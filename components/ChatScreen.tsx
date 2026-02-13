@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { createMedicalChat } from '../services/geminiService';
+import { createMedicalChat, isAIEnabled } from '../services/geminiService';
 import { ChatMessage, ChatSession } from '../types';
 import { PROFILE_IMAGE } from '../constants';
 import { supabase } from '../services/supabase';
@@ -22,13 +22,22 @@ const ChatScreen: React.FC = () => {
     if (activeSession) {
       fetchMessages(activeSession.id);
       if (activeSession.type === 'AI') {
-        const newChat = createMedicalChat();
-        setChat(newChat);
+        if (isAIEnabled) {
+          const newChat = createMedicalChat();
+          setChat(newChat);
+        } else {
+          setMessages([{
+            id: 'system',
+            role: 'model',
+            text: 'AI features are currently disabled. Please configure the Gemini API Key to enable the AI Consultant.',
+            timestamp: Date.now()
+          }]);
+        }
       }
     }
   }, [activeSession]);
 
-  const fetchSessions = async () => {
+  async function fetchSessions() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -40,9 +49,9 @@ const ChatScreen: React.FC = () => {
 
     if (error) console.error('Error fetching sessions:', error);
     else setSessions(data || []);
-  };
+  }
 
-  const fetchMessages = async (sessionId: string) => {
+  async function fetchMessages(sessionId: string) {
     const { data, error } = await supabase
       .from('chat_messages')
       .select('*')
@@ -58,10 +67,16 @@ const ChatScreen: React.FC = () => {
         timestamp: new Date(m.created_at).getTime()
       })) || []);
     }
-  };
+  }
 
   const createNewSession = async (type: 'AI' | 'Peer' = 'AI') => {
+    if (type === 'AI' && !isAIEnabled) {
+      alert("AI features are disabled. Please configure the Gemini API Key.");
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) return;
 
     const { data, error } = await supabase

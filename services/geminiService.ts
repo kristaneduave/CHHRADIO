@@ -1,13 +1,20 @@
-
 import { GoogleGenAI, Type, Chat } from "@google/genai";
 import { CaseData, AnalysisResult } from "../types";
 
-const aiClient = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+export const isAIEnabled = !!apiKey && apiKey !== 'YOUR_GEMINI_API_KEY';
+
+const aiClient = isAIEnabled ? new GoogleGenAI({ apiKey }) : null;
 
 export async function analyzeMedicalImage(
   base64Image: string,
   caseData: CaseData
 ): Promise<AnalysisResult | null> {
+  if (!aiClient) {
+    console.warn("Gemini API Key missing. AI features disabled.");
+    return null;
+  }
+
   const contextPrompt = `
     Perform an advanced educational analysis of this medical image.
     
@@ -71,6 +78,8 @@ export async function analyzeMedicalImage(
 }
 
 export async function generateMedicalQuiz(specialty: string = 'Neurology') {
+  if (!aiClient) return null;
+
   try {
     const response = await aiClient.models.generateContent({
       model: 'gemini-3-flash-preview',
@@ -99,7 +108,9 @@ export async function generateMedicalQuiz(specialty: string = 'Neurology') {
   }
 }
 
-export function createMedicalChat(): Chat {
+export function createMedicalChat(): Chat | null {
+  if (!aiClient) return null;
+
   return aiClient.chats.create({
     model: 'gemini-3-flash-preview',
     config: {

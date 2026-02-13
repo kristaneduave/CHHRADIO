@@ -89,6 +89,19 @@ const UploadScreen: React.FC = () => {
     setIsAnalyzing(true);
     const base64Data = preview.split(',')[1];
     const result = await analyzeMedicalImage(base64Data, caseData);
+
+    if (!result) {
+      setAnalysis({
+        keyFindings: ["AI Analysis Unavailable (Key missing or error)"],
+        differentials: [],
+        planOfCare: [],
+        educationalSummary: "Please configure the Gemini API Key to enable AI analysis.",
+        severity: "Routine"
+      });
+      setIsAnalyzing(false);
+      return;
+    }
+
     setAnalysis(result);
     setIsAnalyzing(false);
     if (result) setStep(3);
