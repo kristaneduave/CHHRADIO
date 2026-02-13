@@ -1,0 +1,56 @@
+
+import React from 'react';
+import { Screen } from '../types';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  activeScreen: Screen;
+  setScreen: (screen: Screen) => void;
+}
+
+const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) => {
+  const navItems: { screen: Screen; icon: string; outlineIcon: string }[] = [
+    { screen: 'dashboard', icon: 'home', outlineIcon: 'home' },
+    { screen: 'search', icon: 'search', outlineIcon: 'search' },
+    { screen: 'chat', icon: 'chat_bubble', outlineIcon: 'chat_bubble_outline' },
+    { screen: 'upload', icon: 'folder', outlineIcon: 'folder_open' },
+    { screen: 'profile', icon: 'person', outlineIcon: 'person_outline' },
+  ];
+
+  return (
+    <div className="relative min-h-screen flex flex-col bg-[#050B14]">
+      {/* Background Effects */}
+      <div className="ambient-glow top-[-100px] left-[-50px]"></div>
+      <div className="ambient-glow top-[30%] right-[-150px] opacity-40"></div>
+      <div className="ambient-glow bottom-[10%] left-[-100px] opacity-30"></div>
+
+      <main className="relative z-10 max-w-md mx-auto w-full flex-1 flex flex-col pb-24">
+        {children}
+      </main>
+
+      {/* Navigation */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 px-6 pb-8 pt-4 pointer-events-none">
+        <div className="glass-panel rounded-2xl h-16 flex items-center justify-between px-2 mx-auto max-w-md pointer-events-auto">
+          {navItems.map((item) => (
+            <button
+              key={item.screen}
+              onClick={() => setScreen(item.screen)}
+              className={`flex flex-col items-center justify-center w-16 h-12 relative group transition-colors ${
+                activeScreen === item.screen ? 'text-primary' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <span className="material-icons text-2xl">
+                {activeScreen === item.screen ? item.icon : item.outlineIcon}
+              </span>
+              {activeScreen === item.screen && (
+                <span className="absolute -bottom-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_2px_rgba(13,162,231,0.6)]"></span>
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+};
+
+export default Layout;

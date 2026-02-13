@@ -1,0 +1,7 @@
+{
+  "name": "MedLink AI Dashboard",
+  "description": "A refined medical professional dashboard featuring AI-powered case analysis, interactive quizzes, and patient activity tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
