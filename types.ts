@@ -73,13 +73,25 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+// ... existing types ...
+
+export interface Profile {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  bio: string | null;
+  year_level: string | null;
+  avatar_url: string | null;
+  updated_at: string;
+}
+
 export interface ChatSession {
   id: string;
   title: string;
   lastMessage: string;
   timestamp: string;
   unread?: boolean;
-  type: 'AI' | 'Peer';
+  type: 'Peer'; // Removed 'AI'
 }
 
 export interface BulletinPost {
