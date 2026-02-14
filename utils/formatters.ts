@@ -6,7 +6,7 @@ export const generateViberText = (data: any): string => {
         age,
         sex,
         modality,
-        organ,
+        organSystem,
         findings,
         impression,
         notes
@@ -16,7 +16,7 @@ export const generateViberText = (data: any): string => {
 
 👤 *Pt:* ${initials || 'N/A'} (${age || '?'} / ${sex || '?'})
 📷 *Modality:* ${modality || 'N/A'}
-🧠 *Organ:* ${organ || 'N/A'}
+🧠 *Organ System:* ${organSystem || 'N/A'}
 
 📝 *Findings:*
 ${findings || 'No specific findings.'}

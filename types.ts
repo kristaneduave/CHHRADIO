@@ -26,8 +26,9 @@ export interface CaseData {
   findings: string;
   modality?: string;
   anatomy?: string;
+  organSystem?: string; // Standardized category
   tags?: string[];
-  imageUrls: string[]; // Changed from single preview string logic or implicit
+  imageUrls: string[]; // Array of image URLs
   // Manual fields
   diagnosis?: string;
   differentials?: Differential[];

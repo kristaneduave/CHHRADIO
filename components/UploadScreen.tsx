@@ -1,12 +1,24 @@
+
 import React, { useState, useRef } from 'react';
 import { generateCasePDF } from '../services/pdfService';
 import { supabase } from '../services/supabase';
 import { generateViberText } from '../utils/formatters';
 
-const SINGLE_STEP_FIELDS = [
-  'Neuroradiology', 'Gastrointestinal', 'Cardiology', 'Orthopedics',
-  'Pulmonology', 'Emergency Medicine', 'Oncology'
+const ORGAN_SYSTEMS = [
+  'Neuroradiology',
+  'Head & Neck',
+  'Chest / Thoracic',
+  'Cardiovascular',
+  'Gastrointestinal (GI)',
+  'Genitourinary (GU)',
+  'Musculoskeletal (MSK)',
+  'Women\'s Imaging / Breast',
+  'Pediatric',
+  'Interventional',
+  'Nuclear Medicine'
 ];
+
+const SEVERITIES = ['Routine', 'Urgent', 'Critical'];
 
 const UploadScreen: React.FC = () => {
   // Flattened state for the 8 requested fields
@@ -15,16 +27,17 @@ const UploadScreen: React.FC = () => {
     age: '',
     sex: 'M',
     modality: '',
-    organ: '', // Systems/Anatomy
+    organSystem: 'Neuroradiology', // Default
     findings: '',
     impression: '', // Diagnosis
     notes: '' // Bite-sized notes
   });
 
-  const [preview, setPreview] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<string[]>([]);
   const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -32,17 +45,29 @@ const UploadScreen: React.FC = () => {
   };
 
   const processFile = (file: File) => {
+    if (previews.length >= 8) {
+      alert("Maximum of 8 images allowed.");
+      return;
+    }
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreview(reader.result as string);
+        setPreviews(prev => [...prev, reader.result as string]);
         setIsCameraActive(false);
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const removeImage = (index: number) => {
+    setPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   const startCamera = async () => {
+    if (previews.length >= 8) {
+      alert("Maximum of 8 images allowed.");
+      return;
+    }
     try {
       setIsCameraActive(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -63,7 +88,7 @@ const UploadScreen: React.FC = () => {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(videoRef.current, 0, 0);
       const dataUrl = canvas.toDataURL('image/png');
-      setPreview(dataUrl);
+      setPreviews(prev => [...prev, dataUrl]);
       stopCamera();
     }
   };
@@ -77,8 +102,8 @@ const UploadScreen: React.FC = () => {
   };
 
   const handleGenerateReport = () => {
-    if (!preview) {
-      alert("Please upload or capture an image first.");
+    if (previews.length === 0) {
+      alert("Please upload or capture at least one image.");
       return;
     }
     setStep(2);
@@ -92,49 +117,55 @@ const UploadScreen: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!preview || !formData.initials) return;
+    if (previews.length === 0 || !formData.initials) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
-      // 1. Upload Image
-      const response = await fetch(preview);
-      const blob = await response.blob();
-      const fileName = `${user.id}/${Date.now()}.png`;
+      // 1. Upload Images Loop
+      const uploadedUrls: string[] = [];
 
-      const { error: uploadError } = await supabase.storage
-        .from('case-images')
-        .upload(fileName, blob);
+      for (let i = 0; i < previews.length; i++) {
+        const response = await fetch(previews[i]);
+        const blob = await response.blob();
+        const fileName = `${user.id}/${Date.now()}_${i}.png`;
 
-      if (uploadError) throw uploadError;
+        const { error: uploadError } = await supabase.storage
+          .from('case-images')
+          .upload(fileName, blob);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('case-images')
-        .getPublicUrl(fileName);
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('case-images')
+          .getPublicUrl(fileName);
+
+        uploadedUrls.push(publicUrl);
+      }
 
       // 2. Insert Case
-      // Mapping flat 8 fields to DB schema (some fields might slightly differ in name)
       const { error: insertError } = await supabase
         .from('cases')
         .insert({
           title: `Case: ${formData.initials}`,
-          clinical_history: formData.notes, // Storing notes here for now
+          clinical_history: formData.notes,
           findings: formData.findings,
-          image_url: publicUrl,
-          difficulty: 'Medium', // Default
+          image_url: uploadedUrls[0], // Primary thumbnail
+          image_urls: uploadedUrls,   // All images
+          difficulty: 'Medium',
           created_by: user.id,
-          category: formData.organ,
-          // Storing structured data in JSON columns for future proofing if needed
+          category: formData.organSystem,
+          organ_system: formData.organSystem,
           analysis_result: {
             modality: formData.modality,
-            anatomy_region: formData.organ,
+            anatomy_region: formData.organSystem,
             keyFindings: [formData.findings],
             impression: formData.impression,
             educationalSummary: formData.notes
           },
           modality: formData.modality,
-          anatomy_region: formData.organ,
+          anatomy_region: formData.organSystem,
           status: 'published'
         });
 
@@ -147,18 +178,22 @@ const UploadScreen: React.FC = () => {
         age: '',
         sex: 'M',
         modality: '',
-        organ: '',
+        organSystem: 'Neuroradiology',
         findings: '',
         impression: '',
         notes: ''
       });
-      setPreview(null);
+      setPreviews([]);
 
     } catch (error: any) {
       console.error('Error saving case:', error);
       alert('Failed to save case: ' + error.message);
     }
   };
+
+  const triggerFileInput = () => {
+    fileInputRef.current?.click();
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#050B14]">
@@ -182,41 +217,51 @@ const UploadScreen: React.FC = () => {
               <p className="text-slate-500 text-xs">Enter clinical details</p>
             </header>
 
-            {/* Image Section moved to top for better workflow */}
-            {!preview && !isCameraActive ? (
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={startCamera} className="glass-card-enhanced aspect-[3/2] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                    <span className="material-icons text-xl">camera_alt</span>
+            {/* Multi-Image Gallery */}
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Images ({previews.length}/8)</span>
+                {previews.length === 0 && <span className="text-[10px] text-rose-500">*Required</span>}
+              </div>
+
+              {isCameraActive ? (
+                <div className="relative glass-card-enhanced rounded-2xl overflow-hidden aspect-video border-2 border-primary/30">
+                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                  <div className="absolute inset-x-0 bottom-4 flex justify-center items-center gap-8">
+                    <button onClick={stopCamera} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center">
+                      <span className="material-icons">close</span>
+                    </button>
+                    <button onClick={capturePhoto} className="w-14 h-14 rounded-full bg-white border-4 border-primary/30 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
+                      <div className="w-10 h-10 rounded-full border-2 border-slate-200" />
+                    </button>
                   </div>
-                  <span className="text-xs font-bold text-slate-400">Camera</span>
-                </button>
-                <div className="relative glass-card-enhanced aspect-[3/2] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all overflow-hidden">
-                  <input type="file" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
-                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                    <span className="material-icons text-xl">file_upload</span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400">Upload</span>
                 </div>
-              </div>
-            ) : isCameraActive ? (
-              <div className="relative glass-card-enhanced rounded-2xl overflow-hidden aspect-video border-2 border-primary/30">
-                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                <div className="absolute inset-x-0 bottom-4 flex justify-center items-center gap-8">
-                  <button onClick={stopCamera} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center">
-                    <span className="material-icons">close</span>
-                  </button>
-                  <button onClick={capturePhoto} className="w-14 h-14 rounded-full bg-white border-4 border-primary/30 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
-                    <div className="w-10 h-10 rounded-full border-2 border-slate-200" />
-                  </button>
+              ) : (
+                <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar snap-x">
+                  {/* Add Button */}
+                  {previews.length < 8 && (
+                    <div className="shrink-0 w-24 h-24 rounded-2xl glass-card-enhanced flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors snap-start" onClick={() => { }}>
+                      <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
+                      <div className="flex gap-2">
+                        <button onClick={startCamera} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"><span className="material-icons text-sm">camera_alt</span></button>
+                        <button onClick={triggerFileInput} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"><span className="material-icons text-sm">upload</span></button>
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-500 mt-1">Add Image</span>
+                    </div>
+                  )}
+
+                  {/* Previews */}
+                  {previews.map((src, idx) => (
+                    <div key={idx} className="shrink-0 w-24 h-24 rounded-2xl relative group snap-start">
+                      <img src={src} className="w-full h-full object-cover rounded-2xl border border-white/10" alt={`Scan ${idx}`} />
+                      <button onClick={() => removeImage(idx)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md">
+                        <span className="material-icons text-[10px]">close</span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ) : (
-              <div className="relative glass-card-enhanced rounded-2xl overflow-hidden shadow-2xl bg-black/50">
-                <img src={preview!} alt="Preview" className="w-full h-48 object-contain" />
-                <button onClick={() => setPreview(null)} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 backdrop-blur text-white flex items-center justify-center hover:bg-rose-500 transition-colors"><span className="material-icons text-sm">close</span></button>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
               {/* Row 1: Initials, Age, Sex */}
@@ -238,15 +283,19 @@ const UploadScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 2: Modality, Organ */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 2: Modality, Organ System */}
+              <div className="grid grid-cols-1 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
                   <input name="modality" value={formData.modality} onChange={handleInputChange} placeholder="CT, MRI..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ</label>
-                  <input name="organ" value={formData.organ} onChange={handleInputChange} placeholder="Lung, Brain..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ System</label>
+                  <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
+                    {ORGAN_SYSTEMS.map(os => (
+                      <option key={os} value={os} className="bg-[#0c1829]">{os}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -288,8 +337,12 @@ const UploadScreen: React.FC = () => {
 
             {/* Preview Card */}
             <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
-              {preview && (
-                <img src={preview} alt="Case" className="w-full h-40 object-cover rounded-xl mb-4 bg-black/40" />
+              {previews.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {previews.map((src, i) => (
+                    <img key={i} src={src} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40 shrink-0" />
+                  ))}
+                </div>
               )}
               <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
                 <div>
@@ -298,7 +351,7 @@ const UploadScreen: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[9px] text-slate-500 uppercase font-bold">Modality</span>
-                  <p className="text-white text-sm font-bold">{formData.modality} - {formData.organ}</p>
+                  <p className="text-white text-sm font-bold">{formData.modality} - {formData.organSystem}</p>
                 </div>
               </div>
               <div>
@@ -318,7 +371,7 @@ const UploadScreen: React.FC = () => {
                 Copy for Viber
               </button>
 
-              <button onClick={() => generateCasePDF(formData, null, preview)} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+              <button onClick={() => generateCasePDF(formData, null, previews)} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
                 <span className="material-icons text-rose-500">picture_as_pdf</span>
                 Export to Drive (PDF)
               </button>

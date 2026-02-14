@@ -9,10 +9,10 @@ declare module 'jspdf' {
     }
 }
 
-export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrl: string | null) => {
+export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: string[] | string | null) => {
     const doc = new jsPDF();
     const {
-        initials, age, sex, modality, organ, findings, impression, notes
+        initials, age, sex, modality, organSystem, findings, impression, notes
     } = data;
 
     // Title
@@ -33,7 +33,7 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrl: string
             ['Age', age],
             ['Sex', sex],
             ['Modality', modality],
-            ['Organ', organ],
+            ['Organ System', organSystem],
             ['Findings', findings],
             ['Impression', impression],
             ['Notes', notes]
@@ -47,25 +47,42 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrl: string
         }
     });
 
-    // Image (if exists)
+    // Images
     let finalY = (doc as any).lastAutoTable.finalY + 10;
 
-    if (imageUrl) {
-        if (finalY > 200) {
+    const images = Array.isArray(imageUrls) ? imageUrls : imageUrls ? [imageUrls] : [];
+
+    if (images.length > 0) {
+        doc.setFontSize(14);
+        doc.setTextColor(0, 51, 102);
+
+        if (finalY > 250) {
             doc.addPage();
             finalY = 20;
         }
+        doc.text('Diagnostic Imaging:', 14, finalY);
+        finalY += 10;
 
-        try {
-            const imgProps = doc.getImageProperties(imageUrl);
-            const pdfWidth = 120;
-            const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+        images.forEach((url, index) => {
+            if (finalY > 200) {
+                doc.addPage();
+                finalY = 20;
+            }
 
-            doc.text('Diagnostic Image:', 14, finalY);
-            doc.addImage(imageUrl, 'PNG', 14, finalY + 5, pdfWidth, pdfHeight);
-        } catch (e) {
-            console.error('Error adding image to PDF', e);
-        }
+            try {
+                const imgProps = doc.getImageProperties(url);
+                const pdfWidth = 120;
+                const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+                doc.setFontSize(10);
+                doc.setTextColor(100);
+                doc.text(`Image ${index + 1}`, 14, finalY);
+                doc.addImage(url, 'PNG', 14, finalY + 5, pdfWidth, pdfHeight);
+                finalY += pdfHeight + 15;
+            } catch (e) {
+                console.error('Error adding image to PDF', e);
+            }
+        });
     }
 
     // Save
