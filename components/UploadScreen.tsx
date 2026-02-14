@@ -540,11 +540,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Bite-sized interesting facts..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
-              {/* Row 6: Diagnostic Code */}
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Diagnostic Code (ICD-10)</label>
-                <input name="diagnosis" value={formData.diagnosis} onChange={handleInputChange} placeholder="e.g. G30.9" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
-              </div>
+              {/* Manual Diagnostic Code Removed */}
             </div>
 
             <button onClick={handleGenerateReport} disabled={!formData.initials} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
