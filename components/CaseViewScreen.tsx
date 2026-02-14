@@ -72,8 +72,13 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         };
 
         try {
-            const pdfTitle = `${caseData.organ_system || 'GENERAL'} - ${caseData.title} (${caseData.analysis_result?.reliability || 'N/A'})`.toUpperCase();
-            generateCasePDF(formattedData, null, pdfImages, pdfTitle, 'Radiologist');
+            // Header: User input title (e.g. "SINONASAL MENINGIOMA")
+            const headerTitle = (caseData.title || 'RADIOLOGY CASE').toUpperCase();
+
+            // Filename: ORGAN SYSTEM - TITLE (RELIABILITY)
+            const fileName = `${caseData.organ_system || 'GENERAL'} - ${caseData.title || 'CASE'} (${caseData.analysis_result?.reliability || 'N/A'})`.toUpperCase();
+
+            generateCasePDF(formattedData, null, pdfImages, headerTitle, 'Radiologist', fileName);
         } catch (e: any) {
             alert('Export failed: ' + e.message);
         }
