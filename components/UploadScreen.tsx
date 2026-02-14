@@ -337,7 +337,15 @@ const UploadScreen: React.FC = () => {
                 Copy for Viber
               </button>
 
-              <button onClick={() => generateCasePDF(formData, null, previews)} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+              <button onClick={() => {
+                console.log('Export button clicked');
+                try {
+                  generateCasePDF(formData, null, previews);
+                } catch (e) {
+                  console.error('Export failed immediately:', e);
+                  alert('Export failed: ' + e);
+                }
+              }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
                 <span className="material-icons text-rose-500">picture_as_pdf</span>
                 Export to Drive (PDF)
               </button>
