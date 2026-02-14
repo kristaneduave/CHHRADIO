@@ -103,23 +103,7 @@ export const generateCasePDF = (
 
         yPos += 15; // Space before findings
 
-        // --- 3. Findings ---
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(0, 51, 102);
-        doc.text('FINDINGS', margin, yPos);
-        yPos += 6;
-
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(0, 0, 0);
-
-        const findingsText = findings || 'No specific findings recorded.';
-        const splitFindings = doc.splitTextToSize(findingsText, pageWidth - (margin * 2));
-        doc.text(splitFindings, margin, yPos);
-        yPos += (splitFindings.length * 5) + 8; // Compact spacing
-
-        // --- 4. Clinical Notes ---
+        // --- 3. Clinical Notes (Moved before Findings) ---
         const notesText = notes || clinical_history;
         if (notesText) {
             if (yPos + 30 > pageHeight) {
@@ -141,6 +125,22 @@ export const generateCasePDF = (
             doc.text(splitNotes, margin, yPos);
             yPos += (splitNotes.length * 5) + 8;
         }
+
+        // --- 4. Findings ---
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 51, 102);
+        doc.text('FINDINGS', margin, yPos);
+        yPos += 6;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(0, 0, 0);
+
+        const findingsText = findings || 'No specific findings recorded.';
+        const splitFindings = doc.splitTextToSize(findingsText, pageWidth - (margin * 2));
+        doc.text(splitFindings, margin, yPos);
+        yPos += (splitFindings.length * 5) + 8; // Compact spacing
 
         // --- FORCE PAGE BREAK FOR IMPRESSION & IMAGES ---
         doc.addPage();
