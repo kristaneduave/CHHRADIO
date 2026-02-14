@@ -1,13 +1,7 @@
 
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { AnalysisResult, CaseData } from '../types';
-
-declare module 'jspdf' {
-    interface jsPDF {
-        autoTable: (options: any) => jsPDF;
-    }
-}
 
 export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: string[] | string | null) => {
     try {
@@ -18,9 +12,8 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: strin
         const doc = new jsPDF();
         console.log('jsPDF created');
 
-        if (typeof (doc as any).autoTable !== 'function') {
-            throw new Error('jspdf-autotable plugin is not correctly loaded.');
-        }
+        // Using explicit autoTable call instead of doc.autoTable plugin
+        // method to avoid "plugin not loaded" errors.
 
         const {
             initials, age, sex, modality, organSystem, findings, impression, notes
@@ -36,7 +29,7 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: strin
         doc.text(new Date().toLocaleDateString(), 180, 22, { align: 'right' });
 
         // 8-Field Table
-        doc.autoTable({
+        autoTable(doc, {
             startY: 30,
             head: [['Field', 'Details']],
             body: [
@@ -59,7 +52,10 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: strin
         });
 
         // Images
-        let finalY = (doc as any).lastAutoTable.finalY + 10;
+        // Access finalY from the autoTable state.
+        // Typings for autoTable might be tricky, usually it's `(doc as any).lastAutoTable.finalY`
+        let finalY = (doc as any).lastAutoTable?.finalY || 100;
+        finalY += 10;
 
         const images = Array.isArray(imageUrls) ? imageUrls : imageUrls ? [imageUrls] : [];
 
