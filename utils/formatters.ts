@@ -7,10 +7,12 @@ export const generateViberText = (data: any): string => {
         sex,
         modality,
         organSystem,
+        clinicalData,
         findings,
         impression,
         reliability,
-        notes
+        notes,
+        diagnosis
     } = data;
 
     return `🚨 *INTERESTING CASE* 🚨
@@ -18,16 +20,16 @@ export const generateViberText = (data: any): string => {
 🎯 *Reliability:* ${reliability || 'N/A'}
 
 👤 *Pt:* ${initials || 'N/A'} (${age || '?'} / ${sex || '?'})
-📷 *Modality:* ${modality || 'N/A'}
-🧠 *Organ System:* ${organSystem || 'N/A'}
+📷 *Exam:* ${modality || 'N/A'} - ${organSystem || 'N/A'}
+${clinicalData ? `📋 *Clinical:* ${clinicalData}` : ''}
 
 📝 *Findings:*
 ${findings || 'No specific findings.'}
 
 💡 *Impression:*
 ${impression || 'Pending Diagnosis'}
+${diagnosis ? `🔑 *Code:* ${diagnosis}` : ''}
 
 📌 *Notes:*
 ${notes || 'No notes provided.'}`;
 };
-
