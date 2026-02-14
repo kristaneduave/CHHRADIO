@@ -11,7 +11,6 @@ import ChatScreen from './components/ChatScreen';
 import BulletinScreen from './components/BulletinScreen';
 import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
-import ActivityLogScreen from './components/ActivityLogScreen';
 import { Screen } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -116,8 +115,6 @@ const App: React.FC = () => {
         );
       case 'bulletin':
         return <BulletinScreen />;
-      case 'activity-log':
-        return <ActivityLogScreen onBack={() => setCurrentScreen('dashboard')} />;
       default:
         return <Dashboard onNavigate={setCurrentScreen} />;
     }

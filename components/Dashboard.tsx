@@ -1,10 +1,11 @@
 
 
 import React, { useEffect, useState } from 'react';
-import { QUICK_ACTIONS, PROFILE_IMAGE } from '../constants'; // Removed ACTIVITIES
+import { QUICK_ACTIONS, PROFILE_IMAGE } from '../constants';
 import { Screen, Activity } from '../types';
 import { supabase } from '../services/supabase';
 import { fetchRecentActivity } from '../services/activityService';
+import ActivityLogModal from './ActivityLogModal';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
@@ -15,19 +16,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loadingActivities, setLoadingActivities] = useState(true);
+  const [showActivityModal, setShowActivityModal] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Try to fetch profile name, or fall back to email username
-
+        // Try to fetch profile name
         const { data } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
         if (data) {
           if (data.full_name) setUserName(data.full_name);
           if (data.avatar_url) setAvatarUrl(data.avatar_url);
         } else if (user.email) {
           setUserName(user.email.split('@')[0]);
+        }
+
+        // Fetch Activities
+        try {
+          const recent = await fetchRecentActivity(user.id, 3);
+          setActivities(recent);
+        } catch (e) {
+          console.error(e);
+        } finally {
+          setLoadingActivities(false);
         }
       }
     };
@@ -77,7 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         <div className="flex justify-between items-center mb-4 ml-1">
           <h3 className="text-sm font-medium text-slate-400">Recent Activity</h3>
           <button
-            onClick={() => onNavigate('activity-log')}
+            onClick={() => setShowActivityModal(true)}
             className="text-xs text-primary hover:text-primary-dark font-medium transition-colors"
           >
             View All
@@ -109,6 +120,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           )}
         </div>
       </section>
+
+      {showActivityModal && (
+        <ActivityLogModal onClose={() => setShowActivityModal(false)} />
+      )}
     </>
   );
 };
