@@ -217,15 +217,15 @@ const UploadScreen: React.FC = () => {
     <div className="flex flex-col h-full bg-[#050B14] relative">
       {/* Screenshot Overlay */}
       {isScreenshotMode && (
-        <div className="absolute inset-0 z-50 bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[100] bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-y-auto">
           {/* Exit Button - Floating */}
           <button
             onClick={() => setIsScreenshotMode(false)}
-            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-50">
+            className="fixed top-6 right-6 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-50 backdrop-blur-md">
             <span className="material-icons">close</span>
           </button>
 
-          <div className="w-full max-w-md space-y-6">
+          <div className="w-full max-w-md space-y-6 my-auto">
             <header className="text-center space-y-2">
               <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
               <p className="text-sm font-medium text-slate-400">
