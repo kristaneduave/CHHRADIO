@@ -68,7 +68,10 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             findings: caseData.findings,
             impression: caseData.analysis_result?.impression || caseData.diagnosis,
             reliability: caseData.analysis_result?.reliability,
-            notes: caseData.clinical_history
+            notes: caseData.clinical_history,
+            clinicalData: caseData.clinicalData, // Pass explicit clinicalData if exists
+            pearl: caseData.pearl || caseData.analysis_result?.pearl,
+            additionalNotes: caseData.notes // Attempt to pass generic notes if they exist
         };
 
         try {
