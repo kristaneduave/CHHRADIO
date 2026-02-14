@@ -177,6 +177,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
+      // Auto-generate Diagnostic Code if publishing and doesn't exist
+      let finalDiagnosis = formData.diagnosis;
+      if (status === 'published' && !finalDiagnosis) {
+        // Generate random 6-digit code prepended with RAD
+        finalDiagnosis = 'RAD-' + Math.floor(100000 + Math.random() * 900000).toString();
+        // Update state to reflect it immediately in UI
+        setFormData(prev => ({ ...prev, diagnosis: finalDiagnosis }));
+      }
+
       // 1. Upload New Images (Skip existing ones)
       // Note: This simple logic assumes all images in 'images' state that have a distinct 'file' need uploading
       // But for existing images we put a dummy File. We should check if it's a real file or just a URL holder.
@@ -226,7 +235,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         created_by: user.id,
         category: formData.organSystem,
         organ_system: formData.organSystem,
-        diagnosis: formData.diagnosis, // Save to diagnosis column
+        organ_system: formData.organSystem,
+        diagnosis: finalDiagnosis, // Save generated or existing code
         analysis_result: {
           modality: formData.modality,
           anatomy_region: formData.organSystem,
@@ -260,7 +270,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
       if (error) throw error;
 
-      alert(`Case ${existingCase ? 'updated' : 'saved'} successfully as ${status === 'draft' ? 'Private Draft' : 'Public Case'}!`);
+      if (error) throw error;
+
+      if (status === 'published') {
+        alert(`Case successfully published!\n\nDiagnostic Code: ${finalDiagnosis}\n\nShare this code for easy lookup.`);
+      } else {
+        alert(`Case saved as Private Draft.`);
+      }
 
       if (onClose) {
         onClose();
@@ -576,6 +592,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   <p className="text-white text-sm font-bold">{formData.modality} - {formData.organSystem}</p>
                 </div>
               </div>
+
+              {/* Diagnostic Code Display */}
+              {formData.diagnosis && (
+                <div>
+                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
+                  <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
+                </div>
+              )}
+
               <div>
                 <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
                 <p className="text-white text-sm font-medium">{formData.impression}</p>
