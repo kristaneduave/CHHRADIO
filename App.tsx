@@ -18,6 +18,7 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [caseToEdit, setCaseToEdit] = useState<any>(null);
 
   if (!isSupabaseConfigured) {
     return (
@@ -61,7 +62,15 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard onNavigate={setCurrentScreen} />;
       case 'upload':
-        return <UploadScreen />;
+        return (
+          <UploadScreen
+            existingCase={caseToEdit}
+            onClose={() => {
+              setCaseToEdit(null);
+              setCurrentScreen('profile'); // Return to profile after editing/closing
+            }}
+          />
+        );
       case 'quiz':
         return <QuizScreen />;
       case 'calendar':
@@ -71,7 +80,14 @@ const App: React.FC = () => {
       case 'chat':
         return <ChatScreen />;
       case 'profile':
-        return <ProfileScreen />;
+        return (
+          <ProfileScreen
+            onEditCase={(caseItem) => {
+              setCaseToEdit(caseItem);
+              setCurrentScreen('upload'); // Navigate to upload screen with data
+            }}
+          />
+        );
       case 'bulletin':
         return <BulletinScreen />;
       default:

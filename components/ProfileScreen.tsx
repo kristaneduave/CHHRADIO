@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { PROFILE_IMAGE } from '../constants';
 
-const ProfileScreen: React.FC = () => {
+interface ProfileScreenProps {
+  onEditCase?: (caseItem: any) => void;
+}
+
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase }) => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -16,10 +20,34 @@ const ProfileScreen: React.FC = () => {
     specialty: 'Radiology', // Default, kept for UI if needed or add to DB
     avatar_url: ''
   });
+  const [myCases, setMyCases] = useState<any[]>([]);
+  const [loadingCases, setLoadingCases] = useState(false);
 
   useEffect(() => {
     getProfile();
+    getMyCases();
   }, []);
+
+  const getMyCases = async () => {
+    try {
+      setLoadingCases(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('created_by', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMyCases(data || []);
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+    } finally {
+      setLoadingCases(false);
+    }
+  };
 
   const getProfile = async () => {
     try {
@@ -220,7 +248,54 @@ const ProfileScreen: React.FC = () => {
         </button>
       </div>
 
-      <p className="text-center mt-8 text-[9px] text-slate-700 font-bold uppercase tracking-[0.4em]">
+      {/* My Cases Section */}
+      <div className="mt-10">
+        <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 ml-1">My Case Library</h2>
+
+        {loadingCases ? (
+          <div className="text-center py-8 text-slate-500 text-xs">Loading cases...</div>
+        ) : myCases.length === 0 ? (
+          <div className="glass-card-enhanced p-8 rounded-2xl flex flex-col items-center justify-center text-center opacity-80">
+            <span className="material-icons text-4xl text-slate-600 mb-2">folder_open</span>
+            <p className="text-slate-400 text-xs">No cases uploaded yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {myCases.map((c) => (
+              <div key={c.id} className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all group">
+                <div className="w-16 h-16 rounded-lg bg-black/50 border border-white/10 overflow-hidden shrink-0">
+                  {c.image_url ? (
+                    <img src={c.image_url} className="w-full h-full object-cover" alt="" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-600">
+                      <span className="material-icons text-xl">image</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-start mb-1">
+                    <h4 className="text-sm font-bold text-white truncate pr-2">{c.title}</h4>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${c.status === 'published' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      {c.status || 'Draft'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 line-clamp-2">{c.analysis_result?.impression || c.findings || 'No description'}</p>
+                  <p className="text-[9px] text-slate-600 mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
+                </div>
+
+                <button
+                  onClick={() => onEditCase && onEditCase(c)}
+                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-primary transition-colors"
+                >
+                  <span className="material-icons text-base">edit</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <p className="text-center mt-12 text-[9px] text-slate-700 font-bold uppercase tracking-[0.4em]">
         Department Portal v3.2.0
       </p>
     </div>

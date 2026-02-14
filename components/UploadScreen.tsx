@@ -40,22 +40,33 @@ const RELIABILITY_BG_COLORS: Record<string, string> = {
 
 const RELIABILITY_OPTIONS = ['Certain', 'Probable', 'Possible', 'Unlikely'];
 
-const UploadScreen: React.FC = () => {
+interface UploadScreenProps {
+  existingCase?: any; // Replace with proper type if available, e.g., Case
+  onClose?: () => void;
+}
+
+const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) => {
   const [formData, setFormData] = useState({
-    initials: '',
-    age: '',
-    sex: 'M',
-    modality: '',
-    organSystem: 'Neuroradiology', // Default
-    findings: '',
-    impression: '', // Diagnosis
-    notes: '', // Bite-sized notes
-    date: new Date().toISOString().split('T')[0], // Default today
-    reliability: 'Certain' // Default
+    initials: existingCase?.patient_initials || '',
+    age: existingCase?.patient_age || '',
+    sex: existingCase?.patient_sex || 'M',
+    modality: existingCase?.modality || '',
+    organSystem: existingCase?.anatomy_region || 'Neuroradiology',
+    findings: existingCase?.findings || '',
+    impression: existingCase?.analysis_result?.impression || '',
+    notes: existingCase?.clinical_history || '',
+    date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
+    reliability: existingCase?.analysis_result?.reliability || 'Certain'
   });
 
-  const [customTitle, setCustomTitle] = useState('');
-  const [images, setImages] = useState<ImageUpload[]>([]);
+  const [customTitle, setCustomTitle] = useState(existingCase?.title || '');
+  const [images, setImages] = useState<ImageUpload[]>(
+    existingCase?.image_urls?.map((url: string, index: number) => ({
+      url,
+      file: new File([], "existing_image"), // Placeholder, won't need re-uploading unless changed
+      description: existingCase?.analysis_result?.imagesMetadata?.[index]?.description || ''
+    })) || []
+  );
   const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [uploaderName, setUploaderName] = useState<string>('');
   const [isScreenshotMode, setIsScreenshotMode] = useState(false);
@@ -158,81 +169,116 @@ const UploadScreen: React.FC = () => {
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = async (status: 'draft' | 'published') => {
     if (images.length === 0 || !formData.initials) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
-      // 1. Upload Images Loop
-      const uploadedUrls: string[] = [];
-      const imageMetadata = images.map(img => ({ description: img.description }));
+      // 1. Upload New Images (Skip existing ones)
+      // Note: This simple logic assumes all images in 'images' state that have a distinct 'file' need uploading
+      // But for existing images we put a dummy File. We should check if it's a real file or just a URL holder.
+      // A better check: is it a blob url? (starts with blob:)
+
+      const distinctUploadedUrls: string[] = [];
+      // We need to keep the order.
+      // If image has `file.size === 0` and is placeholder, we reuse `url`.
+      // If it's a new file, we upload.
 
       for (let i = 0; i < images.length; i++) {
-        // We already have the file object in state
-        const blob = images[i].file;
-        const fileName = `${user.id}/${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}.png`;
+        const img = images[i];
+        if (img.file.size === 0 && img.url.startsWith('http')) {
+          // Existing image
+          distinctUploadedUrls.push(img.url);
+        } else {
+          // New image
+          const blob = img.file;
+          const fileName = `${user.id}/${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}.png`;
 
-        const { error: uploadError } = await supabase.storage
-          .from('case-images')
-          .upload(fileName, blob);
+          const { error: uploadError } = await supabase.storage
+            .from('case-images')
+            .upload(fileName, blob);
 
-        if (uploadError) throw uploadError;
+          if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('case-images')
-          .getPublicUrl(fileName);
+          const { data: { publicUrl } } = supabase.storage
+            .from('case-images')
+            .getPublicUrl(fileName);
 
-        uploadedUrls.push(publicUrl);
+          distinctUploadedUrls.push(publicUrl);
+        }
       }
 
-      // 2. Insert Case
-      const { error: insertError } = await supabase
-        .from('cases')
-        .insert({
-          title: customTitle || `Case: ${formData.initials}`,
-          clinical_history: formData.notes,
-          findings: formData.findings,
-          image_url: uploadedUrls[0], // Primary thumbnail
-          image_urls: uploadedUrls,   // All images
-          difficulty: 'Medium',
-          created_by: user.id,
-          category: formData.organSystem,
-          organ_system: formData.organSystem,
-          analysis_result: {
-            modality: formData.modality,
-            anatomy_region: formData.organSystem,
-            keyFindings: [formData.findings],
-            impression: formData.impression,
-            educationalSummary: formData.notes,
-            imagesMetadata: imageMetadata, // Store descriptions here
-            studyDate: formData.date,
-            reliability: formData.reliability
-          },
+      const imageMetadata = images.map(img => ({ description: img.description }));
+
+      const casePayload = {
+        title: customTitle || `Case: ${formData.initials}`,
+        patient_initials: formData.initials, // Ensure these match DB columns
+        patient_age: formData.age,
+        patient_sex: formData.sex,
+        clinical_history: formData.notes,
+        findings: formData.findings,
+        image_url: distinctUploadedUrls[0], // Primary thumbnail
+        image_urls: distinctUploadedUrls,   // All images
+        difficulty: 'Medium',
+        created_by: user.id,
+        category: formData.organSystem,
+        organ_system: formData.organSystem,
+        analysis_result: {
           modality: formData.modality,
           anatomy_region: formData.organSystem,
-          status: 'published'
+          keyFindings: [formData.findings],
+          impression: formData.impression,
+          educationalSummary: formData.notes,
+          imagesMetadata: imageMetadata, // Store descriptions here
+          studyDate: formData.date,
+          reliability: formData.reliability
+        },
+        modality: formData.modality,
+        anatomy_region: formData.organSystem,
+        status: status
+      };
+
+      let error;
+      if (existingCase?.id) {
+        // Update
+        const { error: updateError } = await supabase
+          .from('cases')
+          .update(casePayload)
+          .eq('id', existingCase.id);
+        error = updateError;
+      } else {
+        // Insert
+        const { error: insertError } = await supabase
+          .from('cases')
+          .insert(casePayload);
+        error = insertError;
+      }
+
+      if (error) throw error;
+
+      alert(`Case ${existingCase ? 'updated' : 'saved'} successfully as ${status === 'draft' ? 'Private Draft' : 'Public Case'}!`);
+
+      if (onClose) {
+        onClose();
+      } else {
+        setStep(1);
+        setFormData({
+          initials: '',
+          age: '',
+          sex: 'M',
+          modality: '',
+          organSystem: 'Neuroradiology',
+          findings: '',
+          impression: '',
+          notes: '',
+          date: new Date().toISOString().split('T')[0],
+          reliability: 'Certain'
         });
-
-      if (insertError) throw insertError;
-
-      alert('Case saved successfully!');
-      setStep(1);
-      setFormData({
-        initials: '',
-        age: '',
-        sex: 'M',
-        modality: '',
-        organSystem: 'Neuroradiology',
-        findings: '',
-        impression: '',
-        notes: '',
-        date: new Date().toISOString().split('T')[0],
-        reliability: 'Certain'
-      });
-      setImages([]);
-      setCustomTitle('');
+        setImages([]);
+        setCustomTitle('');
+      }
 
     } catch (error: any) {
       console.error('Error saving case:', error);
@@ -565,9 +611,14 @@ const UploadScreen: React.FC = () => {
                 Export to Drive (PDF)
               </button>
 
-              <button onClick={handleSave} className="w-full py-3 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-white transition-colors">
-                Save to Profile Only
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => handleSave('draft')} className="w-full py-3 text-sm font-bold text-slate-400 bg-white/5 rounded-xl hover:bg-white/10 transition-colors uppercase tracking-wider">
+                  {existingCase ? 'Update Private Draft' : 'Save as Private Draft'}
+                </button>
+                <button onClick={() => handleSave('published')} className="w-full py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors uppercase tracking-wider shadow-lg shadow-blue-900/20">
+                  {existingCase ? 'Update & Publish' : 'Publish to Database'}
+                </button>
+              </div>
             </div>
           </div>
         )}
