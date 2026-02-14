@@ -524,7 +524,7 @@ const UploadScreen: React.FC = () => {
               </div>
               <div>
                 <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
-                <p className="text-white text-sm font-medium">{formData.impression} <span className="text-slate-500 text-xs">({formData.reliability})</span></p>
+                <p className="text-white text-sm font-medium">{formData.impression}</p>
               </div>
               <div>
                 <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>

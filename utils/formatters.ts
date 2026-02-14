@@ -9,6 +9,7 @@ export const generateViberText = (data: any): string => {
         organSystem,
         findings,
         impression,
+        reliability,
         notes
     } = data;
 
@@ -24,6 +25,9 @@ ${findings || 'No specific findings.'}
 💡 *Impression:*
 ${impression || 'Pending Diagnosis'}
 
+🎯 *Reliability:* ${reliability || 'N/A'}
+
 📌 *Notes:*
 ${notes || 'No notes provided.'}`;
 };
+
