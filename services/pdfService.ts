@@ -86,10 +86,15 @@ export const generateCasePDF = (data: any, unusedAnalysis: any, imageUrls: strin
     }
 
     // Save
-    const safeInitials = (initials || 'Pt').replace(/[^a-z0-9]/gi, '_');
-    const safeImpression = (impression || 'Case').substring(0, 15).replace(/[^a-z0-9]/gi, '_');
-    const dateStr = new Date().toISOString().split('T')[0];
+    try {
+        const safeInitials = (initials || 'Pt').replace(/[^a-z0-9]/gi, '_');
+        const safeImpression = (impression || 'Case').substring(0, 15).replace(/[^a-z0-9]/gi, '_');
+        const dateStr = new Date().toISOString().split('T')[0];
 
-    const filename = `${dateStr}_${safeInitials}_${safeImpression}.pdf`;
-    doc.save(filename);
+        const filename = `${dateStr}_${safeInitials}_${safeImpression}.pdf`;
+        doc.save(filename);
+    } catch (error: any) {
+        console.error('PDF generation failed:', error);
+        alert('Failed to generate PDF. Please try again. ' + (error.message || ''));
+    }
 };
