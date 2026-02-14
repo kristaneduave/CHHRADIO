@@ -1,16 +1,18 @@
-
 <!DOCTYPE html>
 <html class="dark" lang="en">
+
 <head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta content="#050B14" name="theme-color" />
     <title>MedLink AI Dashboard</title>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script>
+    <script>
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -28,12 +30,28 @@
         }
     </script>
     <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #050B14;
+            /* Fallback */
+            overscroll-behavior-y: none;
+            /* Prevent bounce */
+        }
+
         .glass-panel {
             background: rgba(16, 28, 34, 0.6);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
+
         .glass-card-enhanced {
             background: linear-gradient(160deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
             backdrop-filter: blur(20px);
@@ -41,6 +59,7 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-top: 1px solid rgba(255, 255, 255, 0.2);
         }
+
         .ambient-glow {
             position: absolute;
             width: 300px;
@@ -50,14 +69,19 @@
             pointer-events: none;
             z-index: 0;
         }
+
         body {
             background: linear-gradient(180deg, #050B14 0%, #0c1829 100%);
             color: white;
+            background-attachment: fixed;
+            /* Fix gradient on scroll */
         }
     </style>
 </head>
-<body class="font-display overflow-x-hidden antialiased">
-    <div id="root"></div>
-<script type="module" src="/index.tsx"></script>
+
+<body class="font-display overflow-x-hidden antialiased selection:bg-primary/30">
+    <div id="root" class="h-full"></div>
+    <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>
