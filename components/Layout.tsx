@@ -18,7 +18,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
   ];
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-[#050B14]">
+    <div className="relative min-h-screen flex flex-col bg-[#050B14] overflow-hidden">
       {/* Background Effects */}
       <div className="ambient-glow top-[-100px] left-[-50px]"></div>
       <div className="ambient-glow top-[30%] right-[-150px] opacity-40"></div>
@@ -35,9 +35,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
             <button
               key={item.screen}
               onClick={() => setScreen(item.screen)}
-              className={`flex flex-col items-center justify-center w-16 h-12 relative group transition-colors ${
-                activeScreen === item.screen ? 'text-primary' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`flex flex-col items-center justify-center w-16 h-12 relative group transition-colors ${activeScreen === item.screen ? 'text-primary' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <span className="material-icons text-2xl">
                 {activeScreen === item.screen ? item.icon : item.outlineIcon}
