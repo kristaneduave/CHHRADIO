@@ -190,6 +190,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     {caseData.organ_system}
                                 </span>
                                 <span className="text-slate-500">{new Date(caseData.created_at).toLocaleDateString()}</span>
+                                <span className="text-slate-600">•</span>
+                                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Published
+                                </span>
                             </div>
                         </div>
 
@@ -199,9 +204,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     </div>
 
                     {/* Patient Demographics */}
-                    <div className="glass-card-enhanced p-4 rounded-xl flex items-center justify-between">
+                    <div className="glass-card-enhanced p-4 rounded-xl space-y-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-blue-600/10 flex items-center justify-center text-primary font-bold border border-primary/20">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-blue-600/10 flex items-center justify-center text-primary font-bold border border-primary/20 shrink-0">
                                 {caseData.patient_sex || '?'}
                             </div>
                             <div>
@@ -209,13 +214,15 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 <div className="text-white font-bold">{caseData.patient_initials} <span className="text-slate-500 font-normal">| {caseData.patient_age} yo</span></div>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status</div>
-                            <div className="text-emerald-400 font-bold flex items-center justify-end gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                Published
+
+                        {caseData.clinical_history && (
+                            <div className="pt-2 border-t border-white/5">
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Clinical Data</div>
+                                <div className="text-sm text-slate-300 italic">
+                                    "{caseData.clinical_history}"
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Main Content Tabs (Optional visual separation) */}
@@ -232,45 +239,16 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                             </div>
                         </div>
 
-                        {/* Vertical Divider */}
-                        <div className="h-px w-full bg-white/5"></div>
-
-                        {/* Impression */}
-                        <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
-                                <span className="material-icons text-sm">lightbulb</span>
-                                Impression
-                            </h3>
-                            <div className="bg-emerald-500/[0.05] border border-emerald-500/20 rounded-xl p-4">
-                                <p className="text-base font-bold text-white leading-relaxed">
-                                    {caseData.analysis_result?.impression || caseData.diagnosis || "Pending Diagnosis"}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Notes */}
-                        {caseData.clinical_history && (
-                            <div className="space-y-2 pt-2">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                                    <span className="material-icons text-sm">sticky_note_2</span>
-                                    Clinical Data
-                                </h3>
-                                <p className="text-xs text-slate-400 italic leading-relaxed pl-4">
-                                    "{caseData.clinical_history}"
-                                </p>
-                            </div>
-                        )}
-
                         {/* Notes / Remarks */}
                         {caseData.educational_summary && (
-                            <div className="space-y-2 pt-2">
+                            <div className="space-y-2">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                                     <span className="material-icons text-sm">description</span>
                                     Notes / Remarks
                                 </h3>
-                                <p className="text-xs text-slate-400 italic leading-relaxed pl-4">
+                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-white/10">
                                     {caseData.educational_summary}
-                                </p>
+                                </div>
                             </div>
                         )}
                     </div>
