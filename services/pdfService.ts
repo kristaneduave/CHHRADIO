@@ -126,21 +126,42 @@ export const generateCasePDF = (
         doc.text(splitFindings, margin, yPos);
         yPos += (splitFindings.length * 5) + 8; // Compact spacing
 
-        // --- 4. Notes / Remarks (Was Impression) ---
-        // Ensure space or page break
-        if (yPos + 30 > pageHeight) {
-            doc.addPage();
-            yPos = 20;
+        // --- 4. Notes / Remarks ---
+        const remarksText = data.pearl || data.additionalNotes;
+        if (remarksText) {
+            if (yPos + 30 > pageHeight) {
+                doc.addPage();
+                yPos = 20;
+            }
+
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 51, 102);
+            doc.text('NOTES / REMARKS', margin, yPos);
+            yPos += 6;
+
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'italic');
+            doc.setTextColor(40, 40, 40);
+
+            const splitRemarks = doc.splitTextToSize(remarksText, pageWidth - (margin * 2));
+            doc.text(splitRemarks, margin, yPos);
+            yPos += (splitRemarks.length * 5) + 8;
         }
 
-        doc.setFontSize(11); // Same size as other headers
+        // --- FORCE PAGE BREAK FOR IMPRESSION & IMAGES ---
+        doc.addPage();
+        yPos = 20;
+
+        // --- 5. Impression ---
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 51, 102);
-        doc.text('NOTES / REMARKS', margin, yPos);
+        doc.text('IMPRESSION', margin, yPos);
         yPos += 6;
 
         doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold'); // Keep content bold
+        doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 0, 0);
         const impText = impression || diagnosis || 'Pending Diagnosis';
 
