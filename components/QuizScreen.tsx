@@ -1,13 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { generateMedicalQuiz } from '../services/geminiService';
+import { STATIC_QUIZZES, Question } from '../data/quizData';
 import { SPECIALTIES } from '../constants';
-
-interface Question {
-  question: string;
-  options: string[];
-  correctAnswer: number;
-}
 
 const QuizScreen: React.FC = () => {
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -29,10 +23,13 @@ const QuizScreen: React.FC = () => {
     setCurrentIndex(0);
     setScore(0);
     setSelectedOption(null);
-    
-    const data = await generateMedicalQuiz(specialty);
-    if (data) setQuestions(data);
-    setIsLoading(false);
+
+    // Simulate a brief loading delay for better UX, or load instantly
+    setTimeout(() => {
+      const data = STATIC_QUIZZES[specialty] || [];
+      setQuestions(data);
+      setIsLoading(false);
+    }, 500);
   };
 
   const handleSpecialtyChange = (specialty: string) => {
@@ -67,11 +64,10 @@ const QuizScreen: React.FC = () => {
             key={spec}
             onClick={() => handleSpecialtyChange(spec)}
             disabled={isLoading}
-            className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
-              selectedSpecialty === spec 
-                ? 'bg-primary border-primary text-white shadow-[0_0_15px_rgba(13,162,231,0.3)]' 
+            className={`whitespace-nowrap px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${selectedSpecialty === spec
+                ? 'bg-primary border-primary text-white shadow-[0_0_15px_rgba(13,162,231,0.3)]'
                 : 'bg-white/5 border-white/10 text-slate-500 hover:text-white'
-            } disabled:opacity-50`}
+              } disabled:opacity-50`}
           >
             {spec}
           </button>
@@ -87,8 +83,8 @@ const QuizScreen: React.FC = () => {
             </div>
           </div>
           <div className="text-center">
-            <p className="text-white text-sm font-semibold">Generating questions...</p>
-            <p className="text-slate-500 text-xs mt-1">Sourcing {selectedSpecialty} case studies</p>
+            <p className="text-white text-sm font-semibold">Loading questions...</p>
+            <p className="text-slate-500 text-xs mt-1">Preparing {selectedSpecialty} case studies</p>
           </div>
         </div>
       ) : isFinished ? (
@@ -102,22 +98,22 @@ const QuizScreen: React.FC = () => {
               +{score * 10} XP
             </div>
           </div>
-          
+
           <h2 className="text-2xl font-bold text-white mb-2">Quiz Complete!</h2>
           <p className="text-slate-400 text-sm mb-8 px-8 leading-relaxed">
-            Excellent work! You achieved a precision score of <span className="text-emerald-400 font-bold">{Math.round((score/questions.length)*100)}%</span> in <span className="text-primary font-semibold">{selectedSpecialty}</span>.
+            Excellent work! You achieved a precision score of <span className="text-emerald-400 font-bold">{Math.round((score / questions.length) * 100)}%</span> in <span className="text-primary font-semibold">{selectedSpecialty}</span>.
           </p>
 
           <div className="w-full space-y-3">
-            <button 
+            <button
               onClick={() => loadQuiz(selectedSpecialty)}
               className="w-full py-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary-dark transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] flex items-center justify-center gap-2"
             >
               <span className="material-icons text-lg">refresh</span>
               Try New Set
             </button>
-            <button 
-              onClick={() => {}} // Could navigate back or to leaderboard
+            <button
+              onClick={() => { }} // Could navigate back or to leaderboard
               className="w-full py-4 glass-card-enhanced text-slate-300 rounded-2xl font-bold hover:text-white transition-all"
             >
               Review Explanations
@@ -134,8 +130,8 @@ const QuizScreen: React.FC = () => {
               </span>
             </div>
             <div className="h-1.5 w-24 bg-white/5 rounded-full overflow-hidden border border-white/5">
-              <div 
-                className="h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(13,162,231,0.5)]" 
+              <div
+                className="h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(13,162,231,0.5)]"
                 style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
               ></div>
             </div>
@@ -152,18 +148,16 @@ const QuizScreen: React.FC = () => {
               <button
                 key={idx}
                 onClick={() => setSelectedOption(idx)}
-                className={`w-full p-4 rounded-2xl text-left transition-all border group relative overflow-hidden ${
-                  selectedOption === idx 
-                    ? 'bg-primary/10 border-primary shadow-[inset_0_0_20px_rgba(13,162,231,0.1)]' 
+                className={`w-full p-4 rounded-2xl text-left transition-all border group relative overflow-hidden ${selectedOption === idx
+                    ? 'bg-primary/10 border-primary shadow-[inset_0_0_20px_rgba(13,162,231,0.1)]'
                     : 'glass-card-enhanced border-white/5 text-slate-400 hover:border-white/20 hover:bg-white/[0.04]'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-4 relative z-10">
-                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold border transition-all ${
-                    selectedOption === idx 
-                      ? 'bg-primary text-white border-primary shadow-lg scale-110' 
+                  <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold border transition-all ${selectedOption === idx
+                      ? 'bg-primary text-white border-primary shadow-lg scale-110'
                       : 'bg-white/5 border-white/10 text-slate-500 group-hover:border-primary/40 group-hover:text-primary'
-                  }`}>
+                    }`}>
                     {String.fromCharCode(65 + idx)}
                   </span>
                   <span className={`text-sm font-medium transition-colors ${selectedOption === idx ? 'text-white' : 'group-hover:text-slate-200'}`}>
