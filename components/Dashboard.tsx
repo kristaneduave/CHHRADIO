@@ -1,8 +1,10 @@
 
+
 import React, { useEffect, useState } from 'react';
-import { ACTIVITIES, QUICK_ACTIONS, PROFILE_IMAGE } from '../constants';
-import { Screen } from '../types';
+import { QUICK_ACTIONS, PROFILE_IMAGE } from '../constants'; // Removed ACTIVITIES
+import { Screen, Activity } from '../types';
 import { supabase } from '../services/supabase';
+import { fetchRecentActivity } from '../services/activityService';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
@@ -11,12 +13,15 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [userName, setUserName] = useState('Doctor');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Try to fetch profile name, or fall back to email username
+
         const { data } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
         if (data) {
           if (data.full_name) setUserName(data.full_name);
@@ -71,24 +76,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       <section className="px-6 flex-1">
         <div className="flex justify-between items-center mb-4 ml-1">
           <h3 className="text-sm font-medium text-slate-400">Recent Activity</h3>
-          <button className="text-xs text-primary hover:text-primary-dark font-medium transition-colors">View All</button>
+          <button
+            onClick={() => onNavigate('activity-log')}
+            className="text-xs text-primary hover:text-primary-dark font-medium transition-colors"
+          >
+            View All
+          </button>
         </div>
         <div className="flex flex-col gap-3">
-          {ACTIVITIES.map((activity) => (
-            <div
-              key={activity.id}
-              className="glass-card-enhanced p-4 rounded-xl flex items-center gap-4 hover:bg-white/5 border border-white/5 hover:border-primary/30 transition-all cursor-pointer group"
-            >
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${activity.colorClass} border-white/10`}>
-                <span className="material-icons text-lg text-inherit">{activity.icon}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-semibold text-white truncate">{activity.title}</h4>
-                <p className="text-[11px] text-slate-400 mt-0.5">{activity.subtitle}</p>
-              </div>
-              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">{activity.time}</span>
+          {loadingActivities ? (
+            <p className="text-xs text-slate-500 text-center py-4">Loading activity...</p>
+          ) : activities.length === 0 ? (
+            <div className="text-center py-8 glass-card-enhanced rounded-xl border border-white/5 opacity-70">
+              <p className="text-xs text-slate-500">No recent activity.</p>
             </div>
-          ))}
+          ) : (
+            activities.map((activity, index) => (
+              <div
+                key={`${activity.id}-${index}`}
+                className="glass-card-enhanced p-4 rounded-xl flex items-center gap-4 hover:bg-white/5 border border-white/5 hover:border-primary/30 transition-all cursor-pointer group"
+              >
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${activity.colorClass} border-white/10`}>
+                  <span className="material-icons text-lg text-inherit">{activity.icon}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-semibold text-white truncate">{activity.title}</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">{activity.subtitle}</p>
+                </div>
+                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">{activity.time}</span>
+              </div>
+            ))
+          )}
         </div>
       </section>
     </>
