@@ -10,15 +10,17 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [userName, setUserName] = useState('Doctor');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Try to fetch profile name, or fall back to email username
-        const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).single();
-        if (data?.full_name) {
-          setUserName(data.full_name);
+        const { data } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single();
+        if (data) {
+          if (data.full_name) setUserName(data.full_name);
+          if (data.avatar_url) setAvatarUrl(data.avatar_url);
         } else if (user.email) {
           setUserName(user.email.split('@')[0]);
         }
@@ -31,10 +33,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     <>
       <header className="flex justify-between items-center px-6 pt-12 pb-8">
         <div className="flex items-center gap-4">
-          <div className="relative group cursor-pointer">
+          <div className="relative group cursor-pointer" onClick={() => onNavigate('profile')}>
             <div className="absolute -inset-1 bg-gradient-to-br from-primary/50 to-transparent rounded-full blur opacity-40 group-hover:opacity-60 transition duration-500"></div>
             <div className="relative p-0.5 rounded-full border border-white/10 glass-card-enhanced">
-              <img alt="Profile" className="w-12 h-12 rounded-full object-cover border border-background-dark shadow-inner" src={PROFILE_IMAGE} />
+              <img alt="Profile" className="w-12 h-12 rounded-full object-cover border border-background-dark shadow-inner" src={avatarUrl || PROFILE_IMAGE} />
             </div>
           </div>
           <div>

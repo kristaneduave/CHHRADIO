@@ -107,6 +107,10 @@ const App: React.FC = () => {
               setCaseToEdit(caseItem);
               setCurrentScreen('case-view'); // Profile also goes to view mode first
             }}
+            onViewCase={(caseItem) => {
+              setCaseToEdit(caseItem);
+              setCurrentScreen('case-view');
+            }}
           />
         );
       case 'bulletin':
