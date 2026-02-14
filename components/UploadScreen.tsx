@@ -1,56 +1,34 @@
-
 import React, { useState, useRef } from 'react';
-import { CaseData, AnalysisResult } from '../types';
 import { generateCasePDF } from '../services/pdfService';
 import { supabase } from '../services/supabase';
+import { generateViberText } from '../utils/formatters';
 
-const SPECIALTIES = [
-  'Neuroradiology',
-  'Gastrointestinal',
-  'Cardiology',
-  'Orthopedics',
-  'Pulmonology',
-  'Emergency Medicine',
-  'Oncology'
+const SINGLE_STEP_FIELDS = [
+  'Neuroradiology', 'Gastrointestinal', 'Cardiology', 'Orthopedics',
+  'Pulmonology', 'Emergency Medicine', 'Oncology'
 ];
 
-const SEVERITIES = ['Routine', 'Urgent', 'Critical'];
-
 const UploadScreen: React.FC = () => {
-  const [caseData, setCaseData] = useState<CaseData>({
+  // Flattened state for the 8 requested fields
+  const [formData, setFormData] = useState({
     initials: '',
     age: '',
-    isPediatric: false,
-    specialty: 'Neuroradiology',
-    clinicalHistory: '',
-    findings: ''
-  });
-
-  // Manual Entry States
-  const [manualEntry, setManualEntry] = useState({
+    sex: 'M',
     modality: '',
-    anatomy: '',
-    primaryDiagnosis: '',
-    planOfCare: '',
-    severity: 'Routine',
-    educationalNotes: ''
+    organ: '', // Systems/Anatomy
+    findings: '',
+    impression: '', // Diagnosis
+    notes: '' // Bite-sized notes
   });
 
   const [preview, setPreview] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [step, setStep] = useState(1); // 1: Info, 2: Upload/Report, 3: Result
+  const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [isCameraActive, setIsCameraActive] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    // Check if it belongs to manualEntry or caseData
-    if (Object.keys(manualEntry).includes(name)) {
-      setManualEntry(prev => ({ ...prev, [name]: value }));
-    } else {
-      const val = type === 'checkbox' ? (e.target as HTMLInputElement).checked : value;
-      setCaseData(prev => ({ ...prev, [name]: val }));
-    }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const processFile = (file: File) => {
@@ -103,31 +81,18 @@ const UploadScreen: React.FC = () => {
       alert("Please upload or capture an image first.");
       return;
     }
+    setStep(2);
+  };
 
-    // specific hack: create analysis object from manual inputs
-    const generatedAnalysis: AnalysisResult = {
-      modality: manualEntry.modality || "Not Specified",
-      anatomy_region: manualEntry.anatomy || "Not Specified",
-      keyFindings: caseData.findings ? caseData.findings.split('\n').filter(Boolean) : ["No specific findings noted."],
-      differentials: manualEntry.primaryDiagnosis ? [{
-        condition: manualEntry.primaryDiagnosis,
-        confidence: 100,
-        rationale: "Clinical Impression"
-      }] : [],
-      planOfCare: manualEntry.planOfCare ? manualEntry.planOfCare.split('\n').filter(Boolean) : ["Continue monitoring"],
-      educationalSummary: manualEntry.educationalNotes || "No educational notes provided.",
-      severity: manualEntry.severity as any,
-      pearl: "",
-      teachingPoints: [],
-      redFlags: []
-    };
-
-    setAnalysis(generatedAnalysis);
-    setStep(3);
+  const handleCopyToViber = () => {
+    const text = generateViberText(formData);
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Copied to clipboard! Ready to paste into Viber.');
+    });
   };
 
   const handleSave = async () => {
-    if (!preview || !analysis || !caseData.initials) return;
+    if (!preview || !formData.initials) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -149,22 +114,27 @@ const UploadScreen: React.FC = () => {
         .getPublicUrl(fileName);
 
       // 2. Insert Case
+      // Mapping flat 8 fields to DB schema (some fields might slightly differ in name)
       const { error: insertError } = await supabase
         .from('cases')
         .insert({
-          title: `Case: ${caseData.initials}`,
-          clinical_history: caseData.clinicalHistory,
-          findings: caseData.findings,
+          title: `Case: ${formData.initials}`,
+          clinical_history: formData.notes, // Storing notes here for now
+          findings: formData.findings,
           image_url: publicUrl,
-          difficulty: analysis.severity === 'Critical' ? 'Hard' : analysis.severity === 'Urgent' ? 'Medium' : 'Easy',
+          difficulty: 'Medium', // Default
           created_by: user.id,
-          category: caseData.specialty,
-          analysis_result: analysis,
-          modality: analysis.modality,
-          anatomy_region: analysis.anatomy_region,
-          teaching_points: JSON.stringify(analysis.teachingPoints),
-          pearl: analysis.pearl,
-          red_flags: JSON.stringify(analysis.redFlags),
+          category: formData.organ,
+          // Storing structured data in JSON columns for future proofing if needed
+          analysis_result: {
+            modality: formData.modality,
+            anatomy_region: formData.organ,
+            keyFindings: [formData.findings],
+            impression: formData.impression,
+            educationalSummary: formData.notes
+          },
+          modality: formData.modality,
+          anatomy_region: formData.organ,
           status: 'published'
         });
 
@@ -172,24 +142,17 @@ const UploadScreen: React.FC = () => {
 
       alert('Case saved successfully!');
       setStep(1);
-      setCaseData({
+      setFormData({
         initials: '',
         age: '',
-        isPediatric: false,
-        specialty: 'Neuroradiology',
-        clinicalHistory: '',
-        findings: ''
-      });
-      setManualEntry({
+        sex: 'M',
         modality: '',
-        anatomy: '',
-        primaryDiagnosis: '',
-        planOfCare: '',
-        severity: 'Routine',
-        educationalNotes: ''
+        organ: '',
+        findings: '',
+        impression: '',
+        notes: ''
       });
       setPreview(null);
-      setAnalysis(null);
 
     } catch (error: any) {
       console.error('Error saving case:', error);
@@ -202,12 +165,12 @@ const UploadScreen: React.FC = () => {
       {/* Modern Stepper */}
       <div className="px-6 pt-12 flex justify-between items-center mb-8 shrink-0">
         <div className="flex gap-2">
-          {[1, 2, 3].map(i => (
+          {[1, 2].map(i => (
             <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
           ))}
         </div>
         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          {step === 1 ? 'Patient Data' : step === 2 ? 'Report Entry' : 'Clinical Report'}
+          {step === 1 ? 'Data Entry' : 'Export'}
         </span>
       </div>
 
@@ -215,188 +178,154 @@ const UploadScreen: React.FC = () => {
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <header>
-              <h1 className="text-2xl font-bold text-white mb-1">Case Profile</h1>
-              <p className="text-slate-500 text-xs">Establish the clinical baseline</p>
+              <h1 className="text-2xl font-bold text-white mb-1">New Case</h1>
+              <p className="text-slate-500 text-xs">Enter clinical details</p>
             </header>
 
-            <div className="glass-card-enhanced p-5 rounded-2xl space-y-5">
+            {/* Image Section moved to top for better workflow */}
+            {!preview && !isCameraActive ? (
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
+                <button onClick={startCamera} className="glass-card-enhanced aspect-[3/2] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+                    <span className="material-icons text-xl">camera_alt</span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-400">Camera</span>
+                </button>
+                <div className="relative glass-card-enhanced aspect-[3/2] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all overflow-hidden">
+                  <input type="file" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
+                  <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all">
+                    <span className="material-icons text-xl">file_upload</span>
+                  </div>
+                  <span className="text-xs font-bold text-slate-400">Upload</span>
+                </div>
+              </div>
+            ) : isCameraActive ? (
+              <div className="relative glass-card-enhanced rounded-2xl overflow-hidden aspect-video border-2 border-primary/30">
+                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                <div className="absolute inset-x-0 bottom-4 flex justify-center items-center gap-8">
+                  <button onClick={stopCamera} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center">
+                    <span className="material-icons">close</span>
+                  </button>
+                  <button onClick={capturePhoto} className="w-14 h-14 rounded-full bg-white border-4 border-primary/30 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
+                    <div className="w-10 h-10 rounded-full border-2 border-slate-200" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="relative glass-card-enhanced rounded-2xl overflow-hidden shadow-2xl bg-black/50">
+                <img src={preview!} alt="Preview" className="w-full h-48 object-contain" />
+                <button onClick={() => setPreview(null)} className="absolute top-2 right-2 w-8 h-8 rounded-full bg-black/50 backdrop-blur text-white flex items-center justify-center hover:bg-rose-500 transition-colors"><span className="material-icons text-sm">close</span></button>
+              </div>
+            )}
+
+            <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
+              {/* Row 1: Initials, Age, Sex */}
+              <div className="grid grid-cols-12 gap-3">
+                <div className="col-span-6 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
-                  <input name="initials" value={caseData.initials} onChange={handleInputChange} placeholder="E.G. J.W." className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all" />
+                  <input name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
                 </div>
-                <div className="space-y-1.5">
+                <div className="col-span-3 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
-                  <input type="number" name="age" value={caseData.age} onChange={handleInputChange} placeholder="Years" className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all" />
+                  <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                </div>
+                <div className="col-span-3 space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Sex</label>
+                  <select name="sex" value={formData.sex} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-2 py-2 text-sm text-white focus:border-primary appearance-none text-center">
+                    <option value="M" className="bg-[#0c1829]">M</option>
+                    <option value="F" className="bg-[#0c1829]">F</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Specialty</label>
-                <select name="specialty" value={caseData.specialty} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary appearance-none">
-                  {SPECIALTIES.map(s => <option key={s} value={s} className="bg-[#0c1829]">{s}</option>)}
-                </select>
+              {/* Row 2: Modality, Organ */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
+                  <input name="modality" value={formData.modality} onChange={handleInputChange} placeholder="CT, MRI..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ</label>
+                  <input name="organ" value={formData.organ} onChange={handleInputChange} placeholder="Lung, Brain..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">History & Symptoms</label>
-                <textarea name="clinicalHistory" value={caseData.clinicalHistory} onChange={handleInputChange} rows={4} placeholder="Summary of presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all resize-none" />
+              {/* Row 3: Findings */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Findings</label>
+                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={3} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+              </div>
+
+              {/* Row 4: Impression */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Impression</label>
+                <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+              </div>
+
+              {/* Row 5: Notes */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes</label>
+                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Bite-sized interesting facts..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
             </div>
 
-            <button onClick={() => setStep(2)} disabled={!caseData.initials || !caseData.age || !caseData.clinicalHistory} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
-              Next Step
+            <button onClick={handleGenerateReport} disabled={!formData.initials} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
+              Generate Reports
               <span className="material-icons text-sm">arrow_forward</span>
             </button>
           </div>
         )}
 
         {step === 2 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <header className="flex justify-between items-end">
-              <div>
-                <h1 className="text-2xl font-bold text-white mb-1">Diagnostic Report</h1>
-                <p className="text-slate-500 text-xs">Upload images and enter findings</p>
-              </div>
-              <button onClick={() => setStep(1)} className="text-[10px] font-bold text-slate-500 uppercase hover:text-white transition-colors">Edit Profile</button>
-            </header>
-
-            {!preview && !isCameraActive ? (
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={startCamera} className="glass-card-enhanced aspect-[3/4] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                    <span className="material-icons text-2xl">camera_alt</span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400">Open Camera</span>
-                </button>
-                <div className="relative glass-card-enhanced aspect-[3/4] rounded-2xl flex flex-col items-center justify-center gap-3 group hover:border-primary/50 transition-all overflow-hidden">
-                  <input type="file" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
-                  <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-primary/10 group-hover:text-primary transition-all">
-                    <span className="material-icons text-2xl">file_upload</span>
-                  </div>
-                  <span className="text-xs font-bold text-slate-400">Upload File</span>
-                </div>
-              </div>
-            ) : isCameraActive ? (
-              <div className="relative glass-card-enhanced rounded-2xl overflow-hidden aspect-[3/4] border-2 border-primary/30">
-                <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                <div className="absolute inset-x-0 bottom-6 flex justify-center items-center gap-8">
-                  <button onClick={stopCamera} className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center">
-                    <span className="material-icons">close</span>
-                  </button>
-                  <button onClick={capturePhoto} className="w-16 h-16 rounded-full bg-white border-4 border-primary/30 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
-                    <div className="w-12 h-12 rounded-full border-2 border-slate-200" />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                <div className="relative glass-card-enhanced rounded-2xl overflow-hidden shadow-2xl">
-                  <img src={preview!} alt="Preview" className="w-full h-80 object-contain bg-black" />
-                  <button onClick={() => setPreview(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-rose-500/80 text-white flex items-center justify-center"><span className="material-icons text-sm">close</span></button>
-                </div>
-
-                <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
-                      <input name="modality" value={manualEntry.modality} onChange={handleInputChange} placeholder="e.g. MRI, CT" className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Anatomy</label>
-                      <input name="anatomy" value={manualEntry.anatomy} onChange={handleInputChange} placeholder="e.g. Brain" className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Key Findings</label>
-                    <textarea name="findings" value={caseData.findings} onChange={handleInputChange} rows={3} placeholder="List key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all resize-none" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Diagnosis</label>
-                    <input name="primaryDiagnosis" value={manualEntry.primaryDiagnosis} onChange={handleInputChange} placeholder="Primary Impression" className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Plan of Care</label>
-                    <textarea name="planOfCare" value={manualEntry.planOfCare} onChange={handleInputChange} rows={2} placeholder="Recommended next steps..." className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary transition-all resize-none" />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Severity</label>
-                    <select name="severity" value={manualEntry.severity} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary appearance-none">
-                      {SEVERITIES.map(s => <option key={s} value={s} className="bg-[#0c1829]">{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <button onClick={handleGenerateReport} className="w-full py-5 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl font-bold shadow-[0_10px_30px_-5px_rgba(13,162,231,0.5)] flex items-center justify-center gap-3">
-                  <span className="material-icons">description</span>
-                  Preview Report
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {step === 3 && analysis && (
           <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
             <header className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-0.5">Clinical Report</h1>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${analysis.severity === 'Critical' ? 'bg-rose-500 text-white' :
-                    analysis.severity === 'Urgent' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-white'
-                    }`}>
-                    {analysis.severity}
-                  </span>
-                  <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">{analysis.modality} - {analysis.anatomy_region}</span>
-                </div>
+                <h1 className="text-2xl font-bold text-white mb-0.5">Ready to Share</h1>
+                <p className="text-slate-500 text-xs text-emerald-400">Generated successfully</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => generateCasePDF(caseData, analysis, preview)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400 hover:text-white transition-colors" title="Download PDF">
-                  <span className="material-icons">picture_as_pdf</span>
-                </button>
-                <button onClick={() => setStep(2)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
-              </div>
+              <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
             </header>
 
-            {/* Manual Report Display */}
+            {/* Preview Card */}
             <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
-              <div>
-                <h3 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-2">Diagnosis</h3>
-                <p className="text-lg font-bold text-white leading-relaxed">{manualEntry.primaryDiagnosis || "Pending Diagnosis"}</p>
+              {preview && (
+                <img src={preview} alt="Case" className="w-full h-40 object-cover rounded-xl mb-4 bg-black/40" />
+              )}
+              <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
+                  <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Modality</span>
+                  <p className="text-white text-sm font-bold">{formData.modality} - {formData.organ}</p>
+                </div>
               </div>
-
               <div>
-                <h3 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-2">Observations</h3>
-                <ul className="space-y-2">
-                  {analysis.keyFindings.map((f, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-slate-300">
-                      <span className="text-primary">•</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
+                <p className="text-white text-sm font-medium">{formData.impression}</p>
               </div>
-
               <div>
-                <h3 className="text-[10px] font-bold text-emerald-500 uppercase tracking-[0.2em] mb-2">Plan</h3>
-                <ul className="space-y-2">
-                  {analysis.planOfCare.map((f, i) => (
-                    <li key={i} className="flex gap-2 text-sm text-slate-300">
-                      <span className="text-emerald-500 font-bold">{i + 1}.</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
+                <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
               </div>
             </div>
 
-            <div className="flex gap-4 pt-4">
-              <button onClick={() => setStep(1)} className="flex-1 py-4 glass-card-enhanced rounded-2xl text-xs font-bold text-slate-400 uppercase tracking-widest hover:text-white transition-all">New Case</button>
-              <button onClick={handleSave} className="flex-2 py-4 bg-primary text-white rounded-2xl text-xs font-bold uppercase tracking-widest shadow-lg hover:bg-blue-600 transition-colors">Save To Profile</button>
+            {/* Actions */}
+            <div className="space-y-3">
+              <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
+                <span className="material-icons">content_copy</span>
+                Copy for Viber
+              </button>
+
+              <button onClick={() => generateCasePDF(formData, null, preview)} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+                <span className="material-icons text-rose-500">picture_as_pdf</span>
+                Export to Drive (PDF)
+              </button>
+
+              <button onClick={handleSave} className="w-full py-3 text-xs font-bold text-slate-500 uppercase tracking-widest hover:text-white transition-colors">
+                Save to Profile Only
+              </button>
             </div>
           </div>
         )}
