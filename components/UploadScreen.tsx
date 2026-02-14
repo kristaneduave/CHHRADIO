@@ -52,10 +52,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     sex: existingCase?.patient_sex || 'M',
     modality: existingCase?.modality || '',
     organSystem: existingCase?.anatomy_region || 'Neuroradiology',
+    clinicalData: existingCase?.clinical_history || '',
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
-    notes: existingCase?.clinical_history || '',
-    diagnosis: existingCase?.diagnosis || '', // Map to 'diagnosis' column
+    notes: existingCase?.educational_summary || '', // Mapped to educational_summary for notes
+    diagnosis: existingCase?.diagnosis || '',
     date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
     reliability: existingCase?.analysis_result?.reliability || 'Certain'
   });
@@ -227,7 +228,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         patient_initials: formData.initials, // Ensure these match DB columns
         patient_age: formData.age,
         patient_sex: formData.sex,
-        clinical_history: formData.notes,
+        clinical_history: formData.clinicalData, // Save clinicalData to DB column
+        educational_summary: formData.notes, // Save notes/remarks here
         findings: formData.findings,
         image_url: distinctUploadedUrls[0], // Primary thumbnail
         image_urls: distinctUploadedUrls,   // All images
@@ -486,10 +488,49 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               )}
             </div>
 
-            <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
+            const MODALITIES = [
+            'X-Ray',
+            'CT Scan',
+            'MRI',
+            'Ultrasound',
+            'Mammography',
+            'Fluoroscopy',
+            'Nuclear Medicine',
+            'Interventional',
+            'PET/CT'
+            ];
+
+            interface UploadScreenProps {
+              existingCase ?: any; // Replace with proper type if available, e.g., Case
+  onClose?: () => void;
+}
+
+            const UploadScreen: React.FC<UploadScreenProps> = ({existingCase, onClose}) => {
+  const [formData, setFormData] = useState({
+                initials: existingCase?.patient_initials || '',
+              age: existingCase?.patient_age || '',
+              sex: existingCase?.patient_sex || 'M',
+              modality: existingCase?.modality || 'CT Scan',
+              organSystem: existingCase?.anatomy_region || 'Neuroradiology',
+              clinicalData: existingCase?.clinical_history || '', // Mapping clinical_history here for now, or new field
+              findings: existingCase?.findings || '',
+              impression: existingCase?.analysis_result?.impression || '',
+              notes: existingCase?.educational_summary || '', // Separate notes from clinical data
+              diagnosis: existingCase?.diagnosis || '', // Map to 'diagnosis' column
+              date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
+              reliability: existingCase?.analysis_result?.reliability || 'Certain'
+  });
+
+              // ... (Keep existing code) ...
+
+              // Update handleSave casePayload to include clinicalData
+              // ...
+
+              // RENDER UPDATES
+
               {/* Row 1: Initials, Age, Sex */}
               <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-6 space-y-1">
+                <div className="col-span-5 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
                   <input name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
                 </div>
@@ -497,35 +538,62 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
                   <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
                 </div>
-                <div className="col-span-3 space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Sex</label>
-                  <select name="sex" value={formData.sex} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-2 py-2 text-sm text-white focus:border-primary appearance-none text-center">
-                    <option value="M" className="bg-[#0c1829]">M</option>
-                    <option value="F" className="bg-[#0c1829]">F</option>
-                  </select>
+                <div className="col-span-4 space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1 text-center block">Sex</label>
+                  <div className="flex justify-center gap-2">
+                    {['M', 'F'].map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setFormData(prev => ({ ...prev, sex: s }))}
+                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${formData.sex === s ? 'bg-primary text-white shadow-lg scale-110' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               {/* Row 2: Modality, Organ System */}
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
-                  <input name="modality" value={formData.modality} onChange={handleInputChange} placeholder="CT, MRI..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                  <div className="relative">
+                    <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
+                      {MODALITIES.map(m => (
+                        <option key={m} value={m} className="bg-[#0c1829] text-white">{m}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <span className="material-icons text-sm">expand_more</span>
+                    </div>
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ System</label>
-                  <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
-                    {ORGAN_SYSTEMS.map(os => (
-                      <option key={os} value={os} className="bg-[#0c1829]">{os}</option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
+                      {ORGAN_SYSTEMS.map(os => (
+                        <option key={os} value={os} className="bg-[#0c1829] text-white">{os}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <span className="material-icons text-sm">expand_more</span>
+                    </div>
+                  </div>
                 </div>
+              </div>
+
+              {/* New Row: Clinical Data */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Data</label>
+                <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
               {/* Row 3: Findings */}
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Findings</label>
-                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={3} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
               {/* Row 4: Impression */}
@@ -534,121 +602,104 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
               </div>
 
-              {/* Row 5: Notes */}
+              {/* Row 5: Notes / Remarks */}
               <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes</label>
-                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Bite-sized interesting facts..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
+                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
-              {/* Manual Diagnostic Code Removed */}
-            </div>
+              {/* PREVIEW UPDATE */}
+              <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
+                {/* ... (Images) ... */}
+                {images.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                    {images.map((img, i) => (
+                      <div key={i} className="shrink-0 space-y-1 w-24">
+                        <img src={img.url} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40" />
+                        {img.description && <p className="text-[9px] text-slate-400 truncate">{img.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-            <button onClick={handleGenerateReport} disabled={!formData.initials} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
-              Generate Reports
-              <span className="material-icons text-sm">arrow_forward</span>
-            </button>
-          </div>
-        )}
-
-        {step === 2 && !isScreenshotMode && (
-          <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
-            <header className="flex justify-between items-center">
-              <div>
-                <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-500">{formData.date}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className={`${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'} font-bold`}>
-                    {formData.reliability}
-                  </span>
-                </div>
-              </div>
-              <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
-            </header>
-
-            {/* Preview Card */}
-            <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
-              {images.length > 0 && (
-                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                  {images.map((img, i) => (
-                    <div key={i} className="shrink-0 space-y-1 w-24">
-                      <img src={img.url} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40" />
-                      {img.description && <p className="text-[9px] text-slate-400 truncate">{img.description}</p>}
+                <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
+                  <div>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
+                    <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
+                    <p className="text-white text-sm font-bold">{formData.modality}</p>
+                    <p className="text-slate-400 text-xs">{formData.organSystem}</p>
+                  </div>
+                  {formData.clinicalData && (
+                    <div className="col-span-2">
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">Clinical Data</span>
+                      <p className="text-white text-xs">{formData.clinicalData}</p>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-              <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
+                {/* ... (Rest of Preview) ... */}
+                {/* Diagnostic Code Display */}
+                {formData.diagnosis && (
+                  <div>
+                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
+                    <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
+                  </div>
+                )}
+
                 <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
-                  <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
+                  <p className="text-white text-sm font-medium">{formData.impression}</p>
                 </div>
                 <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Modality</span>
-                  <p className="text-white text-sm font-bold">{formData.modality} - {formData.organSystem}</p>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
+                  <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
                 </div>
               </div>
 
-              {/* Diagnostic Code Display */}
-              {formData.diagnosis && (
-                <div>
-                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
-                  <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
-                </div>
-              )}
-
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
-                <p className="text-white text-sm font-medium">{formData.impression}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
-                <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-3">
-              <button
-                onClick={() => setIsScreenshotMode(true)}
-                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3"
-              >
-                <span className="material-icons">crop_free</span>
-                Screenshot Mode
-              </button>
-
-              <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
-                <span className="material-icons">content_copy</span>
-                Copy for Viber
-              </button>
-
-              <button onClick={() => {
-                console.log('Export button clicked');
-                try {
-                  // Pass reliability to PDF if needed, or append to Impression
-                  const extendedData = {
-                    ...formData,
-                    impression: `${formData.impression} (${formData.reliability})`
-                  };
-                  generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
-                } catch (e) {
-                  console.error('Export failed immediately:', e);
-                  alert('Export failed: ' + e);
-                }
-              }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
-                <span className="material-icons text-rose-500">picture_as_pdf</span>
-                Export to Drive (PDF)
-              </button>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => handleSave('draft')} className="w-full py-3 text-sm font-bold text-slate-400 bg-white/5 rounded-xl hover:bg-white/10 transition-colors uppercase tracking-wider">
-                  {existingCase ? 'Update Private Draft' : 'Save as Private Draft'}
+              {/* Actions */}
+              <div className="space-y-3">
+                <button
+                  onClick={() => setIsScreenshotMode(true)}
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3"
+                >
+                  <span className="material-icons">crop_free</span>
+                  Screenshot Mode
                 </button>
-                <button onClick={() => handleSave('published')} className="w-full py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors uppercase tracking-wider shadow-lg shadow-blue-900/20">
-                  {existingCase ? 'Update & Publish' : 'Publish to Database'}
+
+                <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
+                  <span className="material-icons">content_copy</span>
+                  Copy for Viber
                 </button>
+
+                <button onClick={() => {
+                  console.log('Export button clicked');
+                  try {
+                    // Pass reliability to PDF if needed, or append to Impression
+                    const extendedData = {
+                      ...formData,
+                      impression: `${formData.impression} (${formData.reliability})`
+                    };
+                    generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
+                  } catch (e) {
+                    console.error('Export failed immediately:', e);
+                    alert('Export failed: ' + e);
+                  }
+                }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+                  <span className="material-icons text-rose-500">picture_as_pdf</span>
+                  Export to Drive (PDF)
+                </button>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => handleSave('draft')} className="w-full py-3 text-sm font-bold text-slate-400 bg-white/5 rounded-xl hover:bg-white/10 transition-colors uppercase tracking-wider">
+                    {existingCase ? 'Update Private Draft' : 'Save as Private Draft'}
+                  </button>
+                  <button onClick={() => handleSave('published')} className="w-full py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors uppercase tracking-wider shadow-lg shadow-blue-900/20">
+                    {existingCase ? 'Update & Publish' : 'Publish to Database'}
+                  </button>
+                </div>
               </div>
-            </div>
           </div>
         )}
       </div>

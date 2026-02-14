@@ -70,19 +70,37 @@ export const generateCasePDF = (
         doc.setTextColor(20, 20, 20);
         doc.text(`${modality || 'N/A'}  -  ${organSystem || 'N/A'}`, col1X + 25, yPos);
 
-        // Column 2 Row 2: Diagnostic Code
-        const rawCode = diagnosis || data.diagnosticCode;
-        if (rawCode && !rawCode.toUpperCase().includes('PENDING')) {
+        yPos += 8;
+
+        // Clinical Data (New Line)
+        if (data.clinicalData) {
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 102, 204);
-            doc.text('CODE', col2X, yPos);
+            doc.text('CLINICAL', col1X, yPos);
 
-            doc.setFont('helvetica', 'bold'); // Bold for the code itself
+            doc.setFont('helvetica', 'normal');
             doc.setTextColor(20, 20, 20);
-            doc.text(rawCode, col2X + 20, yPos);
+            doc.text(data.clinicalData, col1X + 25, yPos);
+            yPos += 8;
         }
 
-        yPos += 20; // Space before findings
+        // Column 2 Row 2: Diagnostic Code
+        // Reset Y for Code if needed, or place it aligned with Clinical
+        const rawCode = diagnosis || data.diagnosticCode;
+        if (rawCode && !rawCode.toUpperCase().includes('PENDING')) {
+            // align with Exam or Clinical depending on space
+            const codeY = data.clinicalData ? yPos - 16 : yPos - 8;
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 102, 204);
+            doc.text('CODE', col2X, codeY);
+
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(20, 20, 20);
+            doc.text(rawCode, col2X + 20, codeY);
+        }
+
+        yPos += 15; // Space before findings
 
         // --- 3. Findings ---
         doc.setFontSize(11);
