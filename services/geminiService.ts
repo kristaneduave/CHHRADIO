@@ -48,6 +48,8 @@ export async function analyzeMedicalImage(
         responseSchema: {
           type: Type.OBJECT,
           properties: {
+            modality: { type: Type.STRING },
+            anatomy_region: { type: Type.STRING },
             keyFindings: { type: Type.ARRAY, items: { type: Type.STRING } },
             differentials: {
               type: Type.ARRAY,
@@ -63,9 +65,12 @@ export async function analyzeMedicalImage(
             },
             planOfCare: { type: Type.ARRAY, items: { type: Type.STRING } },
             educationalSummary: { type: Type.STRING },
-            severity: { type: Type.STRING, enum: ["Routine", "Urgent", "Critical"] }
+            severity: { type: Type.STRING, enum: ["Routine", "Urgent", "Critical"] },
+            teachingPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+            pearl: { type: Type.STRING },
+            redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
           },
-          required: ["keyFindings", "differentials", "planOfCare", "educationalSummary", "severity"]
+          required: ["modality", "anatomy_region", "keyFindings", "differentials", "planOfCare", "educationalSummary", "severity", "teachingPoints", "pearl", "redFlags"]
         }
       }
     });

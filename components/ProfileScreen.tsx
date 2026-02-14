@@ -5,6 +5,7 @@ import { PROFILE_IMAGE } from '../constants';
 const ProfileScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [profile, setProfile] = useState({
@@ -76,6 +77,11 @@ const ProfileScreen: React.FC = () => {
 
       if (error) throw error;
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setTimeout(() => {
+        setIsEditing(false);
+        setMessage(null);
+      }, 1500);
+
     } catch (error: any) {
       console.error('Error updating profile:', error);
       setMessage({ type: 'error', text: error.message || 'Error updating profile' });
@@ -111,49 +117,63 @@ const ProfileScreen: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-full max-w-sm space-y-4">
-          <div>
-            <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-            <input
-              name="full_name"
-              value={profile.full_name}
-              onChange={handleChange}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-              placeholder="Dr. Alex Smith"
-            />
+        {/* View Mode Header */}
+        {!isEditing && (
+          <div className="mb-6">
+            <h1 className="text-xl font-bold text-white mb-0.5">{profile.full_name || 'Doctor'}</h1>
+            <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-2">
+              {profile.year_level || 'Resident'} • {profile.specialty}
+            </p>
+            <p className="text-slate-400 text-xs italic max-w-xs mx-auto">"{profile.bio || 'No bio yet.'}"</p>
           </div>
-          <div>
-            <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Username</label>
-            <input
-              name="username"
-              value={profile.username}
-              onChange={handleChange}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-              placeholder="asmith"
-            />
+        )}
+
+        {/* Edit Form */}
+        {isEditing && (
+          <div className="w-full max-w-sm space-y-4">
+            <div>
+              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
+              <input
+                name="full_name"
+                value={profile.full_name}
+                onChange={handleChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                placeholder="Dr. Alex Smith"
+              />
+            </div>
+            <div>
+              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Username</label>
+              <input
+                name="username"
+                value={profile.username}
+                onChange={handleChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                placeholder="asmith"
+              />
+            </div>
+            <div>
+              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
+              <textarea
+                name="bio"
+                value={profile.bio}
+                onChange={handleChange}
+                rows={3}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
+                placeholder="Resident physician..."
+              />
+            </div>
+            <div>
+              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Year Level</label>
+              <input
+                name="year_level"
+                value={profile.year_level}
+                onChange={handleChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                placeholder="e.g. R1, R2, Fellow"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
-            <textarea
-              name="bio"
-              value={profile.bio}
-              onChange={handleChange}
-              rows={3}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
-              placeholder="Resident physician..."
-            />
-          </div>
-          <div>
-            <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Year Level</label>
-            <input
-              name="year_level"
-              value={profile.year_level}
-              onChange={handleChange}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-              placeholder="e.g. R1, R2, Fellow"
-            />
-          </div>
-        </div>
+        )}
 
         {message && (
           <div className={`mt-4 px-4 py-2 rounded-lg text-xs font-bold ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -165,13 +185,31 @@ const ProfileScreen: React.FC = () => {
 
       {/* Actions */}
       <div className="space-y-3 mt-8">
-        <button
-          onClick={updateProfile}
-          disabled={updating}
-          className="w-full py-4 bg-primary hover:bg-primary-dark rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-white transition-all uppercase tracking-widest shadow-lg shadow-primary/20 disabled:opacity-50"
-        >
-          {updating ? 'Saving...' : 'Save Profile'}
-        </button>
+        {isEditing ? (
+          <>
+            <button
+              onClick={updateProfile}
+              disabled={updating}
+              className="w-full py-4 bg-primary hover:bg-primary-dark rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-white transition-all uppercase tracking-widest shadow-lg shadow-primary/20 disabled:opacity-50"
+            >
+              {updating ? 'Saving...' : 'Save Changes'}
+            </button>
+            <button
+              onClick={() => { setIsEditing(false); setMessage(null); }}
+              className="w-full py-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-slate-400 transition-all uppercase tracking-widest"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-white transition-all uppercase tracking-widest"
+          >
+            <span className="material-icons text-sm">edit</span>
+            Edit Profile
+          </button>
+        )}
 
         <button
           onClick={() => supabase.auth.signOut()}

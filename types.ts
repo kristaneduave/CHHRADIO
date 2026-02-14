@@ -19,10 +19,23 @@ export interface QuickAction {
 export interface CaseData {
   initials: string;
   age: string;
+  gender?: string;
   isPediatric: boolean;
   specialty: string;
   clinicalHistory: string;
   findings: string;
+  modality?: string;
+  anatomy?: string;
+  tags?: string[];
+  imageUrls: string[]; // Changed from single preview string logic or implicit
+  // Manual fields
+  diagnosis?: string;
+  differentials?: Differential[];
+  pearl?: string;
+  teachingPoints?: string[];
+  redFlags?: string[];
+  planOfCare?: string[];
+  severity?: 'Routine' | 'Urgent' | 'Critical';
 }
 
 export interface Differential {
@@ -37,6 +50,11 @@ export interface AnalysisResult {
   planOfCare: string[];
   educationalSummary: string;
   severity: 'Routine' | 'Urgent' | 'Critical';
+  modality?: string;
+  anatomy_region?: string;
+  teachingPoints?: string[];
+  pearl?: string;
+  redFlags?: string[];
 }
 
 export interface PatientRecord {

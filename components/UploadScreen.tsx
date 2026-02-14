@@ -2,6 +2,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { analyzeMedicalImage } from '../services/geminiService';
 import { CaseData, AnalysisResult } from '../types';
+import { generateCasePDF } from '../services/pdfService';
 import { supabase } from '../services/supabase';
 
 
@@ -140,7 +141,13 @@ const UploadScreen: React.FC = () => {
           difficulty: analysis.severity === 'Critical' ? 'Hard' : analysis.severity === 'Urgent' ? 'Medium' : 'Easy',
           created_by: user.id,
           category: caseData.specialty,
-          analysis_result: analysis
+          analysis_result: analysis,
+          modality: analysis.modality,
+          anatomy_region: analysis.anatomy_region,
+          teaching_points: JSON.stringify(analysis.teachingPoints), // Note: Storing as JSON string if text array not supported directly or use text[]
+          pearl: analysis.pearl,
+          red_flags: JSON.stringify(analysis.redFlags), // Same logic
+          status: 'published' // Default to published for now, or add toggle
         });
 
       if (insertError) throw insertError;
@@ -327,7 +334,12 @@ const UploadScreen: React.FC = () => {
                   <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Educational Review</span>
                 </div>
               </div>
-              <button onClick={() => setStep(2)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">close</span></button>
+              <div className="flex gap-2">
+                <button onClick={() => generateCasePDF(caseData, analysis, preview)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400 hover:text-white transition-colors" title="Download PDF">
+                  <span className="material-icons">picture_as_pdf</span>
+                </button>
+                <button onClick={() => setStep(2)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">close</span></button>
+              </div>
             </header>
 
             <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02]">
@@ -391,6 +403,38 @@ const UploadScreen: React.FC = () => {
                   ))}
                 </div>
               </section>
+
+              {/* Enhanced Educational Content */}
+              {(analysis.pearl || analysis.teachingPoints) && (
+                <section>
+                  <h3 className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <span className="material-icons text-sm">school</span>
+                    Educational Pearls
+                  </h3>
+                  <div className="glass-card-enhanced p-4 rounded-xl border-indigo-500/20 bg-indigo-500/5 space-y-4">
+                    {analysis.pearl && (
+                      <div className="flex gap-3">
+                        <span className="text-xl">💡</span>
+                        <div>
+                          <span className="text-xs font-bold text-white block mb-1">Clinical Pearl</span>
+                          <p className="text-xs text-slate-300 italic">{analysis.pearl}</p>
+                        </div>
+                      </div>
+                    )}
+                    {analysis.teachingPoints && (
+                      <div className="space-y-2 pt-2 border-t border-indigo-500/10">
+                        <span className="text-xs font-bold text-white block">Key Takeaways</span>
+                        <ul className="list-disc list-inside space-y-1">
+                          {analysis.teachingPoints.map((tp, i) => (
+                            <li key={i} className="text-xs text-slate-300">{tp}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </section>
+              )}
+
             </div>
 
             <div className="bg-rose-500/5 border border-rose-500/10 p-4 rounded-xl">
