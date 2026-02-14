@@ -33,7 +33,9 @@ const UploadScreen: React.FC = () => {
     organSystem: 'Neuroradiology', // Default
     findings: '',
     impression: '', // Diagnosis
-    notes: '' // Bite-sized notes
+    notes: '', // Bite-sized notes
+    date: new Date().toISOString().split('T')[0], // Default today
+    reliability: 'Probable' // Default
   });
 
   const [customTitle, setCustomTitle] = useState('');
@@ -171,7 +173,9 @@ const UploadScreen: React.FC = () => {
             keyFindings: [formData.findings],
             impression: formData.impression,
             educationalSummary: formData.notes,
-            imagesMetadata: imageMetadata // Store descriptions here
+            imagesMetadata: imageMetadata, // Store descriptions here
+            studyDate: formData.date,
+            reliability: formData.reliability
           },
           modality: formData.modality,
           anatomy_region: formData.organSystem,
@@ -190,7 +194,9 @@ const UploadScreen: React.FC = () => {
         organSystem: 'Neuroradiology',
         findings: '',
         impression: '',
-        notes: ''
+        notes: '',
+        date: new Date().toISOString().split('T')[0],
+        reliability: 'Probable'
       });
       setImages([]);
       setCustomTitle('');
@@ -228,37 +234,29 @@ const UploadScreen: React.FC = () => {
           <div className="w-full max-w-md space-y-6 my-auto">
             <header className="text-center space-y-2">
               <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
-              <p className="text-sm font-medium text-slate-400">
-                {formData.initials} • {formData.age} / {formData.sex}
-              </p>
+              {/* Removed Patient Info as requested */}
             </header>
 
             {/* Grid of Images */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               {images.map((img, idx) => (
-                <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/50">
-                  <img src={img.url} className="w-full h-full object-cover" alt="" />
+                <div key={idx} className="flex flex-col gap-2">
+                  <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/50">
+                    <img src={img.url} className="w-full h-full object-cover" alt="" />
+                  </div>
+                  {/* Description Below Image */}
                   {img.description && (
-                    <div className="absolute inset-x-0 bottom-0 bg-black/70 backdrop-blur-md p-2">
-                      <p className="text-[10px] text-white font-medium text-center truncate">{img.description}</p>
-                    </div>
+                    <p className="text-[10px] text-slate-300 font-medium text-center leading-tight px-1">
+                      {img.description}
+                    </p>
                   )}
                 </div>
               ))}
             </div>
 
-            <div className="glass-card-enhanced p-4 rounded-2xl space-y-3 bg-white/[0.03]">
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Impression</span>
-                <p className="text-white text-sm font-medium mt-0.5">{formData.impression}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Modality</span>
-                <p className="text-slate-300 text-xs mt-0.5">{formData.modality} - {formData.organSystem}</p>
-              </div>
-            </div>
+            {/* Removed Bottom Summary Box as requested */}
 
-            <footer className="pt-4 text-center">
+            <footer className="pt-8 text-center">
               <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">CHH Radiology App</p>
             </footer>
           </div>
@@ -273,16 +271,14 @@ const UploadScreen: React.FC = () => {
               <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
             ))}
           </div>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            {step === 1 ? 'Data Entry' : 'Export'}
-          </span>
+          {/* Removed "Data Entry" label as requested */}
         </div>
       )}
 
       <div className={`flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <header>
+            <header className="space-y-3">
               <input
                 type="text"
                 value={customTitle}
@@ -290,6 +286,33 @@ const UploadScreen: React.FC = () => {
                 placeholder="Enter Case Title..."
                 className="text-2xl font-bold text-white bg-transparent border-none focus:ring-0 placeholder-slate-600 w-full p-0"
               />
+
+              {/* Date and Reliability Row */}
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <input
+                    type="date"
+                    name="date"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary transition-all max-w-[130px]"
+                  />
+                </div>
+                <div className="relative flex-1">
+                  <select
+                    name="reliability"
+                    value={formData.reliability}
+                    onChange={handleInputChange}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary appearance-none"
+                  >
+                    <option value="Certain" className="bg-[#0c1829]">Certain</option>
+                    <option value="Probable" className="bg-[#0c1829]">Probable</option>
+                    <option value="Possible" className="bg-[#0c1829]">Possible</option>
+                    <option value="Unlikely" className="bg-[#0c1829]">Unlikely</option>
+                  </select>
+                  <span className="material-icons absolute right-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-500 pointer-events-none">expand_more</span>
+                </div>
+              </div>
             </header>
 
             {/* Multi-Image Gallery */}
@@ -431,6 +454,7 @@ const UploadScreen: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
                 <p className="text-slate-500 text-xs text-emerald-400">Ready to Share</p>
+                <p className="text-slate-500 text-xs mt-1">{formData.date} • {formData.reliability}</p>
               </div>
               <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
             </header>
@@ -459,7 +483,7 @@ const UploadScreen: React.FC = () => {
               </div>
               <div>
                 <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
-                <p className="text-white text-sm font-medium">{formData.impression}</p>
+                <p className="text-white text-sm font-medium">{formData.impression} <span className="text-slate-500 text-xs">({formData.reliability})</span></p>
               </div>
               <div>
                 <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
@@ -485,7 +509,12 @@ const UploadScreen: React.FC = () => {
               <button onClick={() => {
                 console.log('Export button clicked');
                 try {
-                  generateCasePDF(formData, null, getImagesForPdf(), customTitle, uploaderName);
+                  // Pass reliability to PDF if needed, or append to Impression
+                  const extendedData = {
+                    ...formData,
+                    impression: `${formData.impression} (${formData.reliability})`
+                  };
+                  generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
                 } catch (e) {
                   console.error('Export failed immediately:', e);
                   alert('Export failed: ' + e);
