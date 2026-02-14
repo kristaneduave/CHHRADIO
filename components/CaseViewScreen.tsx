@@ -177,43 +177,42 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                 <div className="px-6 py-6 space-y-8">
 
                     {/* Header Info */}
-                    <div className="flex items-start justify-between">
-                        <div>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex-1">
                             <h1 className={`text-2xl font-bold mb-2 leading-tight ${reliabilityColor.split(' ')[0]}`}>
                                 {caseData.title || `Case ${caseData.patient_initials}`}
                             </h1>
-                            <div className="flex items-center gap-3 text-xs">
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
                                 <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
                                     {caseData.modality}
                                 </span>
                                 <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
                                     {caseData.organ_system}
                                 </span>
-                                <span className="text-slate-500">{new Date(caseData.created_at).toLocaleDateString()}</span>
-                                <span className="text-slate-600">•</span>
-                                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                <span className="text-slate-500 whitespace-nowrap">{new Date(caseData.created_at).toLocaleDateString()}</span>
+                                <span className="text-slate-600 hidden sm:inline">•</span>
+                                <span className="text-emerald-400 font-bold flex items-center gap-1 whitespace-nowrap">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                     Published
                                 </span>
                             </div>
                         </div>
 
-                        <div className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${reliabilityColor}`}>
+                        <div className={`self-start px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${reliabilityColor}`}>
                             {caseData.analysis_result?.reliability || 'Certain'}
                         </div>
                     </div>
 
                     {/* Patient Demographics */}
                     <div className="glass-card-enhanced p-4 rounded-xl space-y-4">
-                        <div className="flex items-center gap-4">
-                            <div>
-                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Patient</div>
-                                <div className="text-white font-bold flex items-center gap-2">
-                                    {caseData.patient_initials}
-                                    <span className="text-slate-500 font-normal">|</span>
+                        <div>
+                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Patient</div>
+                            <div className="flex items-center justify-between text-white font-bold">
+                                <div className="text-lg">{caseData.patient_initials}</div>
+                                <div className="flex items-center gap-3">
                                     <span>{caseData.patient_age} yo</span>
                                     <span className="text-slate-500 font-normal">|</span>
-                                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${caseData.patient_sex === 'M' ? 'bg-blue-500/10 text-blue-400' : 'bg-pink-500/10 text-pink-400'}`}>
+                                    <span className={`text-xs px-2 py-0.5 rounded-md ${caseData.patient_sex === 'M' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border border-pink-500/20'}`}>
                                         {caseData.patient_sex || '?'}
                                     </span>
                                 </div>
@@ -223,7 +222,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         {caseData.clinical_history && (
                             <div className="pt-2 border-t border-white/5">
                                 <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Clinical Data</div>
-                                <div className="text-sm text-slate-300 italic">
+                                <div className="text-sm text-slate-300 italic text-justify">
                                     "{caseData.clinical_history}"
                                 </div>
                             </div>
@@ -239,7 +238,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 <span className="material-icons text-sm">search</span>
                                 Findings
                             </h3>
-                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-white/10">
+                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-white/10 text-justify">
                                 {caseData.findings || "No findings recorded."}
                             </div>
                         </div>
@@ -251,7 +250,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     <span className="material-icons text-sm">description</span>
                                     Notes / Remarks
                                 </h3>
-                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-rose-500/20">
+                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-rose-500/20 text-justify">
                                     {caseData.educational_summary}
                                 </div>
                             </div>
