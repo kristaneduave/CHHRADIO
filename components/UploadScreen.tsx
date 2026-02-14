@@ -55,6 +55,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
     notes: existingCase?.clinical_history || '',
+    diagnosis: existingCase?.diagnosis || '', // Map to 'diagnosis' column
     date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
     reliability: existingCase?.analysis_result?.reliability || 'Certain'
   });
@@ -225,6 +226,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         created_by: user.id,
         category: formData.organSystem,
         organ_system: formData.organSystem,
+        diagnosis: formData.diagnosis, // Save to diagnosis column
         analysis_result: {
           modality: formData.modality,
           anatomy_region: formData.organSystem,
@@ -520,6 +522,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes</label>
                 <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Bite-sized interesting facts..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+              </div>
+
+              {/* Row 6: Diagnostic Code */}
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Diagnostic Code (ICD-10)</label>
+                <input name="diagnosis" value={formData.diagnosis} onChange={handleInputChange} placeholder="e.g. G30.9" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
               </div>
             </div>
 

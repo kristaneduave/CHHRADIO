@@ -76,7 +76,14 @@ const App: React.FC = () => {
       case 'calendar':
         return <CalendarScreen />;
       case 'search':
-        return <SearchScreen />;
+        return (
+          <SearchScreen
+            onCaseSelect={(caseItem) => {
+              setCaseToEdit(caseItem);
+              setCurrentScreen('upload');
+            }}
+          />
+        );
       case 'chat':
         return <ChatScreen />;
       case 'profile':
