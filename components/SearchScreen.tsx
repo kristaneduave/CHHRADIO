@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SPECIALTIES } from '../constants';
 import { PatientRecord, SearchFilters } from '../types';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../services/supabase';
 
 const SearchScreen: React.FC = () => {
   const [query, setQuery] = useState('');
