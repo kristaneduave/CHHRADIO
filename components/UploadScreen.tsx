@@ -268,9 +268,9 @@ const UploadScreen: React.FC = () => {
           </button>
 
           <div className="w-full max-w-md space-y-6 my-auto">
-            <header className="text-center space-y-3 flex flex-col items-center">
+            <header className="text-center space-y-3 flex flex-row items-center justify-center gap-4">
+              <div className={`w-4 h-4 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
               <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
-              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
             </header>
 
             {/* Grid of Images */}
@@ -332,15 +332,20 @@ const UploadScreen: React.FC = () => {
                     className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary transition-all max-w-[130px]"
                   />
                 </div>
-                <div className="relative flex-1 flex justify-end gap-2">
-                  {RELIABILITY_OPTIONS.map(option => (
-                    <button
-                      key={option}
-                      onClick={() => setFormData(prev => ({ ...prev, reliability: option }))}
-                      className={`w-6 h-6 rounded-full transition-all duration-300 ${RELIABILITY_BG_COLORS[option]} ${formData.reliability === option ? 'ring-2 ring-white ring-offset-2 ring-offset-[#050B14] scale-110' : 'opacity-40 hover:opacity-100'}`}
-                      title={option}
-                    />
-                  ))}
+                <div className="relative flex-1 flex justify-end">
+                  <div className="bg-white/5 rounded-lg px-3 py-1.5 flex items-center gap-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Reliability</span>
+                    <div className="flex gap-2">
+                      {RELIABILITY_OPTIONS.map(option => (
+                        <button
+                          key={option}
+                          onClick={() => setFormData(prev => ({ ...prev, reliability: option }))}
+                          className={`w-6 h-6 rounded-full transition-all duration-300 ${RELIABILITY_BG_COLORS[option]} ${formData.reliability === option ? 'ring-2 ring-white ring-offset-2 ring-offset-[#050B14] scale-110' : 'opacity-40 hover:opacity-100'}`}
+                          title={option}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
             </header>
