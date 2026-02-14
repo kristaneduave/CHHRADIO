@@ -4,7 +4,11 @@ import { SPECIALTIES } from '../constants';
 import { PatientRecord, SearchFilters } from '../types';
 import { supabase } from '../services/supabase';
 
-const SearchScreen: React.FC = () => {
+interface SearchScreenProps {
+  onCaseSelect: (caseItem: any) => void;
+}
+
+const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -17,6 +21,7 @@ const SearchScreen: React.FC = () => {
   });
   const [results, setResults] = useState<PatientRecord[]>([]);
   const [allCases, setAllCases] = useState<PatientRecord[]>([]);
+  const [rawCases, setRawCases] = useState<any[]>([]); // Store raw DB data
   const [loading, setLoading] = useState(true);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +41,7 @@ const SearchScreen: React.FC = () => {
       if (error) throw error;
 
       if (data) {
+        setRawCases(data); // Save raw data for editing/viewing
         const mappedCases: PatientRecord[] = data.map((item: any) => ({
           id: item.id,
           name: item.patient_initials ? `Patient ${item.patient_initials}` : 'Unknown Patient',
@@ -228,6 +234,10 @@ const SearchScreen: React.FC = () => {
           results.map((p) => (
             <div
               key={p.id}
+              onClick={() => {
+                const raw = rawCases.find(c => c.id === p.id);
+                if (raw && onCaseSelect) onCaseSelect(raw);
+              }}
               className="glass-card-enhanced p-4 rounded-xl border border-white/5 hover:border-primary/30 hover:bg-white/[0.03] transition-all group cursor-pointer"
             >
               <div className="flex items-center gap-4">
