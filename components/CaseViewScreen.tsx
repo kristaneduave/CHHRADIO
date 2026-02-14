@@ -72,7 +72,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         };
 
         try {
-            generateCasePDF(formattedData, null, pdfImages, caseData.title, 'Radiologist');
+            const pdfTitle = `${caseData.organ_system || 'GENERAL'} - ${caseData.title} (${caseData.analysis_result?.reliability || 'N/A'})`.toUpperCase();
+            generateCasePDF(formattedData, null, pdfImages, pdfTitle, 'Radiologist');
         } catch (e: any) {
             alert('Export failed: ' + e.message);
         }
