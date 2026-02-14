@@ -11,11 +11,21 @@ const ChatScreen: React.FC = () => {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
+  const subscriptionRef = useRef<any>(null); // To store valid subscription
 
+  // New Chat Modal State
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<Profile[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   useEffect(() => {
     fetchSessions();
     fetchCurrentUser();
+
+    return () => {
+      // Cleanup subscription on unmount
+      if (subscriptionRef.current) supabase.removeChannel(subscriptionRef.current);
+    };
   }, []);
 
   const fetchCurrentUser = async () => {
@@ -29,6 +39,44 @@ const ChatScreen: React.FC = () => {
   useEffect(() => {
     if (activeSession) {
       fetchMessages(activeSession.id);
+
+      // Subscribe to new messages for this session
+      const channel = supabase
+        .channel(`chat:${activeSession.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'chat_messages',
+            filter: `session_id=eq.${activeSession.id}`
+          },
+          (payload) => {
+            console.log('New message received!', payload);
+            const newMessage = payload.new;
+
+            // Avoid duplicating own messages if we optimistically added them
+            // Or just append. Since we optimized locally, we might need a check
+            // For simplicity, let's just append if the ID is not already in list.
+            // Actually, simpler to just append if the ID is not already in list.
+            setMessages((prev) => {
+              if (prev.some(m => m.id === newMessage.id)) return prev;
+              return [...prev, {
+                id: newMessage.id,
+                role: newMessage.role as 'user' | 'model', // 'model' effectively 'peer' here
+                text: newMessage.content,
+                timestamp: new Date(newMessage.created_at).getTime()
+              }];
+            });
+          }
+        )
+        .subscribe();
+
+      subscriptionRef.current = channel;
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [activeSession]);
 
@@ -36,10 +84,12 @@ const ChatScreen: React.FC = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Fetch sessions where the user is a participant
+    // Note: We use 'cs' (contains) for array column
     const { data, error } = await supabase
       .from('chat_sessions')
       .select('*')
-      .eq('user_id', user.id)
+      .contains('participants', [user.id])
       .order('created_at', { ascending: false });
 
     if (error) console.error('Error fetching sessions:', error);
@@ -57,35 +107,61 @@ const ChatScreen: React.FC = () => {
     else {
       setMessages(data?.map(m => ({
         id: m.id,
-        role: m.role as 'user' | 'model', // Keeping 'model' as 'peer' equivalent for compatibility or refactor to 'peer'
+        role: m.role as 'user' | 'model',
         text: m.content,
         timestamp: new Date(m.created_at).getTime()
       })) || []);
     }
   }
 
-  const createNewSession = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+  const handleOpenNewChat = async () => {
+    setShowNewChatModal(true);
+    setIsLoadingUsers(true);
 
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Fetch all profiles except current user
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', user.id);
+
+    if (error) {
+      console.error("Error fetching profiles:", error);
+    } else {
+      setAvailableUsers(data || []);
+    }
+    setIsLoadingUsers(false);
+  };
+
+  const createPeerSession = async (peer: Profile) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Check if session already exists? (Optional optimization)
+    // For now, just create new.
 
     const { data, error } = await supabase
       .from('chat_sessions')
       .insert({
-        user_id: user.id,
-        title: 'New Peer Chat',
-        type: 'Peer'
+        user_id: user.id, // Creator
+        title: peer.full_name || peer.username || 'Chat',
+        type: 'Peer',
+        participants: [user.id, peer.id]
       })
       .select()
       .single();
 
     if (error) {
       console.error('Error creating session:', error);
+      alert('Failed to create chat');
       return;
     }
 
     setSessions([data, ...sessions]);
     setActiveSession(data);
+    setShowNewChatModal(false);
   };
 
   const scrollToBottom = () => {
@@ -96,14 +172,6 @@ const ChatScreen: React.FC = () => {
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const saveMessage = async (sessionId: string, role: 'user' | 'model', text: string) => {
-    await supabase.from('chat_messages').insert({
-      session_id: sessionId,
-      role,
-      content: text
-    });
-  };
-
   const sendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || !activeSession) return;
@@ -111,30 +179,27 @@ const ChatScreen: React.FC = () => {
     const userText = input;
     setInput('');
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      text: userText,
-      timestamp: Date.now()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    saveMessage(activeSession.id, 'user', userText);
-
-    // No AI response generation here.
-    // In a real peer chat, we would wait for a subscription event for the other user's message.
-    // For now, this acts as a message store.
+    try {
+      await supabase.from('chat_messages').insert({
+        session_id: activeSession.id,
+        role: 'user',
+        content: userText
+      });
+      // Verification via subscription will update UI
+    } catch (err) {
+      console.error("Error sending message", err);
+    }
   };
 
   if (!activeSession) {
     return (
-      <div className="px-6 pt-12 pb-12 flex flex-col h-full animate-in fade-in duration-500">
+      <div className="px-6 pt-12 pb-12 flex flex-col h-full animate-in fade-in duration-500 relative">
         <header className="mb-8 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-white mb-1">Messages</h1>
             <p className="text-slate-400 text-xs">Secure peer consultations</p>
           </div>
-          <button onClick={createNewSession} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2">
+          <button onClick={handleOpenNewChat} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center gap-2">
             <span className="material-icons text-sm">add</span>
             New Chat
           </button>
@@ -144,7 +209,7 @@ const ChatScreen: React.FC = () => {
           <div className="space-y-3">
             <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1 mb-2">Recent Consultations</h3>
             {sessions.length === 0 ? (
-              <p className="text-slate-500 text-xs text-center py-8">No active chats. Start a new one!</p>
+              <p className="text-slate-500 text-xs text-center py-8">No active chats. Start one with a colleague!</p>
             ) : (
               sessions.map(session => (
                 <button
@@ -168,6 +233,41 @@ const ChatScreen: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* New Chat Modal */}
+        {showNewChatModal && (
+          <div className="absolute inset-0 z-50 bg-[#050B14]/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm glass-card-enhanced rounded-2xl overflow-hidden shadow-2xl border border-white/10 flex flex-col max-h-[80%]">
+              <div className="p-4 border-b border-white/5 flex justify-between items-center">
+                <h3 className="text-sm font-bold text-white">Select Colleague</h3>
+                <button onClick={() => setShowNewChatModal(false)} className="text-slate-400 hover:text-white">
+                  <span className="material-icons text-sm">close</span>
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                {isLoadingUsers ? (
+                  <p className="text-center text-xs text-slate-500 py-4">Loading users...</p>
+                ) : availableUsers.length === 0 ? (
+                  <p className="text-center text-xs text-slate-500 py-4">No other users found.</p>
+                ) : (
+                  availableUsers.map(user => (
+                    <button
+                      key={user.id}
+                      onClick={() => createPeerSession(user)}
+                      className="w-full p-3 rounded-xl hover:bg-white/5 flex items-center gap-3 transition-colors text-left"
+                    >
+                      <img src={user.avatar_url || PROFILE_IMAGE} className="w-10 h-10 rounded-full object-cover bg-slate-800" alt="" />
+                      <div>
+                        <p className="text-sm font-bold text-white">{user.full_name || user.username || 'Unknown User'}</p>
+                        <p className="text-[10px] text-slate-400">{user.year_level || 'Resident'} • {user.bio ? user.bio.substring(0, 20) + '...' : 'No bio'}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
