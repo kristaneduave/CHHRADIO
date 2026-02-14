@@ -40,6 +40,7 @@ const UploadScreen: React.FC = () => {
   const [images, setImages] = useState<ImageUpload[]>([]);
   const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [uploaderName, setUploaderName] = useState<string>('');
+  const [isScreenshotMode, setIsScreenshotMode] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -213,20 +214,72 @@ const UploadScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#050B14]">
-      {/* Modern Stepper */}
-      <div className="px-6 pt-12 flex justify-between items-center mb-4 shrink-0">
-        <div className="flex gap-2">
-          {[1, 2].map(i => (
-            <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
-          ))}
-        </div>
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-          {step === 1 ? 'Data Entry' : 'Export'}
-        </span>
-      </div>
+    <div className="flex flex-col h-full bg-[#050B14] relative">
+      {/* Screenshot Overlay */}
+      {isScreenshotMode && (
+        <div className="absolute inset-0 z-50 bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300">
+          {/* Exit Button - Floating */}
+          <button
+            onClick={() => setIsScreenshotMode(false)}
+            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-50">
+            <span className="material-icons">close</span>
+          </button>
 
-      <div className="flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar">
+          <div className="w-full max-w-md space-y-6">
+            <header className="text-center space-y-2">
+              <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
+              <p className="text-sm font-medium text-slate-400">
+                {formData.initials} • {formData.age} / {formData.sex}
+              </p>
+            </header>
+
+            {/* Grid of Images */}
+            <div className="grid grid-cols-2 gap-3">
+              {images.map((img, idx) => (
+                <div key={idx} className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/50">
+                  <img src={img.url} className="w-full h-full object-cover" alt="" />
+                  {img.description && (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/70 backdrop-blur-md p-2">
+                      <p className="text-[10px] text-white font-medium text-center truncate">{img.description}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="glass-card-enhanced p-4 rounded-2xl space-y-3 bg-white/[0.03]">
+              <div>
+                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Impression</span>
+                <p className="text-white text-sm font-medium mt-0.5">{formData.impression}</p>
+              </div>
+              <div>
+                <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">Modality</span>
+                <p className="text-slate-300 text-xs mt-0.5">{formData.modality} - {formData.organSystem}</p>
+              </div>
+            </div>
+
+            <footer className="pt-4 text-center">
+              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">CHH Radiology App</p>
+            </footer>
+          </div>
+        </div>
+      )}
+
+      {/* Modern Stepper (Hidden in Screenshot Mode) */}
+      {!isScreenshotMode && (
+        <div className="px-6 pt-12 flex justify-between items-center mb-4 shrink-0">
+          <div className="flex gap-2">
+            {[1, 2].map(i => (
+              <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
+            ))}
+          </div>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            {step === 1 ? 'Data Entry' : 'Export'}
+          </span>
+        </div>
+      )}
+
+      <div className={`flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <header>
@@ -372,7 +425,7 @@ const UploadScreen: React.FC = () => {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 2 && !isScreenshotMode && (
           <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
             <header className="flex justify-between items-center">
               <div>
@@ -416,6 +469,14 @@ const UploadScreen: React.FC = () => {
 
             {/* Actions */}
             <div className="space-y-3">
+              <button
+                onClick={() => setIsScreenshotMode(true)}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3"
+              >
+                <span className="material-icons">crop_free</span>
+                Screenshot Mode
+              </button>
+
               <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
                 <span className="material-icons">content_copy</span>
                 Copy for Viber
