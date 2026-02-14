@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MOCK_PATIENTS, SPECIALTIES } from '../constants';
+import { SPECIALTIES } from '../constants';
 import { PatientRecord, SearchFilters } from '../types';
+import { supabase } from '../supabaseClient';
 
 const SearchScreen: React.FC = () => {
   const [query, setQuery] = useState('');
@@ -14,13 +15,51 @@ const SearchScreen: React.FC = () => {
     specialty: '',
     diagnosticCode: ''
   });
-  const [results, setResults] = useState<PatientRecord[]>(MOCK_PATIENTS);
+  const [results, setResults] = useState<PatientRecord[]>([]);
+  const [allCases, setAllCases] = useState<PatientRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    fetchCases();
+  }, []);
+
+  const fetchCases = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('cases')
+        .select('*')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        const mappedCases: PatientRecord[] = data.map((item: any) => ({
+          id: item.id,
+          name: item.patient_initials ? `Patient ${item.patient_initials}` : 'Unknown Patient',
+          initials: item.patient_initials || '??',
+          age: parseInt(item.patient_age) || 0,
+          date: item.created_at,
+          specialty: item.organ_system || 'General',
+          diagnosticCode: item.diagnosis || 'Pending',
+          status: 'Published' // Since we filtered by published
+        }));
+        setAllCases(mappedCases);
+        setResults(mappedCases);
+      }
+    } catch (error) {
+      console.error('Error fetching cases:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (query.trim().length > 0) {
-      const matches = MOCK_PATIENTS.filter(p => 
-        p.name.toLowerCase().includes(query.toLowerCase()) || 
+      const matches = allCases.filter(p =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
         p.initials.toLowerCase().includes(query.toLowerCase()) ||
         p.diagnosticCode.toLowerCase().includes(query.toLowerCase())
       ).slice(0, 4);
@@ -29,7 +68,7 @@ const SearchScreen: React.FC = () => {
     } else {
       setShowSuggestions(false);
     }
-  }, [query]);
+  }, [query, allCases]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -47,15 +86,16 @@ const SearchScreen: React.FC = () => {
   };
 
   const applyFilters = () => {
-    let filtered = MOCK_PATIENTS.filter(p => {
+    let filtered = allCases.filter(p => {
       const matchQuery = query ? (
-        p.name.toLowerCase().includes(query.toLowerCase()) || 
-        p.initials.toLowerCase().includes(query.toLowerCase())
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.initials.toLowerCase().includes(query.toLowerCase()) ||
+        p.diagnosticCode.toLowerCase().includes(query.toLowerCase())
       ) : true;
-      
+
       const matchSpecialty = filters.specialty ? p.specialty === filters.specialty : true;
       const matchCode = filters.diagnosticCode ? p.diagnosticCode.toLowerCase().includes(filters.diagnosticCode.toLowerCase()) : true;
-      
+
       const date = new Date(p.date);
       const start = filters.startDate ? new Date(filters.startDate) : null;
       const end = filters.endDate ? new Date(filters.endDate) : null;
@@ -70,7 +110,8 @@ const SearchScreen: React.FC = () => {
 
   const clearFilters = () => {
     setFilters({ startDate: '', endDate: '', specialty: '', diagnosticCode: '' });
-    setResults(MOCK_PATIENTS);
+    setResults(allCases);
+    setQuery('');
   };
 
   const selectSuggestion = (p: PatientRecord) => {
@@ -82,21 +123,21 @@ const SearchScreen: React.FC = () => {
   return (
     <div className="px-6 pt-12 pb-12 flex flex-col min-h-full">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-white mb-1">Search Records</h1>
-        <p className="text-slate-400 text-xs">Access centralized patient diagnostic history</p>
+        <h1 className="text-2xl font-bold text-white mb-1">Database</h1>
+        <p className="text-slate-400 text-xs">Access centralized patient case library</p>
       </header>
 
       <div className="relative mb-4 z-40" ref={suggestionsRef}>
         <div className="relative group">
           <span className="material-icons absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors">search</span>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, initials or code..." 
+            placeholder="Search by name, initials or code..."
             className="w-full bg-white/5 border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder-slate-600 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 transition-all text-sm"
           />
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className={`absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg transition-all ${showFilters ? 'bg-primary text-white' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}
           >
@@ -108,7 +149,7 @@ const SearchScreen: React.FC = () => {
         {showSuggestions && (
           <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             {suggestions.map((p) => (
-              <button 
+              <button
                 key={p.id}
                 onClick={() => selectSuggestion(p)}
                 className="w-full px-5 py-3 flex items-center gap-3 hover:bg-primary/10 transition-colors border-b border-white/5 last:border-0 text-left"
@@ -162,7 +203,7 @@ const SearchScreen: React.FC = () => {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={applyFilters}
             className="w-full mt-6 py-3 bg-primary text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg"
           >
@@ -175,13 +216,17 @@ const SearchScreen: React.FC = () => {
       <div className="flex-1 space-y-3 overflow-y-auto custom-scrollbar pr-1">
         <div className="flex justify-between items-center mb-2 px-1">
           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
-            {results.length} Result{results.length !== 1 ? 's' : ''} Found
+            {loading ? 'Loading...' : `${results.length} Result${results.length !== 1 ? 's' : ''} Found`}
           </p>
         </div>
 
-        {results.length > 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : results.length > 0 ? (
           results.map((p) => (
-            <div 
+            <div
               key={p.id}
               className="glass-card-enhanced p-4 rounded-xl border border-white/5 hover:border-primary/30 hover:bg-white/[0.03] transition-all group cursor-pointer"
             >
@@ -192,10 +237,9 @@ const SearchScreen: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
                     <h4 className="text-sm font-bold text-white truncate">{p.name}</h4>
-                    <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                      p.status === 'Completed' ? 'bg-emerald-500/10 text-emerald-400' :
+                    <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-full ${p.status === 'Completed' || p.status === 'Published' ? 'bg-emerald-500/10 text-emerald-400' :
                       p.status === 'Pending' ? 'bg-amber-500/10 text-amber-400' : 'bg-slate-500/10 text-slate-400'
-                    }`}>
+                      }`}>
                       {p.status}
                     </span>
                   </div>
@@ -226,3 +270,4 @@ const SearchScreen: React.FC = () => {
 };
 
 export default SearchScreen;
+

@@ -66,7 +66,7 @@ export interface PatientRecord {
   date: string;
   specialty: string;
   diagnosticCode: string;
-  status: 'Completed' | 'Pending' | 'Draft';
+  status: 'Completed' | 'Pending' | 'Draft' | 'Published';
 }
 
 export interface SearchFilters {
