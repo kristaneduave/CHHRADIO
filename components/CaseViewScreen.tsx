@@ -179,7 +179,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     {/* Header Info */}
                     <div className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-2xl font-bold text-white mb-2 leading-tight">
+                            <h1 className={`text-2xl font-bold mb-2 leading-tight ${reliabilityColor.split(' ')[0]}`}>
                                 {caseData.title || `Case ${caseData.patient_initials}`}
                             </h1>
                             <div className="flex items-center gap-3 text-xs">
@@ -206,12 +206,17 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     {/* Patient Demographics */}
                     <div className="glass-card-enhanced p-4 rounded-xl space-y-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-blue-600/10 flex items-center justify-center text-primary font-bold border border-primary/20 shrink-0">
-                                {caseData.patient_sex || '?'}
-                            </div>
                             <div>
                                 <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Patient</div>
-                                <div className="text-white font-bold">{caseData.patient_initials} <span className="text-slate-500 font-normal">| {caseData.patient_age} yo</span></div>
+                                <div className="text-white font-bold flex items-center gap-2">
+                                    {caseData.patient_initials}
+                                    <span className="text-slate-500 font-normal">|</span>
+                                    <span>{caseData.patient_age} yo</span>
+                                    <span className="text-slate-500 font-normal">|</span>
+                                    <span className={`text-xs px-1.5 py-0.5 rounded-md ${caseData.patient_sex === 'M' ? 'bg-blue-500/10 text-blue-400' : 'bg-pink-500/10 text-pink-400'}`}>
+                                        {caseData.patient_sex || '?'}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -242,11 +247,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         {/* Notes / Remarks */}
                         {caseData.educational_summary && (
                             <div className="space-y-2">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                <h3 className="text-xs font-bold text-rose-500 uppercase tracking-widest flex items-center gap-2">
                                     <span className="material-icons text-sm">description</span>
                                     Notes / Remarks
                                 </h3>
-                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-white/10">
+                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-rose-500/20">
                                     {caseData.educational_summary}
                                 </div>
                             </div>
