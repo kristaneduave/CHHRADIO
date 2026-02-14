@@ -268,16 +268,17 @@ const UploadScreen: React.FC = () => {
           </button>
 
           <div className="w-full max-w-md space-y-6 my-auto">
-            <header className="text-center space-y-3 flex flex-row items-center justify-center gap-4">
-              <div className={`w-4 h-4 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
-              <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
+            <header className="text-center flex flex-row items-center justify-center gap-3">
+              <div className={`w-3.5 h-3.5 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
+              <h1 className="text-3xl font-bold text-white tracking-tight leading-none pt-1">{customTitle || 'Case Report'}</h1>
             </header>
 
             {/* Grid of Images */}
-            <div className="grid grid-cols-2 gap-4">
+            {/* Grid of Images - Smart Layout */}
+            <div className={`grid gap-4 ${images.length === 1 ? 'grid-cols-1 max-w-[280px] mx-auto' : 'grid-cols-2'}`}>
               {images.map((img, idx) => (
-                <div key={idx} className="flex flex-col gap-2">
-                  <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/50">
+                <div key={idx} className={`flex flex-col gap-2 ${images.length > 1 && images.length % 2 !== 0 && idx === images.length - 1 ? 'col-span-2 w-1/2 mx-auto' : ''}`}>
+                  <div className="relative aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/50 shadow-lg">
                     <img src={img.url} className="w-full h-full object-cover" alt="" />
                   </div>
                   {/* Description Below Image */}
