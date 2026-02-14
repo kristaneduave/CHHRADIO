@@ -18,6 +18,18 @@ const ORGAN_SYSTEMS = [
   'Nuclear Medicine'
 ];
 
+const MODALITIES = [
+  'X-Ray',
+  'CT Scan',
+  'MRI',
+  'Ultrasound',
+  'Mammography',
+  'Fluoroscopy',
+  'Nuclear Medicine',
+  'Interventional',
+  'PET/CT'
+];
+
 interface ImageUpload {
   url: string;
   file: File;
@@ -50,7 +62,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     initials: existingCase?.patient_initials || '',
     age: existingCase?.patient_age || '',
     sex: existingCase?.patient_sex || 'M',
-    modality: existingCase?.modality || '',
+    modality: existingCase?.modality || 'CT Scan',
     organSystem: existingCase?.anatomy_region || 'Neuroradiology',
     clinicalData: existingCase?.clinical_history || '',
     findings: existingCase?.findings || '',
@@ -188,14 +200,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
       }
 
       // 1. Upload New Images (Skip existing ones)
-      // Note: This simple logic assumes all images in 'images' state that have a distinct 'file' need uploading
-      // But for existing images we put a dummy File. We should check if it's a real file or just a URL holder.
-      // A better check: is it a blob url? (starts with blob:)
-
       const distinctUploadedUrls: string[] = [];
-      // We need to keep the order.
-      // If image has `file.size === 0` and is placeholder, we reuse `url`.
-      // If it's a new file, we upload.
 
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
@@ -228,15 +233,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         patient_initials: formData.initials, // Ensure these match DB columns
         patient_age: formData.age,
         patient_sex: formData.sex,
-        clinical_history: formData.clinicalData, // Save clinicalData to DB column
-        educational_summary: formData.notes, // Save notes/remarks here
+        clinical_history: formData.clinicalData, // Updated to use clinicalData
+        educational_summary: formData.notes, // Updated from notes
         findings: formData.findings,
         image_url: distinctUploadedUrls[0], // Primary thumbnail
         image_urls: distinctUploadedUrls,   // All images
         difficulty: 'Medium',
         created_by: user.id,
         category: formData.organSystem,
-        organ_system: formData.organSystem,
         organ_system: formData.organSystem,
         diagnosis: finalDiagnosis, // Save generated or existing code
         analysis_result: {
@@ -250,7 +254,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
           reliability: formData.reliability
         },
         modality: formData.modality,
-        anatomy_region: formData.organSystem,
         status: status
       };
 
@@ -272,8 +275,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
       if (error) throw error;
 
-      if (error) throw error;
-
       if (status === 'published') {
         alert(`Case successfully published!\n\nDiagnostic Code: ${finalDiagnosis}\n\nShare this code for easy lookup.`);
       } else {
@@ -288,11 +289,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
           initials: '',
           age: '',
           sex: 'M',
-          modality: '',
+          modality: 'CT Scan',
           organSystem: 'Neuroradiology',
+          clinicalData: '',
           findings: '',
           impression: '',
           notes: '',
+          diagnosis: '',
           date: new Date().toISOString().split('T')[0],
           reliability: 'Certain'
         });
@@ -356,10 +359,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 </div>
               ))}
             </div>
-
-            {/* Removed Bottom Summary Box as requested */}
-
-
           </div>
         </div>
       )}
@@ -372,7 +371,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
             ))}
           </div>
-          {/* Removed "Data Entry" label as requested */}
         </div>
       )}
 
@@ -488,46 +486,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               )}
             </div>
 
-            const MODALITIES = [
-            'X-Ray',
-            'CT Scan',
-            'MRI',
-            'Ultrasound',
-            'Mammography',
-            'Fluoroscopy',
-            'Nuclear Medicine',
-            'Interventional',
-            'PET/CT'
-            ];
-
-            interface UploadScreenProps {
-              existingCase ?: any; // Replace with proper type if available, e.g., Case
-  onClose?: () => void;
-}
-
-            const UploadScreen: React.FC<UploadScreenProps> = ({existingCase, onClose}) => {
-  const [formData, setFormData] = useState({
-                initials: existingCase?.patient_initials || '',
-              age: existingCase?.patient_age || '',
-              sex: existingCase?.patient_sex || 'M',
-              modality: existingCase?.modality || 'CT Scan',
-              organSystem: existingCase?.anatomy_region || 'Neuroradiology',
-              clinicalData: existingCase?.clinical_history || '', // Mapping clinical_history here for now, or new field
-              findings: existingCase?.findings || '',
-              impression: existingCase?.analysis_result?.impression || '',
-              notes: existingCase?.educational_summary || '', // Separate notes from clinical data
-              diagnosis: existingCase?.diagnosis || '', // Map to 'diagnosis' column
-              date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
-              reliability: existingCase?.analysis_result?.reliability || 'Certain'
-  });
-
-              // ... (Keep existing code) ...
-
-              // Update handleSave casePayload to include clinicalData
-              // ...
-
-              // RENDER UPDATES
-
+            <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
               {/* Row 1: Initials, Age, Sex */}
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-5 space-y-1">
@@ -607,99 +566,122 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
                 <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
+            </div>
 
-              {/* PREVIEW UPDATE */}
-              <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
-                {/* ... (Images) ... */}
-                {images.length > 0 && (
-                  <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                    {images.map((img, i) => (
-                      <div key={i} className="shrink-0 space-y-1 w-24">
-                        <img src={img.url} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40" />
-                        {img.description && <p className="text-[9px] text-slate-400 truncate">{img.description}</p>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <button onClick={handleGenerateReport} disabled={!formData.initials} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
+              Generate Reports
+              <span className="material-icons text-sm">arrow_forward</span>
+            </button>
+          </div>
+        )}
 
-                <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
-                  <div>
-                    <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
-                    <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
-                  </div>
-                  <div>
-                    <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
-                    <p className="text-white text-sm font-bold">{formData.modality}</p>
-                    <p className="text-slate-400 text-xs">{formData.organSystem}</p>
-                  </div>
-                  {formData.clinicalData && (
-                    <div className="col-span-2">
-                      <span className="text-[9px] text-slate-500 uppercase font-bold">Clinical Data</span>
-                      <p className="text-white text-xs">{formData.clinicalData}</p>
+        {step === 2 && !isScreenshotMode && (
+          <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
+            <header className="flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">{formData.date}</span>
+                  <span className="text-slate-600">•</span>
+                  <span className={`${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'} font-bold`}>
+                    {formData.reliability}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
+            </header>
+
+            {/* Preview Card */}
+            <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
+              {images.length > 0 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                  {images.map((img, i) => (
+                    <div key={i} className="shrink-0 space-y-1 w-24">
+                      <img src={img.url} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40" />
+                      {img.description && <p className="text-[9px] text-slate-400 truncate">{img.description}</p>}
                     </div>
-                  )}
+                  ))}
                 </div>
-                {/* ... (Rest of Preview) ... */}
-                {/* Diagnostic Code Display */}
-                {formData.diagnosis && (
-                  <div>
-                    <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
-                    <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
+                  <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
+                </div>
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
+                  <p className="text-white text-sm font-bold">{formData.modality}</p>
+                  <p className="text-slate-400 text-xs">{formData.organSystem}</p>
+                </div>
+                {formData.clinicalData && (
+                  <div className="col-span-2">
+                    <span className="text-[9px] text-slate-500 uppercase font-bold">Clinical Data</span>
+                    <p className="text-white text-xs">{formData.clinicalData}</p>
                   </div>
                 )}
-
-                <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
-                  <p className="text-white text-sm font-medium">{formData.impression}</p>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
-                  <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
-                </div>
               </div>
 
-              {/* Actions */}
-              <div className="space-y-3">
-                <button
-                  onClick={() => setIsScreenshotMode(true)}
-                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3"
-                >
-                  <span className="material-icons">crop_free</span>
-                  Screenshot Mode
-                </button>
-
-                <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
-                  <span className="material-icons">content_copy</span>
-                  Copy for Viber
-                </button>
-
-                <button onClick={() => {
-                  console.log('Export button clicked');
-                  try {
-                    // Pass reliability to PDF if needed, or append to Impression
-                    const extendedData = {
-                      ...formData,
-                      impression: `${formData.impression} (${formData.reliability})`
-                    };
-                    generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
-                  } catch (e) {
-                    console.error('Export failed immediately:', e);
-                    alert('Export failed: ' + e);
-                  }
-                }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
-                  <span className="material-icons text-rose-500">picture_as_pdf</span>
-                  Export to Drive (PDF)
-                </button>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => handleSave('draft')} className="w-full py-3 text-sm font-bold text-slate-400 bg-white/5 rounded-xl hover:bg-white/10 transition-colors uppercase tracking-wider">
-                    {existingCase ? 'Update Private Draft' : 'Save as Private Draft'}
-                  </button>
-                  <button onClick={() => handleSave('published')} className="w-full py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors uppercase tracking-wider shadow-lg shadow-blue-900/20">
-                    {existingCase ? 'Update & Publish' : 'Publish to Database'}
-                  </button>
+              {/* Diagnostic Code Display */}
+              {formData.diagnosis && (
+                <div>
+                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
+                  <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
                 </div>
+              )}
+
+              <div>
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
+                <p className="text-white text-sm font-medium">{formData.impression}</p>
               </div>
+              <div>
+                <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
+                <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3">
+              <button
+                onClick={() => setIsScreenshotMode(true)}
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3"
+              >
+                <span className="material-icons">crop_free</span>
+                Screenshot Mode
+              </button>
+
+              <button onClick={handleCopyToViber} className="w-full py-4 bg-[#7360f2] hover:bg-[#5e4ecc] text-white rounded-2xl font-bold transition-all shadow-lg flex items-center justify-center gap-3">
+                <span className="material-icons">content_copy</span>
+                Copy for Viber
+              </button>
+
+              <button onClick={() => {
+                console.log('Export button clicked');
+                try {
+                  // Pass reliability to PDF if needed, or append to Impression
+                  const extendedData = {
+                    ...formData,
+                    impression: `${formData.impression} (${formData.reliability})`
+                  };
+                  generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
+                } catch (e) {
+                  console.error('Export failed immediately:', e);
+                  alert('Export failed: ' + e);
+                }
+              }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+                <span className="material-icons text-rose-500">picture_as_pdf</span>
+                Export to Drive (PDF)
+              </button>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={() => handleSave('draft')} className="w-full py-3 text-sm font-bold text-slate-400 bg-white/5 rounded-xl hover:bg-white/10 transition-colors uppercase tracking-wider">
+                  {existingCase ? 'Update Private Draft' : 'Save as Private Draft'}
+                </button>
+                <button onClick={() => handleSave('published')} className="w-full py-3 text-sm font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-500 transition-colors uppercase tracking-wider shadow-lg shadow-blue-900/20">
+                  {existingCase ? 'Update & Publish' : 'Publish to Database'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
