@@ -35,8 +35,6 @@ const UploadScreen: React.FC = () => {
 
   const [previews, setPreviews] = useState<string[]>([]);
   const [step, setStep] = useState(1); // 1: Input, 2: Result
-  const [isCameraActive, setIsCameraActive] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -53,7 +51,6 @@ const UploadScreen: React.FC = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviews(prev => [...prev, reader.result as string]);
-        setIsCameraActive(false);
       };
       reader.readAsDataURL(file);
     }
@@ -61,44 +58,6 @@ const UploadScreen: React.FC = () => {
 
   const removeImage = (index: number) => {
     setPreviews(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const startCamera = async () => {
-    if (previews.length >= 8) {
-      alert("Maximum of 8 images allowed.");
-      return;
-    }
-    try {
-      setIsCameraActive(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (err) {
-      console.error("Camera access denied", err);
-      setIsCameraActive(false);
-    }
-  };
-
-  const capturePhoto = () => {
-    if (videoRef.current) {
-      const canvas = document.createElement('canvas');
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(videoRef.current, 0, 0);
-      const dataUrl = canvas.toDataURL('image/png');
-      setPreviews(prev => [...prev, dataUrl]);
-      stopCamera();
-    }
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      setIsCameraActive(false);
-    }
   };
 
   const handleGenerateReport = () => {
@@ -218,47 +177,54 @@ const UploadScreen: React.FC = () => {
             </header>
 
             {/* Multi-Image Gallery */}
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Images ({previews.length}/8)</span>
-                {previews.length === 0 && <span className="text-[10px] text-rose-500">*Required</span>}
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Diagnostic Images ({previews.length}/8)</span>
+                {previews.length === 0 && <span className="text-[10px] text-rose-500 font-bold uppercase">*Required</span>}
               </div>
 
-              {isCameraActive ? (
-                <div className="relative glass-card-enhanced rounded-2xl overflow-hidden aspect-video border-2 border-primary/30">
-                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  <div className="absolute inset-x-0 bottom-4 flex justify-center items-center gap-8">
-                    <button onClick={stopCamera} className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white flex items-center justify-center">
-                      <span className="material-icons">close</span>
-                    </button>
-                    <button onClick={capturePhoto} className="w-14 h-14 rounded-full bg-white border-4 border-primary/30 flex items-center justify-center shadow-2xl active:scale-90 transition-transform">
-                      <div className="w-10 h-10 rounded-full border-2 border-slate-200" />
-                    </button>
+              {/* Clean, Large Upload Area */}
+              {previews.length === 0 ? (
+                <div
+                  onClick={triggerFileInput}
+                  className="w-full aspect-video border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all group"
+                >
+                  <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                    <span className="material-icons text-3xl">add_photo_alternate</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-bold text-white group-hover:text-primary transition-colors">Tap to Upload Image</p>
+                    <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG</p>
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar snap-x">
-                  {/* Add Button */}
-                  {previews.length < 8 && (
-                    <div className="shrink-0 w-24 h-24 rounded-2xl glass-card-enhanced flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-white/5 transition-colors snap-start" onClick={() => { }}>
-                      <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
-                      <div className="flex gap-2">
-                        <button onClick={startCamera} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"><span className="material-icons text-sm">camera_alt</span></button>
-                        <button onClick={triggerFileInput} className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all"><span className="material-icons text-sm">upload</span></button>
+                <div className="space-y-4">
+                  {/* Add Button for Subsequent Images (Horizontal List) */}
+                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+                    {previews.length < 8 && (
+                      <div
+                        onClick={triggerFileInput}
+                        className="shrink-0 w-32 h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all snap-start"
+                      >
+                        <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
+                        <span className="material-icons text-primary/50 text-2xl">add</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Add New</span>
                       </div>
-                      <span className="text-[9px] font-bold text-slate-500 mt-1">Add Image</span>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Previews */}
-                  {previews.map((src, idx) => (
-                    <div key={idx} className="shrink-0 w-24 h-24 rounded-2xl relative group snap-start">
-                      <img src={src} className="w-full h-full object-cover rounded-2xl border border-white/10" alt={`Scan ${idx}`} />
-                      <button onClick={() => removeImage(idx)} className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md">
-                        <span className="material-icons text-[10px]">close</span>
-                      </button>
-                    </div>
-                  ))}
+                    {previews.map((src, idx) => (
+                      <div key={idx} className="shrink-0 w-32 h-32 rounded-2xl relative group snap-start shadow-lg">
+                        <img src={src} className="w-full h-full object-cover rounded-2xl border border-white/10 bg-black" alt={`Scan ${idx}`} />
+                        <button onClick={(e) => { e.stopPropagation(); removeImage(idx); }} className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10">
+                          <span className="material-icons text-xs">close</span>
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur rounded px-2 py-0.5 pointer-events-none">
+                          <span className="text-[9px] font-bold text-white">Img {idx + 1}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
