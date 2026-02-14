@@ -73,60 +73,44 @@ export const generateCasePDF = (
 
         yPos += 8;
 
-        // Clinical Data (New Line)
-        if (data.clinicalData) {
+        // Clinical Data (New Line) - Renamed from Clinical Notes and moved to Header
+        const clinicalText = data.clinicalData || clinical_history || notes;
+        if (clinicalText) {
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 102, 204);
-            doc.text('CLINICAL', col1X, yPos);
+            doc.text('CLINICAL DATA', col1X, yPos);
 
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(20, 20, 20);
-            doc.text(data.clinicalData, col1X + 25, yPos);
+            const splitClinical = doc.splitTextToSize(clinicalText, pageWidth - col1X - margin - 10); // Wrap if long
+            doc.text(splitClinical, col1X + 35, yPos); // increased offset for longer label
+            yPos += (splitClinical.length * 5) + 3;
+        } else {
             yPos += 8;
         }
 
         // Column 2 Row 2: Diagnostic Code
-        // Reset Y for Code if needed, or place it aligned with Clinical
+        // Reset Y for Code if needed, align with Clinical Data start if possible, or below
+        // Since Clinical Data might wrap, careful with col2
         const rawCode = diagnosis || data.diagnosticCode;
         if (rawCode && !rawCode.toUpperCase().includes('PENDING')) {
             // align with Exam or Clinical depending on space
-            const codeY = data.clinicalData ? yPos - 16 : yPos - 8;
+            const codeY = clinicalText ? yPos - ((clinicalText.length > 50 ? 10 : 5)) - 5 : yPos - 8; // approximate alignment
+            // Simpler: Just place it at roughly same Y as Clinical Data start
+            const codeStartY = clinicalText ? (yPos - ((doc.splitTextToSize(clinicalText, pageWidth - col1X - margin - 10).length * 5) + 3)) : yPos - 8;
 
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(0, 102, 204);
-            doc.text('CODE', col2X, codeY);
+            doc.text('CODE', col2X, codeStartY);
 
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(20, 20, 20);
-            doc.text(rawCode, col2X + 20, codeY);
+            doc.text(rawCode, col2X + 20, codeStartY);
         }
 
-        yPos += 15; // Space before findings
+        yPos += 10; // Space before findings
 
-        // --- 3. Clinical Notes (Moved before Findings) ---
-        const notesText = notes || clinical_history;
-        if (notesText) {
-            if (yPos + 30 > pageHeight) {
-                doc.addPage();
-                yPos = 20;
-            }
-
-            doc.setFontSize(11);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(0, 51, 102);
-            doc.text('CLINICAL NOTES', margin, yPos);
-            yPos += 6;
-
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(40, 40, 40);
-
-            const splitNotes = doc.splitTextToSize(notesText, pageWidth - (margin * 2));
-            doc.text(splitNotes, margin, yPos);
-            yPos += (splitNotes.length * 5) + 8;
-        }
-
-        // --- 4. Findings ---
+        // --- 3. Findings ---
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 51, 102);
@@ -142,15 +126,17 @@ export const generateCasePDF = (
         doc.text(splitFindings, margin, yPos);
         yPos += (splitFindings.length * 5) + 8; // Compact spacing
 
-        // --- FORCE PAGE BREAK FOR IMPRESSION & IMAGES ---
-        doc.addPage();
-        yPos = 20;
+        // --- 4. Notes / Remarks (Was Impression) ---
+        // Ensure space or page break
+        if (yPos + 30 > pageHeight) {
+            doc.addPage();
+            yPos = 20;
+        }
 
-        // --- 5. Impression ---
         doc.setFontSize(11); // Same size as other headers
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 51, 102);
-        doc.text('IMPRESSION', margin, yPos);
+        doc.text('NOTES / REMARKS', margin, yPos);
         yPos += 6;
 
         doc.setFontSize(10);
