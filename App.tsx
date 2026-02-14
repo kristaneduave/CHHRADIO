@@ -10,6 +10,7 @@ import ProfileScreen from './components/ProfileScreen';
 import ChatScreen from './components/ChatScreen';
 import BulletinScreen from './components/BulletinScreen';
 import LoginScreen from './components/LoginScreen';
+import CaseViewScreen from './components/CaseViewScreen';
 import { Screen } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -75,12 +76,25 @@ const App: React.FC = () => {
         return <QuizScreen />;
       case 'calendar':
         return <CalendarScreen />;
+      case 'case-view':
+        return (
+          <CaseViewScreen
+            caseData={caseToEdit}
+            onBack={() => {
+              setCaseToEdit(null);
+              setCurrentScreen('search');
+            }}
+            onEdit={() => {
+              setCurrentScreen('upload'); // Navigate to upload for editing
+            }}
+          />
+        );
       case 'search':
         return (
           <SearchScreen
             onCaseSelect={(caseItem) => {
               setCaseToEdit(caseItem);
-              setCurrentScreen('upload');
+              setCurrentScreen('case-view'); // Navigate to read-only view
             }}
           />
         );
@@ -91,7 +105,7 @@ const App: React.FC = () => {
           <ProfileScreen
             onEditCase={(caseItem) => {
               setCaseToEdit(caseItem);
-              setCurrentScreen('upload'); // Navigate to upload screen with data
+              setCurrentScreen('case-view'); // Profile also goes to view mode first
             }}
           />
         );

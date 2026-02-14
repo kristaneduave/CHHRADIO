@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'bulletin' | 'profile' | 'search' | 'chat';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'bulletin' | 'profile' | 'search' | 'chat' | 'case-view';
 
 export interface Activity {
   id: string;
