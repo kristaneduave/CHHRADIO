@@ -31,6 +31,15 @@ const RELIABILITY_COLORS: Record<string, string> = {
   'Unlikely': 'text-rose-400'
 };
 
+const RELIABILITY_BG_COLORS: Record<string, string> = {
+  'Certain': 'bg-emerald-500',
+  'Probable': 'bg-blue-500',
+  'Possible': 'bg-amber-500',
+  'Unlikely': 'bg-rose-500'
+};
+
+const RELIABILITY_OPTIONS = ['Certain', 'Probable', 'Possible', 'Unlikely'];
+
 const UploadScreen: React.FC = () => {
   const [formData, setFormData] = useState({
     initials: '',
@@ -42,7 +51,7 @@ const UploadScreen: React.FC = () => {
     impression: '', // Diagnosis
     notes: '', // Bite-sized notes
     date: new Date().toISOString().split('T')[0], // Default today
-    reliability: 'Probable' // Default
+    reliability: 'Certain' // Default
   });
 
   const [customTitle, setCustomTitle] = useState('');
@@ -220,7 +229,7 @@ const UploadScreen: React.FC = () => {
         impression: '',
         notes: '',
         date: new Date().toISOString().split('T')[0],
-        reliability: 'Probable'
+        reliability: 'Certain'
       });
       setImages([]);
       setCustomTitle('');
@@ -259,11 +268,9 @@ const UploadScreen: React.FC = () => {
           </button>
 
           <div className="w-full max-w-md space-y-6 my-auto">
-            <header className="text-center space-y-1">
+            <header className="text-center space-y-3 flex flex-col items-center">
               <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
-              <p className={`text-sm font-bold ${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'}`}>
-                {formData.reliability}
-              </p>
+              <div className={`w-3 h-3 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
             </header>
 
             {/* Grid of Images */}
@@ -285,9 +292,7 @@ const UploadScreen: React.FC = () => {
 
             {/* Removed Bottom Summary Box as requested */}
 
-            <footer className="pt-8 text-center">
-              <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">CHH Radiology App</p>
-            </footer>
+
           </div>
         </div>
       )}
@@ -327,19 +332,15 @@ const UploadScreen: React.FC = () => {
                     className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary transition-all max-w-[130px]"
                   />
                 </div>
-                <div className="relative flex-1">
-                  <select
-                    name="reliability"
-                    value={formData.reliability}
-                    onChange={handleInputChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary appearance-none"
-                  >
-                    <option value="Certain" className="bg-[#0c1829]">Certain</option>
-                    <option value="Probable" className="bg-[#0c1829]">Probable</option>
-                    <option value="Possible" className="bg-[#0c1829]">Possible</option>
-                    <option value="Unlikely" className="bg-[#0c1829]">Unlikely</option>
-                  </select>
-                  <span className="material-icons absolute right-2 top-1/2 -translate-y-1/2 text-[14px] text-slate-500 pointer-events-none">expand_more</span>
+                <div className="relative flex-1 flex justify-end gap-2">
+                  {RELIABILITY_OPTIONS.map(option => (
+                    <button
+                      key={option}
+                      onClick={() => setFormData(prev => ({ ...prev, reliability: option }))}
+                      className={`w-6 h-6 rounded-full transition-all duration-300 ${RELIABILITY_BG_COLORS[option]} ${formData.reliability === option ? 'ring-2 ring-white ring-offset-2 ring-offset-[#050B14] scale-110' : 'opacity-40 hover:opacity-100'}`}
+                      title={option}
+                    />
+                  ))}
                 </div>
               </div>
             </header>
