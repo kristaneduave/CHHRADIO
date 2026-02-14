@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { generateCasePDF } from '../services/pdfService';
 import { supabase } from '../services/supabase';
 import { generateViberText } from '../utils/formatters';
@@ -18,10 +18,13 @@ const ORGAN_SYSTEMS = [
   'Nuclear Medicine'
 ];
 
-const SEVERITIES = ['Routine', 'Urgent', 'Critical'];
+interface ImageUpload {
+  url: string;
+  file: File;
+  description: string;
+}
 
 const UploadScreen: React.FC = () => {
-  // Flattened state for the 8 requested fields
   const [formData, setFormData] = useState({
     initials: '',
     age: '',
@@ -33,50 +36,94 @@ const UploadScreen: React.FC = () => {
     notes: '' // Bite-sized notes
   });
 
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [customTitle, setCustomTitle] = useState('');
+  const [images, setImages] = useState<ImageUpload[]>([]);
   const [step, setStep] = useState(1); // 1: Input, 2: Result
+  const [uploaderName, setUploaderName] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Try to get profile name, fallback to email or 'Radiologist'
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+
+        setUploaderName(profile?.full_name || user.email || 'Radiologist');
+      }
+    };
+    fetchUser();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const processFile = (file: File) => {
-    if (previews.length >= 8) {
-      alert("Maximum of 8 images allowed.");
-      return;
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCustomTitle(e.target.value);
+  }
+
+  const processFiles = (files: FileList | null) => {
+    if (!files) return;
+
+    const newImages: ImageUpload[] = [];
+    let count = images.length;
+
+    Array.from(files).forEach(file => {
+      if (count >= 8) return; // Hard limit
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImages(prev => {
+            if (prev.length >= 8) return prev;
+            return [...prev, {
+              url: reader.result as string,
+              file: file,
+              description: ''
+            }];
+          });
+        };
+        reader.readAsDataURL(file);
+        count++;
+      }
+    });
+
+    if (files.length + images.length > 8) {
+      alert("Maximum of 8 images allowed. Some images may have been skipped.");
     }
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviews(prev => [...prev, reader.result as string]);
-      };
-      reader.readAsDataURL(file);
-    }
+  };
+
+  const handleImageDescriptionChange = (index: number, text: string) => {
+    setImages(prev => prev.map((img, i) => i === index ? { ...img, description: text } : img));
   };
 
   const removeImage = (index: number) => {
-    setPreviews(prev => prev.filter((_, i) => i !== index));
+    setImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleGenerateReport = () => {
-    if (previews.length === 0) {
-      alert("Please upload or capture at least one image.");
+    if (images.length === 0) {
+      alert("Please upload at least one image.");
       return;
     }
     setStep(2);
   };
 
   const handleCopyToViber = () => {
-    const text = generateViberText(formData);
+    const text = generateViberText({ ...formData, organ: formData.organSystem }); // Backward compat if needed
     navigator.clipboard.writeText(text).then(() => {
       alert('Copied to clipboard! Ready to paste into Viber.');
     });
   };
 
   const handleSave = async () => {
-    if (previews.length === 0 || !formData.initials) return;
+    if (images.length === 0 || !formData.initials) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -84,11 +131,12 @@ const UploadScreen: React.FC = () => {
 
       // 1. Upload Images Loop
       const uploadedUrls: string[] = [];
+      const imageMetadata = images.map(img => ({ description: img.description }));
 
-      for (let i = 0; i < previews.length; i++) {
-        const response = await fetch(previews[i]);
-        const blob = await response.blob();
-        const fileName = `${user.id}/${Date.now()}_${i}.png`;
+      for (let i = 0; i < images.length; i++) {
+        // We already have the file object in state
+        const blob = images[i].file;
+        const fileName = `${user.id}/${Date.now()}_${i}_${Math.random().toString(36).substr(2, 9)}.png`;
 
         const { error: uploadError } = await supabase.storage
           .from('case-images')
@@ -107,7 +155,7 @@ const UploadScreen: React.FC = () => {
       const { error: insertError } = await supabase
         .from('cases')
         .insert({
-          title: `Case: ${formData.initials}`,
+          title: customTitle || `Case: ${formData.initials}`,
           clinical_history: formData.notes,
           findings: formData.findings,
           image_url: uploadedUrls[0], // Primary thumbnail
@@ -121,7 +169,8 @@ const UploadScreen: React.FC = () => {
             anatomy_region: formData.organSystem,
             keyFindings: [formData.findings],
             impression: formData.impression,
-            educationalSummary: formData.notes
+            educationalSummary: formData.notes,
+            imagesMetadata: imageMetadata // Store descriptions here
           },
           modality: formData.modality,
           anatomy_region: formData.organSystem,
@@ -142,7 +191,8 @@ const UploadScreen: React.FC = () => {
         impression: '',
         notes: ''
       });
-      setPreviews([]);
+      setImages([]);
+      setCustomTitle('');
 
     } catch (error: any) {
       console.error('Error saving case:', error);
@@ -154,10 +204,18 @@ const UploadScreen: React.FC = () => {
     fileInputRef.current?.click();
   }
 
+  // Helper to extract visuals for PDF service
+  const getImagesForPdf = () => {
+    return images.map(img => ({
+      url: img.url,
+      description: img.description
+    }));
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#050B14]">
       {/* Modern Stepper */}
-      <div className="px-6 pt-12 flex justify-between items-center mb-8 shrink-0">
+      <div className="px-6 pt-12 flex justify-between items-center mb-4 shrink-0">
         <div className="flex gap-2">
           {[1, 2].map(i => (
             <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
@@ -172,58 +230,81 @@ const UploadScreen: React.FC = () => {
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <header>
-              <h1 className="text-2xl font-bold text-white mb-1">New Case</h1>
-              <p className="text-slate-500 text-xs">Enter clinical details</p>
+              <input
+                type="text"
+                value={customTitle}
+                onChange={handleTitleChange}
+                placeholder="Enter Case Title..."
+                className="text-2xl font-bold text-white bg-transparent border-none focus:ring-0 placeholder-slate-600 w-full p-0"
+              />
             </header>
 
             {/* Multi-Image Gallery */}
             <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Diagnostic Images ({previews.length}/8)</span>
-                {previews.length === 0 && <span className="text-[10px] text-rose-500 font-bold uppercase">*Required</span>}
-              </div>
-
               {/* Clean, Large Upload Area */}
-              {previews.length === 0 ? (
+              {images.length === 0 ? (
                 <div
                   onClick={triggerFileInput}
                   className="w-full aspect-video border-2 border-dashed border-white/10 rounded-3xl flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all group"
                 >
-                  <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={(e) => processFiles(e.target.files)}
+                    className="hidden"
+                    accept="image/*"
+                    multiple // Enable multiple files
+                  />
                   <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
                     <span className="material-icons text-3xl">add_photo_alternate</span>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-bold text-white group-hover:text-primary transition-colors">Tap to Upload Image</p>
-                    <p className="text-xs text-slate-500 mt-1">Supports JPG, PNG</p>
+                    <p className="text-sm font-bold text-white group-hover:text-primary transition-colors">Tap into Upload Images</p>
+                    <p className="text-xs text-slate-500 mt-1">Select multiple (Max 8)</p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* Add Button for Subsequent Images (Horizontal List) */}
-                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
-                    {previews.length < 8 && (
-                      <div
-                        onClick={triggerFileInput}
-                        className="shrink-0 w-32 h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all snap-start"
-                      >
-                        <input type="file" ref={fileInputRef} onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" accept="image/*" />
-                        <span className="material-icons text-primary/50 text-2xl">add</span>
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Add New</span>
-                      </div>
-                    )}
-
-                    {previews.map((src, idx) => (
-                      <div key={idx} className="shrink-0 w-32 h-32 rounded-2xl relative group snap-start shadow-lg">
-                        <img src={src} className="w-full h-full object-cover rounded-2xl border border-white/10 bg-black" alt={`Scan ${idx}`} />
-                        <button onClick={(e) => { e.stopPropagation(); removeImage(idx); }} className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform z-10">
-                          <span className="material-icons text-xs">close</span>
-                        </button>
-                        <div className="absolute bottom-2 left-2 bg-black/60 backdrop-blur rounded px-2 py-0.5 pointer-events-none">
-                          <span className="text-[9px] font-bold text-white">Img {idx + 1}</span>
+                  {/* Horizontal Scroll Gallery */}
+                  <div className="flex flex-col gap-4">
+                    <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+                      {images.length < 8 && (
+                        <div
+                          onClick={triggerFileInput}
+                          className="shrink-0 w-40 h-56 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-white/5 hover:border-primary/50 transition-all snap-start"
+                        >
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={(e) => processFiles(e.target.files)}
+                            className="hidden"
+                            accept="image/*"
+                            multiple
+                          />
+                          <span className="material-icons text-primary/50 text-2xl">add</span>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">Add New</span>
                         </div>
-                      </div>
-                    ))}
+                      )}
+
+                      {images.map((img, idx) => (
+                        <div key={idx} className="shrink-0 w-48 bg-white/5 rounded-2xl p-2 snap-start">
+                          <div className="relative w-full aspect-square mb-2 group">
+                            <img src={img.url} className="w-full h-full object-cover rounded-xl border border-white/10 bg-black" alt={`Scan ${idx}`} />
+                            <button onClick={(e) => { e.stopPropagation(); removeImage(idx); }} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg pointer-events-auto z-10">
+                              <span className="material-icons text-[10px]">close</span>
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={img.description}
+                            onChange={(e) => handleImageDescriptionChange(idx, e.target.value)}
+                            placeholder="Description..."
+                            className="w-full bg-black/20 border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white focus:border-primary transition-all"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[10px] text-slate-500 text-center italic">Scroll to view all images</p>
                   </div>
                 </div>
               )}
@@ -295,18 +376,21 @@ const UploadScreen: React.FC = () => {
           <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
             <header className="flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-0.5">Ready to Share</h1>
-                <p className="text-slate-500 text-xs text-emerald-400">Generated successfully</p>
+                <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
+                <p className="text-slate-500 text-xs text-emerald-400">Ready to Share</p>
               </div>
               <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
             </header>
 
             {/* Preview Card */}
             <div className="glass-card-enhanced p-5 rounded-2xl border-primary/20 bg-primary/[0.02] space-y-4">
-              {previews.length > 0 && (
+              {images.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                  {previews.map((src, i) => (
-                    <img key={i} src={src} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40 shrink-0" />
+                  {images.map((img, i) => (
+                    <div key={i} className="shrink-0 space-y-1 w-24">
+                      <img src={img.url} alt="" className="h-24 w-24 object-cover rounded-xl bg-black/40" />
+                      {img.description && <p className="text-[9px] text-slate-400 truncate">{img.description}</p>}
+                    </div>
                   ))}
                 </div>
               )}
@@ -340,7 +424,7 @@ const UploadScreen: React.FC = () => {
               <button onClick={() => {
                 console.log('Export button clicked');
                 try {
-                  generateCasePDF(formData, null, previews);
+                  generateCasePDF(formData, null, getImagesForPdf(), customTitle, uploaderName);
                 } catch (e) {
                   console.error('Export failed immediately:', e);
                   alert('Export failed: ' + e);
