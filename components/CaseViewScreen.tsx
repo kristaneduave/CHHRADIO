@@ -253,10 +253,23 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                             <div className="space-y-2 pt-2">
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                                     <span className="material-icons text-sm">sticky_note_2</span>
-                                    Clinical Notes
+                                    Clinical Data
                                 </h3>
                                 <p className="text-xs text-slate-400 italic leading-relaxed pl-4">
                                     "{caseData.clinical_history}"
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Notes / Remarks */}
+                        {caseData.educational_summary && (
+                            <div className="space-y-2 pt-2">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                    <span className="material-icons text-sm">description</span>
+                                    Notes / Remarks
+                                </h3>
+                                <p className="text-xs text-slate-400 italic leading-relaxed pl-4">
+                                    {caseData.educational_summary}
                                 </p>
                             </div>
                         )}
