@@ -24,6 +24,13 @@ interface ImageUpload {
   description: string;
 }
 
+const RELIABILITY_COLORS: Record<string, string> = {
+  'Certain': 'text-emerald-400',
+  'Probable': 'text-blue-400',
+  'Possible': 'text-amber-400',
+  'Unlikely': 'text-rose-400'
+};
+
 const UploadScreen: React.FC = () => {
   const [formData, setFormData] = useState({
     initials: '',
@@ -43,8 +50,25 @@ const UploadScreen: React.FC = () => {
   const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [uploaderName, setUploaderName] = useState<string>('');
   const [isScreenshotMode, setIsScreenshotMode] = useState(false);
+  const [showControls, setShowControls] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (isScreenshotMode && showControls) {
+      timeout = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isScreenshotMode, showControls]);
+
+  const handleScreenTap = () => {
+    if (isScreenshotMode) {
+      setShowControls(true);
+    }
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -223,18 +247,23 @@ const UploadScreen: React.FC = () => {
     <div className="flex flex-col h-full bg-[#050B14] relative">
       {/* Screenshot Overlay */}
       {isScreenshotMode && (
-        <div className="fixed inset-0 z-[100] bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-y-auto">
-          {/* Exit Button - Floating */}
+        <div
+          onClick={handleScreenTap}
+          className="fixed inset-0 z-[100] bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-y-auto cursor-pointer"
+        >
+          {/* Exit Button - Floating (Auto-hide) */}
           <button
-            onClick={() => setIsScreenshotMode(false)}
-            className="fixed top-6 right-6 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all z-50 backdrop-blur-md">
+            onClick={(e) => { e.stopPropagation(); setIsScreenshotMode(false); }}
+            className={`fixed top-6 right-6 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-all duration-500 z-50 backdrop-blur-md ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
             <span className="material-icons">close</span>
           </button>
 
           <div className="w-full max-w-md space-y-6 my-auto">
-            <header className="text-center space-y-2">
+            <header className="text-center space-y-1">
               <h1 className="text-3xl font-bold text-white tracking-tight">{customTitle || 'Case Report'}</h1>
-              {/* Removed Patient Info as requested */}
+              <p className={`text-sm font-bold ${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'}`}>
+                {formData.reliability}
+              </p>
             </header>
 
             {/* Grid of Images */}
@@ -453,8 +482,13 @@ const UploadScreen: React.FC = () => {
             <header className="flex justify-between items-center">
               <div>
                 <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
-                <p className="text-slate-500 text-xs text-emerald-400">Ready to Share</p>
-                <p className="text-slate-500 text-xs mt-1">{formData.date} • {formData.reliability}</p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">{formData.date}</span>
+                  <span className="text-slate-600">•</span>
+                  <span className={`${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'} font-bold`}>
+                    {formData.reliability}
+                  </span>
+                </div>
               </div>
               <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
             </header>
