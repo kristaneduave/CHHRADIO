@@ -14,6 +14,8 @@ export const generateViberText = (data: any): string => {
     } = data;
 
     return `🚨 *INTERESTING CASE* 🚨
+    
+🎯 *Reliability:* ${reliability || 'N/A'}
 
 👤 *Pt:* ${initials || 'N/A'} (${age || '?'} / ${sex || '?'})
 📷 *Modality:* ${modality || 'N/A'}
@@ -24,8 +26,6 @@ ${findings || 'No specific findings.'}
 
 💡 *Impression:*
 ${impression || 'Pending Diagnosis'}
-
-🎯 *Reliability:* ${reliability || 'N/A'}
 
 📌 *Notes:*
 ${notes || 'No notes provided.'}`;
