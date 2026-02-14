@@ -31,21 +31,9 @@ export const generateCasePDF = (
         doc.setFont('helvetica', 'bold');
         doc.text(customTitle || 'Radiology Case Report', margin, 20);
 
-        // Diagnostic Code (Top Right - Prominent)
-        const rawCode = diagnosis || data.diagnosticCode;
-        if (rawCode) {
-            doc.setFontSize(16); // Larger
-            doc.setFont('helvetica', 'bold');
-            doc.text(rawCode, pageWidth - margin, 20, { align: 'right' });
+        yPos = 55; // Start content higher up
 
-            doc.setFontSize(8);
-            doc.setFont('helvetica', 'normal');
-            doc.text('DIAGNOSTIC CODE', pageWidth - margin, 26, { align: 'right' });
-        }
-
-        yPos = 50; // Start content higher up
-
-        // --- 2. Patient & Exam Metadata (Compact) ---
+        // --- 2. Patient & Exam Metadata ---
         const col1X = margin;
         const col2X = pageWidth / 2 + 10;
 
@@ -59,9 +47,9 @@ export const generateCasePDF = (
 
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(20, 20, 20);
-        doc.text(`${initials || 'N/A'}  |  ${age || '?'} yo  |  ${sex || '?'}`, col1X + 25, yPos); // Inline details
+        doc.text(`${initials || 'N/A'}  |  ${age || '?'} yo  |  ${sex || '?'}`, col1X + 25, yPos);
 
-        // Column 2: Date (Moved here)
+        // Column 2: Date
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 102, 204);
         doc.text('DATE', col2X, yPos);
@@ -82,7 +70,19 @@ export const generateCasePDF = (
         doc.setTextColor(20, 20, 20);
         doc.text(`${modality || 'N/A'}  -  ${organSystem || 'N/A'}`, col1X + 25, yPos);
 
-        yPos += 15; // Space before findings (Removed the Line Divider)
+        // Column 2 Row 2: Diagnostic Code
+        const rawCode = diagnosis || data.diagnosticCode;
+        if (rawCode && !rawCode.toUpperCase().includes('PENDING')) {
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(0, 102, 204);
+            doc.text('CODE', col2X, yPos);
+
+            doc.setFont('helvetica', 'bold'); // Bold for the code itself
+            doc.setTextColor(20, 20, 20);
+            doc.text(rawCode, col2X + 20, yPos);
+        }
+
+        yPos += 20; // Space before findings
 
         // --- 3. Findings ---
         doc.setFontSize(11);
@@ -123,12 +123,11 @@ export const generateCasePDF = (
             yPos += (splitNotes.length * 5) + 8;
         }
 
-        // --- 5. Impression ---
-        if (yPos + 30 > pageHeight) {
-            doc.addPage();
-            yPos = 20;
-        }
+        // --- FORCE PAGE BREAK FOR IMPRESSION & IMAGES ---
+        doc.addPage();
+        yPos = 20;
 
+        // --- 5. Impression ---
         doc.setFontSize(11); // Same size as other headers
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(0, 51, 102);
@@ -157,19 +156,13 @@ export const generateCasePDF = (
         }
 
         if (imageList.length > 0) {
-            // No Header "DIAGNOSTIC IMAGING"
-
-            // Check space for first row
-            if (yPos + 60 > pageHeight) {
-                doc.addPage();
-                yPos = 20;
-            }
+            // No Header needed, implicit
 
             const colWidth = (pageWidth - (margin * 3)) / 2; // 2 columns with margin gap
             let currentRowMaxHeight = 0;
 
             imageList.forEach((img, index) => {
-                // New Page Check
+                // Page Check
                 if (yPos + 50 > pageHeight) {
                     doc.addPage();
                     yPos = 20;
@@ -198,7 +191,7 @@ export const generateCasePDF = (
                     }
 
                 } catch (e) {
-                    // Error block
+                    // Error placeholder
                     const fallbackHeight = colWidth * 0.75;
                     doc.setFillColor(245, 245, 245);
                     doc.rect(x, yPos, colWidth, fallbackHeight, 'F');
@@ -215,7 +208,7 @@ export const generateCasePDF = (
             });
         }
 
-        // --- 7. Footer ---
+        // --- 7. Footer (Page Numbers) ---
         const pageCount = (doc as any).internal.getNumberOfPages();
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
@@ -229,7 +222,7 @@ export const generateCasePDF = (
         // --- Save ---
         const safeTitle = (customTitle || 'Case').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
         const safeInitials = (initials || 'Pt').replace(/[^a-z0-9]/gi, '_');
-        const filename = `${new Date().toISOString().split('T')[0]}_${safeTitle}_${safeInitials}.pdf`;
+        const filename = `${dateStr}_${safeTitle}_${safeInitials}.pdf`;
         doc.save(filename);
 
     } catch (error: any) {
