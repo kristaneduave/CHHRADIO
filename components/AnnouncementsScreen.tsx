@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Announcement } from '../types';
+import { Announcement, UserRole } from '../types';
 import { MOCK_ANNOUNCEMENTS } from '../constants';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
 
@@ -10,10 +9,23 @@ const AnnouncementsScreen: React.FC = () => {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [userRole, setUserRole] = useState<UserRole>('resident'); // Default to resident
+    const [userId, setUserId] = useState<string | null>(null);
 
     const categories = ['All', 'Research', 'Announcement', 'Event', 'Clinical'];
 
     useEffect(() => {
+        const fetchUserRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setUserId(user.id);
+                const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if (data?.role) {
+                    setUserRole(data.role as UserRole);
+                }
+            }
+        };
+        fetchUserRole();
         fetchAnnouncements();
     }, []);
 
@@ -41,6 +53,7 @@ const AnnouncementsScreen: React.FC = () => {
                     summary: item.content.substring(0, 150) + '...', // Create summary from content
                     content: item.content,
                     author: 'Hospital Staff', // Placeholder until we join with profiles
+                    author_id: item.author_id,
                     authorTitle: 'Contributor',
                     date: new Date(item.created_at).toLocaleDateString(),
                     category: item.category,
@@ -139,6 +152,32 @@ const AnnouncementsScreen: React.FC = () => {
                                         <span className="text-[10px] text-slate-500">{post.views}</span>
                                     </div>
                                 </div>
+                                <div className="flex gap-4 mt-4 pt-4 border-t border-white/5">
+                                    <button className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors">
+                                        <span className="material-icons text-sm">share</span>
+                                        Share
+                                    </button>
+                                    <button className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors">
+                                        <span className="material-icons text-sm">bookmark_border</span>
+                                        Save
+                                    </button>
+                                    {/* Delete button for Admin or Author (if privileged) */}
+                                    {(userRole === 'admin' || (userRole !== 'resident' && userId && post.author_id === userId)) && (
+                                        <button
+                                            className="flex items-center gap-2 text-xs font-medium text-red-400 hover:text-red-300 transition-colors ml-auto"
+                                            onClick={async (e) => {
+                                                e.stopPropagation();
+                                                if (confirm('Are you sure you want to delete this announcement?')) {
+                                                    const { error } = await supabase.from('announcements').delete().eq('id', post.id);
+                                                    if (!error) fetchAnnouncements();
+                                                }
+                                            }}
+                                        >
+                                            <span className="material-icons text-sm">delete</span>
+                                            Delete
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {post.imageUrl && (
@@ -162,13 +201,15 @@ const AnnouncementsScreen: React.FC = () => {
                 )}
             </div>
 
-            {/* Create FAB */}
-            <button
-                onClick={() => setShowCreateModal(true)}
-                className="fixed bottom-24 right-8 w-12 h-12 rounded-full bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 flex items-center justify-center transition-all z-50 transform hover:scale-110 active:scale-95"
-            >
-                <span className="material-icons text-xl">add</span>
-            </button>
+            {/* Create FAB - Only for Admin, Faculty, Consultant */}
+            {['admin', 'faculty', 'consultant'].includes(userRole) && (
+                <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="fixed bottom-24 right-8 w-12 h-12 rounded-full bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/20 flex items-center justify-center transition-all z-50 transform hover:scale-110 active:scale-95"
+                >
+                    <span className="material-icons text-xl">add</span>
+                </button>
+            )}
 
             {showCreateModal && (
                 <CreateAnnouncementModal

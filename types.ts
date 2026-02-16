@@ -95,6 +95,8 @@ export interface ChatMessage {
 
 // ... existing types ...
 
+export type UserRole = 'admin' | 'faculty' | 'consultant' | 'resident';
+
 export interface Profile {
   id: string;
   full_name: string | null;
@@ -102,6 +104,7 @@ export interface Profile {
   bio: string | null;
   year_level: string | null;
   avatar_url: string | null;
+  role: UserRole; // Added role field
   updated_at: string;
 }
 
@@ -120,6 +123,7 @@ export interface Announcement {
   summary: string; // We can keep summary or rename to content, plan says content but keeping summary for now to match interface till full refactor
   content?: string; // Adding content field for full text
   author: string;
+  author_id?: string; // Added for RBAC ownership checks
   authorTitle: string;
   date: string;
   category: 'Research' | 'Announcement' | 'Event' | 'Clinical';
