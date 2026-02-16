@@ -7,7 +7,6 @@ import QuizScreen from './components/QuizScreen';
 import SearchScreen from './components/SearchScreen';
 import CalendarScreen from './components/CalendarScreen';
 import ProfileScreen from './components/ProfileScreen';
-import ChatScreen from './components/ChatScreen';
 import AnnouncementsScreen from './components/AnnouncementsScreen';
 import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
@@ -100,8 +99,6 @@ const App: React.FC = () => {
             }}
           />
         );
-      case 'chat':
-        return <ChatScreen />;
       case 'profile':
         return (
           <ProfileScreen

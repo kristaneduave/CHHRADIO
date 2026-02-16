@@ -13,11 +13,21 @@ const AnnouncementsScreen: React.FC = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const ITEMS_PER_PAGE = 5;
 
     const categories = ['All', 'Announcement', 'Research', 'Event', 'Misc'];
 
-    const fetchAnnouncements = async () => {
+    const fetchAnnouncements = async (pageNumber: number = 0, reset: boolean = false) => {
         try {
+            if (reset) {
+                setLoading(true);
+            }
+
+            const from = pageNumber * ITEMS_PER_PAGE;
+            const to = from + ITEMS_PER_PAGE - 1;
+
             const { data, error } = await supabase
                 .from('announcements')
                 .select(`
@@ -28,7 +38,8 @@ const AnnouncementsScreen: React.FC = () => {
                         role
                     )
                 `)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false })
+                .range(from, to);
 
             if (error) throw error;
 
@@ -51,7 +62,18 @@ const AnnouncementsScreen: React.FC = () => {
                     links: item.links || [],
                     icon: item.icon
                 }));
-                setAnnouncements(formattedData);
+
+                if (reset) {
+                    setAnnouncements(formattedData);
+                } else {
+                    setAnnouncements(prev => [...prev, ...formattedData]);
+                }
+
+                if (data.length < ITEMS_PER_PAGE) {
+                    setHasMore(false);
+                } else {
+                    setHasMore(true);
+                }
             }
         } catch (error) {
             console.error('Error fetching announcements:', error);
@@ -72,7 +94,7 @@ const AnnouncementsScreen: React.FC = () => {
             }
         };
         fetchUserRole();
-        fetchAnnouncements();
+        fetchAnnouncements(0, true);
     }, []);
 
     const handleEdit = (announcement: Announcement, e: React.MouseEvent) => {
@@ -87,7 +109,7 @@ const AnnouncementsScreen: React.FC = () => {
             try {
                 const { error } = await supabase.from('announcements').delete().eq('id', id);
                 if (error) throw error;
-                fetchAnnouncements();
+                fetchAnnouncements(0, true);
             } catch (error) {
                 console.error('Error deleting announcement:', error);
             }
@@ -137,7 +159,7 @@ const AnnouncementsScreen: React.FC = () => {
                 </div>
             </div>
 
-            {loading ? (
+            {loading && announcements.length === 0 ? (
                 <div className="space-y-4 px-6">
                     <div className="h-64 rounded-3xl bg-white/5 animate-pulse" />
                     <div className="h-32 rounded-3xl bg-white/5 animate-pulse" />
@@ -299,6 +321,30 @@ const AnnouncementsScreen: React.FC = () => {
                             <p className="text-xs text-slate-500 uppercase tracking-widest font-medium">No announcements found</p>
                         </div>
                     )}
+
+                    {/* Load More Button */}
+                    {activeCategory === 'All' && hasMore && filteredAnnouncements.length > 0 && (
+                        <div className="flex justify-center pt-4 pb-8">
+                            <button
+                                onClick={() => {
+                                    const nextPage = page + 1;
+                                    setPage(nextPage);
+                                    fetchAnnouncements(nextPage, false);
+                                }}
+                                disabled={loading}
+                                className="px-6 py-2 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-400 hover:text-white transition-colors border border-white/5 flex items-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="w-3 h-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></div>
+                                        <span>Loading...</span>
+                                    </>
+                                ) : (
+                                    <span>Load More</span>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -320,7 +366,7 @@ const AnnouncementsScreen: React.FC = () => {
                         setEditingAnnouncement(null);
                     }}
                     onSuccess={() => {
-                        fetchAnnouncements();
+                        fetchAnnouncements(0, true);
                         setShowCreateModal(false);
                         setEditingAnnouncement(null);
                     }}

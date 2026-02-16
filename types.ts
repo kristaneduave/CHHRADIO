@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'chat' | 'case-view' | 'activity-log' | 'quick-links' | 'institution';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'case-view' | 'activity-log' | 'quick-links' | 'institution';
 
 export interface Activity {
   id: string;
@@ -116,12 +116,7 @@ export interface CalendarEvent {
   type?: EventType; // mapped to event_type
 }
 
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'model';
-  text: string;
-  timestamp: number;
-}
+
 
 // ... existing types ...
 
@@ -138,14 +133,7 @@ export interface Profile {
   updated_at: string;
 }
 
-export interface ChatSession {
-  id: string;
-  title: string;
-  lastMessage: string;
-  timestamp: string;
-  unread?: boolean;
-  type: 'Peer'; // Removed 'AI'
-}
+
 
 export interface Announcement {
   id: string;

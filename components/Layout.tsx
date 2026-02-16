@@ -11,7 +11,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
   const navItems: { screen: Screen; icon: string; outlineIcon: string }[] = [
     { screen: 'dashboard', icon: 'home', outlineIcon: 'home' },
     { screen: 'search', icon: 'folder', outlineIcon: 'folder_open' }, // Database
-    { screen: 'chat', icon: 'chat_bubble', outlineIcon: 'chat_bubble_outline' },
     { screen: 'profile', icon: 'person', outlineIcon: 'person_outline' },
   ];
 
