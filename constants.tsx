@@ -1,5 +1,5 @@
 
-import { Activity, QuickAction, PatientRecord, CalendarEvent, BulletinPost } from './types';
+import { Activity, QuickAction, PatientRecord, CalendarEvent, Announcement } from './types';
 
 export const ACTIVITIES: Activity[] = [
   {
@@ -40,7 +40,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Upload Case', icon: 'cloud_upload', target: 'upload' },
   { label: 'Start Quiz', icon: 'quiz', target: 'quiz' },
   { label: 'Calendar', icon: 'calendar_month', target: 'calendar' },
-  { label: 'Bulletin', icon: 'forum', target: 'bulletin' },
+  { label: 'Announcements', icon: 'campaign', target: 'announcements' },
   { label: 'Quick Links', icon: 'link', target: 'quick-links' },
   { label: 'Institution', icon: 'apartment', target: 'institution' }
 ];
@@ -98,7 +98,7 @@ export const MOCK_EVENTS: CalendarEvent[] = [
   }
 ];
 
-export const MOCK_BULLETINS: BulletinPost[] = [
+export const MOCK_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'b1',
     category: 'Research',

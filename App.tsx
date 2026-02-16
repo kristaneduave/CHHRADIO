@@ -8,7 +8,7 @@ import SearchScreen from './components/SearchScreen';
 import CalendarScreen from './components/CalendarScreen';
 import ProfileScreen from './components/ProfileScreen';
 import ChatScreen from './components/ChatScreen';
-import BulletinScreen from './components/BulletinScreen';
+import AnnouncementsScreen from './components/AnnouncementsScreen';
 import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
 import QuickLinksScreen from './components/QuickLinksScreen';
@@ -115,8 +115,8 @@ const App: React.FC = () => {
             }}
           />
         );
-      case 'bulletin':
-        return <BulletinScreen />;
+      case 'announcements':
+        return <AnnouncementsScreen />;
       case 'quick-links':
         return <QuickLinksScreen />;
       case 'institution':

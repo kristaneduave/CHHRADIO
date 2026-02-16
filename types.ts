@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'bulletin' | 'profile' | 'search' | 'chat' | 'case-view' | 'activity-log' | 'quick-links' | 'institution';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'chat' | 'case-view' | 'activity-log' | 'quick-links' | 'institution';
 
 export interface Activity {
   id: string;
@@ -114,10 +114,11 @@ export interface ChatSession {
   type: 'Peer'; // Removed 'AI'
 }
 
-export interface BulletinPost {
+export interface Announcement {
   id: string;
   title: string;
-  summary: string;
+  summary: string; // We can keep summary or rename to content, plan says content but keeping summary for now to match interface till full refactor
+  content?: string; // Adding content field for full text
   author: string;
   authorTitle: string;
   date: string;
