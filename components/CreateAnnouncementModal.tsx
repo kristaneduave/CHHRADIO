@@ -84,8 +84,8 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 px-4">
-            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-0 sm:p-4">
+            <div className="w-full max-w-lg bg-[#0c1829] border-t sm:border border-white/10 rounded-t-3xl rounded-b-none sm:rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 relative overflow-hidden h-[85vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
                 {/* Background Glow */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
 
