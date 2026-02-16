@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import ReactDOM from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Announcement } from '../types';
 
@@ -12,13 +12,17 @@ interface CreateAnnouncementModalProps {
 const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess, editingAnnouncement }) => {
     const [title, setTitle] = useState(editingAnnouncement?.title || '');
     const [content, setContent] = useState(editingAnnouncement?.content || '');
-    const [category, setCategory] = useState(editingAnnouncement?.category || 'Announcement');
+    // Handle legacy 'Miscellaneous' category mapping to 'Misc'
+    const [category, setCategory] = useState(
+        (editingAnnouncement?.category === 'Miscellaneous' ? 'Misc' : editingAnnouncement?.category) || 'Announcement'
+    );
     const [imageFile, setImageFile] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    // Initialize preview with existing image URL
+    const [imagePreview, setImagePreview] = useState<string | null>(editingAnnouncement?.imageUrl || null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const categories = ['Announcement', 'Research', 'Event', 'Miscellaneous'];
+    const categories = ['Announcement', 'Research', 'Event', 'Misc'];
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -104,7 +108,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
         }
     };
 
-    return (
+    return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
             <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[80vh] sm:max-h-[90vh] flex flex-col">
                 {/* Background Glow */}
@@ -196,10 +200,10 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[10px] font-medium text-white truncate max-w-[150px]">
-                                            {imageFile?.name || 'Image attached'}
+                                            {imageFile ? imageFile.name : 'Current Image'}
                                         </span>
                                         <span className="text-[9px] text-slate-500">
-                                            {(imageFile?.size ? (imageFile.size / 1024 / 1024).toFixed(2) : '0')} MB
+                                            {imageFile ? (imageFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Attached'}
                                         </span>
                                     </div>
                                     <button
@@ -255,7 +259,8 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
