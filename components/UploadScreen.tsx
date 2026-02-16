@@ -121,6 +121,29 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     fetchUser();
   }, []);
 
+  // Force reset form if no existing case (fixes potential stale state or browser autofill issues)
+  useEffect(() => {
+    if (!existingCase) {
+      setFormData({
+        initials: '',
+        age: '',
+        sex: 'M',
+        modality: 'CT Scan',
+        organSystem: 'Neuroradiology',
+        clinicalData: '',
+        findings: '',
+        impression: '',
+        notes: '',
+        diagnosis: '',
+        date: new Date().toISOString().split('T')[0],
+        reliability: 'Certain'
+      });
+      setCustomTitle('');
+      setImages([]);
+      setStep(1);
+    }
+  }, [existingCase]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -383,6 +406,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 value={customTitle}
                 onChange={handleTitleChange}
                 placeholder="Enter Case Title..."
+                autoComplete="off"
                 className="text-2xl font-bold text-white bg-transparent border-none focus:ring-0 placeholder-slate-600 w-full p-0"
               />
 
@@ -491,7 +515,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-5 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
-                  <input name="initials" value={formData.initials} onChange={handleInputChange} placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                  <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
                 </div>
                 <div className="col-span-3 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
