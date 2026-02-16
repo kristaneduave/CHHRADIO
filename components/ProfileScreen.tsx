@@ -23,8 +23,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     bio: '',
     year_level: '',
     specialty: 'Radiology',
-    year_level: '',
-    specialty: 'Radiology',
+
     avatar_url: '',
     role: 'resident' as UserRole
   });
@@ -84,8 +83,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           bio: data.bio || '',
           year_level: data.year_level || '',
           specialty: 'Radiology',
-          year_level: data.year_level || '',
-          specialty: 'Radiology',
+
           avatar_url: data.avatar_url || '',
           role: (data.role as UserRole) || 'resident'
         });
