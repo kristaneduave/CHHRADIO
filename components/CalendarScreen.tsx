@@ -457,7 +457,7 @@ const CalendarScreen: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative">
+      <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative z-0">
         {/* Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
           <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl h-full flex flex-col">
@@ -511,7 +511,7 @@ const CalendarScreen: React.FC = () => {
 
         {/* Agenda */}
         <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative">
-          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative">
+          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <span className="material-icons text-sm">view_agenda</span> Agenda
@@ -574,6 +574,9 @@ const CalendarScreen: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Bottom Gradient Fade */}
+      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050B14] via-[#050B14]/90 to-transparent pointer-events-none z-10"></div>
 
       {/* Render Portal Modal */}
       <Modal />
