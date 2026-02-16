@@ -89,6 +89,11 @@ export interface CalendarEvent {
   location?: string;
   created_by: string;
   assigned_to?: string;
+  covered_by?: string;
+  covered_user?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
   is_all_day: boolean;
   created_at?: string;
 

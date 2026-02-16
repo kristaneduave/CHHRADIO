@@ -9,14 +9,21 @@ const CalendarScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [staffList, setStaffList] = useState<{ id: string, full_name: string }[]>([]);
 
   // Form state
   const [newEventTitle, setNewEventTitle] = useState('');
+  const [newEventStartDate, setNewEventStartDate] = useState('');
+  const [newEventEndDate, setNewEventEndDate] = useState('');
   const [newEventTime, setNewEventTime] = useState('09:00');
   const [newEventEndTime, setNewEventEndTime] = useState('10:00');
   const [newEventType, setNewEventType] = useState<EventType>('meeting');
   const [newEventDescription, setNewEventDescription] = useState('');
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [assignedTo, setAssignedTo] = useState('');
+  const [coveredBy, setCoveredBy] = useState('');
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -30,11 +37,13 @@ const CalendarScreen: React.FC = () => {
   const fetchEvents = async () => {
     setLoading(true);
     try {
-      // Fetch for the whole month
       const start = new Date(year, month, 1);
       const end = new Date(year, month + 1, 0, 23, 59, 59);
       const data = await CalendarService.getEvents(start, end);
       setEvents(data);
+
+      const upcoming = await CalendarService.getUpcomingEvents(5);
+      setUpcomingEvents(upcoming);
     } catch (error) {
       console.error('Error fetching events:', error);
     } finally {
@@ -42,9 +51,31 @@ const CalendarScreen: React.FC = () => {
     }
   };
 
+  const fetchStaff = async () => {
+    const { data } = await supabase.from('profiles').select('id, full_name');
+    if (data) setStaffList(data);
+  };
+
   useEffect(() => {
     fetchEvents();
+    fetchStaff();
   }, [currentDate]);
+
+  // Pre-fill dates when opening modal
+  useEffect(() => {
+    if (showAddEvent) {
+      const dateStr = selectedDate.toISOString().split('T')[0];
+      setNewEventStartDate(dateStr);
+      setNewEventEndDate(dateStr);
+    }
+  }, [showAddEvent, selectedDate]);
+
+  // Auto-set all day for leave
+  useEffect(() => {
+    if (newEventType === 'leave') {
+      setIsAllDay(true);
+    }
+  }, [newEventType]);
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
@@ -59,8 +90,6 @@ const CalendarScreen: React.FC = () => {
   };
 
   const getEventsForDay = (day: number) => {
-    // Naive check for single day events. 
-    // For multi-day (rotations), we need to check overlap.
     const targetStart = new Date(year, month, day, 0, 0, 0);
     const targetEnd = new Date(year, month, day, 23, 59, 59);
 
@@ -83,16 +112,18 @@ const CalendarScreen: React.FC = () => {
     if (!newEventTitle) return;
 
     try {
-      const start = new Date(selectedDate);
-      const [sh, sm] = newEventTime.split(':').map(Number);
-      start.setHours(sh, sm);
+      let start: Date, end: Date;
 
-      const end = new Date(selectedDate);
-      const [eh, em] = newEventEndTime.split(':').map(Number);
-      end.setHours(eh, em);
+      if (isAllDay) {
+        start = new Date(newEventStartDate);
+        start.setHours(0, 0, 0, 0);
 
-      // Handle end time being possibly next day if < start time? No, let's assume same day for simple events
-      // For leave, we might want multi-day.
+        end = new Date(newEventEndDate);
+        end.setHours(23, 59, 59, 999);
+      } else {
+        start = new Date(`${newEventStartDate}T${newEventTime}`);
+        end = new Date(`${newEventStartDate}T${newEventEndTime}`); // Assume same day for non-all-day simple events
+      }
 
       await CalendarService.createEvent({
         title: newEventTitle,
@@ -100,14 +131,20 @@ const CalendarScreen: React.FC = () => {
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         event_type: newEventType,
-        is_all_day: false, // simplified
+        is_all_day: isAllDay,
         location: '',
+        assigned_to: assignedTo || undefined,
+        covered_by: coveredBy || undefined
       });
 
       setShowAddEvent(false);
+      // Reset form
       setNewEventTitle('');
       setNewEventDescription('');
-      fetchEvents(); // Refresh
+      setAssignedTo('');
+      setCoveredBy('');
+      setIsAllDay(false);
+      fetchEvents();
     } catch (e) {
       console.error("Error creating event", e);
       alert("Failed to create event");
@@ -127,167 +164,311 @@ const CalendarScreen: React.FC = () => {
   };
 
   return (
-    <div className="px-6 pt-12 pb-12 flex flex-col h-full animate-in fade-in duration-500">
+    <div className="px-6 pt-8 pb-12 flex flex-col h-full animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
+      {/* Top Header with Month and Actions */}
       <header className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">{monthNames[month]}</h1>
-          <p className="text-slate-400 text-xs font-medium tracking-widest uppercase">{year}</p>
+          <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
         </div>
-        <div className="flex gap-2">
-          <button onClick={prevMonth} className="w-10 h-10 rounded-xl glass-card-enhanced flex items-center justify-center text-slate-400 hover:text-white transition-all">
-            <span className="material-icons">chevron_left</span>
-          </button>
-          <button onClick={nextMonth} className="w-10 h-10 rounded-xl glass-card-enhanced flex items-center justify-center text-slate-400 hover:text-white transition-all">
-            <span className="material-icons">chevron_right</span>
+        <div className="flex gap-4">
+          <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
+            <button onClick={prevMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+              <span className="material-icons text-xl">chevron_left</span>
+            </button>
+            <button onClick={() => setCurrentDate(new Date())} className="px-4 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
+              Today
+            </button>
+            <button onClick={nextMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+              <span className="material-icons text-xl">chevron_right</span>
+            </button>
+          </div>
+          <button
+            onClick={() => setShowAddEvent(true)}
+            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2"
+          >
+            <span className="material-icons text-lg">add</span>
+            Add Event
           </button>
         </div>
       </header>
 
-      {/* Calendar Grid */}
-      <div className="glass-card-enhanced rounded-2xl p-4 mb-8">
-        <div className="grid grid-cols-7 mb-2">
-          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-            <div key={d} className="text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest py-2">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {padding.map((_, i) => <div key={`p-${i}`} className="aspect-square"></div>)}
-          {days.map(day => (
-            <button
-              key={day}
-              onClick={() => setSelectedDate(new Date(year, month, day))}
-              className={`relative aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all hover:bg-white/5 ${isSelected(day) ? 'bg-primary text-white shadow-[0_0_15px_rgba(13,162,231,0.4)]' :
-                  isToday(day) ? 'text-primary border border-primary/30' : 'text-slate-300'
-                }`}
-            >
-              {day}
-              {hasEvents(day) && !isSelected(day) && (
-                <span className="absolute bottom-1.5 w-1 h-1 bg-primary rounded-full"></span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden">
+        {/* Left Column: Calendar Grid & Upcoming */}
+        <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+          {/* Calendar Grid */}
+          <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl">
+            <div className="grid grid-cols-7 mb-4">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+                <div key={d} className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest py-2">{d}</div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1">
+              {padding.map((_, i) => <div key={`p-${i}`} className="aspect-square"></div>)}
+              {days.map(day => (
+                <button
+                  key={day}
+                  onClick={() => setSelectedDate(new Date(year, month, day))}
+                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all hover:bg-white/5 group ${isSelected(day) ? 'bg-primary text-white shadow-[0_0_20px_rgba(13,162,231,0.4)] z-10 scale-105' :
+                    isToday(day) ? 'text-primary border border-primary/30 bg-primary/5' : 'text-slate-300'
+                    }`}
+                >
+                  <span className={`text-sm font-medium ${isToday(day) && !isSelected(day) ? 'font-bold' : ''}`}>{day}</span>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Events for Selected Day */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-center mb-1">
-            <h3 className="text-sm font-semibold text-slate-200">
-              {selectedDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
-            </h3>
-            <button
-              onClick={() => setShowAddEvent(true)}
-              className="flex items-center gap-1.5 text-xs font-bold text-primary uppercase tracking-widest hover:text-primary-dark transition-colors"
-            >
-              <span className="material-icons text-sm">add</span>
-              Add Event
-            </button>
+                  {/* Event Dots */}
+                  {hasEvents(day) && !isSelected(day) && (
+                    <div className="absolute bottom-2 flex gap-1">
+                      {/* Simplified dot logic - ideally map types colors */}
+                      <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-white transition-colors"></span>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {getEventsForSelected().length > 0 ? (
-            getEventsForSelected().map(event => (
-              <div key={event.id} className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex gap-4 animate-in slide-in-from-bottom-2 duration-300">
-                <div className={`w-1 h-10 rounded-full ${event.event_type === 'rotation' ? 'bg-purple-500' : event.event_type === 'call' ? 'bg-red-500' : 'bg-primary'}`}></div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className="text-sm font-bold text-white">{event.title}</h4>
-                    <span className="text-[10px] text-slate-500 font-bold">
-                      {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+          {/* Upcoming Events Dashboard */}
+          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 overflow-hidden flex flex-col">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="material-icons text-sm">upcoming</span> Upcoming Events
+            </h3>
+            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2">
+              {upcomingEvents.map(event => (
+                <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
+                  <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border border-white/5 bg-white/5`}>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
+                    <span className="text-lg font-bold text-white">{new Date(event.start_time).getDate()}</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                    {event.description || 'No additional details.'}
-                  </p>
-                  <div className="mt-2 flex gap-2">
-                    <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded-md border ${eventTypeStyles[event.event_type] || eventTypeStyles.other}`}>
-                      {event.event_type}
-                    </span>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-slate-200 truncate group-hover:text-primary transition-colors">{event.title}</h4>
+                    <p className="text-[11px] text-slate-500 truncate">{event.description || 'No description'}</p>
+                  </div>
+                  <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${eventTypeStyles[event.event_type]}`}>
+                    {event.event_type}
                   </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center opacity-50">
-              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/5">
-                <span className="material-icons text-slate-600">event_available</span>
-              </div>
-              <p className="text-xs text-slate-500">No events scheduled for this day.</p>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Leave List Panel */}
-        <div>
-          <LeaveList date={selectedDate} />
+        {/* Right Column: Selected Day Details & Leave List */}
+        <div className="w-full lg:w-96 flex flex-col gap-6 overflow-hidden">
+          {/* Selected Day Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white">{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
+          </div>
+
+          {/* Day Events List */}
+          <div className="glass-card-enhanced rounded-2xl p-1 flex-1 min-h-[300px] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-white/5 bg-white/5">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule</h3>
+            </div>
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+              {getEventsForSelected().length > 0 ? (
+                getEventsForSelected().map(event => (
+                  <div key={event.id} className="glass-card-enhanced p-4 rounded-xl border border-white/5 relative overflow-hidden group">
+                    <div className={`absolute top-0 bottom-0 left-0 w-1 ${event.event_type === 'rotation' ? 'bg-purple-500' : event.event_type === 'call' ? 'bg-red-500' : 'bg-primary'}`}></div>
+                    <div className="pl-3">
+                      <div className="flex justify-between items-start mb-1">
+                        <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors">{event.title}</h4>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${eventTypeStyles[event.event_type]}`}>
+                          {event.event_type}
+                        </span>
+                      </div>
+
+                      {!event.is_all_day && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
+                          <span className="material-icons text-[14px]">schedule</span>
+                          {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(event.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+
+                      {event.description && (
+                        <p className="text-[11px] text-slate-500 line-clamp-2">{event.description}</p>
+                      )}
+
+                      {event.covered_user && (
+                        <div className="mt-2 flex items-center gap-2 bg-white/5 p-1.5 rounded-lg border border-white/5">
+                          <div className="w-5 h-5 rounded-full bg-slate-700 overflow-hidden">
+                            {event.covered_user.avatar_url ? (
+                              <img src={event.covered_user.avatar_url} className="w-full h-full object-cover" />
+                            ) : (
+                              <span className="flex items-center justify-center h-full text-[8px] font-bold">{event.covered_user.full_name?.charAt(0)}</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-400">Covered by <strong className="text-slate-300">{event.covered_user.full_name}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 text-center opacity-50">
+                  <span className="material-icons text-4xl text-slate-600 mb-2">event_available</span>
+                  <p className="text-sm text-slate-500 font-medium">No events today</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Leave List */}
+          <div className="flex-shrink-0">
+            <LeaveList date={selectedDate} />
+          </div>
         </div>
       </div>
 
-      {/* Add Event Modal */}
+      {/* Enhanced Add Event Modal */}
       {showAddEvent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="glass-card-enhanced w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 duration-300">
-            <h3 className="text-lg font-bold text-white mb-4">New Event</h3>
-            <div className="space-y-4 mb-6">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="glass-card-enhanced w-full max-w-lg rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-300 border border-white/10">
+            <div className="flex justify-between items-start mb-6">
               <div>
-                <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">Title</label>
+                <h3 className="text-xl font-bold text-white">New Event</h3>
+                <p className="text-slate-400 text-xs mt-1">Add a new schedule item to the calendar</p>
+              </div>
+              <button onClick={() => setShowAddEvent(false)} className="text-slate-500 hover:text-white transition-colors">
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-5 mb-8">
+              {/* Title Input */}
+              <div>
+                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Event Title</label>
                 <input
                   type="text"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
-                  placeholder="Event name"
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary focus:ring-0"
+                  placeholder="e.g., Post-duty Leave, Neuro Rotation"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">Start Time</label>
-                  <input
-                    type="time"
-                    value={newEventTime}
-                    onChange={(e) => setNewEventTime(e.target.value)}
-                    className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary focus:ring-0"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">End Time</label>
-                  <input
-                    type="time"
-                    value={newEventEndTime}
-                    onChange={(e) => setNewEventEndTime(e.target.value)}
-                    className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary focus:ring-0"
-                  />
+
+              {/* Type Selection */}
+              <div>
+                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Event Type</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {['meeting', 'rotation', 'call', 'lecture', 'exam', 'leave', 'other'].map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setNewEventType(type as EventType)}
+                      className={`px-2 py-2 rounded-lg text-xs font-bold border transition-all capitalize
+                                 ${newEventType === type ? 'bg-primary text-white border-primary' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}
+                             `}
+                    >
+                      {type}
+                    </button>
+                  ))}
                 </div>
               </div>
-              <div>
-                <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">Type</label>
-                <select
-                  value={newEventType}
-                  onChange={(e) => setNewEventType(e.target.value as EventType)}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary focus:ring-0 appearance-none"
-                >
-                  <option value="meeting" className="bg-slate-900">Meeting</option>
-                  <option value="rotation" className="bg-slate-900">Rotation</option>
-                  <option value="call" className="bg-slate-900">Call</option>
-                  <option value="lecture" className="bg-slate-900">Lecture</option>
-                  <option value="exam" className="bg-slate-900">Exam</option>
-                  <option value="leave" className="bg-slate-900">Leave</option>
-                  <option value="other" className="bg-slate-900">Other</option>
-                </select>
+
+              {/* Time Toggle */}
+              <div className="flex items-center gap-3 py-1">
+                <div className={`w-10 h-6 rounded-full p-1 cursor-pointer transition-colors ${isAllDay ? 'bg-primary' : 'bg-slate-700'}`} onClick={() => setIsAllDay(!isAllDay)}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isAllDay ? 'translate-x-4' : ''}`}></div>
+                </div>
+                <span className="text-sm font-medium text-slate-300">All Day Event / Range</span>
               </div>
+
+              {/* Date & Time Grid */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Start</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={newEventStartDate}
+                      onChange={(e) => setNewEventStartDate(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                    />
+                    {!isAllDay && (
+                      <input
+                        type="time"
+                        value={newEventTime}
+                        onChange={(e) => setNewEventTime(e.target.value)}
+                        className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">End</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={newEventEndDate}
+                      onChange={(e) => setNewEventEndDate(e.target.value)}
+                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                    />
+                    {!isAllDay && (
+                      <input
+                        type="time"
+                        value={newEventEndTime}
+                        onChange={(e) => setNewEventEndTime(e.target.value)}
+                        className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Staff Selectors - Enhanced Logic */}
+              {(newEventType === 'leave' || newEventType === 'call' || newEventType === 'rotation') && (
+                <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-1">
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Assigned To</label>
+                    <select
+                      value={assignedTo}
+                      onChange={(e) => setAssignedTo(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                    >
+                      <option value="">Select Staff...</option>
+                      {staffList.map(staff => (
+                        <option key={staff.id} value={staff.id} className="bg-slate-900">{staff.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Covered By (Optional)</label>
+                    <select
+                      value={coveredBy}
+                      onChange={(e) => setCoveredBy(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                    >
+                      <option value="">No Coverage / Self</option>
+                      {staffList.map(staff => (
+                        <option key={staff.id} value={staff.id} className="bg-slate-900">{staff.full_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
               <div>
-                <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">Description</label>
+                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Notes / Description</label>
                 <textarea
                   value={newEventDescription}
                   onChange={(e) => setNewEventDescription(e.target.value)}
                   rows={3}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-primary focus:ring-0"
+                  placeholder="Additional details..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none"
                 />
               </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowAddEvent(false)} className="flex-1 py-3 text-xs font-bold text-slate-400 hover:text-white bg-white/5 rounded-xl transition-all">Cancel</button>
-              <button onClick={handleCreateEvent} className="flex-1 py-3 text-xs font-bold bg-primary text-white rounded-xl shadow-lg">Save</button>
+
+            <div className="flex gap-4">
+              <button onClick={() => setShowAddEvent(false)} className="flex-1 py-3.5 text-sm font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">Cancel</button>
+              <button
+                onClick={handleCreateEvent}
+                disabled={!newEventTitle}
+                className="flex-1 py-3.5 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Save Event
+              </button>
             </div>
           </div>
         </div>
