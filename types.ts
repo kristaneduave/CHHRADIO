@@ -100,7 +100,7 @@ export interface CalendarEvent {
   };
   coverage_details?: {
     user_id: string;
-    modality: string;
+    modalities: string[]; // Changed from modality: string
     user?: {
       full_name: string | null;
       avatar_url: string | null;
