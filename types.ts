@@ -126,11 +126,13 @@ export interface Announcement {
   author_id?: string; // Added for RBAC ownership checks
   authorTitle: string;
   date: string;
-  category: 'Research' | 'Announcement' | 'Event' | 'Clinical';
+  category: 'Research' | 'Announcement' | 'Event' | 'Misc';
   imageUrl?: string;
   views: number;
   viewers?: {
     avatar_url: string | null;
     full_name: string | null;
   }[];
+  attachments?: { url: string; type: string; name: string; size: number }[];
+  externalLink?: string;
 }

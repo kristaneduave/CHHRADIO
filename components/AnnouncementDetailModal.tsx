@@ -163,9 +163,63 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                     )}
 
                     {/* Body Text */}
-                    <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed whitespace-pre-wrap">
-                        {announcement.content}
+                    <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed whitespace-pre-wrap mb-6">
+                        {announcement.content || announcement.summary}
                     </div>
+
+                    {/* External Link */}
+                    {announcement.externalLink && (
+                        <div className="mb-6">
+                            <a
+                                href={announcement.externalLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group"
+                            >
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                                        <span className="material-icons text-blue-400">link</span>
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-sm font-bold text-blue-100 truncate">External Link</span>
+                                        <span className="text-xs text-blue-300 truncate">{announcement.externalLink}</span>
+                                    </div>
+                                </div>
+                                <span className="material-icons text-blue-400 group-hover:translate-x-1 transition-transform">open_in_new</span>
+                            </a>
+                        </div>
+                    )}
+
+                    {/* Attachments Section */}
+                    {announcement.attachments && announcement.attachments.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Attachments</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {announcement.attachments.map((att, idx) => (
+                                    <a
+                                        key={idx}
+                                        href={att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-3 p-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all group"
+                                    >
+                                        <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0 border border-white/5">
+                                            {att.type.startsWith('image/') ? (
+                                                <span className="material-icons text-purple-400">image</span>
+                                            ) : (
+                                                <span className="material-icons text-blue-400">description</span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-sm font-medium text-slate-200 truncate">{att.name}</span>
+                                            <span className="text-[10px] text-slate-500">{(att.size / 1024 / 1024).toFixed(2)} MB</span>
+                                        </div>
+                                        <span className="material-icons text-slate-500 group-hover:text-white ml-auto text-lg">download</span>
+                                    </a>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer Actions (Optional) */}

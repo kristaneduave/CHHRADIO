@@ -154,8 +154,14 @@ const AnnouncementsScreen: React.FC = () => {
                                     </span>
                                     {heroAnnouncement.imageUrl && (
                                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                                            <span className="material-icons text-[10px]">attach_file</span>
+                                            <span className="material-icons text-[10px]">image</span>
                                             <span>Image</span>
+                                        </div>
+                                    )}
+                                    {heroAnnouncement.attachments && heroAnnouncement.attachments.length > 0 && (
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <span className="material-icons text-[10px]">attach_file</span>
+                                            <span>Files</span>
                                         </div>
                                     )}
                                 </div>
@@ -218,7 +224,12 @@ const AnnouncementsScreen: React.FC = () => {
                                             {post.category}
                                         </span>
                                         {post.imageUrl && (
-                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has attachment">
+                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has image">
+                                                <span className="material-icons text-[10px]">image</span>
+                                            </span>
+                                        )}
+                                        {post.attachments && post.attachments.length > 0 && (
+                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has files">
                                                 <span className="material-icons text-[10px]">attach_file</span>
                                             </span>
                                         )}

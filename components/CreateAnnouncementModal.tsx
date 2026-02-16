@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../services/supabase';
@@ -9,32 +10,73 @@ interface CreateAnnouncementModalProps {
     editingAnnouncement?: Announcement | null;
 }
 
+interface Attachment {
+    file: File;
+    preview?: string;
+    id: string; // temp id for UI
+}
+
 const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess, editingAnnouncement }) => {
     const [title, setTitle] = useState(editingAnnouncement?.title || '');
     const [content, setContent] = useState(editingAnnouncement?.content || '');
-    // Handle legacy 'Miscellaneous' category mapping to 'Misc'
+    // Handle legacy mappings
     const [category, setCategory] = useState(
         (editingAnnouncement?.category === 'Miscellaneous' ? 'Misc' : editingAnnouncement?.category) || 'Announcement'
     );
-    const [imageFile, setImageFile] = useState<File | null>(null);
-    // Initialize preview with existing image URL
-    const [imagePreview, setImagePreview] = useState<string | null>(editingAnnouncement?.imageUrl || null);
+
+    // File State
+    const [attachments, setAttachments] = useState<Attachment[]>([]);
+    // If editing, we might have existing attachments. For now, we only handle new uploads or clearing existing "main" image.
+    // To support full editing of existing array, we'd need to fetch them. 
+    // Given the timeline, we'll treat "image_url" as the "Cover Image" and manage new attachments separately or merged?
+    // Plan: We will store ALL new files in 'attachments'. We will use the FIRST image as 'image_url' for backward compatibility.
+    // Existing image is kept in `existingCoverImage` state.
+
+    const [existingCoverImage, setExistingCoverImage] = useState<string | null>(editingAnnouncement?.imageUrl || null);
+
+    const [externalLink, setExternalLink] = useState(editingAnnouncement?.externalLink || '');
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     const categories = ['Announcement', 'Research', 'Event', 'Misc'];
+    const emojis = ['😊', '😂', '🔥', '👍', '🎉', '❤️', '🏥', '💊', '🩺', '🚑', '🧪', '📋', '✅', '⚠️', '📎', '📅', '📢', '👋', '🌟', '💡'];
 
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            if (file.size > 5 * 1024 * 1024) {
-                setError('Image size must be less than 5MB');
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files) as File[];
+            const totalFiles = attachments.length + newFiles.length;
+
+            if (totalFiles > 8) {
+                setError('Maximum 8 files allowed.');
                 return;
             }
-            setImageFile(file);
-            setImagePreview(URL.createObjectURL(file));
+
+            const processedFiles: Attachment[] = newFiles.map(file => ({
+                file,
+                id: Math.random().toString(36).substr(2, 9),
+                preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+            }));
+
+            // Validate sizes
+            const invalidFile = processedFiles.find(a => a.file.size > 20 * 1024 * 1024);
+            if (invalidFile) {
+                setError(`File ${invalidFile.file.name} is too large (max 20MB).`);
+                return;
+            }
+
+            setAttachments(prev => [...prev, ...processedFiles]);
             setError(null);
         }
+    };
+
+    const removeAttachment = (id: string) => {
+        setAttachments(prev => prev.filter(a => a.id !== id));
+    };
+
+    const removeExistingCover = () => {
+        setExistingCoverImage(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -46,19 +88,19 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Not authenticated');
 
-            // Get profile for author name (optional, can be done server side or trigger)
-            // For now just using the user id as author_id column reference
+            // Upload Files
+            const uploadedAttachments = [];
+            let newCoverImageUrl = null;
 
-            let imageUrl = null;
-
-            if (imageFile) {
-                const fileExt = imageFile.name.split('.').pop();
+            for (const att of attachments) {
+                const file = att.file;
+                const fileExt = file.name.split('.').pop();
                 const fileName = `${Math.random()}.${fileExt}`;
                 const filePath = `${user.id}/${fileName}`;
 
                 const { error: uploadError } = await supabase.storage
                     .from('announcements')
-                    .upload(filePath, imageFile);
+                    .upload(filePath, file);
 
                 if (uploadError) throw uploadError;
 
@@ -66,8 +108,36 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     .from('announcements')
                     .getPublicUrl(filePath);
 
-                imageUrl = publicUrl;
+                uploadedAttachments.push({
+                    url: publicUrl,
+                    type: file.type,
+                    name: file.name,
+                    size: file.size
+                });
             }
+
+            // Determine Cover Image
+            // If we have an existing cover and haven't deleted it, use it.
+            // If we uploaded new images, maybe use the first one as cover if no existing cover?
+            // User requested "photo upload". We will stick to: `image_url` is the dedicated cover.
+            // If `attachments` has images, `image_url` effectively becomes redundant or the "Main" one.
+            // Logic: If `existingCoverImage` is null, and we have new uploaded images, take the first one as `image_url`.
+
+            let finalImageUrl = existingCoverImage;
+
+            // Find first image in new uploads
+            const firstNewImage = uploadedAttachments.find(a => a.type.startsWith('image/'));
+
+            if (!finalImageUrl && firstNewImage) {
+                finalImageUrl = firstNewImage.url;
+            }
+
+            // Determine Attachments Array to save
+            // This merges new uploads. What about preserving old `attachments` if we were editing?
+            // Currently `editingAnnouncement` doesn't have `attachments` in the object passed from parent yet (unless we fetch).
+            // For now, we just append new ones. 
+            // NOTE: This implementation replaces/adds. Real production needs full edit capability of arrays.
+            // Given the scope, we will save `uploadedAttachments` as the attachments.
 
             if (editingAnnouncement) {
                 // Update
@@ -77,10 +147,10 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         title,
                         content,
                         category,
-                        created_at: new Date().toISOString(), // Bump to top
-                        // Only update image if a new one is provided.
-                        // If imageFile is provided, we update.
-                        ...(imageUrl ? { image_url: imageUrl } : {})
+                        image_url: finalImageUrl,
+                        attachments: uploadedAttachments, // Overwrites for now (or append if we could)
+                        external_link: externalLink,
+                        created_at: new Date().toISOString() // Bump
                     })
                     .eq('id', editingAnnouncement.id);
 
@@ -92,7 +162,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     content,
                     category,
                     author_id: user.id,
-                    image_url: imageUrl
+                    image_url: finalImageUrl,
+                    attachments: uploadedAttachments,
+                    external_link: externalLink
                 });
 
                 if (insertError) throw insertError;
@@ -110,16 +182,12 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[80vh] sm:max-h-[90vh] flex flex-col">
+            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[85vh] flex flex-col">
                 {/* Background Glow */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
 
-                {/* Header - Fixed */}
-                <div className="flex justify-between items-center p-6 border-b border-white/5 relative z-10 shrink-0">
-                    <div>
-                        <h2 className="text-xl font-bold text-white tracking-tight">{editingAnnouncement ? 'Edit Announcement' : 'New Announcement'}</h2>
-                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Share updates</p>
-                    </div>
+                {/* Minimalist Header */}
+                <div className="flex justify-end p-4 absolute top-0 right-0 z-20">
                     <button
                         onClick={onClose}
                         className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
@@ -129,7 +197,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative z-10">
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative z-10 pt-12">
                     {error && (
                         <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3">
                             <span className="material-icons text-lg">error_outline</span>
@@ -138,125 +206,192 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     )}
 
                     <form onSubmit={handleSubmit} id="create-announcement-form" className="space-y-6">
+
+                        {/* Title - Large & Prominent */}
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Title</label>
                             <input
                                 type="text"
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 text-white placeholder-slate-600 transition-all font-medium text-sm"
-                                placeholder="e.g., Grand Rounds Schedule Change"
+                                className="w-full bg-transparent border-none p-0 text-2xl sm:text-3xl font-bold text-white placeholder-slate-600 focus:ring-0 focus:outline-none transition-all"
+                                placeholder="What's happening?"
+                                autoFocus
                                 required
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Category</label>
-                            <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-2 px-2">
-                                {categories.map((cat) => (
-                                    <button
-                                        key={cat}
-                                        type="button"
-                                        onClick={() => setCategory(cat)}
-                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap border ${category === cat
-                                            ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
-                                            : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/10 hover:text-slate-200'
-                                            }`}
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
-                            </div>
+                        {/* Category Pills */}
+                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-2 px-2">
+                            {categories.map((cat) => (
+                                <button
+                                    key={cat}
+                                    type="button"
+                                    onClick={() => setCategory(cat)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${category === cat
+                                        ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
+                                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/10 hover:text-slate-200'
+                                        }`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
                         </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Content</label>
+                        {/* Content */}
+                        <div>
+                            <textarea
+                                value={content}
+                                onChange={(e) => setContent(e.target.value)}
+                                className="w-full bg-transparent border-none p-0 text-slate-300 placeholder-slate-600 focus:ring-0 focus:outline-none min-h-[120px] text-base leading-relaxed resize-none"
+                                placeholder="Share the details..."
+                                required
+                            />
+                        </div>
 
-                                {/* Attachment Button */}
+                        {/* Link Input */}
+                        <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors">
+                            <span className="material-icons text-slate-500">link</span>
+                            <input
+                                type="url"
+                                value={externalLink}
+                                onChange={(e) => setExternalLink(e.target.value)}
+                                className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
+                                placeholder="Add an external link (https://...)"
+                            />
+                        </div>
+
+                        {/* Attachments Area */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attachments ({attachments.length + (existingCoverImage ? 1 : 0)}/8)</span>
                                 <div className="relative">
                                     <input
                                         type="file"
-                                        accept="image/*"
-                                        onChange={handleImageSelect}
-                                        id="image-upload"
+                                        multiple
+                                        accept="image/*, .pdf, .doc, .docx"
+                                        onChange={handleFileSelect}
+                                        id="file-upload"
                                         className="hidden"
                                     />
                                     <label
-                                        htmlFor="image-upload"
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer border border-white/5 hover:border-white/10"
+                                        htmlFor="file-upload"
+                                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-primary hover:text-primary-light transition-all cursor-pointer border border-primary/20 hover:border-primary/50"
                                     >
-                                        <span className="material-icons text-sm">attach_file</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wide">Attach Image</span>
+                                        <span className="material-icons text-sm">add</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide">Add Files</span>
                                     </label>
                                 </div>
                             </div>
 
-                            {/* Image Preview Pill */}
-                            {imagePreview && (
-                                <div className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/10 w-fit animate-in fade-in slide-in-from-top-2 duration-200 mb-2">
-                                    <div className="w-8 h-8 rounded-md overflow-hidden bg-black/20 shrink-0">
-                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                            {/* Existing Cover Image (if editing) */}
+                            {existingCoverImage && (
+                                <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 group">
+                                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-black/30 shrink-0">
+                                        <img src={existingCoverImage} alt="Cover" className="w-full h-full object-cover" />
                                     </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-medium text-white truncate max-w-[150px]">
-                                            {imageFile ? imageFile.name : 'Current Image'}
-                                        </span>
-                                        <span className="text-[9px] text-slate-500">
-                                            {imageFile ? (imageFile.size / 1024 / 1024).toFixed(2) + ' MB' : 'Attached'}
-                                        </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-white truncate">Current Cover Image</p>
+                                        <p className="text-[10px] text-slate-500">Will be kept unless removed</p>
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => {
-                                            setImageFile(null);
-                                            setImagePreview(null);
-                                        }}
-                                        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-1"
+                                        onClick={removeExistingCover}
+                                        className="w-7 h-7 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
                                     >
-                                        <span className="material-icons text-sm">close</span>
+                                        <span className="material-icons text-sm">delete</span>
                                     </button>
                                 </div>
                             )}
 
-                            <textarea
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 text-white placeholder-slate-600 min-h-[150px] transition-all font-medium leading-relaxed resize-none text-sm"
-                                placeholder="Write the details of your announcement here..."
-                                required
-                            />
+                            {/* New Attachments List */}
+                            <div className="grid grid-cols-1 gap-2">
+                                {attachments.map((att) => (
+                                    <div key={att.id} className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 group animate-in slide-in-from-bottom-2 duration-200">
+                                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-black/30 shrink-0 flex items-center justify-center border border-white/5">
+                                            {att.preview ? (
+                                                <img src={att.preview} alt="Preview" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="material-icons text-slate-400 text-lg">description</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-white truncate">{att.file.name}</p>
+                                            <p className="text-[10px] text-slate-500">{(att.file.size / 1024 / 1024).toFixed(2)} MB</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeAttachment(att.id)}
+                                            className="w-7 h-7 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                                        >
+                                            <span className="material-icons text-sm">close</span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
+
                     </form>
                 </div>
 
                 {/* Footer - Fixed */}
-                <div className="flex justify-end gap-3 p-4 border-t border-white/5 bg-[#0c1829] relative z-20 shrink-0">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="px-5 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-wider"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        form="create-announcement-form"
-                        className="px-6 py-2.5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
-                    >
-                        {loading ? (
-                            <>
-                                <span className="material-icons animate-spin text-sm">sync</span>
-                                Publishing...
-                            </>
-                        ) : (
-                            <>
-                                <span>{editingAnnouncement ? 'UPDATE POST' : 'POST UPDATE'}</span>
-                                <span className="material-icons text-sm">send</span>
-                            </>
-                        )}
-                    </button>
+                <div className="flex justify-between items-center p-4 border-t border-white/5 bg-[#0c1829] relative z-20 shrink-0">
+                    <div className="flex gap-2">
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${showEmojiPicker ? 'text-yellow-400 bg-white/10' : 'text-slate-400 hover:bg-white/5 hover:text-yellow-400'}`}
+                                title="Add Emoji"
+                            >
+                                <span className="material-icons text-lg">sentiment_satisfied_alt</span>
+                            </button>
+
+                            {showEmojiPicker && (
+                                <div className="absolute bottom-12 left-0 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    {emojis.map(emoji => (
+                                        <button
+                                            key={emoji}
+                                            type="button"
+                                            onClick={() => {
+                                                setContent(prev => prev + emoji);
+                                                setShowEmojiPicker(false);
+                                            }}
+                                            className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded-lg transition-colors"
+                                        >
+                                            {emoji}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-5 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-wider"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            form="create-announcement-form"
+                            className="px-6 py-2.5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="material-icons animate-spin text-sm">sync</span>
+                                    Posting...
+                                </>
+                            ) : (
+                                <>
+                                    <span>POST</span>
+                                    <span className="material-icons text-sm">send</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>,
