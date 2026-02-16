@@ -111,9 +111,14 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                         <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border mb-2 ${getCategoryBadgeStyle(announcement.category)}`}>
                             {announcement.category}
                         </span>
-                        <h2 className="text-lg font-bold text-white leading-tight">
-                            {announcement.title}
-                        </h2>
+                        <div className="flex items-start gap-4">
+                            {announcement.icon && (
+                                <span className="text-4xl shrink-0 pt-1">{announcement.icon}</span>
+                            )}
+                            <h2 className="text-lg font-bold text-white leading-tight">
+                                {announcement.title}
+                            </h2>
+                        </div>
                     </div>
                     <button
                         onClick={onClose}
@@ -167,26 +172,53 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                         {announcement.content || announcement.summary}
                     </div>
 
-                    {/* External Link */}
-                    {announcement.externalLink && (
-                        <div className="mb-6">
-                            <a
-                                href={announcement.externalLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group"
-                            >
-                                <div className="flex items-center gap-3 overflow-hidden">
-                                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
-                                        <span className="material-icons text-blue-400">link</span>
+                    {/* Links Section */}
+                    {((announcement.links && announcement.links.length > 0) || announcement.externalLink) && (
+                        <div className="mb-6 space-y-2">
+                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Links</h3>
+
+                            {/* Legacy Single Link */}
+                            {announcement.externalLink && !announcement.links?.find(l => l.url === announcement.externalLink) && (
+                                <a
+                                    href={announcement.externalLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group"
+                                >
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                                            <span className="material-icons text-blue-400 text-sm">link</span>
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-xs font-bold text-blue-100 truncate">External Link</span>
+                                            <span className="text-[10px] text-blue-300 truncate">{announcement.externalLink}</span>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col min-w-0">
-                                        <span className="text-sm font-bold text-blue-100 truncate">External Link</span>
-                                        <span className="text-xs text-blue-300 truncate">{announcement.externalLink}</span>
+                                    <span className="material-icons text-blue-400 group-hover:translate-x-1 transition-transform text-sm">open_in_new</span>
+                                </a>
+                            )}
+
+                            {/* Multi Links */}
+                            {announcement.links?.map((link, idx) => (
+                                <a
+                                    key={idx}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl hover:bg-blue-500/20 transition-all group"
+                                >
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                                            <span className="material-icons text-blue-400 text-sm">link</span>
+                                        </div>
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-xs font-bold text-blue-100 truncate">{link.title || 'External Link'}</span>
+                                            <span className="text-[10px] text-blue-300 truncate">{link.url}</span>
+                                        </div>
                                     </div>
-                                </div>
-                                <span className="material-icons text-blue-400 group-hover:translate-x-1 transition-transform">open_in_new</span>
-                            </a>
+                                    <span className="material-icons text-blue-400 group-hover:translate-x-1 transition-transform text-sm">open_in_new</span>
+                                </a>
+                            ))}
                         </div>
                     )}
 

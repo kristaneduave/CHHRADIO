@@ -134,5 +134,7 @@ export interface Announcement {
     full_name: string | null;
   }[];
   attachments?: { url: string; type: string; name: string; size: number }[];
-  externalLink?: string;
+  externalLink?: string; // Deprecated
+  links?: { url: string; title: string }[];
+  icon?: string;
 }

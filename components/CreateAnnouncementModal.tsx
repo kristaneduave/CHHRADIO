@@ -39,10 +39,17 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+    // New Feature State
+    const [icon, setIcon] = useState(editingAnnouncement?.icon || '📣');
+    const [links, setLinks] = useState<{ url: string; title: string }[]>(editingAnnouncement?.links || []);
     const [showLinkInput, setShowLinkInput] = useState(false);
 
+    // Temp state for adding a new link
+    const [newLinkUrl, setNewLinkUrl] = useState('');
+
     const categories = ['Announcement', 'Research', 'Event', 'Misc'];
-    const emojis = ['😊', '😂', '🔥', '👍', '🎉', '❤️', '🏥', '💊', '🩺', '🚑', '🧪', '📋', '✅', '⚠️', '📎', '📅', '📢', '👋', '🌟', '💡'];
+    const emojis = ['📣', '😊', '😂', '🔥', '👍', '🎉', '❤️', '🏥', '💊', '🩺', '🚑', '🧪', '📋', '✅', '⚠️', '📎', '📅', '👋', '🌟', '💡'];
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -150,7 +157,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         category,
                         image_url: finalImageUrl,
                         attachments: uploadedAttachments, // Overwrites for now (or append if we could)
-                        external_link: externalLink,
+                        external_link: links.length > 0 ? links[0].url : '', // Backward compat
+                        links: links,
+                        icon: icon,
                         created_at: new Date().toISOString() // Bump
                     })
                     .eq('id', editingAnnouncement.id);
@@ -165,7 +174,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     author_id: user.id,
                     image_url: finalImageUrl,
                     attachments: uploadedAttachments,
-                    external_link: externalLink
+                    external_link: links.length > 0 ? links[0].url : '',
+                    links: links,
+                    icon: icon
                 });
 
                 if (insertError) throw insertError;
@@ -208,17 +219,48 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                     <form onSubmit={handleSubmit} id="create-announcement-form" className="space-y-6">
 
-                        {/* Title - Large & Prominent */}
-                        <div className="space-y-2">
-                            <input
-                                type="text"
-                                value={title}
-                                onChange={(e) => setTitle(e.target.value)}
-                                className="w-full bg-transparent border-none p-0 text-2xl sm:text-3xl font-bold text-white placeholder-slate-600 focus:ring-0 focus:outline-none transition-all"
-                                placeholder="What's happening?"
-                                autoFocus
-                                required
-                            />
+                        {/* Title & Icon Header */}
+                        <div className="flex items-start gap-4">
+                            {/* Icon Selector */}
+                            <div className="relative shrink-0 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                    className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-2xl shadow-lg shadow-black/20"
+                                >
+                                    {icon}
+                                </button>
+                                {showEmojiPicker && (
+                                    <div className="absolute top-14 left-0 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                        {emojis.map(emoji => (
+                                            <button
+                                                key={emoji}
+                                                type="button"
+                                                onClick={() => {
+                                                    setIcon(emoji);
+                                                    setShowEmojiPicker(false);
+                                                }}
+                                                className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded-lg transition-colors"
+                                            >
+                                                {emoji}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Title Input */}
+                            <div className="flex-1 space-y-2">
+                                <input
+                                    type="text"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="w-full bg-transparent border-none p-0 text-2xl sm:text-3xl font-bold text-white placeholder-slate-600 focus:ring-0 focus:outline-none transition-all"
+                                    placeholder="What's happening?"
+                                    autoFocus
+                                    required
+                                />
+                            </div>
                         </div>
 
                         {/* Category Pills */}
@@ -250,46 +292,79 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                             />
                         </div>
 
-                        {/* Link Input */}
-                        <div>
-                            {!showLinkInput && !externalLink ? (
+                        {/* Links List */}
+                        {links.length > 0 && (
+                            <div className="space-y-2">
+                                {links.map((link, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 group">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+                                                <span className="material-icons text-sm">link</span>
+                                            </div>
+                                            <span className="text-sm text-blue-400 truncate underline decoration-blue-500/30">{link.url}</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setLinks(prev => prev.filter((_, i) => i !== idx))}
+                                            className="text-slate-500 hover:text-red-400 transition-colors p-1"
+                                        >
+                                            <span className="material-icons text-sm">close</span>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Link Input Logic */}
+                        {showLinkInput && (
+                            <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors animate-in fade-in slide-in-from-left-2 duration-200">
+                                <span className="material-icons text-slate-500">link</span>
+                                <input
+                                    type="url"
+                                    value={newLinkUrl}
+                                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            if (newLinkUrl) {
+                                                setLinks(prev => [...prev, { url: newLinkUrl, title: newLinkUrl }]);
+                                                setNewLinkUrl('');
+                                                setShowLinkInput(false);
+                                            }
+                                        }
+                                    }}
+                                    className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
+                                    placeholder="https://... (Press Enter to add)"
+                                    autoFocus
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setNewLinkUrl('');
+                                        setShowLinkInput(false);
+                                    }}
+                                    className="text-slate-500 hover:text-white transition-colors"
+                                >
+                                    <span className="material-icons text-sm">close</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Attachments Area */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-end gap-2 mb-2">
+                                {/* Add Link Button */}
                                 <button
                                     type="button"
                                     onClick={() => setShowLinkInput(true)}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-all cursor-pointer border border-blue-500/20 hover:border-blue-500/50 w-fit"
+                                    disabled={showLinkInput}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-all cursor-pointer border border-blue-500/20 hover:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <span className="material-icons text-sm">link</span>
                                     <span className="text-[10px] font-bold uppercase tracking-wide">Add Link</span>
                                 </button>
-                            ) : (
-                                <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors animate-in fade-in slide-in-from-left-2 duration-200">
-                                    <span className="material-icons text-slate-500">link</span>
-                                    <input
-                                        type="url"
-                                        value={externalLink}
-                                        onChange={(e) => setExternalLink(e.target.value)}
-                                        className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
-                                        placeholder="https://..."
-                                        autoFocus
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setExternalLink('');
-                                            setShowLinkInput(false);
-                                        }}
-                                        className="text-slate-500 hover:text-white transition-colors"
-                                    >
-                                        <span className="material-icons text-sm">close</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Attachments Area */}
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attachments</span>
+                                {/* Add Files Button */}
                                 <div className="relative">
                                     <input
                                         type="file"
@@ -361,36 +436,6 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                 {/* Footer - Fixed */}
                 <div className="flex justify-between items-center p-4 border-t border-white/5 bg-[#0c1829] relative z-20 shrink-0">
-                    <div className="flex gap-2">
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${showEmojiPicker ? 'text-yellow-400 bg-white/10' : 'text-slate-400 hover:bg-white/5 hover:text-yellow-400'}`}
-                                title="Add Emoji"
-                            >
-                                <span className="material-icons text-lg">sentiment_satisfied_alt</span>
-                            </button>
-
-                            {showEmojiPicker && (
-                                <div className="absolute bottom-12 left-0 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                    {emojis.map(emoji => (
-                                        <button
-                                            key={emoji}
-                                            type="button"
-                                            onClick={() => {
-                                                setContent(prev => prev + emoji);
-                                                setShowEmojiPicker(false);
-                                            }}
-                                            className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded-lg transition-colors"
-                                        >
-                                            {emoji}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
                     <div className="flex gap-3">
                         <button
                             type="button"

@@ -47,7 +47,9 @@ const AnnouncementsScreen: React.FC = () => {
                     imageUrl: item.image_url,
                     views: item.views || 0,
                     attachments: item.attachments || [],
-                    externalLink: item.external_link
+                    externalLink: item.external_link,
+                    links: item.links || [],
+                    icon: item.icon
                 }));
                 setAnnouncements(formattedData);
             }
@@ -152,6 +154,7 @@ const AnnouncementsScreen: React.FC = () => {
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${getCategoryStyle(heroAnnouncement.category)}`}>
+                                        {heroAnnouncement.icon ? <span className="mr-1 text-sm not-italic">{heroAnnouncement.icon}</span> : null}
                                         {heroAnnouncement.category}
                                     </span>
                                     {heroAnnouncement.imageUrl && (
@@ -166,7 +169,7 @@ const AnnouncementsScreen: React.FC = () => {
                                             <span>Files</span>
                                         </div>
                                     )}
-                                    {heroAnnouncement.externalLink && (
+                                    {(heroAnnouncement.externalLink || (heroAnnouncement.links && heroAnnouncement.links.length > 0)) && (
                                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                                             <span className="material-icons text-[10px]">link</span>
                                             <span>Link</span>
@@ -229,6 +232,7 @@ const AnnouncementsScreen: React.FC = () => {
                                 <div className="flex justify-between items-start gap-4 mb-3">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
+                                            {post.icon ? <span className="mr-1 text-sm not-italic">{post.icon}</span> : null}
                                             {post.category}
                                         </span>
                                         {post.imageUrl && (
