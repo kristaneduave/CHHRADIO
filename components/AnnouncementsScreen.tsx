@@ -145,65 +145,60 @@ const AnnouncementsScreen: React.FC = () => {
                     {heroAnnouncement && (
                         <div
                             onClick={() => setSelectedAnnouncement(heroAnnouncement)}
-                            className="group relative w-full rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-[#0c1829] flex flex-col sm:flex-row hover:bg-white/5 transition-colors"
+                            className="group relative w-full p-6 sm:p-8 rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-[#0c1829] hover:bg-white/5 transition-colors flex flex-col"
                         >
-                            {/* Image Section */}
-                            <div className="w-full sm:w-5/12 aspect-video sm:aspect-auto relative overflow-hidden">
-                                {heroAnnouncement.imageUrl ? (
-                                    <img src={heroAnnouncement.imageUrl} alt={heroAnnouncement.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                                ) : (
-                                    <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
-                                        <span className="material-icons text-4xl text-white/20">image</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Content Section */}
-                            <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center">
-                                <div className="flex justify-between items-start mb-3">
+                            <div className="flex justify-between items-start mb-4">
+                                <div className="flex items-center gap-2">
                                     <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${getCategoryStyle(heroAnnouncement.category)}`}>
                                         {heroAnnouncement.category}
                                     </span>
-                                    {/* Action Buttons */}
-                                    {(userRole === 'admin' || (currentUserId === heroAnnouncement.author_id)) && (
-                                        <div className="flex items-center gap-1">
-                                            <button
-                                                onClick={(e) => handleEdit(heroAnnouncement, e)}
-                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
-                                            >
-                                                <span className="material-icons text-sm">edit</span>
-                                            </button>
-                                            <button
-                                                onClick={(e) => handleDelete(heroAnnouncement.id, e)}
-                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
-                                            >
-                                                <span className="material-icons text-sm">delete</span>
-                                            </button>
+                                    {heroAnnouncement.imageUrl && (
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <span className="material-icons text-[10px]">attach_file</span>
+                                            <span>Image</span>
                                         </div>
                                     )}
                                 </div>
 
-                                <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-3 line-clamp-2 group-hover:text-primary transition-colors">
-                                    {heroAnnouncement.title}
-                                </h2>
-                                <p className="text-sm text-slate-300 line-clamp-3 mb-6 opacity-90 leading-relaxed">
-                                    {heroAnnouncement.summary}
-                                </p>
+                                {/* Action Buttons */}
+                                {(userRole === 'admin' || (currentUserId === heroAnnouncement.author_id)) && (
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            onClick={(e) => handleEdit(heroAnnouncement, e)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                                        >
+                                            <span className="material-icons text-sm">edit</span>
+                                        </button>
+                                        <button
+                                            onClick={(e) => handleDelete(heroAnnouncement.id, e)}
+                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                        >
+                                            <span className="material-icons text-sm">delete</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
 
-                                <div className="flex items-center gap-3 mt-auto">
-                                    <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden border border-white/20">
-                                        {heroAnnouncement.authorAvatar ? (
-                                            <img src={heroAnnouncement.authorAvatar} alt="Author" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
-                                                {heroAnnouncement.author.charAt(0)}
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="text-xs">
-                                        <p className="font-bold text-white max-w-[120px] truncate">{heroAnnouncement.author}</p>
-                                        <p className="text-slate-500">{heroAnnouncement.date}</p>
-                                    </div>
+                            <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-3 line-clamp-2 group-hover:text-primary transition-colors">
+                                {heroAnnouncement.title}
+                            </h2>
+                            <p className="text-sm text-slate-300 line-clamp-3 mb-6 opacity-90 leading-relaxed max-w-3xl">
+                                {heroAnnouncement.summary}
+                            </p>
+
+                            <div className="flex items-center gap-3 mt-auto">
+                                <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden border border-white/20">
+                                    {heroAnnouncement.authorAvatar ? (
+                                        <img src={heroAnnouncement.authorAvatar} alt="Author" className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white">
+                                            {heroAnnouncement.author.charAt(0)}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-xs">
+                                    <p className="font-bold text-white max-w-[120px] truncate">{heroAnnouncement.author}</p>
+                                    <p className="text-slate-500">{heroAnnouncement.date}</p>
                                 </div>
                             </div>
                         </div>
@@ -218,9 +213,16 @@ const AnnouncementsScreen: React.FC = () => {
                                 className="group relative glass-card-enhanced rounded-2xl p-5 cursor-pointer hover:bg-white/[0.07] transition-all active:scale-[0.99]"
                             >
                                 <div className="flex justify-between items-start gap-4 mb-3">
-                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
-                                        {post.category}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
+                                            {post.category}
+                                        </span>
+                                        {post.imageUrl && (
+                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has attachment">
+                                                <span className="material-icons text-[10px]">attach_file</span>
+                                            </span>
+                                        )}
+                                    </div>
                                     <span className="text-[10px] font-medium text-slate-500">{post.date}</span>
                                 </div>
 

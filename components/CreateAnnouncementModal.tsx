@@ -73,9 +73,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         title,
                         content,
                         category,
+                        created_at: new Date().toISOString(), // Bump to top
                         // Only update image if a new one is provided.
-                        // If imageFile is null and we are editing, we keep the old one unless explicitly cleared?
-                        // For now, if imageFile is provided, we update.
+                        // If imageFile is provided, we update.
                         ...(imageUrl ? { image_url: imageUrl } : {})
                     })
                     .eq('id', editingAnnouncement.id);
