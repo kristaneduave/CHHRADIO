@@ -11,6 +11,7 @@ const AnnouncementsScreen: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeCategory, setActiveCategory] = useState('All');
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
 
     const categories = ['All', 'Announcement', 'Research', 'Event', 'Misc'];
@@ -70,6 +71,12 @@ const AnnouncementsScreen: React.FC = () => {
         fetchAnnouncements();
     }, []);
 
+    const handleEdit = (announcement: Announcement, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditingAnnouncement(announcement);
+        setShowCreateModal(true);
+    };
+
     const handleDelete = async (id: string, e: React.MouseEvent) => {
         e.stopPropagation();
         if (window.confirm('Are you sure you want to delete this announcement?')) {
@@ -112,7 +119,11 @@ const AnnouncementsScreen: React.FC = () => {
                             key={cat}
                             onClick={() => setActiveCategory(cat)}
                             className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap border ${activeCategory === cat
-                                ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
+                                ? cat === 'Announcement' ? 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/25'
+                                    : cat === 'Research' ? 'bg-indigo-500 text-white border-indigo-500 shadow-lg shadow-indigo-500/25'
+                                        : cat === 'Event' ? 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/25'
+                                            : cat === 'Misc' ? 'bg-slate-500 text-white border-slate-500 shadow-lg shadow-slate-500/25'
+                                                : 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
                                 : 'glass-card text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
                         >
@@ -190,13 +201,9 @@ const AnnouncementsScreen: React.FC = () => {
                                     <span className="text-[10px] font-medium text-slate-500">{post.date}</span>
                                 </div>
 
-                                <h3 className="text-base font-bold text-white mb-2 leading-snug group-hover:text-primary transition-colors pr-8">
+                                <h3 className="text-base font-bold text-white mb-4 leading-snug group-hover:text-primary transition-colors pr-8">
                                     {post.title}
                                 </h3>
-
-                                <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-4">
-                                    {post.summary}
-                                </p>
 
                                 <div className="flex items-center justify-between mt-auto">
                                     <div className="flex items-center gap-2">
@@ -213,12 +220,20 @@ const AnnouncementsScreen: React.FC = () => {
                                     </div>
 
                                     {(userRole === 'admin' || (currentUserId === post.author_id)) && (
-                                        <button
-                                            onClick={(e) => handleDelete(post.id, e)}
-                                            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
-                                        >
-                                            <span className="material-icons text-sm">delete</span>
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={(e) => handleEdit(post, e)}
+                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                                            >
+                                                <span className="material-icons text-sm">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDelete(post.id, e)}
+                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                            >
+                                                <span className="material-icons text-sm">delete</span>
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -247,11 +262,16 @@ const AnnouncementsScreen: React.FC = () => {
             {/* Modals */}
             {showCreateModal && (
                 <CreateAnnouncementModal
-                    onClose={() => setShowCreateModal(false)}
+                    onClose={() => {
+                        setShowCreateModal(false);
+                        setEditingAnnouncement(null);
+                    }}
                     onSuccess={() => {
                         fetchAnnouncements();
                         setShowCreateModal(false);
+                        setEditingAnnouncement(null);
                     }}
+                    editingAnnouncement={editingAnnouncement}
                 />
             )}
 

@@ -129,4 +129,8 @@ export interface Announcement {
   category: 'Research' | 'Announcement' | 'Event' | 'Clinical';
   imageUrl?: string;
   views: number;
+  viewers?: {
+    avatar_url: string | null;
+    full_name: string | null;
+  }[];
 }

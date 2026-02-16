@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
+import { supabase } from '../services/supabase';
 import { Announcement } from '../types';
 
 interface AnnouncementDetailModalProps {
@@ -10,12 +11,68 @@ interface AnnouncementDetailModalProps {
 const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ announcement, onClose }) => {
     if (!announcement) return null;
 
+    const [viewers, setViewers] = useState<{ avatar_url: string | null; full_name: string | null }[]>([]);
+
+    useEffect(() => {
+        if (!announcement) return;
+
+        const trackView = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+
+            // Check if already viewed
+            const { data: existingView } = await supabase
+                .from('announcement_views')
+                .select('id')
+                .eq('announcement_id', announcement.id)
+                .eq('user_id', user.id)
+                .single();
+
+            if (!existingView) {
+                // Insert view
+                await supabase.from('announcement_views').insert({
+                    announcement_id: announcement.id,
+                    user_id: user.id
+                });
+            }
+        };
+
+        const fetchViewers = async () => {
+            // We need to fetch from announcement_views and join with profiles
+            // However, supabase-js loose typing might require us to be careful or use a view if strict
+            // Let's try standard select with join
+            const { data } = await supabase
+                .from('announcement_views')
+                .select(`
+                    user_id,
+                    profiles:user_id (
+                        avatar_url,
+                        full_name
+                    )
+                `)
+                .eq('announcement_id', announcement.id)
+                .limit(10);
+
+            if (data) {
+                const uniqueViewers = data.map((item: any) => ({
+                    avatar_url: item.profiles?.avatar_url,
+                    full_name: item.profiles?.full_name
+                }));
+                setViewers(uniqueViewers);
+            }
+        };
+
+        trackView();
+        fetchViewers();
+    }, [announcement]);
+
     const getCategoryBadgeStyle = (category: string) => {
         switch (category) {
             case 'Announcement': return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
             case 'Research': return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
             case 'Event': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-            case 'Miscellaneous': return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+            case 'Miscellaneous':
+            case 'Misc': return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
             default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
         }
     };
@@ -113,6 +170,27 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
 
                 {/* Footer Actions (Optional) */}
                 <div className="p-3 border-t border-white/5 bg-[#0F1720]/50 flex justify-end shrink-0">
+                    <div className="flex items-center gap-[-8px]">
+                        {viewers.length > 0 && (
+                            <div className="flex items-center mr-3">
+                                <div className="flex -space-x-2 overflow-hidden">
+                                    {viewers.slice(0, 5).map((viewer, i) => (
+                                        <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-[#0F1720] bg-slate-700 flex items-center justify-center overflow-hidden" title={viewer.full_name || 'User'}>
+                                            {viewer.avatar_url ? (
+                                                <img src={viewer.avatar_url} alt="Viewer" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-[8px] text-white font-bold">{viewer.full_name?.charAt(0) || 'U'}</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                {viewers.length > 5 && (
+                                    <span className="text-[10px] text-slate-500 font-medium ml-2">+{viewers.length - 5} others</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider">
                         <span className="material-icons text-sm">share</span>
                         Share Update

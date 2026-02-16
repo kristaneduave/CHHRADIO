@@ -1,16 +1,18 @@
 
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
+import { Announcement } from '../types';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
     onSuccess: () => void;
+    editingAnnouncement?: Announcement | null;
 }
 
-const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess }) => {
-    const [title, setTitle] = useState('');
-    const [content, setContent] = useState('');
-    const [category, setCategory] = useState('Announcement');
+const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess, editingAnnouncement }) => {
+    const [title, setTitle] = useState(editingAnnouncement?.title || '');
+    const [content, setContent] = useState(editingAnnouncement?.content || '');
+    const [category, setCategory] = useState(editingAnnouncement?.category || 'Announcement');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
@@ -63,21 +65,40 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 imageUrl = publicUrl;
             }
 
-            const { error: insertError } = await supabase.from('announcements').insert({
-                title,
-                content,
-                category,
-                author_id: user.id,
-                image_url: imageUrl
-            });
+            if (editingAnnouncement) {
+                // Update
+                const { error: updateError } = await supabase
+                    .from('announcements')
+                    .update({
+                        title,
+                        content,
+                        category,
+                        // Only update image if a new one is provided.
+                        // If imageFile is null and we are editing, we keep the old one unless explicitly cleared?
+                        // For now, if imageFile is provided, we update.
+                        ...(imageUrl ? { image_url: imageUrl } : {})
+                    })
+                    .eq('id', editingAnnouncement.id);
 
-            if (insertError) throw insertError;
+                if (updateError) throw updateError;
+            } else {
+                // Insert
+                const { error: insertError } = await supabase.from('announcements').insert({
+                    title,
+                    content,
+                    category,
+                    author_id: user.id,
+                    image_url: imageUrl
+                });
+
+                if (insertError) throw insertError;
+            }
 
             onSuccess();
             onClose();
         } catch (err: any) {
-            console.error('Error creating announcement:', err);
-            setError(err.message || 'Failed to create announcement');
+            console.error('Error saving announcement:', err);
+            setError(err.message || 'Failed to save announcement');
         } finally {
             setLoading(false);
         }
@@ -92,7 +113,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 {/* Header - Fixed */}
                 <div className="flex justify-between items-center p-6 border-b border-white/5 relative z-10 shrink-0">
                     <div>
-                        <h2 className="text-xl font-bold text-white tracking-tight">New Announcement</h2>
+                        <h2 className="text-xl font-bold text-white tracking-tight">{editingAnnouncement ? 'Edit Announcement' : 'New Announcement'}</h2>
                         <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Share updates</p>
                     </div>
                     <button
@@ -227,7 +248,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                             </>
                         ) : (
                             <>
-                                <span>POST UPDATE</span>
+                                <span>{editingAnnouncement ? 'UPDATE POST' : 'POST UPDATE'}</span>
                                 <span className="material-icons text-sm">send</span>
                             </>
                         )}
