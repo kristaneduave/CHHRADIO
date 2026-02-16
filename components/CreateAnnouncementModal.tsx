@@ -48,45 +48,55 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050B14]/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-lg bg-[#0A121A] border border-white/10 rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold text-white">New Announcement</h2>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
-                        <span className="material-icons">close</span>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 px-4">
+            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+                {/* Background Glow */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
+
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                    <div>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">New Announcement</h2>
+                        <p className="text-xs text-slate-500 font-medium">Share updates with the department</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                    >
+                        <span className="material-icons text-lg">close</span>
                     </button>
                 </div>
 
                 {error && (
-                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-lg mb-4 text-sm">
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3">
+                        <span className="material-icons text-lg">error_outline</span>
                         {error}
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
+                <form onSubmit={handleSubmit} className="space-y-6 relative z-10">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Title</label>
                         <input
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            className="w-full px-4 py-2 bg-black/40 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-slate-500"
-                            placeholder="Enter title"
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 text-white placeholder-slate-600 transition-all font-medium"
+                            placeholder="e.g., Grand Rounds Schedule Change"
                             required
                         />
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Category</label>
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Category</label>
+                        <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
                             {categories.map((cat) => (
                                 <button
                                     key={cat}
                                     type="button"
                                     onClick={() => setCategory(cat)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${category === cat
-                                            ? 'bg-primary/20 border-primary text-primary'
-                                            : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'
+                                    className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${category === cat
+                                        ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
+                                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/10 hover:text-slate-200'
                                         }`}
                                 >
                                     {cat}
@@ -95,32 +105,41 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Content</label>
                         <textarea
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
-                            className="w-full px-4 py-2 bg-black/40 border border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-white placeholder-slate-500 min-h-[120px]"
-                            placeholder="Write your announcement..."
+                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50 text-white placeholder-slate-600 min-h-[150px] transition-all font-medium leading-relaxed resize-none"
+                            placeholder="Write the details of your announcement here..."
                             required
                         />
                     </div>
 
-                    <div className="flex justify-end pt-4">
+                    <div className="flex justify-end gap-3 pt-4 border-t border-white/5">
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors mr-3"
+                            className="px-5 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-colors uppercase tracking-wider"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={loading}
-                            className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                            className="px-6 py-2.5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
                         >
-                            {loading && <span className="material-icons animate-spin text-sm mr-2">sync</span>}
-                            Post Announcement
+                            {loading ? (
+                                <>
+                                    <span className="material-icons animate-spin text-sm">sync</span>
+                                    Publishing...
+                                </>
+                            ) : (
+                                <>
+                                    <span>POST UPDATE</span>
+                                    <span className="material-icons text-sm">send</span>
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>
