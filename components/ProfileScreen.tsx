@@ -72,6 +72,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         .eq('id', user.id)
         .single();
 
+
       if (error && error.code !== 'PGRST116') {
         throw error;
       }
