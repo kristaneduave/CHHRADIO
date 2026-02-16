@@ -17,10 +17,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
   ];
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-[#050B14] overflow-hidden">
+    <div className="relative h-screen flex flex-col bg-[#050B14] overflow-hidden">
 
 
-      <main className="relative z-10 max-w-md mx-auto w-full flex-1 flex flex-col pb-24">
+      <main className={`relative z-10 max-w-md mx-auto w-full flex-1 flex flex-col pb-24 ${activeScreen === 'dashboard' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {children}
       </main>
 
