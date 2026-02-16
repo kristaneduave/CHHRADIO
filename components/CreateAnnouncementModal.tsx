@@ -145,32 +145,55 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Cover Image (Optional)</label>
-                            <div className="relative group">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleImageSelect}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                />
-                                <div className={`w-full h-32 rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 ${imagePreview
-                                    ? 'border-primary/50 bg-primary/5'
-                                    : 'border-white/10 bg-white/5 group-hover:border-primary/30 group-hover:bg-primary/5'
-                                    }`}>
-                                    {imagePreview ? (
-                                        <img src={imagePreview} alt="Preview" className="h-full w-full object-cover rounded-xl opacity-60" />
-                                    ) : (
-                                        <>
-                                            <span className="material-icons text-slate-400 group-hover:text-primary transition-colors">add_photo_alternate</span>
-                                            <span className="text-[10px] text-slate-500 group-hover:text-primary/80 transition-colors">Click to upload image</span>
-                                        </>
-                                    )}
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Content</label>
+
+                                {/* Attachment Button */}
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageSelect}
+                                        id="image-upload"
+                                        className="hidden"
+                                    />
+                                    <label
+                                        htmlFor="image-upload"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer border border-white/5 hover:border-white/10"
+                                    >
+                                        <span className="material-icons text-sm">attach_file</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wide">Attach Image</span>
+                                    </label>
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider ml-1">Content</label>
+                            {/* Image Preview Pill */}
+                            {imagePreview && (
+                                <div className="flex items-center gap-3 p-2 bg-white/5 rounded-lg border border-white/10 w-fit animate-in fade-in slide-in-from-top-2 duration-200 mb-2">
+                                    <div className="w-8 h-8 rounded-md overflow-hidden bg-black/20 shrink-0">
+                                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-medium text-white truncate max-w-[150px]">
+                                            {imageFile?.name || 'Image attached'}
+                                        </span>
+                                        <span className="text-[9px] text-slate-500">
+                                            {(imageFile?.size ? (imageFile.size / 1024 / 1024).toFixed(2) : '0')} MB
+                                        </span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setImageFile(null);
+                                            setImagePreview(null);
+                                        }}
+                                        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors ml-1"
+                                    >
+                                        <span className="material-icons text-sm">close</span>
+                                    </button>
+                                </div>
+                            )}
+
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
