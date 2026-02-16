@@ -42,7 +42,7 @@ const AnnouncementsScreen: React.FC = () => {
                     author_id: item.author_id,
                     authorAvatar: item.profiles?.avatar_url,
                     authorTitle: item.profiles?.role ? item.profiles.role.charAt(0).toUpperCase() + item.profiles.role.slice(1) : 'Staff',
-                    date: new Date(item.created_at).toLocaleDateString(),
+                    date: new Date(item.created_at).toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     category: item.category,
                     imageUrl: item.image_url,
                     views: item.views || 0
@@ -145,29 +145,52 @@ const AnnouncementsScreen: React.FC = () => {
                     {heroAnnouncement && (
                         <div
                             onClick={() => setSelectedAnnouncement(heroAnnouncement)}
-                            className="group relative w-full aspect-video sm:aspect-[2/1] rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl"
+                            className="group relative w-full rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-[#0c1829] flex flex-col sm:flex-row hover:bg-white/5 transition-colors"
                         >
-                            {/* Background Image or Gradient */}
-                            {heroAnnouncement.imageUrl ? (
-                                <img src={heroAnnouncement.imageUrl} alt={heroAnnouncement.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                            ) : (
-                                <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-900" />
-                            )}
+                            {/* Image Section */}
+                            <div className="w-full sm:w-5/12 aspect-video sm:aspect-auto relative overflow-hidden">
+                                {heroAnnouncement.imageUrl ? (
+                                    <img src={heroAnnouncement.imageUrl} alt={heroAnnouncement.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                                ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 flex items-center justify-center">
+                                        <span className="material-icons text-4xl text-white/20">image</span>
+                                    </div>
+                                )}
+                            </div>
 
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#050B14] via-[#050B14]/60 to-transparent" />
+                            {/* Content Section */}
+                            <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center">
+                                <div className="flex justify-between items-start mb-3">
+                                    <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${getCategoryStyle(heroAnnouncement.category)}`}>
+                                        {heroAnnouncement.category}
+                                    </span>
+                                    {/* Action Buttons */}
+                                    {(userRole === 'admin' || (currentUserId === heroAnnouncement.author_id)) && (
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={(e) => handleEdit(heroAnnouncement, e)}
+                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+                                            >
+                                                <span className="material-icons text-sm">edit</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleDelete(heroAnnouncement.id, e)}
+                                                className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-slate-400 hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                                            >
+                                                <span className="material-icons text-sm">delete</span>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
 
-                            <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
-                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border mb-3 backdrop-blur-md ${getCategoryStyle(heroAnnouncement.category)}`}>
-                                    {heroAnnouncement.category}
-                                </span>
                                 <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-3 line-clamp-2 group-hover:text-primary transition-colors">
                                     {heroAnnouncement.title}
                                 </h2>
-                                <p className="text-sm text-slate-300 line-clamp-2 mb-4 opacity-90">
+                                <p className="text-sm text-slate-300 line-clamp-3 mb-6 opacity-90 leading-relaxed">
                                     {heroAnnouncement.summary}
                                 </p>
 
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-3 mt-auto">
                                     <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden border border-white/20">
                                         {heroAnnouncement.authorAvatar ? (
                                             <img src={heroAnnouncement.authorAvatar} alt="Author" className="w-full h-full object-cover" />
