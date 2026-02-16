@@ -460,7 +460,7 @@ const CalendarScreen: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative z-0">
         {/* Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
-          <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl h-full flex flex-col">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 h-full flex flex-col">
             <div className="grid grid-cols-7 mb-4">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                 <div key={d} className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest py-2">{d}</div>
@@ -499,19 +499,19 @@ const CalendarScreen: React.FC = () => {
           <div className="lg:hidden mt-2">
             <button
               onClick={() => setShowAddEvent(true)}
-              className="w-full py-3.5 bg-gradient-to-r from-slate-800 to-slate-900 border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 hover:from-slate-700 hover:to-slate-800 transition-all active:scale-[0.98]"
+              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
-              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
                 <span className="material-icons text-lg">add</span>
               </div>
-              <span>Add Event for {selectedDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}</span>
+              <span>Add Event</span>
             </button>
           </div>
         </div>
 
         {/* Agenda */}
         <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative">
-          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative shadow-2xl">
+          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <span className="material-icons text-sm">view_agenda</span> Agenda
