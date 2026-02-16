@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { QUICK_ACTIONS, PROFILE_IMAGE } from '../constants';
-import { Screen, Activity } from '../types';
+import { Screen } from '../types';
 import { supabase } from '../services/supabase';
-import { fetchRecentActivity } from '../services/activityService';
-import ActivityLogModal from './ActivityLogModal';
+
+import NotificationCenter from './NotificationCenter';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
@@ -14,9 +14,8 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   const [userName, setUserName] = useState('Doctor');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [loadingActivities, setLoadingActivities] = useState(true);
-  const [showActivityModal, setShowActivityModal] = useState(false);
+
+  const [showNotifications, setShowNotifications] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -29,16 +28,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           if (data.avatar_url) setAvatarUrl(data.avatar_url);
         } else if (user.email) {
           setUserName(user.email.split('@')[0]);
-        }
-
-        // Fetch Activities
-        try {
-          const recent = await fetchRecentActivity(user.id, 3);
-          setActivities(recent);
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setLoadingActivities(false);
         }
       }
     };
@@ -60,7 +49,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             <h1 className="text-xl font-bold text-white">Dr. {userName}</h1>
           </div>
         </div>
-        <button className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-all relative">
+        <button
+          onClick={() => setShowNotifications(true)}
+          className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-all relative"
+        >
           <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-rose-500 rounded-full border-2 border-[#050B14]"></span>
           <span className="material-icons text-xl">notifications</span>
         </button>
@@ -84,45 +76,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
         </div>
       </section>
 
-      <section className="px-6 flex-1">
-        <div className="flex justify-between items-center mb-4 ml-1">
-          <h3 className="text-sm font-medium text-slate-400">Recent Activity</h3>
-          <button
-            onClick={() => setShowActivityModal(true)}
-            className="text-xs text-primary hover:text-primary-dark font-medium transition-colors"
-          >
-            View All
-          </button>
-        </div>
-        <div className="flex flex-col gap-3">
-          {loadingActivities ? (
-            <p className="text-xs text-slate-500 text-center py-4">Loading activity...</p>
-          ) : activities.length === 0 ? (
-            <div className="text-center py-8 glass-card-enhanced rounded-xl border border-white/5 opacity-70">
-              <p className="text-xs text-slate-500">No recent activity.</p>
-            </div>
-          ) : (
-            activities.map((activity, index) => (
-              <div
-                key={`${activity.id}-${index}`}
-                className="glass-card-enhanced p-4 rounded-xl flex items-center gap-4 hover:bg-white/5 border border-white/5 hover:border-primary/30 transition-all cursor-pointer group"
-              >
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center border transition-colors ${activity.colorClass} border-white/10`}>
-                  <span className="material-icons text-lg text-inherit">{activity.icon}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-white truncate">{activity.title}</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 truncate">{activity.subtitle}</p>
-                </div>
-                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">{activity.time}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
 
-      {showActivityModal && (
-        <ActivityLogModal onClose={() => setShowActivityModal(false)} />
+
+      {showNotifications && (
+        <NotificationCenter onClose={() => setShowNotifications(false)} />
       )}
     </>
   );
