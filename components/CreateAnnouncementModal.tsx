@@ -41,9 +41,10 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
     // New Feature State
-    const [icon, setIcon] = useState(editingAnnouncement?.icon || '📣');
+    const [icon, setIcon] = useState(editingAnnouncement?.icon || '');
     const [links, setLinks] = useState<{ url: string; title: string }[]>(editingAnnouncement?.links || []);
     const [showLinkInput, setShowLinkInput] = useState(false);
+    const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
 
     // Temp state for adding a new link
     const [newLinkUrl, setNewLinkUrl] = useState('');
@@ -226,12 +227,25 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                 <button
                                     type="button"
                                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                    className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all text-2xl shadow-lg shadow-black/20"
+                                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all text-2xl shadow-lg shadow-black/20 ${icon
+                                        ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+                                        : 'bg-transparent border-dashed border-slate-600 hover:border-slate-400 text-slate-500 hover:text-slate-300'
+                                        }`}
                                 >
-                                    {icon}
+                                    {icon || <span className="material-icons text-xl opacity-50">add_reaction</span>}
                                 </button>
                                 {showEmojiPicker && (
                                     <div className="absolute top-14 left-0 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIcon('');
+                                                setShowEmojiPicker(false);
+                                            }}
+                                            className="w-full col-span-5 p-2 mb-1 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors border border-dashed border-slate-700 hover:border-slate-500"
+                                        >
+                                            No Icon
+                                        </button>
                                         {emojis.map(emoji => (
                                             <button
                                                 key={emoji}
@@ -263,22 +277,48 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                             </div>
                         </div>
 
-                        {/* Category Pills */}
-                        {/* Category Pills */}
-                        <div className="flex flex-wrap gap-2 pb-2">
-                            {categories.map((cat) => (
-                                <button
-                                    key={cat}
-                                    type="button"
-                                    onClick={() => setCategory(cat)}
-                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${category === cat
-                                        ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
-                                        : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10 hover:border-white/10 hover:text-slate-200'
-                                        }`}
-                                >
-                                    {cat}
-                                </button>
-                            ))}
+                        {/* Category Dropdown (Compact) */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium text-slate-300 transition-all"
+                            >
+                                <span className={`w-2 h-2 rounded-full ${category === 'Announcement' ? 'bg-amber-400' :
+                                    category === 'Research' ? 'bg-indigo-400' :
+                                        category === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
+                                    }`} />
+                                {category}
+                                <span className="material-icons text-sm text-slate-500 ml-1">arrow_drop_down</span>
+                            </button>
+
+                            {showCategoryDropdown && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
+                                    <div className="absolute top-full left-0 mt-1 w-48 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
+                                        {categories.map((cat) => (
+                                            <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={() => {
+                                                    setCategory(cat as any);
+                                                    setShowCategoryDropdown(false);
+                                                }}
+                                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${category === cat
+                                                    ? 'bg-blue-500/10 text-blue-400'
+                                                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                                                    }`}
+                                            >
+                                                <span className={`w-2 h-2 rounded-full ${cat === 'Announcement' ? 'bg-amber-400' :
+                                                    cat === 'Research' ? 'bg-indigo-400' :
+                                                        cat === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
+                                                    }`} />
+                                                {cat}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Content */}
@@ -317,8 +357,8 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                         {/* Link Input Logic */}
                         {showLinkInput && (
-                            <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors animate-in fade-in slide-in-from-left-2 duration-200">
-                                <span className="material-icons text-slate-500">link</span>
+                            <div className="bg-white/5 rounded-xl p-2 pl-3 flex items-center gap-2 border border-white/5 focus-within:border-white/20 transition-colors animate-in fade-in slide-in-from-left-2 duration-200">
+                                <span className="material-icons text-slate-500 text-sm">link</span>
                                 <input
                                     type="url"
                                     value={newLinkUrl}
@@ -333,17 +373,31 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                             }
                                         }
                                     }}
-                                    className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
-                                    placeholder="https://... (Press Enter to add)"
+                                    className="flex-1 bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
+                                    placeholder="https://..."
                                     autoFocus
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (newLinkUrl) {
+                                            setLinks(prev => [...prev, { url: newLinkUrl, title: newLinkUrl }]);
+                                            setNewLinkUrl('');
+                                            setShowLinkInput(false);
+                                        }
+                                    }}
+                                    className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                    title="Add Link"
+                                >
+                                    <span className="material-icons text-sm font-bold">add</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setNewLinkUrl('');
                                         setShowLinkInput(false);
                                     }}
-                                    className="text-slate-500 hover:text-white transition-colors"
+                                    className="p-1.5 text-slate-500 hover:text-white transition-colors"
                                 >
                                     <span className="material-icons text-sm">close</span>
                                 </button>
