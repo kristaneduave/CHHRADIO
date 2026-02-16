@@ -4,12 +4,9 @@ import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
 import AnnouncementDetailModal from './AnnouncementDetailModal';
 
-interface AnnouncementsScreenProps {
-    userRole: UserRole;
-    currentUserId: string;
-}
-
-const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, currentUserId }) => {
+const AnnouncementsScreen: React.FC = () => {
+    const [userRole, setUserRole] = useState<UserRole>('resident');
+    const [currentUserId, setCurrentUserId] = useState<string>('');
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeCategory, setActiveCategory] = useState('All');
@@ -59,6 +56,17 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, cur
     };
 
     useEffect(() => {
+        const fetchUserRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                setCurrentUserId(user.id);
+                const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+                if (data?.role) {
+                    setUserRole(data.role.toLowerCase() as UserRole);
+                }
+            }
+        };
+        fetchUserRole();
         fetchAnnouncements();
     }, []);
 
