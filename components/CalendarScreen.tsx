@@ -36,6 +36,29 @@ const CalendarScreen: React.FC = () => {
   const days = Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1);
   const padding = Array.from({ length: firstDayOfMonth(year, month) }, (_, i) => null);
 
+  // Color definitions moved up for reuse
+  const eventTypeColors: Record<EventType, string> = {
+    leave: 'bg-rose-600 text-white border-2 border-rose-400/50 shadow-[0_0_15px_rgba(225,29,72,0.4)]',
+    meeting: 'bg-blue-500 text-white border border-blue-400/30',
+    lecture: 'bg-purple-500 text-white border border-purple-400/30',
+    exam: 'bg-yellow-500 text-white border border-yellow-400/30',
+    pickleball: 'bg-emerald-500 text-white border border-emerald-400/30',
+    other: 'bg-slate-600 text-white border border-slate-400/30',
+    rotation: 'bg-indigo-500 text-white',
+    call: 'bg-red-500 text-white'
+  };
+
+  const eventDotColors: Record<EventType, string> = {
+    leave: 'bg-rose-500',
+    meeting: 'bg-blue-500',
+    lecture: 'bg-purple-500',
+    exam: 'bg-yellow-500',
+    pickleball: 'bg-emerald-500',
+    other: 'bg-slate-500',
+    rotation: 'bg-indigo-500',
+    call: 'bg-red-500'
+  };
+
   const fetchEvents = async () => {
     setLoading(true);
     try {
@@ -91,14 +114,20 @@ const CalendarScreen: React.FC = () => {
       selectedDate.getFullYear() === today.getFullYear();
   };
 
-  const hasEvents = (day: number) => {
+  // Updated: Get unique event types for a day to show dots
+  const getEventTypesForDay = (day: number) => {
     const targetStart = new Date(year, month, day, 0, 0, 0);
     const targetEnd = new Date(year, month, day, 23, 59, 59);
-    return events.some(e => {
+
+    const dayEvents = events.filter(e => {
       const eStart = new Date(e.start_time);
       const eEnd = new Date(e.end_time);
       return eStart <= targetEnd && eEnd >= targetStart;
     });
+
+    const types = Array.from(new Set(dayEvents.map(e => e.event_type)));
+    // Sort to ensure consistency (e.g. Leave always first if present?)
+    return types.slice(0, 3); // Max 3 dots
   };
 
   const getAgendaEvents = () => {
@@ -129,10 +158,9 @@ const CalendarScreen: React.FC = () => {
     setCoverageDetails(newDetails);
   };
 
-  // Updated to handle manual name entry
   const updateCoverageName = (index: number, name: string) => {
     const newDetails = [...coverageDetails];
-    newDetails[index] = { ...newDetails[index], name: name, user_id: '' }; // Clear user_id if typing name manually? Or keep separate?
+    newDetails[index] = { ...newDetails[index], name: name, user_id: '' };
     setCoverageDetails(newDetails);
   };
 
@@ -149,7 +177,6 @@ const CalendarScreen: React.FC = () => {
   };
 
   const handleCreateEvent = async () => {
-    // Auto-generate title
     let title = '';
     if (newEventType === 'leave') {
       title = assignedToName ? `${assignedToName} - Leave` : 'Leave';
@@ -183,7 +210,6 @@ const CalendarScreen: React.FC = () => {
         event_type: newEventType,
         is_all_day: isAllDay,
         location: '',
-        // Filter out empty entries
         coverage_details: coverageDetails.filter(d => d.name.trim() !== '')
       });
 
@@ -204,23 +230,10 @@ const CalendarScreen: React.FC = () => {
     exam: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
     leave: 'bg-pink-500/20 text-pink-400 border-pink-500/20',
     meeting: 'bg-blue-500/20 text-blue-400 border-blue-500/20',
-    pickleball: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20', // New Style
+    pickleball: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
     other: 'bg-slate-500/20 text-slate-400 border-slate-500/20',
   };
 
-  // Updated colors
-  const eventTypeColors: Record<EventType, string> = {
-    leave: 'bg-rose-600 text-white border-2 border-rose-400/50 shadow-[0_0_15px_rgba(225,29,72,0.4)]',
-    meeting: 'bg-blue-500 text-white border border-blue-400/30',
-    lecture: 'bg-purple-500 text-white border border-purple-400/30',
-    exam: 'bg-yellow-500 text-white border border-yellow-400/30',
-    pickleball: 'bg-emerald-500 text-white border border-emerald-400/30', // New Color
-    other: 'bg-slate-600 text-white border border-slate-400/30',
-    rotation: 'bg-indigo-500 text-white',
-    call: 'bg-red-500 text-white'
-  };
-
-  // Added pickleball BEFORE other
   const allowedTypes: EventType[] = ['leave', 'meeting', 'lecture', 'exam', 'pickleball', 'other'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
 
@@ -238,7 +251,7 @@ const CalendarScreen: React.FC = () => {
             </button>
           </div>
 
-          <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-1">
+          <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-1 pb-4">
 
             {/* Type Selection */}
             <div className="pt-2">
@@ -329,7 +342,6 @@ const CalendarScreen: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Coverage Section */}
                 <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
                   <div
                     className="flex justify-between items-center cursor-pointer mb-3"
@@ -343,7 +355,6 @@ const CalendarScreen: React.FC = () => {
                     {coverageDetails.map((detail, idx) => (
                       <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
                         <div className="flex gap-2 mb-2">
-                          {/* Manual Name Input for Coverage */}
                           <input
                             type="text"
                             value={detail.name}
@@ -357,7 +368,6 @@ const CalendarScreen: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Multi-modality Toggle Pills */}
                         <div className="flex flex-wrap gap-1.5">
                           {availableModalities.map(modality => {
                             const isActive = detail.modalities?.includes(modality);
@@ -392,7 +402,6 @@ const CalendarScreen: React.FC = () => {
               </div>
             )}
 
-            {/* Description */}
             <div>
               <textarea
                 value={newEventDescription}
@@ -404,7 +413,6 @@ const CalendarScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Footer Action */}
           <div className="pt-6 mt-2 border-t border-white/5">
             <button
               onClick={handleCreateEvent}
@@ -421,7 +429,7 @@ const CalendarScreen: React.FC = () => {
   }
 
   return (
-    <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
+    <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
       {/* Top Header */}
       <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
         <div>
@@ -439,9 +447,17 @@ const CalendarScreen: React.FC = () => {
               <span className="material-icons text-xl">chevron_right</span>
             </button>
           </div>
+          {/* Replaced header 'Add Event' with FAB, but keeping for desktop if needed? Or simply remove. 
+                        User asked for a "Combined button". 
+                        The FAB handles "General Add" effectively for mobile. 
+                        For Desktop, we can keep this or rely on FAB. Let's keep this on Desktop, FAB on Mobile? 
+                         Or FAB everywhere. Let's go FAB everywhere for consistency with the request "combined button". 
+                         Wait, FAB is usually bottom right. Header button is top right.
+                         Let's keep Header button for Desktop view (lg), FAB for Mobile (md and below).
+                    */}
           <button
             onClick={() => setShowAddEvent(true)}
-            className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2"
+            className="hidden lg:flex bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2"
           >
             <span className="material-icons text-lg">add</span>
             Add Event
@@ -449,7 +465,7 @@ const CalendarScreen: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative">
         {/* Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
           <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl h-full flex flex-col">
@@ -460,31 +476,37 @@ const CalendarScreen: React.FC = () => {
             </div>
             <div className="grid grid-cols-7 gap-1 flex-1 content-start">
               {padding.map((_, i) => <div key={`p-${i}`} className="aspect-square"></div>)}
-              {days.map(day => (
-                <button
-                  key={day}
-                  onClick={() => setSelectedDate(new Date(year, month, day))}
-                  className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all hover:bg-white/5 group ${isSelected(day) ? 'bg-primary text-white shadow-[0_0_20px_rgba(13,162,231,0.4)] z-10 scale-105' :
-                    isToday(day) ? 'text-primary border border-primary/30 bg-primary/5' : 'text-slate-300'
-                    }`}
-                >
-                  <span className={`text-sm font-medium ${isToday(day) && !isSelected(day) ? 'font-bold' : ''}`}>{day}</span>
+              {days.map(day => {
+                const dotTypes = getEventTypesForDay(day);
+                return (
+                  <button
+                    key={day}
+                    onClick={() => setSelectedDate(new Date(year, month, day))}
+                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all hover:bg-white/5 group ${isSelected(day) ? 'bg-primary text-white shadow-[0_0_20px_rgba(13,162,231,0.4)] z-10 scale-105' :
+                      isToday(day) ? 'text-primary border border-primary/30 bg-primary/5' : 'text-slate-300'
+                      }`}
+                  >
+                    <span className={`text-sm font-medium ${isToday(day) && !isSelected(day) ? 'font-bold' : ''}`}>{day}</span>
 
-                  {/* Event Dots */}
-                  {hasEvents(day) && !isSelected(day) && (
-                    <div className="absolute bottom-2 flex gap-1">
-                      <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-white transition-colors"></span>
+                    {/* Colored Event Dots */}
+                    <div className="absolute bottom-2 flex gap-1 justify-center px-1 w-full">
+                      {dotTypes.map(type => (
+                        <span
+                          key={type}
+                          className={`w-1.5 h-1.5 rounded-full ${isSelected(day) ? 'bg-white' : eventDotColors[type] || 'bg-slate-400'}`}
+                        ></span>
+                      ))}
                     </div>
-                  )}
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         {/* Agenda */}
-        <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden">
-          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col">
+        <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative">
+          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                 <span className="material-icons text-sm">view_agenda</span> Agenda
@@ -494,7 +516,8 @@ const CalendarScreen: React.FC = () => {
               </span>
             </div>
 
-            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
+            {/* PADDED CONTAINER to fix Agenda overlap */}
+            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-24">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
                   <div key={event.id} className="flex gap-3 items-center p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
@@ -521,13 +544,11 @@ const CalendarScreen: React.FC = () => {
                           <p className="text-[11px] text-slate-500">All Day</p>
                         )}
 
-                        {/* Coverage Info - Matches Manual Name */}
                         {event.coverage_details && event.coverage_details.length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-1">
                             {event.coverage_details.map((d: any, idx) => (
                               <span key={idx} className="text-[9px] text-purple-400 bg-purple-500/10 px-1 rounded flex items-center gap-1">
                                 <span className="material-icons text-[9px] rotate-180">reply</span>
-                                {/* Prioritize Name, fallback to User Object */}
                                 {d.name || d.user?.full_name?.split(' ')[0]}
                                 {d.modalities && d.modalities.length > 0 && ` (${d.modalities.join(', ')})`}
                               </span>
@@ -545,18 +566,18 @@ const CalendarScreen: React.FC = () => {
                 </div>
               )}
             </div>
-
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <button
-                onClick={() => setShowAddEvent(true)}
-                className="w-full py-2.5 rounded-lg border border-dashed border-slate-700 text-slate-400 text-xs font-bold hover:text-white hover:border-slate-500 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-icons text-sm">add_circle_outline</span>
-                Add Event for {selectedDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}
-              </button>
-            </div>
           </div>
         </div>
+      </div>
+
+      {/* FLOATING ACTION BUTTON (Visible on Mobile/Tablet) */}
+      <div className="lg:hidden fixed bottom-24 right-6 z-50">
+        <button
+          onClick={() => setShowAddEvent(true)}
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white shadow-lg shadow-primary/40 flex items-center justify-center transform active:scale-90 transition-all border border-white/20"
+        >
+          <span className="material-icons text-2xl">add</span>
+        </button>
       </div>
 
       {/* Render Portal Modal */}
