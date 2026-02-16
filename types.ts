@@ -77,13 +77,25 @@ export interface SearchFilters {
   diagnosticCode: string;
 }
 
+export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'other';
+
 export interface CalendarEvent {
   id: string;
   title: string;
-  time: string;
-  date: string;
-  type: 'consultation' | 'rounds' | 'meeting' | 'other';
   description?: string;
+  start_time: string;
+  end_time: string;
+  event_type: EventType;
+  location?: string;
+  created_by: string;
+  assigned_to?: string;
+  is_all_day: boolean;
+  created_at?: string;
+
+  // Legacy fields for backward compatibility during refactor (optional)
+  time?: string;
+  date?: string;
+  type?: EventType; // mapped to event_type
 }
 
 export interface ChatMessage {
@@ -126,7 +138,7 @@ export interface Announcement {
   author_id?: string; // Added for RBAC ownership checks
   authorTitle: string;
   date: string;
-  category: 'Research' | 'Announcement' | 'Event' | 'Misc';
+  category: 'Research' | 'Announcement' | 'Event' | 'Misc' | 'Clinical';
   imageUrl?: string;
   views: number;
   viewers?: {

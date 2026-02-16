@@ -70,31 +70,43 @@ export const MOCK_EVENTS: CalendarEvent[] = [
   {
     id: 'e1',
     title: 'Grand Rounds: Neuro-oncology',
-    time: '09:00 AM',
-    date: new Date().toISOString().split('T')[0],
-    type: 'rounds',
-    description: 'Weekly presentation of complex oncology cases in the main auditorium.'
+    start_time: new Date(new Date().setHours(9, 0, 0, 0)).toISOString(),
+    end_time: new Date(new Date().setHours(10, 0, 0, 0)).toISOString(),
+    event_type: 'meeting', // Mapped from rounds
+    type: 'meeting',
+    description: 'Weekly presentation of complex oncology cases in the main auditorium.',
+    created_by: 'system',
+    is_all_day: false
   },
   {
     id: 'e2',
     title: 'Patient Consult: Case #4921',
-    time: '11:30 AM',
-    date: new Date().toISOString().split('T')[0],
-    type: 'consultation'
+    start_time: new Date(new Date().setHours(11, 30, 0, 0)).toISOString(),
+    end_time: new Date(new Date().setHours(12, 0, 0, 0)).toISOString(),
+    event_type: 'exam', // approximate
+    type: 'exam',
+    created_by: 'system',
+    is_all_day: false
   },
   {
     id: 'e3',
     title: 'Department Research Meeting',
-    time: '02:00 PM',
-    date: new Date().toISOString().split('T')[0],
-    type: 'meeting'
+    start_time: new Date(new Date().setHours(14, 0, 0, 0)).toISOString(),
+    end_time: new Date(new Date().setHours(15, 0, 0, 0)).toISOString(),
+    event_type: 'meeting',
+    type: 'meeting',
+    created_by: 'system',
+    is_all_day: false
   },
   {
     id: 'e4',
     title: 'Radiology Lab Review',
-    time: '10:00 AM',
-    date: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-    type: 'consultation'
+    start_time: new Date(new Date(Date.now() + 86400000).setHours(10, 0, 0, 0)).toISOString(),
+    end_time: new Date(new Date(Date.now() + 86400000).setHours(11, 0, 0, 0)).toISOString(),
+    event_type: 'exam',
+    type: 'exam',
+    created_by: 'system',
+    is_all_day: false
   }
 ];
 
