@@ -164,9 +164,9 @@ const CalendarScreen: React.FC = () => {
   };
 
   return (
-    <div className="px-6 pt-8 pb-12 flex flex-col h-full animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
+    <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
       {/* Top Header with Month and Actions */}
-      <header className="flex items-center justify-between mb-8">
+      <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
         </div>
@@ -192,9 +192,9 @@ const CalendarScreen: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden">
+      <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden">
         {/* Left Column: Calendar Grid & Upcoming */}
-        <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+        <div className="flex-1 flex flex-col gap-6 lg:overflow-hidden">
           {/* Calendar Grid */}
           <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl">
             <div className="grid grid-cols-7 mb-4">
@@ -227,7 +227,7 @@ const CalendarScreen: React.FC = () => {
           </div>
 
           {/* Upcoming Events Dashboard */}
-          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 overflow-hidden flex flex-col">
+          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
               <span className="material-icons text-sm">upcoming</span> Upcoming Events
             </h3>
@@ -252,14 +252,14 @@ const CalendarScreen: React.FC = () => {
         </div>
 
         {/* Right Column: Selected Day Details & Leave List */}
-        <div className="w-full lg:w-96 flex flex-col gap-6 overflow-hidden">
+        <div className="w-full lg:w-96 flex flex-col gap-6 lg:overflow-hidden">
           {/* Selected Day Header */}
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-bold text-white">{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
           </div>
 
           {/* Day Events List */}
-          <div className="glass-card-enhanced rounded-2xl p-1 flex-1 min-h-[300px] overflow-hidden flex flex-col">
+          <div className="glass-card-enhanced rounded-2xl p-1 flex-1 min-h-[300px] lg:overflow-hidden flex flex-col">
             <div className="p-4 border-b border-white/5 bg-white/5">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule</h3>
             </div>
