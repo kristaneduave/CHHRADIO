@@ -11,10 +11,25 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [category, setCategory] = useState('Research');
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const categories = ['Research', 'Announcement', 'Event', 'Clinical'];
+
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 5 * 1024 * 1024) {
+                setError('Image size must be less than 5MB');
+                return;
+            }
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+            setError(null);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,11 +43,32 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
             // Get profile for author name (optional, can be done server side or trigger)
             // For now just using the user id as author_id column reference
 
+            let imageUrl = null;
+
+            if (imageFile) {
+                const fileExt = imageFile.name.split('.').pop();
+                const fileName = `${Math.random()}.${fileExt}`;
+                const filePath = `${user.id}/${fileName}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from('announcements')
+                    .upload(filePath, imageFile);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('announcements')
+                    .getPublicUrl(filePath);
+
+                imageUrl = publicUrl;
+            }
+
             const { error: insertError } = await supabase.from('announcements').insert({
                 title,
                 content,
                 category,
-                author_id: user.id
+                author_id: user.id,
+                image_url: imageUrl
             });
 
             if (insertError) throw insertError;
@@ -49,7 +85,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 px-4">
-            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden">
+            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-300 relative overflow-hidden max-h-[90vh] overflow-y-auto custom-scrollbar">
                 {/* Background Glow */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
 
@@ -102,6 +138,31 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                     {cat}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Cover Image (Optional)</label>
+                        <div className="relative group">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageSelect}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            />
+                            <div className={`w-full h-32 rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 ${imagePreview
+                                ? 'border-primary/50 bg-primary/5'
+                                : 'border-white/10 bg-white/5 group-hover:border-primary/30 group-hover:bg-primary/5'
+                                }`}>
+                                {imagePreview ? (
+                                    <img src={imagePreview} alt="Preview" className="h-full w-full object-cover rounded-xl opacity-60" />
+                                ) : (
+                                    <>
+                                        <span className="material-icons text-slate-400 group-hover:text-primary transition-colors">add_photo_alternate</span>
+                                        <span className="text-xs text-slate-500 group-hover:text-primary/80 transition-colors">Click to upload image</span>
+                                    </>
+                                )}
+                            </div>
                         </div>
                     </div>
 
