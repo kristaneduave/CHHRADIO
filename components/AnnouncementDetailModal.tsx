@@ -42,7 +42,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300 sm:p-6" onClick={onClose}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300 sm:p-6" onClick={onClose}>
             <div
                 className="w-full max-w-2xl bg-[#0c1829] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 flex flex-col max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
