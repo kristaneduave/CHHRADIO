@@ -94,6 +94,10 @@ export interface CalendarEvent {
     full_name: string | null;
     avatar_url: string | null;
   };
+  user?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
   is_all_day: boolean;
   created_at?: string;
 

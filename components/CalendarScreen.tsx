@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
-import { LeaveList } from './LeaveList';
 import { supabase } from '../services/supabase';
 
 const CalendarScreen: React.FC = () => {
@@ -9,6 +8,9 @@ const CalendarScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
+  // We might still fetch upcoming for the "Today" default view if needed, 
+  // but let's try to derive everything from 'events' for consistency in the "Month" context
+  // actually, for "Today", upcoming is better across month boundaries.
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [staffList, setStaffList] = useState<{ id: string, full_name: string }[]>([]);
@@ -42,7 +44,8 @@ const CalendarScreen: React.FC = () => {
       const data = await CalendarService.getEvents(start, end);
       setEvents(data);
 
-      const upcoming = await CalendarService.getUpcomingEvents(5);
+      // Still fetch upcoming mostly for the "default" state if we want it, or purely for the Today view
+      const upcoming = await CalendarService.getUpcomingEvents(10); // Fetch a bit more to populate list
       setUpcomingEvents(upcoming);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -89,24 +92,43 @@ const CalendarScreen: React.FC = () => {
     return selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year;
   };
 
-  const getEventsForDay = (day: number) => {
+  const isSelectedDateToday = () => {
+    const today = new Date();
+    return selectedDate.getDate() === today.getDate() &&
+      selectedDate.getMonth() === today.getMonth() &&
+      selectedDate.getFullYear() === today.getFullYear();
+  };
+
+  const hasEvents = (day: number) => {
     const targetStart = new Date(year, month, day, 0, 0, 0);
     const targetEnd = new Date(year, month, day, 23, 59, 59);
-
-    return events.filter(e => {
+    return events.some(e => {
       const eStart = new Date(e.start_time);
       const eEnd = new Date(e.end_time);
       return eStart <= targetEnd && eEnd >= targetStart;
     });
   };
 
-  const hasEvents = (day: number) => {
-    return getEventsForDay(day).length > 0;
+  const getAgendaEvents = () => {
+    // Logic:
+    // If Today is selected: Show global "Upcoming Events" (cross-month).
+    // If Specific Date selected: Show events starting/occurring on that date onwards (within current view).
+
+    if (isSelectedDateToday()) {
+      return upcomingEvents;
+    }
+
+    const startOfSelected = new Date(selectedDate);
+    startOfSelected.setHours(0, 0, 0, 0);
+
+    // Filter events that END after the start of selected day
+    // And Sort by start time
+    return events
+      .filter(e => new Date(e.end_time) >= startOfSelected)
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   };
 
-  const getEventsForSelected = () => {
-    return getEventsForDay(selectedDate.getDate());
-  };
+  const agendaEvents = getAgendaEvents();
 
   const handleCreateEvent = async () => {
     if (!newEventTitle) return;
@@ -122,7 +144,7 @@ const CalendarScreen: React.FC = () => {
         end.setHours(23, 59, 59, 999);
       } else {
         start = new Date(`${newEventStartDate}T${newEventTime}`);
-        end = new Date(`${newEventStartDate}T${newEventEndTime}`); // Assume same day for non-all-day simple events
+        end = new Date(`${newEventStartDate}T${newEventEndTime}`);
       }
 
       await CalendarService.createEvent({
@@ -193,16 +215,16 @@ const CalendarScreen: React.FC = () => {
       </header>
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden">
-        {/* Left Column: Calendar Grid & Upcoming */}
-        <div className="flex-1 flex flex-col gap-6 lg:overflow-hidden">
+        {/* Left Column: Calendar Grid - Takes more space now */}
+        <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
           {/* Calendar Grid */}
-          <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl">
+          <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl h-full flex flex-col">
             <div className="grid grid-cols-7 mb-4">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
                 <div key={d} className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest py-2">{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1 flex-1 content-start">
               {padding.map((_, i) => <div key={`p-${i}`} className="aspect-square"></div>)}
               {days.map(day => (
                 <button
@@ -217,7 +239,6 @@ const CalendarScreen: React.FC = () => {
                   {/* Event Dots */}
                   {hasEvents(day) && !isSelected(day) && (
                     <div className="absolute bottom-2 flex gap-1">
-                      {/* Simplified dot logic - ideally map types colors */}
                       <span className="w-1 h-1 rounded-full bg-slate-400 group-hover:bg-white transition-colors"></span>
                     </div>
                   )}
@@ -225,100 +246,99 @@ const CalendarScreen: React.FC = () => {
               ))}
             </div>
           </div>
-
-          {/* Upcoming Events Dashboard */}
-          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col">
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <span className="material-icons text-sm">upcoming</span> Upcoming Events
-            </h3>
-            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2">
-              {upcomingEvents.map(event => (
-                <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
-                  <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border border-white/5 bg-white/5`}>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
-                    <span className="text-lg font-bold text-white">{new Date(event.start_time).getDate()}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold text-slate-200 truncate group-hover:text-primary transition-colors">{event.title}</h4>
-                    <p className="text-[11px] text-slate-500 truncate">{event.description || 'No description'}</p>
-                  </div>
-                  <div className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${eventTypeStyles[event.event_type]}`}>
-                    {event.event_type}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
-        {/* Right Column: Selected Day Details & Leave List */}
-        <div className="w-full lg:w-96 flex flex-col gap-6 lg:overflow-hidden">
-          {/* Selected Day Header */}
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h2>
-          </div>
+        {/* Right Column: Unified Agenda Information */}
+        <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden">
 
-          {/* Day Events List */}
-          <div className="glass-card-enhanced rounded-2xl p-1 flex-1 min-h-[300px] lg:overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-white/5 bg-white/5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Schedule</h3>
+          {/* Unified Agenda List */}
+          <div className="glass-card-enhanced rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <span className="material-icons text-sm">view_agenda</span> Agenda
+              </h3>
+              <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-slate-400 border border-white/5">
+                {isSelectedDateToday() ? 'Upcoming' : `From ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
+              </span>
             </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-              {getEventsForSelected().length > 0 ? (
-                getEventsForSelected().map(event => (
-                  <div key={event.id} className="glass-card-enhanced p-4 rounded-xl border border-white/5 relative overflow-hidden group">
-                    <div className={`absolute top-0 bottom-0 left-0 w-1 ${event.event_type === 'rotation' ? 'bg-purple-500' : event.event_type === 'call' ? 'bg-red-500' : 'bg-primary'}`}></div>
-                    <div className="pl-3">
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="text-sm font-bold text-white group-hover:text-primary transition-colors">{event.title}</h4>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${eventTypeStyles[event.event_type]}`}>
+
+            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2">
+              {agendaEvents.length > 0 ? (
+                agendaEvents.map(event => (
+                  <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
+                    {/* Date Box */}
+                    <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border border-white/5 bg-white/5 shrink-0`}>
+                      <span className="text-[9px] font-bold text-slate-500 uppercase">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
+                      <span className="text-lg font-bold text-white">{new Date(event.start_time).getDate()}</span>
+                    </div>
+
+                    {/* Event Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-center mb-0.5">
+                        <h4 className="text-sm font-bold text-slate-200 truncate group-hover:text-primary transition-colors">{event.title}</h4>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ml-2 whitespace-nowrap ${eventTypeStyles[event.event_type]}`}>
                           {event.event_type}
                         </span>
                       </div>
 
-                      {!event.is_all_day && (
-                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-2">
-                          <span className="material-icons text-[14px]">schedule</span>
-                          {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(event.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      )}
+                      <div className="flex flex-col gap-0.5">
+                        {/* Time */}
+                        {!event.is_all_day ? (
+                          <p className="text-[11px] text-slate-500 flex items-center gap-1">
+                            <span className="material-icons text-[10px]">schedule</span>
+                            {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">All Day</p>
+                        )}
 
-                      {event.description && (
-                        <p className="text-[11px] text-slate-500 line-clamp-2">{event.description}</p>
-                      )}
-
-                      {event.covered_user && (
-                        <div className="mt-2 flex items-center gap-2 bg-white/5 p-1.5 rounded-lg border border-white/5">
-                          <div className="w-5 h-5 rounded-full bg-slate-700 overflow-hidden">
-                            {event.covered_user.avatar_url ? (
-                              <img src={event.covered_user.avatar_url} className="w-full h-full object-cover" />
-                            ) : (
-                              <span className="flex items-center justify-center h-full text-[8px] font-bold">{event.covered_user.full_name?.charAt(0)}</span>
-                            )}
+                        {/* Assigned / Coverage Info */}
+                        {event.user && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <div className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden shrink-0">
+                              {event.user.avatar_url ? (
+                                <img src={event.user.avatar_url} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="flex items-center justify-center h-full text-[7px] font-bold text-white">{event.user.full_name?.charAt(0)}</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400 truncate">{event.user.full_name}</span>
                           </div>
-                          <span className="text-[10px] text-slate-400">Covered by <strong className="text-slate-300">{event.covered_user.full_name}</strong></span>
-                        </div>
-                      )}
+                        )}
+
+                        {event.covered_user && (
+                          <p className="text-[10px] text-purple-400 mt-0.5 flex items-center gap-1">
+                            <span className="material-icons text-[10px] rotate-180">reply</span>
+                            Covered by {event.covered_user.full_name?.split(' ')[0]}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center h-48 text-center opacity-50">
-                  <span className="material-icons text-4xl text-slate-600 mb-2">event_available</span>
-                  <p className="text-sm text-slate-500 font-medium">No events today</p>
+                <div className="flex flex-col items-center justify-center h-32 text-center opacity-40">
+                  <span className="material-icons text-3xl text-slate-600 mb-2">event_busy</span>
+                  <p className="text-xs text-slate-500 font-medium">No events for this period</p>
                 </div>
               )}
             </div>
+
+            <div className="mt-4 pt-4 border-t border-white/5">
+              <button
+                onClick={() => setShowAddEvent(true)}
+                className="w-full py-2.5 rounded-lg border border-dashed border-slate-700 text-slate-400 text-xs font-bold hover:text-white hover:border-slate-500 hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-icons text-sm">add_circle_outline</span>
+                Add Event for {selectedDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}
+              </button>
+            </div>
           </div>
 
-          {/* Leave List */}
-          <div className="flex-shrink-0">
-            <LeaveList date={selectedDate} />
-          </div>
         </div>
       </div>
 
-      {/* Enhanced Add Event Modal */}
+      {/* Add Event Modal - Kept the same as it was good */}
       {showAddEvent && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="glass-card-enhanced w-full max-w-lg rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-300 border border-white/10">

@@ -17,19 +17,29 @@ export const CalendarService = {
         const { data: events, error } = await query;
         if (error) throw error;
 
-        // We need to fetch covered_by user details if present
-        const coverageUserIds = [...new Set(events.filter(e => e.covered_by).map(e => e.covered_by))];
+        // Create a Set of all user IDs to fetch (both covered_by and assigned_to)
+        const userIds = new Set<string>();
+        events.forEach(e => {
+            if (e.covered_by) userIds.add(e.covered_by);
+            if (e.assigned_to) userIds.add(e.assigned_to);
+            // Also include created_by for leave events if assigned_to is missing? 
+            // Logic in getLeaveEvents uses assigned_to OR created_by.
+            // Let's safe include created_by if type is leave
+            if (e.event_type === 'leave') userIds.add(e.created_by);
+        });
 
-        if (coverageUserIds.length > 0) {
+        if (userIds.size > 0) {
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url')
-                .in('id', coverageUserIds);
+                .select('id, full_name, avatar_url, role')
+                .in('id', Array.from(userIds));
 
             if (!profilesError && profiles) {
                 return events.map(event => ({
                     ...event,
-                    covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined
+                    covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
+                    user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
+                        profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
                 })) as CalendarEvent[];
             }
         }
@@ -118,6 +128,7 @@ export const CalendarService = {
         });
     },
 
+    // We can keep this or deprecate it since the agenda view might use filter
     async getUpcomingEvents(limit: number = 5) {
         const now = new Date();
         const { data, error } = await supabase
@@ -126,6 +137,33 @@ export const CalendarService = {
             .gte('end_time', now.toISOString())
             .order('start_time', { ascending: true })
             .limit(limit);
+
+        // We should probably fetch profiles here too if we want avatars in upcoming
+        if (data && data.length > 0) {
+            // Simplified fetch just for covered_by/assigned_to
+            const userIds = new Set<string>();
+            data.forEach(e => {
+                if (e.covered_by) userIds.add(e.covered_by);
+                if (e.assigned_to) userIds.add(e.assigned_to);
+                if (e.event_type === 'leave') userIds.add(e.created_by);
+            });
+
+            if (userIds.size > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, avatar_url, role')
+                    .in('id', Array.from(userIds));
+
+                if (profiles) {
+                    return data.map(event => ({
+                        ...event,
+                        covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
+                        user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
+                            profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
+                    })) as CalendarEvent[];
+                }
+            }
+        }
 
         if (error) throw error;
         return data as CalendarEvent[];
