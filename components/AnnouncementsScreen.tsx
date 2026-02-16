@@ -95,16 +95,15 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, cur
     return (
         <div className="min-h-full pb-20"> {/* Removed h-screen to allow proper scrolling in Layout */}
             <div className="px-6 pt-8 pb-4">
-                <h2 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em] mb-1">Hospital Intelligence Feed</h2>
                 <h1 className="text-2xl font-bold text-white mb-6">Announcements</h1>
 
                 {/* Categories */}
-                <div className="flex gap-2.5 overflow-x-auto pb-4 no-scrollbar mb-4">
+                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-2 -mx-6 px-6">
                     {categories.map((cat) => (
                         <button
                             key={cat}
                             onClick={() => setActiveCategory(cat)}
-                            className={`px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap border ${activeCategory === cat
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap border ${activeCategory === cat
                                 ? 'bg-primary text-white border-primary shadow-lg shadow-primary/25'
                                 : 'glass-card text-slate-400 hover:text-white hover:bg-white/5'
                                 }`}
@@ -139,7 +138,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, cur
                             <div className="absolute inset-0 bg-gradient-to-t from-[#050B14] via-[#050B14]/60 to-transparent" />
 
                             <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-8">
-                                <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border mb-3 backdrop-blur-md ${getCategoryStyle(heroAnnouncement.category)}`}>
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border mb-3 backdrop-blur-md ${getCategoryStyle(heroAnnouncement.category)}`}>
                                     {heroAnnouncement.category}
                                 </span>
                                 <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight mb-3 line-clamp-2 group-hover:text-primary transition-colors">
@@ -177,7 +176,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, cur
                                 className="group relative glass-card-enhanced rounded-2xl p-5 cursor-pointer hover:bg-white/[0.07] transition-all active:scale-[0.99]"
                             >
                                 <div className="flex justify-between items-start gap-4 mb-3">
-                                    <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
+                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
                                         {post.category}
                                     </span>
                                     <span className="text-[10px] font-medium text-slate-500">{post.date}</span>
@@ -228,12 +227,12 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ userRole, cur
             )}
 
             {/* Create FAB */}
-            {['admin', 'faculty', 'consultant'].includes(userRole) && (
+            {['admin', 'faculty', 'consultant'].includes(userRole.toLowerCase()) && (
                 <button
                     onClick={() => setShowCreateModal(true)}
-                    className="fixed bottom-24 right-6 w-14 h-14 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white shadow-xl shadow-primary/30 flex items-center justify-center transition-all z-40 hover:scale-110 active:scale-95 group"
+                    className="fixed bottom-24 right-6 w-12 h-12 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white shadow-xl shadow-primary/30 flex items-center justify-center transition-all z-40 hover:scale-110 active:scale-95 group"
                 >
-                    <span className="material-icons text-2xl group-hover:rotate-90 transition-transform duration-300">add</span>
+                    <span className="material-icons text-xl group-hover:rotate-90 transition-transform duration-300">add</span>
                 </button>
             )}
 
