@@ -13,7 +13,7 @@ const AnnouncementsScreen: React.FC = () => {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
 
-    const categories = ['All', 'Research', 'Announcement', 'Event', 'Clinical'];
+    const categories = ['All', 'Announcement', 'Research', 'Event', 'Miscellaneous'];
 
     const fetchAnnouncements = async () => {
         try {
@@ -85,11 +85,11 @@ const AnnouncementsScreen: React.FC = () => {
 
     const getCategoryStyle = (category: string) => {
         switch (category) {
-            case 'Research': return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
             case 'Announcement': return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+            case 'Research': return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
             case 'Event': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-            case 'Clinical': return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
-            default: return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+            case 'Miscellaneous': return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
+            default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
         }
     };
 

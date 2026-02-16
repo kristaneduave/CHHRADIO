@@ -10,13 +10,13 @@ interface CreateAnnouncementModalProps {
 const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [category, setCategory] = useState('Research');
+    const [category, setCategory] = useState('Announcement');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const categories = ['Research', 'Announcement', 'Event', 'Clinical'];
+    const categories = ['Announcement', 'Research', 'Event', 'Miscellaneous'];
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
