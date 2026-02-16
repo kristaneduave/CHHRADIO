@@ -211,6 +211,7 @@ const AnnouncementsScreen: React.FC = () => {
                 </button>
             )}
 
+
             {showCreateModal && (
                 <CreateAnnouncementModal
                     onClose={() => setShowCreateModal(false)}
@@ -221,6 +222,13 @@ const AnnouncementsScreen: React.FC = () => {
                     }}
                 />
             )}
+
+            {/* Debug Indicator - Remove before production */}
+            <div className="text-center mt-8 opacity-30 hover:opacity-100 transition-opacity">
+                <p className="text-[10px] text-white font-mono">
+                    Debug: Current Role = <span className="font-bold text-yellow-400">{userRole}</span>
+                </p>
+            </div>
         </div>
     );
 };
