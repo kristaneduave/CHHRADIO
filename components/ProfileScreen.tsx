@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { PROFILE_IMAGE } from '../constants';
+import { UserRole } from '../types';
+import AdminUserManagement from './AdminUserManagement';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
@@ -12,6 +14,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [profile, setProfile] = useState({
@@ -20,7 +23,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     bio: '',
     year_level: '',
     specialty: 'Radiology',
-    avatar_url: ''
+    year_level: '',
+    specialty: 'Radiology',
+    avatar_url: '',
+    role: 'resident' as UserRole
   });
   const [myCases, setMyCases] = useState<any[]>([]);
   const [loadingCases, setLoadingCases] = useState(false);
@@ -78,7 +84,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           bio: data.bio || '',
           year_level: data.year_level || '',
           specialty: 'Radiology',
-          avatar_url: data.avatar_url || ''
+          year_level: data.year_level || '',
+          specialty: 'Radiology',
+          avatar_url: data.avatar_url || '',
+          role: (data.role as UserRole) || 'resident'
         });
       }
     } catch (error: any) {
@@ -298,10 +307,27 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           </div>
         )}
 
+
+
       </div>
 
+      {/* Admin Actions */}
+      {
+        profile.role === 'admin' && (
+          <div className="mb-4">
+            <button
+              onClick={() => setShowAdminPanel(true)}
+              className="w-full py-3 bg-gradient-to-r from-rose-600/20 to-orange-600/20 border border-rose-500/30 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-rose-300 hover:text-white hover:border-rose-500/50 transition-all uppercase tracking-widest shadow-[0_0_15px_-5px_rgba(244,63,94,0.3)]"
+            >
+              <span className="material-icons text-sm">admin_panel_settings</span>
+              Admin: Manage Users
+            </button>
+          </div>
+        )
+      }
+
       {/* Actions */}
-      <div className="space-y-3 mt-8">
+      <div className="space-y-3 mt-4">
         {isEditing ? (
           <>
             <button
@@ -400,38 +426,47 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       </div>
 
       {/* Delete Confirmation Modal */}
-      {deletingId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in duration-200">
-          <div className="bg-[#0c1829] border border-white/10 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4">
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto mb-3">
-                <span className="material-icons text-rose-500 text-2xl">warning</span>
+      {
+        deletingId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in duration-200">
+            <div className="bg-[#0c1829] border border-white/10 rounded-2xl p-6 w-full max-w-xs shadow-2xl space-y-4">
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto mb-3">
+                  <span className="material-icons text-rose-500 text-2xl">warning</span>
+                </div>
+                <h3 className="text-lg font-bold text-white">Delete Case?</h3>
+                <p className="text-sm text-slate-400 mt-1">This action cannot be undone.</p>
               </div>
-              <h3 className="text-lg font-bold text-white">Delete Case?</h3>
-              <p className="text-sm text-slate-400 mt-1">This action cannot be undone.</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setDeletingId(null)}
-                className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 uppercase tracking-wider transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteCase}
-                className="w-full py-3 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold text-white uppercase tracking-wider transition-colors shadow-lg shadow-rose-900/20"
-              >
-                Delete
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setDeletingId(null)}
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteCase}
+                  className="w-full py-3 bg-rose-600 hover:bg-rose-500 rounded-xl text-xs font-bold text-white uppercase tracking-wider transition-colors shadow-lg shadow-rose-900/20"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       <p className="text-center mt-12 text-[9px] text-slate-700 font-bold uppercase tracking-[0.4em]">
         Department Portal v3.2.0
       </p>
-    </div>
+
+
+      {
+        showAdminPanel && (
+          <AdminUserManagement onClose={() => setShowAdminPanel(false)} />
+        )
+      }
+    </div >
   );
 };
 
