@@ -77,7 +77,7 @@ export interface SearchFilters {
   diagnosticCode: string;
 }
 
-export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'other';
+export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'pickleball' | 'other';
 
 export interface CalendarEvent {
   id: string;
@@ -100,6 +100,7 @@ export interface CalendarEvent {
   };
   coverage_details?: {
     user_id: string;
+    name?: string; // Manual name entry
     modalities: string[]; // Changed from modality: string
     user?: {
       full_name: string | null;
