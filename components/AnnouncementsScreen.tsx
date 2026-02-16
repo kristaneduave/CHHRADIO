@@ -45,7 +45,9 @@ const AnnouncementsScreen: React.FC = () => {
                     date: new Date(item.created_at).toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     category: item.category,
                     imageUrl: item.image_url,
-                    views: item.views || 0
+                    views: item.views || 0,
+                    attachments: item.attachments || [],
+                    externalLink: item.external_link
                 }));
                 setAnnouncements(formattedData);
             }
@@ -148,7 +150,7 @@ const AnnouncementsScreen: React.FC = () => {
                             className="group relative w-full p-6 sm:p-8 rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-[#0c1829] hover:bg-white/5 transition-colors flex flex-col"
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest border ${getCategoryStyle(heroAnnouncement.category)}`}>
                                         {heroAnnouncement.category}
                                     </span>
@@ -162,6 +164,12 @@ const AnnouncementsScreen: React.FC = () => {
                                         <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
                                             <span className="material-icons text-[10px]">attach_file</span>
                                             <span>Files</span>
+                                        </div>
+                                    )}
+                                    {heroAnnouncement.externalLink && (
+                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                            <span className="material-icons text-[10px]">link</span>
+                                            <span>Link</span>
                                         </div>
                                     )}
                                 </div>
@@ -219,7 +227,7 @@ const AnnouncementsScreen: React.FC = () => {
                                 className="group relative glass-card-enhanced rounded-2xl p-5 cursor-pointer hover:bg-white/[0.07] transition-all active:scale-[0.99]"
                             >
                                 <div className="flex justify-between items-start gap-4 mb-3">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getCategoryStyle(post.category)}`}>
                                             {post.category}
                                         </span>
@@ -231,6 +239,11 @@ const AnnouncementsScreen: React.FC = () => {
                                         {post.attachments && post.attachments.length > 0 && (
                                             <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has files">
                                                 <span className="material-icons text-[10px]">attach_file</span>
+                                            </span>
+                                        )}
+                                        {post.externalLink && (
+                                            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-white/5 border border-white/10 text-slate-400" title="Has link">
+                                                <span className="material-icons text-[10px]">link</span>
                                             </span>
                                         )}
                                     </div>

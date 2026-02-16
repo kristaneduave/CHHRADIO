@@ -39,6 +39,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showLinkInput, setShowLinkInput] = useState(false);
 
     const categories = ['Announcement', 'Research', 'Event', 'Misc'];
     const emojis = ['😊', '😂', '🔥', '👍', '🎉', '❤️', '🏥', '💊', '🩺', '🚑', '🧪', '📋', '✅', '⚠️', '📎', '📅', '📢', '👋', '🌟', '💡'];
@@ -221,7 +222,8 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         </div>
 
                         {/* Category Pills */}
-                        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar -mx-2 px-2">
+                        {/* Category Pills */}
+                        <div className="flex flex-wrap gap-2 pb-2">
                             {categories.map((cat) => (
                                 <button
                                     key={cat}
@@ -249,21 +251,45 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         </div>
 
                         {/* Link Input */}
-                        <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors">
-                            <span className="material-icons text-slate-500">link</span>
-                            <input
-                                type="url"
-                                value={externalLink}
-                                onChange={(e) => setExternalLink(e.target.value)}
-                                className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
-                                placeholder="Add an external link (https://...)"
-                            />
+                        <div>
+                            {!showLinkInput && !externalLink ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowLinkInput(true)}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-all cursor-pointer border border-blue-500/20 hover:border-blue-500/50 w-fit"
+                                >
+                                    <span className="material-icons text-sm">link</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide">Add Link</span>
+                                </button>
+                            ) : (
+                                <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3 border border-white/5 focus-within:border-white/20 transition-colors animate-in fade-in slide-in-from-left-2 duration-200">
+                                    <span className="material-icons text-slate-500">link</span>
+                                    <input
+                                        type="url"
+                                        value={externalLink}
+                                        onChange={(e) => setExternalLink(e.target.value)}
+                                        className="w-full bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
+                                        placeholder="https://..."
+                                        autoFocus
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setExternalLink('');
+                                            setShowLinkInput(false);
+                                        }}
+                                        className="text-slate-500 hover:text-white transition-colors"
+                                    >
+                                        <span className="material-icons text-sm">close</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Attachments Area */}
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attachments ({attachments.length + (existingCoverImage ? 1 : 0)}/8)</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Attachments</span>
                                 <div className="relative">
                                     <input
                                         type="file"
