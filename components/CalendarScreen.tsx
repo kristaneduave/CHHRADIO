@@ -447,14 +447,6 @@ const CalendarScreen: React.FC = () => {
               <span className="material-icons text-xl">chevron_right</span>
             </button>
           </div>
-          {/* Replaced header 'Add Event' with FAB, but keeping for desktop if needed? Or simply remove. 
-                        User asked for a "Combined button". 
-                        The FAB handles "General Add" effectively for mobile. 
-                        For Desktop, we can keep this or rely on FAB. Let's keep this on Desktop, FAB on Mobile? 
-                         Or FAB everywhere. Let's go FAB everywhere for consistency with the request "combined button". 
-                         Wait, FAB is usually bottom right. Header button is top right.
-                         Let's keep Header button for Desktop view (lg), FAB for Mobile (md and below).
-                    */}
           <button
             onClick={() => setShowAddEvent(true)}
             className="hidden lg:flex bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2"
@@ -502,6 +494,19 @@ const CalendarScreen: React.FC = () => {
               })}
             </div>
           </div>
+
+          {/* Add Event Button (Below Calendar for Mobile) */}
+          <div className="lg:hidden mt-2">
+            <button
+              onClick={() => setShowAddEvent(true)}
+              className="w-full py-3.5 bg-gradient-to-r from-slate-800 to-slate-900 border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 hover:from-slate-700 hover:to-slate-800 transition-all active:scale-[0.98]"
+            >
+              <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+                <span className="material-icons text-lg">add</span>
+              </div>
+              <span>Add Event for {selectedDate.toLocaleDateString('default', { month: 'short', day: 'numeric' })}</span>
+            </button>
+          </div>
         </div>
 
         {/* Agenda */}
@@ -516,8 +521,8 @@ const CalendarScreen: React.FC = () => {
               </span>
             </div>
 
-            {/* PADDED CONTAINER to fix Agenda overlap */}
-            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-24">
+            {/* PADDED CONTAINER to fix Agenda overlap - Increased to pb-40 */}
+            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
                   <div key={event.id} className="flex gap-3 items-center p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
@@ -568,16 +573,6 @@ const CalendarScreen: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* FLOATING ACTION BUTTON (Visible on Mobile/Tablet) */}
-      <div className="lg:hidden fixed bottom-24 right-6 z-50">
-        <button
-          onClick={() => setShowAddEvent(true)}
-          className="w-14 h-14 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white shadow-lg shadow-primary/40 flex items-center justify-center transform active:scale-90 transition-all border border-white/20"
-        >
-          <span className="material-icons text-2xl">add</span>
-        </button>
       </div>
 
       {/* Render Portal Modal */}
