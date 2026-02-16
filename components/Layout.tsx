@@ -18,10 +18,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
 
   return (
     <div className="relative min-h-screen flex flex-col bg-[#050B14] overflow-hidden">
-      {/* Background Effects */}
-      <div className="ambient-glow top-[-100px] left-[-50px]"></div>
-      <div className="ambient-glow top-[30%] right-[-150px] opacity-40"></div>
-      <div className="ambient-glow bottom-[10%] left-[-100px] opacity-30"></div>
+
 
       <main className="relative z-10 max-w-md mx-auto w-full flex-1 flex flex-col pb-24">
         {children}

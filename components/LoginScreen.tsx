@@ -51,10 +51,7 @@ const LoginScreen: React.FC = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#050B14] text-white relative overflow-hidden">
-            {/* Background Effects */}
-            <div className="absolute top-[-100px] left-[-50px] w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-            <div className="absolute top-[30%] right-[-150px] w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-            <div className="absolute bottom-[10%] left-[-100px] w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+
 
             <div className="glass-panel p-8 rounded-2xl w-full max-w-md z-10 mx-4 border border-white/10 shadow-2xl backdrop-blur-md">
                 <h2 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
