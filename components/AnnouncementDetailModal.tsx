@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import { Announcement } from '../types';
 
 interface AnnouncementDetailModalProps {
@@ -41,7 +42,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
         }
     };
 
-    return (
+    return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-6" onClick={onClose}>
             <div
                 className="w-full max-w-lg bg-[#0A121A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]"
@@ -118,7 +119,8 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 
