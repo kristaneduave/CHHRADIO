@@ -575,8 +575,6 @@ const CalendarScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Gradient Fade */}
-      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050B14] via-[#050B14]/90 to-transparent pointer-events-none z-10"></div>
 
       {/* Render Portal Modal */}
       <Modal />

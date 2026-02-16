@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Screen } from '../types';
 
@@ -24,9 +23,12 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
         {children}
       </main>
 
+      {/* Global Bottom Gradient Fade */}
+      <div className="fixed bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-[#050B14] via-[#050B14]/90 to-transparent pointer-events-none z-40"></div>
+
       {/* Navigation */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 px-6 pb-8 pt-4 pointer-events-none">
-        <div className="glass-panel rounded-2xl h-16 flex items-center justify-between px-2 mx-auto max-w-md pointer-events-auto">
+      <nav className="fixed bottom-0 left-0 w-full z-50 px-6 pb-4 pt-4 pointer-events-none">
+        <div className="glass-panel rounded-2xl h-16 flex items-center justify-between px-2 mx-auto max-w-md pointer-events-auto shadow-2xl border border-white/5">
           {navItems.map((item) => (
             <button
               key={item.screen}
