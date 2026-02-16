@@ -42,33 +42,33 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300 p-4 sm:p-6" onClick={onClose}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-6" onClick={onClose}>
             <div
-                className="w-full max-w-2xl bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 flex flex-col h-auto max-h-[80vh] sm:max-h-[90vh]"
+                className="w-full max-w-lg bg-[#0A121A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header - Compact */}
-                <div className="flex justify-between items-start p-6 border-b border-white/5 shrink-0 bg-[#0c1829] relative z-20">
+                <div className="flex justify-between items-start p-4 border-b border-white/5 shrink-0 bg-[#0F1720] relative z-20">
                     <div className="pr-8">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border mb-3 ${getCategoryBadgeStyle(announcement.category)}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border mb-2 ${getCategoryBadgeStyle(announcement.category)}`}>
                             {announcement.category}
                         </span>
-                        <h2 className="text-xl sm:text-2xl font-bold text-white leading-tight">
+                        <h2 className="text-lg font-bold text-white leading-tight">
                             {announcement.title}
                         </h2>
                     </div>
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all -mr-2 -mt-2"
+                        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all -mr-2 -mt-2"
                     >
-                        <span className="material-icons text-lg">close</span>
+                        <span className="material-icons text-sm">close</span>
                     </button>
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar relative">
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar relative">
                     {/* Author Meta - Compact */}
-                    <div className="flex items-center gap-3 mb-6">
+                    <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center border border-white/10 shadow-lg overflow-hidden shrink-0">
                             {announcement.authorAvatar ? (
                                 <img src={announcement.authorAvatar} alt={announcement.author} className="w-full h-full object-cover" />
@@ -88,11 +88,11 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
 
                     {/* Image - Inline */}
                     {announcement.imageUrl && (
-                        <div className="mb-6 relative group rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-black/20">
+                        <div className="mb-4 relative group rounded-xl overflow-hidden border border-white/10 shadow-lg bg-black/20">
                             <img
                                 src={announcement.imageUrl}
                                 alt={announcement.title}
-                                className="w-full h-auto max-h-[50vh] object-contain sm:object-cover" // Ensure it doesn't take too much vertical space on mobile but fully visible
+                                className="w-full h-auto max-h-[40vh] object-contain sm:object-cover" // Ensure it doesn't take too much vertical space on mobile but fully visible
                             />
                             <button
                                 onClick={handleDownloadImage}
@@ -111,8 +111,8 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                 </div>
 
                 {/* Footer Actions (Optional) */}
-                <div className="p-4 border-t border-white/5 bg-[#0a1424] flex justify-end shrink-0">
-                    <button className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase tracking-wider">
+                <div className="p-3 border-t border-white/5 bg-[#0F1720]/50 flex justify-end shrink-0">
+                    <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider">
                         <span className="material-icons text-sm">share</span>
                         Share Update
                     </button>
