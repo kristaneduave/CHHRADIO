@@ -8,9 +8,6 @@ const CalendarScreen: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  // We might still fetch upcoming for the "Today" default view if needed, 
-  // but let's try to derive everything from 'events' for consistency in the "Month" context
-  // actually, for "Today", upcoming is better across month boundaries.
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [staffList, setStaffList] = useState<{ id: string, full_name: string }[]>([]);
@@ -23,9 +20,12 @@ const CalendarScreen: React.FC = () => {
   const [newEventEndTime, setNewEventEndTime] = useState('10:00');
   const [newEventType, setNewEventType] = useState<EventType>('meeting');
   const [newEventDescription, setNewEventDescription] = useState('');
-  const [isAllDay, setIsAllDay] = useState(false);
+  const [isAllDay, setIsAllDay] = useState(true); // Default to True
   const [assignedTo, setAssignedTo] = useState('');
-  const [coveredBy, setCoveredBy] = useState('');
+
+  // Complex Coverage State
+  const [coverageDetails, setCoverageDetails] = useState<{ user_id: string, modality: string }[]>([]);
+  const [showCoverage, setShowCoverage] = useState(false);
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -44,8 +44,7 @@ const CalendarScreen: React.FC = () => {
       const data = await CalendarService.getEvents(start, end);
       setEvents(data);
 
-      // Still fetch upcoming mostly for the "default" state if we want it, or purely for the Today view
-      const upcoming = await CalendarService.getUpcomingEvents(10); // Fetch a bit more to populate list
+      const upcoming = await CalendarService.getUpcomingEvents(10);
       setUpcomingEvents(upcoming);
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -70,15 +69,11 @@ const CalendarScreen: React.FC = () => {
       const dateStr = selectedDate.toISOString().split('T')[0];
       setNewEventStartDate(dateStr);
       setNewEventEndDate(dateStr);
+      // Reset complex state
+      setCoverageDetails([]);
+      setShowCoverage(false);
     }
   }, [showAddEvent, selectedDate]);
-
-  // Auto-set all day for leave
-  useEffect(() => {
-    if (newEventType === 'leave') {
-      setIsAllDay(true);
-    }
-  }, [newEventType]);
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
@@ -110,10 +105,6 @@ const CalendarScreen: React.FC = () => {
   };
 
   const getAgendaEvents = () => {
-    // Logic:
-    // If Today is selected: Show global "Upcoming Events" (cross-month).
-    // If Specific Date selected: Show events starting/occurring on that date onwards (within current view).
-
     if (isSelectedDateToday()) {
       return upcomingEvents;
     }
@@ -121,14 +112,33 @@ const CalendarScreen: React.FC = () => {
     const startOfSelected = new Date(selectedDate);
     startOfSelected.setHours(0, 0, 0, 0);
 
-    // Filter events that END after the start of selected day
-    // And Sort by start time
     return events
       .filter(e => new Date(e.end_time) >= startOfSelected)
       .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
   };
 
   const agendaEvents = getAgendaEvents();
+
+  // Coverage Management
+  const addCoverage = () => {
+    if (coverageDetails.length < 5) {
+      setCoverageDetails([...coverageDetails, { user_id: '', modality: 'CT' }]);
+      setShowCoverage(true);
+    }
+  };
+
+  const removeCoverage = (index: number) => {
+    const newDetails = [...coverageDetails];
+    newDetails.splice(index, 1);
+    setCoverageDetails(newDetails);
+    if (newDetails.length === 0) setShowCoverage(false);
+  };
+
+  const updateCoverage = (index: number, field: 'user_id' | 'modality', value: string) => {
+    const newDetails = [...coverageDetails];
+    newDetails[index] = { ...newDetails[index], [field]: value };
+    setCoverageDetails(newDetails);
+  };
 
   const handleCreateEvent = async () => {
     if (!newEventTitle) return;
@@ -156,7 +166,7 @@ const CalendarScreen: React.FC = () => {
         is_all_day: isAllDay,
         location: '',
         assigned_to: assignedTo || undefined,
-        covered_by: coveredBy || undefined
+        coverage_details: coverageDetails.filter(d => d.user_id) // Only save if user selected
       });
 
       setShowAddEvent(false);
@@ -164,8 +174,8 @@ const CalendarScreen: React.FC = () => {
       setNewEventTitle('');
       setNewEventDescription('');
       setAssignedTo('');
-      setCoveredBy('');
-      setIsAllDay(false);
+      setCoverageDetails([]); // Reset coverage
+      setIsAllDay(true);
       fetchEvents();
     } catch (e) {
       console.error("Error creating event", e);
@@ -176,14 +186,28 @@ const CalendarScreen: React.FC = () => {
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
   const eventTypeStyles: Record<string, string> = {
-    rotation: 'bg-purple-500/20 text-purple-400 border-purple-500/20',
+    rotation: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20', // Meeting -> Indigo/Blue
     call: 'bg-red-500/20 text-red-400 border-red-500/20',
-    lecture: 'bg-blue-500/20 text-blue-400 border-blue-500/20',
-    exam: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
-    leave: 'bg-pink-500/20 text-pink-400 border-pink-500/20',
-    meeting: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20',
-    other: 'bg-slate-500/20 text-slate-400 border-slate-500/20',
+    lecture: 'bg-purple-500/20 text-purple-400 border-purple-500/20', // Lecture -> Purple
+    exam: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20', // Exam -> Yellow/Orange
+    leave: 'bg-pink-500/20 text-pink-400 border-pink-500/20', // Leave -> Pink/Red
+    meeting: 'bg-blue-500/20 text-blue-400 border-blue-500/20', // Custom
+    other: 'bg-slate-500/20 text-slate-400 border-slate-500/20', // Other -> Gray
   };
+
+  const eventTypeColors: Record<EventType, string> = {
+    leave: 'bg-pink-500 text-white',
+    meeting: 'bg-blue-500 text-white',
+    lecture: 'bg-purple-500 text-white',
+    exam: 'bg-yellow-500 text-white',
+    other: 'bg-slate-500 text-white',
+    rotation: 'bg-indigo-500 text-white', // Not explicitly requested but keeping for type safety
+    call: 'bg-red-500 text-white'
+  };
+
+  // Allowed types for buttons strictly as requested + keeping existing ones if needed for retro compatibility but hiding?
+  // User asked: "leave, meeting, lecture, exam, and other"
+  const allowedTypes: EventType[] = ['leave', 'meeting', 'lecture', 'exam', 'other'];
 
   return (
     <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full">
@@ -215,7 +239,7 @@ const CalendarScreen: React.FC = () => {
       </header>
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden">
-        {/* Left Column: Calendar Grid - Takes more space now */}
+        {/* Left Column: Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
           {/* Calendar Grid */}
           <div className="glass-card-enhanced rounded-2xl p-6 shadow-2xl h-full flex flex-col">
@@ -292,7 +316,7 @@ const CalendarScreen: React.FC = () => {
                           <p className="text-[11px] text-slate-500">All Day</p>
                         )}
 
-                        {/* Assigned / Coverage Info */}
+                        {/* Assigned Info */}
                         {event.user && (
                           <div className="flex items-center gap-1.5 mt-1">
                             <div className="w-4 h-4 rounded-full bg-slate-700 overflow-hidden shrink-0">
@@ -306,7 +330,20 @@ const CalendarScreen: React.FC = () => {
                           </div>
                         )}
 
-                        {event.covered_user && (
+                        {/* Coverage Info - Supports Multiplex */}
+                        {event.coverage_details && event.coverage_details.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {event.coverage_details.map((d: any, idx) => (
+                              <span key={idx} className="text-[9px] text-purple-400 bg-purple-500/10 px-1 rounded flex items-center gap-1">
+                                <span className="material-icons text-[9px] rotate-180">reply</span>
+                                {d.user?.full_name?.split(' ')[0]} ({d.modality})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Legacy Single Coverage Fallback */}
+                        {!event.coverage_details?.length && event.covered_user && (
                           <p className="text-[10px] text-purple-400 mt-0.5 flex items-center gap-1">
                             <span className="material-icons text-[10px] rotate-180">reply</span>
                             Covered by {event.covered_user.full_name?.split(' ')[0]}
@@ -338,44 +375,41 @@ const CalendarScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* Add Event Modal - Kept the same as it was good */}
+      {/* Overhauled Add Event Modal - High Z-Index to cover navigation */}
       {showAddEvent && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="glass-card-enhanced w-full max-w-lg rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-300 border border-white/10">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-white">New Event</h3>
-                <p className="text-slate-400 text-xs mt-1">Add a new schedule item to the calendar</p>
-              </div>
-              <button onClick={() => setShowAddEvent(false)} className="text-slate-500 hover:text-white transition-colors">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+          <div className="bg-[#0f172a] border border-white/10 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-hidden">
+
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setShowAddEvent(false)} className="text-slate-500 hover:text-white transition-colors p-2 -mr-2 -mt-2">
                 <span className="material-icons">close</span>
               </button>
             </div>
 
-            <div className="space-y-5 mb-8">
-              {/* Title Input */}
+            <div className="space-y-4">
+              {/* Title Input - Minimalist */}
               <div>
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Event Title</label>
                 <input
                   type="text"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
-                  placeholder="e.g., Post-duty Leave, Neuro Rotation"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
+                  placeholder="Event Title..."
+                  className="w-full bg-transparent border-b border-white/20 px-0 py-2 text-lg font-bold text-white focus:border-primary outline-none transition-all placeholder:text-slate-600 placeholder:font-normal"
+                  autoFocus
                 />
               </div>
 
-              {/* Type Selection */}
+              {/* Type Selection - Colored Pills */}
               <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">Event Type</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {['meeting', 'rotation', 'call', 'lecture', 'exam', 'leave', 'other'].map(type => (
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 block">Event Type</label>
+                <div className="flex flex-wrap gap-2">
+                  {allowedTypes.map(type => (
                     <button
                       key={type}
                       onClick={() => setNewEventType(type as EventType)}
-                      className={`px-3 py-1.5 rounded-md text-[10px] font-bold border transition-all capitalize
-                                 ${newEventType === type ? 'bg-primary text-white border-primary' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}
-                             `}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all capitalize shadow-sm
+                                                ${newEventType === type ? eventTypeColors[type] + ' shadow-[0_0_10px_rgba(255,255,255,0.2)] scale-105' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                                            `}
                     >
                       {type}
                     </button>
@@ -383,109 +417,143 @@ const CalendarScreen: React.FC = () => {
                 </div>
               </div>
 
-              {/* Time Toggle */}
-              <div className="flex items-center gap-3 py-0.5">
-                <div className={`w-8 h-5 rounded-full p-0.5 cursor-pointer transition-colors ${isAllDay ? 'bg-primary' : 'bg-slate-700'}`} onClick={() => setIsAllDay(!isAllDay)}>
-                  <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isAllDay ? 'translate-x-3' : ''}`}></div>
+              {/* Date & Time - Clean Row */}
+              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[11px] font-medium text-slate-400 flex items-center gap-1.5">
+                    <span className="material-icons text-sm">event</span> Date & Time
+                  </span>
+                  <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsAllDay(!isAllDay)}>
+                    <span className={`w-2 h-2 rounded-full ${isAllDay ? 'bg-green-500' : 'bg-slate-600'}`}></span>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">All Day</span>
+                  </div>
                 </div>
-                <span className="text-xs font-medium text-slate-300">All Day</span>
-              </div>
 
-              {/* Date & Time Grid */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">Start</label>
-                  <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-slate-500 uppercase font-bold">Starts</label>
                     <input
                       type="date"
                       value={newEventStartDate}
                       onChange={(e) => setNewEventStartDate(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
+                      className="w-full bg-slate-900/50 rounded-lg px-2 py-1.5 text-xs text-white border border-transparent focus:border-white/20 outline-none"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventTime}
                         onChange={(e) => setNewEventTime(e.target.value)}
-                        className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
+                        className="w-full bg-slate-900/50 rounded-lg px-2 py-1.5 text-xs text-white border border-transparent focus:border-white/20 outline-none mt-1"
                       />
                     )}
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">End</label>
-                  <div className="flex gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[9px] text-slate-500 uppercase font-bold">Ends</label>
                     <input
                       type="date"
                       value={newEventEndDate}
                       onChange={(e) => setNewEventEndDate(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
+                      className="w-full bg-slate-900/50 rounded-lg px-2 py-1.5 text-xs text-white border border-transparent focus:border-white/20 outline-none"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventEndTime}
                         onChange={(e) => setNewEventEndTime(e.target.value)}
-                        className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
+                        className="w-full bg-slate-900/50 rounded-lg px-2 py-1.5 text-xs text-white border border-transparent focus:border-white/20 outline-none mt-1"
                       />
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Staff Selectors - Enhanced Logic */}
-              {(newEventType === 'leave' || newEventType === 'call' || newEventType === 'rotation') && (
-                <div className="grid grid-cols-2 gap-4 animate-in slide-in-from-top-1">
+              {/* Leave Logic: Assigned To & Coverage */}
+              {(newEventType === 'leave') && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
                   <div>
-                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Assigned To</label>
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5 block">Who is on Leave?</label>
                     <select
                       value={assignedTo}
                       onChange={(e) => setAssignedTo(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                      className="w-full bg-slate-800 border-none rounded-xl px-3 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="">Select Staff...</option>
                       {staffList.map(staff => (
-                        <option key={staff.id} value={staff.id} className="bg-slate-900">{staff.full_name}</option>
+                        <option key={staff.id} value={staff.id}>{staff.full_name}</option>
                       ))}
                     </select>
                   </div>
 
-                  <div>
-                    <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Covered By (Optional)</label>
-                    <select
-                      value={coveredBy}
-                      onChange={(e) => setCoveredBy(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                  {/* Coverage Section */}
+                  <div className="bg-white/5 rounded-xl border border-white/5 p-3">
+                    <div
+                      className="flex justify-between items-center cursor-pointer mb-2"
+                      onClick={() => setShowCoverage(!showCoverage)}
                     >
-                      <option value="">No Coverage / Self</option>
-                      {staffList.map(staff => (
-                        <option key={staff.id} value={staff.id} className="bg-slate-900">{staff.full_name}</option>
-                      ))}
-                    </select>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                        <span className="material-icons text-xs">group_add</span> Coverage
+                      </span>
+                      <span className="material-icons text-slate-500 text-sm transform transition-transform duration-200" style={{ transform: showCoverage ? 'rotate(180deg)' : 'rotate(0deg)' }}>expand_more</span>
+                    </div>
+
+                    {showCoverage && (
+                      <div className="space-y-2 mt-2">
+                        {coverageDetails.map((detail, idx) => (
+                          <div key={idx} className="flex gap-2 items-center animate-in fade-in">
+                            <select
+                              value={detail.user_id}
+                              onChange={(e) => updateCoverage(idx, 'user_id', e.target.value)}
+                              className="flex-1 bg-slate-900 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none border border-white/5"
+                            >
+                              <option value="">Select Coverage...</option>
+                              {staffList.filter(s => s.id !== assignedTo).map(staff => (
+                                <option key={staff.id} value={staff.id}>{staff.full_name}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={detail.modality}
+                              onChange={(e) => updateCoverage(idx, 'modality', e.target.value)}
+                              className="w-20 bg-slate-900 rounded-lg px-2 py-1.5 text-[10px] text-white outline-none border border-white/5"
+                            >
+                              {['CT', 'MRI', 'XRay', 'IR', 'Utz', 'Admin'].map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                            <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300">
+                              <span className="material-icons text-sm">remove_circle</span>
+                            </button>
+                          </div>
+                        ))}
+
+                        {coverageDetails.length < 5 && (
+                          <button
+                            onClick={addCoverage}
+                            className="text-[10px] font-bold text-primary hover:text-primary-light flex items-center gap-1 mt-2"
+                          >
+                            <span className="material-icons text-xs">add</span> Add Coverage
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* Description */}
               <div>
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Notes / Description</label>
                 <textarea
                   value={newEventDescription}
                   onChange={(e) => setNewEventDescription(e.target.value)}
-                  rows={3}
-                  placeholder="Additional details..."
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none"
+                  rows={2}
+                  placeholder="Add notes..."
+                  className="w-full bg-transparent border-b border-white/10 px-0 py-2 text-xs text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
                 />
               </div>
             </div>
 
-            <div className="flex gap-4">
-              <button onClick={() => setShowAddEvent(false)} className="flex-1 py-3.5 text-sm font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-all">Cancel</button>
+            <div className="mt-8 pt-4 flex gap-3">
               <button
                 onClick={handleCreateEvent}
                 disabled={!newEventTitle}
-                className="flex-1 py-3.5 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                className="flex-1 py-3 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
               >
                 Save Event
               </button>

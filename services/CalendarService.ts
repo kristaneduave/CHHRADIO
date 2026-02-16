@@ -17,15 +17,19 @@ export const CalendarService = {
         const { data: events, error } = await query;
         if (error) throw error;
 
-        // Create a Set of all user IDs to fetch (both covered_by and assigned_to)
+        // Collect all user IDs to fetch (assigned_to, covered_by, and those in coverage_details)
         const userIds = new Set<string>();
         events.forEach(e => {
             if (e.covered_by) userIds.add(e.covered_by);
             if (e.assigned_to) userIds.add(e.assigned_to);
-            // Also include created_by for leave events if assigned_to is missing? 
-            // Logic in getLeaveEvents uses assigned_to OR created_by.
-            // Let's safe include created_by if type is leave
             if (e.event_type === 'leave') userIds.add(e.created_by);
+
+            // Handle coverage_details
+            if (e.coverage_details && Array.isArray(e.coverage_details)) {
+                e.coverage_details.forEach((d: any) => {
+                    if (d.user_id) userIds.add(d.user_id);
+                });
+            }
         });
 
         if (userIds.size > 0) {
@@ -35,12 +39,24 @@ export const CalendarService = {
                 .in('id', Array.from(userIds));
 
             if (!profilesError && profiles) {
-                return events.map(event => ({
-                    ...event,
-                    covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
-                    user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
-                        profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
-                })) as CalendarEvent[];
+                return events.map(event => {
+                    // Enrich coverage_details with user profiles
+                    let enrichedCoverage = event.coverage_details;
+                    if (event.coverage_details && Array.isArray(event.coverage_details)) {
+                        enrichedCoverage = event.coverage_details.map((d: any) => ({
+                            ...d,
+                            user: profiles.find(p => p.id === d.user_id)
+                        }));
+                    }
+
+                    return {
+                        ...event,
+                        covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
+                        user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
+                            profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
+                        coverage_details: enrichedCoverage
+                    }
+                }) as CalendarEvent[];
             }
         }
 
@@ -60,7 +76,7 @@ export const CalendarService = {
 
     async updateEvent(id: string, updates: Partial<CalendarEvent>) {
         // Remove covered_user from updates as it's a join field
-        const { covered_user, ...cleanUpdates } = updates;
+        const { covered_user, coverage_details, ...cleanUpdates } = updates;
 
         const { data, error } = await supabase
             .from('events')
@@ -101,16 +117,24 @@ export const CalendarService = {
         if (eventsError) throw eventsError;
         if (!events || events.length === 0) return [];
 
-        // Get unique user IDs involved (users on leave AND users covering)
-        const userIds = [...new Set([
-            ...events.map(e => e.assigned_to || e.created_by),
-            ...events.filter(e => e.covered_by).map(e => e.covered_by)
-        ])];
+        // Get unique user IDs involved
+        const userIds = new Set<string>();
+        events.forEach(e => {
+            if (e.assigned_to) userIds.add(e.assigned_to);
+            userIds.add(e.created_by);
+            if (e.covered_by) userIds.add(e.covered_by);
+
+            if (e.coverage_details && Array.isArray(e.coverage_details)) {
+                e.coverage_details.forEach((d: any) => {
+                    if (d.user_id) userIds.add(d.user_id);
+                });
+            }
+        });
 
         const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
             .select('id, full_name, role, avatar_url')
-            .in('id', userIds);
+            .in('id', Array.from(userIds));
 
         if (profilesError) throw profilesError;
 
@@ -120,10 +144,20 @@ export const CalendarService = {
             const profile = profiles?.find(p => p.id === userId);
             const coverProfile = event.covered_by ? profiles?.find(p => p.id === event.covered_by) : undefined;
 
+            // Enrich coverage_details
+            let enrichedCoverage = event.coverage_details;
+            if (event.coverage_details && Array.isArray(event.coverage_details)) {
+                enrichedCoverage = event.coverage_details.map((d: any) => ({
+                    ...d,
+                    user: profiles?.find(p => p.id === d.user_id)
+                }));
+            }
+
             return {
                 ...event,
                 user: profile,
-                covered_user: coverProfile
+                covered_user: coverProfile,
+                coverage_details: enrichedCoverage
             };
         });
     },
