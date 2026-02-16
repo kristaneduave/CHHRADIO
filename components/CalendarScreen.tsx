@@ -262,21 +262,21 @@ const CalendarScreen: React.FC = () => {
               </span>
             </div>
 
-            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2">
+            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
-                  <div key={event.id} className="flex gap-4 items-center p-3 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
+                  <div key={event.id} className="flex gap-3 items-center p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
                     {/* Date Box */}
-                    <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center border border-white/5 bg-white/5 shrink-0`}>
-                      <span className="text-[9px] font-bold text-slate-500 uppercase">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
-                      <span className="text-lg font-bold text-white">{new Date(event.start_time).getDate()}</span>
+                    <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center border border-white/5 bg-white/5 shrink-0`}>
+                      <span className="text-[8px] font-bold text-slate-500 uppercase leading-none mb-0.5">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
+                      <span className="text-base font-bold text-white leading-none">{new Date(event.start_time).getDate()}</span>
                     </div>
 
                     {/* Event Details */}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-center mb-0.5">
                         <h4 className="text-sm font-bold text-slate-200 truncate group-hover:text-primary transition-colors">{event.title}</h4>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase ml-2 whitespace-nowrap ${eventTypeStyles[event.event_type]}`}>
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase ml-2 whitespace-nowrap ${eventTypeStyles[event.event_type]}`}>
                           {event.event_type}
                         </span>
                       </div>
@@ -367,13 +367,13 @@ const CalendarScreen: React.FC = () => {
 
               {/* Type Selection */}
               <div>
-                <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Event Type</label>
-                <div className="grid grid-cols-4 gap-2">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">Event Type</label>
+                <div className="flex flex-wrap gap-1.5">
                   {['meeting', 'rotation', 'call', 'lecture', 'exam', 'leave', 'other'].map(type => (
                     <button
                       key={type}
                       onClick={() => setNewEventType(type as EventType)}
-                      className={`px-2 py-2 rounded-lg text-xs font-bold border transition-all capitalize
+                      className={`px-3 py-1.5 rounded-md text-[10px] font-bold border transition-all capitalize
                                  ${newEventType === type ? 'bg-primary text-white border-primary' : 'bg-white/5 text-slate-400 border-white/5 hover:bg-white/10'}
                              `}
                     >
@@ -384,50 +384,50 @@ const CalendarScreen: React.FC = () => {
               </div>
 
               {/* Time Toggle */}
-              <div className="flex items-center gap-3 py-1">
-                <div className={`w-10 h-6 rounded-full p-1 cursor-pointer transition-colors ${isAllDay ? 'bg-primary' : 'bg-slate-700'}`} onClick={() => setIsAllDay(!isAllDay)}>
-                  <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isAllDay ? 'translate-x-4' : ''}`}></div>
+              <div className="flex items-center gap-3 py-0.5">
+                <div className={`w-8 h-5 rounded-full p-0.5 cursor-pointer transition-colors ${isAllDay ? 'bg-primary' : 'bg-slate-700'}`} onClick={() => setIsAllDay(!isAllDay)}>
+                  <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${isAllDay ? 'translate-x-3' : ''}`}></div>
                 </div>
-                <span className="text-sm font-medium text-slate-300">All Day Event / Range</span>
+                <span className="text-xs font-medium text-slate-300">All Day</span>
               </div>
 
               {/* Date & Time Grid */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">Start</label>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">Start</label>
                   <div className="flex gap-2">
                     <input
                       type="date"
                       value={newEventStartDate}
                       onChange={(e) => setNewEventStartDate(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventTime}
                         onChange={(e) => setNewEventTime(e.target.value)}
-                        className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                        className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
                       />
                     )}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2 block">End</label>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 block">End</label>
                   <div className="flex gap-2">
                     <input
                       type="date"
                       value={newEventEndDate}
                       onChange={(e) => setNewEventEndDate(e.target.value)}
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                      className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventEndTime}
                         onChange={(e) => setNewEventEndTime(e.target.value)}
-                        className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:border-primary outline-none"
+                        className="w-20 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white focus:border-primary outline-none"
                       />
                     )}
                   </div>
