@@ -40,7 +40,9 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Upload Case', icon: 'cloud_upload', target: 'upload' },
   { label: 'Start Quiz', icon: 'quiz', target: 'quiz' },
   { label: 'Calendar', icon: 'calendar_month', target: 'calendar' },
-  { label: 'Bulletin', icon: 'forum', target: 'bulletin' }
+  { label: 'Bulletin', icon: 'forum', target: 'bulletin' },
+  { label: 'Quick Links', icon: 'link', target: 'quick-links' },
+  { label: 'Institution', icon: 'apartment', target: 'institution' }
 ];
 
 export const PROFILE_IMAGE = "https://lh3.googleusercontent.com/aida-public/AB6AXuB-x0-omqmt3sjc_U-NudpSCPInH2TI-8DgF1wcb0rj6sqDlc7i-xj2jJf_3X4KkgL602OK0aiFuI22M7U7kgSQEgT2uGZudJcFhMifhsrSe6XxvvZRhCRtsqcrkhg5ZqP1l0CQy-kd0F9W1Mq-H_RLCMQRlqHD4yfeNK9ixhw4tyKp4XvavVNz1CEJyYtpAwG8ynwEFOuPAINAQd_KqYbiqKdWRgCSAzt0mTCYiWygqryZql68elToElXDQ8jvlygZnWwi3-k";

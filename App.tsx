@@ -11,6 +11,8 @@ import ChatScreen from './components/ChatScreen';
 import BulletinScreen from './components/BulletinScreen';
 import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
+import QuickLinksScreen from './components/QuickLinksScreen';
+import InstitutionScreen from './components/InstitutionScreen';
 import { Screen } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -115,6 +117,10 @@ const App: React.FC = () => {
         );
       case 'bulletin':
         return <BulletinScreen />;
+      case 'quick-links':
+        return <QuickLinksScreen />;
+      case 'institution':
+        return <InstitutionScreen />;
       default:
         return <Dashboard onNavigate={setCurrentScreen} />;
     }
