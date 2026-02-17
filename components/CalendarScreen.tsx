@@ -291,15 +291,14 @@ const CalendarScreen: React.FC = () => {
             <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
           </div>
 
-          {/* Search Bar - New Feature */}
           <div className="flex-1 max-w-md w-full relative group">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500/50 group-focus-within:text-primary transition-colors">search</span>
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors">search</span>
             <input
               type="text"
               placeholder="Search consultant, exam..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-slate-600"
+              className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
             />
           </div>
 
@@ -327,10 +326,20 @@ const CalendarScreen: React.FC = () => {
 
         {/* Quick Filters */}
         <div className="flex gap-2 relative overflow-x-auto pb-2 scrollbar-hide">
-          {[{ id: 'all', label: 'All Events' }, { id: 'exam', label: 'Exams' }, { id: 'leave', label: 'Leaves' }, { id: 'meeting', label: 'Meetings' }].map(filter => (
+          {([
+            { id: 'all', label: 'All Events' },
+            { id: 'rotation', label: 'Rotations' },
+            { id: 'call', label: 'Calls' },
+            { id: 'exam', label: 'Exams' },
+            { id: 'lecture', label: 'Lectures' },
+            { id: 'leave', label: 'Leaves' },
+            { id: 'meeting', label: 'Meetings' },
+            { id: 'pcr', label: 'PCR' },
+            { id: 'pickleball', label: 'Pickleball' }
+          ] as { id: EventType | 'all', label: string }[]).map(filter => (
             <button
               key={filter.id}
-              onClick={() => setActiveFilter(filter.id as any)}
+              onClick={() => setActiveFilter(filter.id)}
               className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap
                     ${activeFilter === filter.id
                   ? 'bg-slate-700 text-white border-slate-600 shadow-lg'
@@ -385,7 +394,7 @@ const CalendarScreen: React.FC = () => {
           <div className="lg:hidden mt-2">
             <button
               onClick={() => setShowAddEvent(true)}
-              className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-600 border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
+              className="w-full py-3.5 bg-primary hover:bg-primary-dark border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
             >
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
                 <span className="material-icons text-lg">add</span>
