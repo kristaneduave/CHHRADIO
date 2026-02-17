@@ -299,24 +299,27 @@ const CalendarScreen: React.FC = () => {
 
             {/* Row 1 (Mobile): Nav + Add Event */}
             <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
-              <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 shrink-0">
-                <button onClick={prevMonth} className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+              {/* Navigation - Takes more space now to balance */}
+              <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 flex-1 md:flex-initial justify-between md:justify-start">
+                <button onClick={prevMonth} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
                   <span className="material-icons text-xl">chevron_left</span>
                 </button>
-                <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
+                <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide flex-1 md:flex-none text-center">
                   Today
                 </button>
-                <button onClick={nextMonth} className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                <button onClick={nextMonth} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
                   <span className="material-icons text-xl">chevron_right</span>
                 </button>
               </div>
 
+              {/* Add Event - Natural width, not overpowering */}
               <button
                 onClick={() => setShowAddEvent(true)}
-                className="flex-1 md:flex-initial bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
+                className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
+                title="Add Event"
               >
                 <span className="material-icons text-lg">add</span>
-                Add Event
+                <span className="hidden sm:inline">Add Event</span>
               </button>
             </div>
 
@@ -324,10 +327,23 @@ const CalendarScreen: React.FC = () => {
             <div className="flex items-center gap-3 w-full md:w-auto">
               {/* Filter Dropdown */}
               <div className="relative group z-50 shrink-0">
-                <button className="flex items-center gap-2 bg-[#09101d] border border-white/5 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-all text-sm font-medium justify-between min-w-[140px]">
-                  <span className="truncate">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
-                  <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
-                </button>
+                <div className="flex items-center bg-[#09101d] border border-white/5 rounded-xl transition-all hover:border-white/10">
+                  <button className="flex items-center gap-2 text-slate-300 hover:text-white px-4 py-3 text-sm font-medium min-w-[120px] justify-between">
+                    <span className="truncate max-w-[100px]">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
+                    <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
+                  </button>
+
+                  {/* Reset Filter Button */}
+                  {activeFilter !== 'all' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveFilter('all'); }}
+                      className="pr-3 pl-1 text-slate-500 hover:text-white transition-colors"
+                      title="Reset Filter"
+                    >
+                      <span className="material-icons text-sm">close</span>
+                    </button>
+                  )}
+                </div>
 
                 {/* Dropdown Menu */}
                 <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-48 md:w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left md:origin-top-right scale-95 group-hover:scale-100">
