@@ -382,7 +382,7 @@ const CalendarScreen: React.FC = () => {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-10 pr-3 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
+                  className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-10 pr-3 py-3 text-base text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
                 />
               </div>
             </div>
@@ -548,14 +548,14 @@ const CalendarScreen: React.FC = () => {
                       type="date"
                       value={newEventStartDate}
                       onChange={(e) => setNewEventStartDate(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
+                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventTime}
                         onChange={(e) => setNewEventTime(e.target.value)}
-                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
+                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
                       />
                     )}
                   </div>
@@ -565,14 +565,14 @@ const CalendarScreen: React.FC = () => {
                       type="date"
                       value={newEventEndDate}
                       onChange={(e) => setNewEventEndDate(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
+                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
                     />
                     {!isAllDay && (
                       <input
                         type="time"
                         value={newEventEndTime}
                         onChange={(e) => setNewEventEndTime(e.target.value)}
-                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
+                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
                       />
                     )}
                   </div>
@@ -593,7 +593,7 @@ const CalendarScreen: React.FC = () => {
                     value={assignedToName}
                     onChange={(e) => setAssignedToName(e.target.value)}
                     placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
-                    className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+                    className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-base md:text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
                     autoFocus // Add autoFocus to help focus
                   />
                 </div>
@@ -632,7 +632,7 @@ const CalendarScreen: React.FC = () => {
                                 value={detail.name}
                                 onChange={(e) => updateCoverageName(idx, e.target.value)}
                                 placeholder="Who is covering?"
-                                className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
+                                className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-base md:text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
                               />
 
                               <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
@@ -679,7 +679,7 @@ const CalendarScreen: React.FC = () => {
                       onChange={(e) => setNewEventDescription(e.target.value)}
                       rows={3}
                       placeholder="Add notes..."
-                      className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
+                      className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-base md:text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
                     />
                   </div>
                 </div>

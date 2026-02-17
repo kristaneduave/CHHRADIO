@@ -418,7 +418,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                     name="date"
                     value={formData.date}
                     onChange={handleInputChange}
-                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white focus:border-primary transition-all max-w-[130px]"
+                    className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-base md:text-xs text-white focus:border-primary transition-all max-w-[130px]"
                   />
                 </div>
                 <div className="relative flex-1 flex justify-end">
@@ -499,7 +499,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                             value={img.description}
                             onChange={(e) => handleImageDescriptionChange(idx, e.target.value)}
                             placeholder="Description..."
-                            className="w-full bg-black/20 border-white/10 rounded-lg px-2 py-1.5 text-[10px] text-white focus:border-primary transition-all"
+                            className="w-full bg-black/20 border-white/10 rounded-lg px-2 py-1.5 text-base md:text-[10px] text-white focus:border-primary transition-all"
                           />
                         </div>
                       ))}
@@ -515,11 +515,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-5 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
-                  <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                  <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
                 </div>
                 <div className="col-span-3 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
-                  <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                  <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
                 </div>
                 <div className="col-span-4 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1 text-center block">Sex</label>
@@ -542,7 +542,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
                   <div className="relative">
-                    <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
+                    <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
                       {MODALITIES.map(m => (
                         <option key={m} value={m} className="bg-[#0c1829] text-white">{m}</option>
                       ))}
@@ -555,7 +555,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ System</label>
                   <div className="relative">
-                    <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary appearance-none">
+                    <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
                       {ORGAN_SYSTEMS.map(os => (
                         <option key={os} value={os} className="bg-[#0c1829] text-white">{os}</option>
                       ))}
@@ -570,25 +570,25 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               {/* New Row: Clinical Data */}
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Data</label>
-                <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+                <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
               {/* Row 3: Findings */}
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Findings</label>
-                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
 
               {/* Row 4: Impression */}
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Impression</label>
-                <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all" />
+                <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
               </div>
 
               {/* Row 5: Notes / Remarks */}
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
-                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:border-primary transition-all resize-none" />
+                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
             </div>
 

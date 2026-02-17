@@ -373,7 +373,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                             }
                                         }
                                     }}
-                                    className="flex-1 bg-transparent border-none p-0 text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
+                                    className="flex-1 bg-transparent border-none p-0 text-base md:text-sm text-blue-400 placeholder-slate-600 focus:ring-0 focus:outline-none"
                                     placeholder="https://..."
                                     autoFocus
                                 />

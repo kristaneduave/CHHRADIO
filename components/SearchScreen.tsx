@@ -141,7 +141,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, initials or code..."
-            className="w-full bg-white/5 border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder-slate-600 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 transition-all text-sm"
+            className="w-full bg-white/5 border-white/10 rounded-2xl py-4 pl-12 pr-12 text-white placeholder-slate-600 focus:ring-1 focus:ring-primary/30 focus:border-primary/50 transition-all text-base md:text-sm"
           />
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -187,25 +187,25 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="space-y-1.5">
               <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">From Date</label>
-              <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary transition-all" />
+              <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all" />
             </div>
             <div className="space-y-1.5">
               <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">To Date</label>
-              <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary transition-all" />
+              <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all" />
             </div>
           </div>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Specialty</label>
-              <select name="specialty" value={filters.specialty} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:border-primary transition-all appearance-none">
+              <select name="specialty" value={filters.specialty} onChange={handleFilterChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all appearance-none">
                 <option value="">All Specialties</option>
                 {SPECIALTIES.map(s => <option key={s} value={s} className="bg-[#0c1829]">{s}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Diagnostic Code (ICD-10)</label>
-              <input type="text" name="diagnosticCode" value={filters.diagnosticCode} onChange={handleFilterChange} placeholder="e.g. G30.9" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:border-primary transition-all" />
+              <input type="text" name="diagnosticCode" value={filters.diagnosticCode} onChange={handleFilterChange} placeholder="e.g. G30.9" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white placeholder-slate-600 focus:border-primary transition-all" />
             </div>
           </div>
 
