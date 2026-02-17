@@ -172,3 +172,5 @@ const ResidentsCornerScreen: React.FC = () => {
 };
 
 
+
+export default ResidentsCornerScreen;
