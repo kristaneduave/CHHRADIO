@@ -34,6 +34,7 @@ const CalendarScreen: React.FC = () => {
 
   // Complex Coverage State - Now with NAME for manual entry
   const [coverageDetails, setCoverageDetails] = useState<{ user_id: string, name: string, modalities: string[] }[]>([]);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -112,7 +113,7 @@ const CalendarScreen: React.FC = () => {
 
   // Pre-fill dates when opening modal
   useEffect(() => {
-    if (showAddEvent) {
+    if (showAddEvent && !editingEventId) {
       const dateStr = selectedDate.toISOString().split('T')[0];
       setNewEventStartDate(dateStr);
       setNewEventEndDate(dateStr);
@@ -123,8 +124,10 @@ const CalendarScreen: React.FC = () => {
       setNewEventDescription('');
       setIsAllDay(true);
       setShowMoreOptions(false); // Reset minimalist view
+    } else if (!showAddEvent) {
+      setEditingEventId(null);
     }
-  }, [showAddEvent, selectedDate]);
+  }, [showAddEvent, selectedDate, editingEventId]);
 
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
@@ -218,10 +221,67 @@ const CalendarScreen: React.FC = () => {
     setCoverageDetails(newDetails);
   };
 
-  const handleCreateEvent = async () => {
+  const handleEditEvent = (event: CalendarEvent) => {
+    setEditingEventId(event.id);
+    setNewEventType(event.event_type);
+
+    // Handle Title / Name
+    if (event.event_type === 'leave') {
+      setAssignedToName(event.title.replace(' - Leave', ''));
+    } else {
+      setAssignedToName(event.title);
+    }
+
+    setNewEventDescription(event.description || '');
+
+    const start = new Date(event.start_time);
+    const end = new Date(event.end_time);
+
+    setIsAllDay(event.is_all_day);
+    setNewEventStartDate(start.toISOString().split('T')[0]);
+    setNewEventEndDate(end.toISOString().split('T')[0]);
+
+    if (!event.is_all_day) {
+      setNewEventTime(start.toTimeString().slice(0, 5));
+      setNewEventEndTime(end.toTimeString().slice(0, 5));
+    } else {
+      setNewEventTime('08:00');
+      setNewEventEndTime('17:00');
+    }
+
+    // Coverage
+    if (event.coverage_details && event.coverage_details.length > 0) {
+      setCoverageDetails(event.coverage_details.map((d: any) => ({
+        user_id: d.user_id || '',
+        name: d.name || d.user?.full_name || '',
+        modalities: d.modalities || []
+      })));
+      setShowMoreOptions(true);
+    } else {
+      setCoverageDetails([]);
+      setShowMoreOptions(false);
+    }
+
+    setShowAddEvent(true);
+  };
+
+  const handleDeleteEvent = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Are you sure you want to delete this event?')) {
+      try {
+        await CalendarService.deleteEvent(id);
+        fetchEvents();
+      } catch (error) {
+        console.error("Error deleting event", error);
+        alert("Failed to delete event");
+      }
+    }
+  };
+
+  const handleSaveEvent = async () => {
     let title = '';
     if (newEventType === 'leave') {
-      title = assignedToName ? `${assignedToName} - Leave` : 'Leave';
+      title = assignedToName || 'Leave'; // Removed " - Leave" suffix
     } else {
       title = `${newEventType.charAt(0).toUpperCase() + newEventType.slice(1)}`;
     }
@@ -244,7 +304,7 @@ const CalendarScreen: React.FC = () => {
         ? `On Leave: ${assignedToName}\n\n${newEventDescription}`
         : newEventDescription;
 
-      await CalendarService.createEvent({
+      const payload = {
         title: title,
         description: finalDescription,
         start_time: start.toISOString(),
@@ -253,13 +313,20 @@ const CalendarScreen: React.FC = () => {
         is_all_day: isAllDay,
         location: '',
         coverage_details: coverageDetails.filter(d => d.name.trim() !== '')
-      });
+      };
+
+      if (editingEventId) {
+        await CalendarService.updateEvent(editingEventId, payload);
+      } else {
+        await CalendarService.createEvent(payload);
+      }
 
       setShowAddEvent(false);
+      setEditingEventId(null);
       fetchEvents();
     } catch (e) {
-      console.error("Error creating event", e);
-      alert("Failed to create event");
+      console.error("Error saving event", e);
+      alert("Failed to save event");
     }
   };
 
@@ -457,7 +524,9 @@ const CalendarScreen: React.FC = () => {
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">{event.title}</h4>
+                      <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">
+                        {event.event_type === 'leave' ? event.title.replace(' - Leave', '') : event.title}
+                      </h4>
                       <p className="text-[11px] text-slate-500 font-medium">
                         {event.is_all_day ? 'All Day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
@@ -478,6 +547,24 @@ const CalendarScreen: React.FC = () => {
                     {/* Badge Style */}
                     <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${eventTypeStyles[event.event_type]}`}>
                       {event.event_type}
+                    </div>
+
+                    {/* Edit/Delete Actions - visible on group hover or if mobile */}
+                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#09101d]/90 p-1 rounded-lg backdrop-blur-sm border border-white/5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-md transition-colors"
+                        title="Edit"
+                      >
+                        <span className="material-icons text-xs">edit</span>
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteEvent(event.id, e)}
+                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-md transition-colors"
+                        title="Delete"
+                      >
+                        <span className="material-icons text-xs">delete</span>
+                      </button>
                     </div>
 
                   </div>
@@ -688,11 +775,11 @@ const CalendarScreen: React.FC = () => {
 
             <div className="pt-6 mt-2 border-t border-white/5">
               <button
-                onClick={handleCreateEvent}
+                onClick={handleSaveEvent}
                 className="w-full py-4 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
               >
                 <span className="material-icons">check</span>
-                Save Event
+                {editingEventId ? 'Update Event' : 'Save Event'}
               </button>
             </div>
           </div>

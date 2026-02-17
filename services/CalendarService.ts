@@ -76,7 +76,7 @@ export const CalendarService = {
 
     async updateEvent(id: string, updates: Partial<CalendarEvent>) {
         // Remove covered_user from updates as it's a join field
-        const { covered_user, coverage_details, ...cleanUpdates } = updates;
+        const { covered_user, user, ...cleanUpdates } = updates;
 
         const { data, error } = await supabase
             .from('events')
