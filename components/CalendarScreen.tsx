@@ -8,7 +8,7 @@ const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [activeMenuEventId, setActiveMenuEventId] = useState<string | null>(null); // For kebab menu
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null); // For click-to-expand actions
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -130,9 +130,15 @@ const CalendarScreen: React.FC = () => {
     }
   }, [showAddEvent, selectedDate, editingEventId]);
 
-  // Click outside to close menus
+  // Click outside to close expanded actions - Optional but nice
   useEffect(() => {
-    const handleClickOutside = () => setActiveMenuEventId(null);
+    const handleClickOutside = (e: MouseEvent) => {
+      // Simple logic: if click target is not inside an event card, collapse all
+      const target = e.target as HTMLElement;
+      if (!target.closest('.event-card')) {
+        setExpandedEventId(null);
+      }
+    };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
@@ -523,84 +529,76 @@ const CalendarScreen: React.FC = () => {
             <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
-                  <div key={event.id} className="flex gap-4 items-center p-4 rounded-2xl bg-[#09101d] border border-white/5 hover:border-white/10 transition-all group relative overflow-hidden">
+                  <div
+                    key={event.id}
+                    onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
+                    className={`flex flex-col p-4 rounded-2xl bg-[#09101d] border border-white/5 hover:border-white/10 transition-all cursor-pointer event-card group bg-gradient-to-br from-[#09101d] to-[#09101d] ${expandedEventId === event.id ? 'from-white/5 to-[#09101d] border-white/10 shadow-lg shadow-black/20' : ''}`}
+                  >
 
-                    {/* Boxed Date Style */}
-                    <div className="flex flex-col items-center justify-center w-12 h-12 bg-slate-800/50 rounded-xl border border-white/10 shrink-0">
-                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{new Date(event.start_time).toLocaleString('default', { month: 'short' }).toUpperCase()}</span>
-                      <span className="text-lg font-black text-white leading-none">{new Date(event.start_time).getDate()}</span>
+                    <div className="flex gap-4 items-center">
+                      {/* Boxed Date Style */}
+                      <div className="flex flex-col items-center justify-center w-12 h-12 bg-slate-800/50 rounded-xl border border-white/10 shrink-0">
+                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{new Date(event.start_time).toLocaleString('default', { month: 'short' }).toUpperCase()}</span>
+                        <span className="text-lg font-black text-white leading-none">{new Date(event.start_time).getDate()}</span>
+                      </div>
+
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">
+                          {event.event_type === 'leave' ? event.title.replace(' - Leave', '') : event.title}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 font-medium">
+                          {event.is_all_day ? 'All Day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+
+                        {/* Creator Indicator */}
+                        {event.creator && (
+                          <div className="flex items-center gap-1 mt-1.5 opacity-60">
+                            <span className="text-[10px] text-slate-500">Added by</span>
+                            {event.creator.avatar_url ? (
+                              <img src={event.creator.avatar_url} alt={event.creator.full_name || ''} className="w-3 h-3 rounded-full" />
+                            ) : (
+                              <span className="material-icons text-[10px] text-slate-500">account_circle</span>
+                            )}
+                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">{event.creator.full_name}</span>
+                          </div>
+                        )}
+
+                        {/* Coverage Pills if any */}
+                        {event.coverage_details && event.coverage_details.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {event.coverage_details.map((d: any, idx) => (
+                              <span key={idx} className="text-[9px] text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 border border-purple-500/10">
+                                <span className="material-icons text-[9px] rotate-180">reply</span>
+                                {d.name || d.user?.full_name?.split(' ')[0]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Badge Style */}
+                      <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border self-start ${eventTypeStyles[event.event_type]}`}>
+                        {event.event_type}
+                      </div>
                     </div>
 
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">
-                        {event.event_type === 'leave' ? event.title.replace(' - Leave', '') : event.title}
-                      </h4>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        {event.is_all_day ? 'All Day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-
-                      {/* Creator Indicator */}
-                      {event.creator && (
-                        <div className="flex items-center gap-1 mt-1.5 opacity-60">
-                          <span className="text-[10px] text-slate-500">Added by</span>
-                          {event.creator.avatar_url ? (
-                            <img src={event.creator.avatar_url} alt={event.creator.full_name || ''} className="w-3 h-3 rounded-full" />
-                          ) : (
-                            <span className="material-icons text-[10px] text-slate-500">account_circle</span>
-                          )}
-                          <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">{event.creator.full_name}</span>
-                        </div>
-                      )}
-
-                      {/* Coverage Pills if any */}
-                      {event.coverage_details && event.coverage_details.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {event.coverage_details.map((d: any, idx) => (
-                            <span key={idx} className="text-[9px] text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 border border-purple-500/10">
-                              <span className="material-icons text-[9px] rotate-180">reply</span>
-                              {d.name || d.user?.full_name?.split(' ')[0]}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Badge Style */}
-                    <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${eventTypeStyles[event.event_type]}`}>
-                      {event.event_type}
-                    </div>
-
-                    {/* Action Menu (Meatball) */}
-                    <div className="absolute right-2 top-2 z-20">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuEventId(activeMenuEventId === event.id ? null : event.id);
-                        }}
-                        className={`p-1 text-slate-400 hover:text-white rounded-lg transition-all ${activeMenuEventId === event.id ? 'bg-white/10 text-white' : 'hover:bg-white/5'}`}
-                      >
-                        <span className="material-icons text-lg">more_vert</span>
-                      </button>
-
-                      {/* Dropdown Menu */}
-                      {activeMenuEventId === event.id && (
-                        <div className="absolute right-0 top-full mt-1 w-32 bg-[#0f172a] border border-white/10 rounded-xl shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 z-50">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleEditEvent(event); setActiveMenuEventId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 flex items-center gap-2 transition-colors"
-                          >
-                            <span className="material-icons text-sm">edit</span> Edit
-                          </button>
-                          <div className="h-px bg-white/5 mx-2"></div>
-                          <button
-                            onClick={(e) => { handleDeleteEvent(event.id, e); setActiveMenuEventId(null); }}
-                            className="w-full text-left px-4 py-2.5 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 flex items-center gap-2 transition-colors"
-                          >
-                            <span className="material-icons text-sm">delete</span> Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    {/* EXPANDED Actions Row */}
+                    {expandedEventId === event.id && (
+                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 fade-in duration-200">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold transition-all border border-transparent hover:border-white/5"
+                        >
+                          <span className="material-icons text-sm">edit</span> Edit
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteEvent(event.id, e)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold transition-all border border-transparent hover:border-rose-500/10"
+                        >
+                          <span className="material-icons text-sm">delete</span> Delete
+                        </button>
+                      </div>
+                    )}
 
                   </div>
                 ))
