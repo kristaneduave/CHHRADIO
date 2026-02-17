@@ -286,24 +286,15 @@ const CalendarScreen: React.FC = () => {
     <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
       {/* Top Header with Search and Filter */}
       <header className="flex flex-col gap-6 mb-8">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
-          </div>
+        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
 
-          <div className="flex-1 max-w-md w-full relative group">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors">search</span>
-            <input
-              type="text"
-              placeholder="Search consultant, exam..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
-            />
-          </div>
+          {/* Title & Navigation */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-6 w-full xl:w-auto mb-2 xl:mb-0">
+            <div>
+              <h1 className="text-3xl font-bold text-white tracking-tight whitespace-nowrap">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
+            </div>
 
-          <div className="flex gap-4">
-            <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
+            <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 self-start sm:self-auto">
               <button onClick={prevMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
                 <span className="material-icons text-xl">chevron_left</span>
               </button>
@@ -314,41 +305,71 @@ const CalendarScreen: React.FC = () => {
                 <span className="material-icons text-xl">chevron_right</span>
               </button>
             </div>
+          </div>
+
+          {/* Controls: Add Event -> Search -> Filter */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full xl:w-auto">
+
+            {/* Add Event Button (Desktop) */}
             <button
               onClick={() => setShowAddEvent(true)}
-              className="hidden lg:flex bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2"
+              className="hidden md:flex bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2 whitespace-nowrap active:scale-95"
             >
               <span className="material-icons text-lg">add</span>
               Add Event
             </button>
-          </div>
-        </div>
 
-        {/* Quick Filters */}
-        <div className="flex gap-2 relative overflow-x-auto pb-2 scrollbar-hide">
-          {([
-            { id: 'all', label: 'All Events' },
-            { id: 'rotation', label: 'Rotations' },
-            { id: 'call', label: 'Calls' },
-            { id: 'exam', label: 'Exams' },
-            { id: 'lecture', label: 'Lectures' },
-            { id: 'leave', label: 'Leaves' },
-            { id: 'meeting', label: 'Meetings' },
-            { id: 'pcr', label: 'PCR' },
-            { id: 'pickleball', label: 'Pickleball' }
-          ] as { id: EventType | 'all', label: string }[]).map(filter => (
-            <button
-              key={filter.id}
-              onClick={() => setActiveFilter(filter.id)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap
-                    ${activeFilter === filter.id
-                  ? 'bg-slate-700 text-white border-slate-600 shadow-lg'
-                  : 'bg-transparent text-slate-500 border-transparent hover:bg-white/5 hover:text-slate-300'
-                }`}
-            >
-              {filter.label}
-            </button>
-          ))}
+            {/* Search Bar */}
+            <div className="flex-1 w-full md:w-64 lg:w-80 relative group">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors">search</span>
+              <input
+                type="text"
+                placeholder="Search events..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
+              />
+            </div>
+
+            {/* Filter Dropdown */}
+            <div className="relative group z-50">
+              <button className="w-full md:w-auto flex items-center gap-2 bg-[#09101d] border border-white/5 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-all text-sm font-medium justify-between min-w-[150px]">
+                <span className="truncate">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
+                <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
+              </button>
+
+              {/* Dropdown Menu */}
+              <div className="absolute right-0 top-full mt-2 w-full md:w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100">
+                <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                  {([
+                    { id: 'all', label: 'All Events' },
+                    { id: 'rotation', label: 'Rotations' },
+                    { id: 'call', label: 'Calls' },
+                    { id: 'exam', label: 'Exams' },
+                    { id: 'lecture', label: 'Lectures' },
+                    { id: 'leave', label: 'Leaves' },
+                    { id: 'meeting', label: 'Meetings' },
+                    { id: 'pcr', label: 'PCR' },
+                    { id: 'pickleball', label: 'Pickleball' }
+                  ] as { id: EventType | 'all', label: string }[]).map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setActiveFilter(filter.id)}
+                      className={`w-full text-left px-4 py-3 text-sm font-medium transition-all border-b border-white/5 last:border-0 hover:bg-white/5 flex items-center justify-between
+                            ${activeFilter === filter.id
+                          ? 'text-primary bg-primary/5'
+                          : 'text-slate-400'
+                        }`}
+                    >
+                      {filter.label}
+                      {activeFilter === filter.id && <span className="material-icons text-sm">check</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+          </div>
         </div>
       </header>
 
