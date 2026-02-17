@@ -277,214 +277,7 @@ const CalendarScreen: React.FC = () => {
   const allowedTypes: EventType[] = ['leave', 'meeting', 'lecture', 'exam', 'pickleball', 'other'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
 
-  // Using Portal for the Modal
-  const Modal = () => {
-    if (!showAddEvent) return null;
 
-    return ReactDOM.createPortal(
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-[#050B14] animate-in fade-in duration-300">
-        <div className="bg-[#0f172a] border border-white/10 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-visible flex flex-col h-auto max-h-full">
-
-          <div className="absolute top-4 right-4 z-50">
-            <button onClick={() => setShowAddEvent(false)} className="bg-white/5 hover:bg-white/10 rounded-full p-2 text-slate-400 hover:text-white transition-colors">
-              <span className="material-icons">close</span>
-            </button>
-          </div>
-
-          <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-1 pb-4">
-
-            {/* Type Selection */}
-            <div className="pt-2">
-              <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 block">Select Event Type</label>
-              <div className="flex flex-wrap gap-2">
-                {allowedTypes.map(type => (
-                  <button
-                    key={type}
-                    onClick={() => setNewEventType(type as EventType)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all capitalize shadow-sm flex-1 outline-none ring-offset-2 ring-offset-[#0f172a] focus:ring-2
-                                            ${newEventType === type ? eventTypeColors[type] + ' ring-primary/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}
-                                        `}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Date & Time */}
-            <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                  <span className="material-icons text-base text-primary">event_note</span> Date & Time
-                </span>
-
-                <button
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border ${isAllDay ? 'bg-primary/20 border-primary/50 text-white' : 'bg-slate-800 border-white/5 text-slate-500'}`}
-                  onClick={() => setIsAllDay(!isAllDay)}
-                >
-                  <div className={`w-2 h-2 rounded-full ${isAllDay ? 'bg-primary' : 'bg-slate-500'}`}></div>
-                  <span className="text-[10px] font-bold uppercase tracking-wide">All Day</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Starts</label>
-                  <input
-                    type="date"
-                    value={newEventStartDate}
-                    onChange={(e) => setNewEventStartDate(e.target.value)}
-                    className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
-                  />
-                  {!isAllDay && (
-                    <input
-                      type="time"
-                      value={newEventTime}
-                      onChange={(e) => setNewEventTime(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
-                    />
-                  )}
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Ends</label>
-                  <input
-                    type="date"
-                    value={newEventEndDate}
-                    onChange={(e) => setNewEventEndDate(e.target.value)}
-                    className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
-                  />
-                  {!isAllDay && (
-                    <input
-                      type="time"
-                      value={newEventEndTime}
-                      onChange={(e) => setNewEventEndTime(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Basic Who/Title Input always visible */}
-            <div>
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block pl-1">
-                {newEventType === 'leave' ? 'Who is on Leave?' : 'Title'}
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-sm">
-                  {newEventType === 'leave' ? 'person' : 'title'}
-                </span>
-                <input
-                  type="text"
-                  value={assignedToName}
-                  onChange={(e) => setAssignedToName(e.target.value)}
-                  placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
-                  className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-
-            {/* Toggle More Options */}
-            <button
-              onClick={() => setShowMoreOptions(!showMoreOptions)}
-              className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-colors"
-            >
-              <span className="material-icons text-sm">{showMoreOptions ? 'expand_less' : 'expand_more'}</span>
-              {showMoreOptions ? 'Hide Details' : 'More Options (Coverage, Notes)'}
-            </button>
-
-            {/* Collapsible Advanced Options */}
-            {showMoreOptions && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                {/* Coverage Logic - Only for leave */}
-                {(newEventType === 'leave') && (
-                  <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
-                    <div
-                      className="flex justify-between items-center cursor-pointer mb-3"
-                    >
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
-                      </span>
-                    </div>
-
-                    <div className="space-y-3">
-                      {coverageDetails.map((detail, idx) => (
-                        <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
-                          <div className="flex gap-2 mb-2">
-                            <input
-                              type="text"
-                              value={detail.name}
-                              onChange={(e) => updateCoverageName(idx, e.target.value)}
-                              placeholder="Who is covering?"
-                              className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
-                            />
-
-                            <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
-                              <span className="material-icons text-base">remove</span>
-                            </button>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1.5">
-                            {availableModalities.map(modality => {
-                              const isActive = detail.modalities?.includes(modality);
-                              return (
-                                <button
-                                  key={modality}
-                                  onClick={() => toggleCoverageModality(idx, modality)}
-                                  className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
-                                                                            ${isActive
-                                      ? 'bg-purple-500 text-white border-purple-500'
-                                      : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
-                                    }`}
-                                >
-                                  {modality}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      ))}
-
-                      {coverageDetails.length < 5 && (
-                        <button
-                          onClick={addCoverage}
-                          className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 text-xs font-bold hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
-                        >
-                          <span className="material-icons text-sm">add</span> Add Coverage
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <textarea
-                    value={newEventDescription}
-                    onChange={(e) => setNewEventDescription(e.target.value)}
-                    rows={3}
-                    placeholder="Add notes..."
-                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="pt-6 mt-2 border-t border-white/5">
-            <button
-              onClick={handleCreateEvent}
-              className="w-full py-4 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
-            >
-              <span className="material-icons">check</span>
-              Save Event
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    );
-  }
 
   return (
     <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
@@ -661,8 +454,212 @@ const CalendarScreen: React.FC = () => {
       </div>
 
 
-      {/* Render Portal Modal */}
-      <Modal />
+      {/* Render Portal Modal directly without nested component */}
+      {showAddEvent && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-[#050B14] animate-in fade-in duration-300">
+          <div className="bg-[#0f172a] border border-white/10 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-visible flex flex-col h-auto max-h-full">
+
+            <div className="absolute top-4 right-4 z-50">
+              <button onClick={() => setShowAddEvent(false)} className="bg-white/5 hover:bg-white/10 rounded-full p-2 text-slate-400 hover:text-white transition-colors">
+                <span className="material-icons">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-1 pb-4">
+
+              {/* Type Selection */}
+              <div className="pt-2">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 block">Select Event Type</label>
+                <div className="flex flex-wrap gap-2">
+                  {allowedTypes.map(type => (
+                    <button
+                      key={type}
+                      onClick={() => setNewEventType(type as EventType)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all capitalize shadow-sm flex-1 outline-none ring-offset-2 ring-offset-[#0f172a] focus:ring-2
+                                            ${newEventType === type ? eventTypeColors[type] + ' ring-primary/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}
+                                        `}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date & Time */}
+              <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                    <span className="material-icons text-base text-primary">event_note</span> Date & Time
+                  </span>
+
+                  <button
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border ${isAllDay ? 'bg-primary/20 border-primary/50 text-white' : 'bg-slate-800 border-white/5 text-slate-500'}`}
+                    onClick={() => setIsAllDay(!isAllDay)}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${isAllDay ? 'bg-primary' : 'bg-slate-500'}`}></div>
+                    <span className="text-[10px] font-bold uppercase tracking-wide">All Day</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Starts</label>
+                    <input
+                      type="date"
+                      value={newEventStartDate}
+                      onChange={(e) => setNewEventStartDate(e.target.value)}
+                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
+                    />
+                    {!isAllDay && (
+                      <input
+                        type="time"
+                        value={newEventTime}
+                        onChange={(e) => setNewEventTime(e.target.value)}
+                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
+                      />
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Ends</label>
+                    <input
+                      type="date"
+                      value={newEventEndDate}
+                      onChange={(e) => setNewEventEndDate(e.target.value)}
+                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
+                    />
+                    {!isAllDay && (
+                      <input
+                        type="time"
+                        value={newEventEndTime}
+                        onChange={(e) => setNewEventEndTime(e.target.value)}
+                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Basic Who/Title Input always visible */}
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block pl-1">
+                  {newEventType === 'leave' ? 'Who is on Leave?' : 'Title'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-sm">
+                    {newEventType === 'leave' ? 'person' : 'title'}
+                  </span>
+                  <input
+                    type="text"
+                    value={assignedToName}
+                    onChange={(e) => setAssignedToName(e.target.value)}
+                    placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
+                    className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+                    autoFocus // Add autoFocus to help focus
+                  />
+                </div>
+              </div>
+
+
+              {/* Toggle More Options */}
+              <button
+                onClick={() => setShowMoreOptions(!showMoreOptions)}
+                className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-colors"
+              >
+                <span className="material-icons text-sm">{showMoreOptions ? 'expand_less' : 'expand_more'}</span>
+                {showMoreOptions ? 'Hide Details' : 'More Options (Coverage, Notes)'}
+              </button>
+
+              {/* Collapsible Advanced Options */}
+              {showMoreOptions && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  {/* Coverage Logic - Only for leave */}
+                  {(newEventType === 'leave') && (
+                    <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
+                      <div
+                        className="flex justify-between items-center cursor-pointer mb-3"
+                      >
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
+                        </span>
+                      </div>
+
+                      <div className="space-y-3">
+                        {coverageDetails.map((detail, idx) => (
+                          <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
+                            <div className="flex gap-2 mb-2">
+                              <input
+                                type="text"
+                                value={detail.name}
+                                onChange={(e) => updateCoverageName(idx, e.target.value)}
+                                placeholder="Who is covering?"
+                                className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
+                              />
+
+                              <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
+                                <span className="material-icons text-base">remove</span>
+                              </button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-1.5">
+                              {availableModalities.map(modality => {
+                                const isActive = detail.modalities?.includes(modality);
+                                return (
+                                  <button
+                                    key={modality}
+                                    onClick={() => toggleCoverageModality(idx, modality)}
+                                    className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
+                                                                            ${isActive
+                                        ? 'bg-purple-500 text-white border-purple-500'
+                                        : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
+                                      }`}
+                                  >
+                                    {modality}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+
+                        {coverageDetails.length < 5 && (
+                          <button
+                            onClick={addCoverage}
+                            className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 text-xs font-bold hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
+                          >
+                            <span className="material-icons text-sm">add</span> Add Coverage
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <textarea
+                      value={newEventDescription}
+                      onChange={(e) => setNewEventDescription(e.target.value)}
+                      rows={3}
+                      placeholder="Add notes..."
+                      className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-6 mt-2 border-t border-white/5">
+              <button
+                onClick={handleCreateEvent}
+                className="w-full py-4 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-icons">check</span>
+                Save Event
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
     </div>
   );
 };
