@@ -288,51 +288,55 @@ const CalendarScreen: React.FC = () => {
       <header className="flex flex-col gap-6 mb-8">
         <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
 
-          {/* Title & Navigation */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-6 w-full xl:w-auto mb-2 xl:mb-0">
-            <div>
-              <h1 className="text-3xl font-bold text-white tracking-tight whitespace-nowrap">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
-            </div>
 
-            <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 self-start sm:self-auto">
-              <button onClick={prevMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-                <span className="material-icons text-xl">chevron_left</span>
-              </button>
-              <button onClick={() => setCurrentDate(new Date())} className="px-4 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
-                Today
-              </button>
-              <button onClick={nextMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-                <span className="material-icons text-xl">chevron_right</span>
-              </button>
-            </div>
+          {/* Title Row */}
+          <div className="w-full xl:w-auto mb-2 xl:mb-0">
+            <h1 className="text-3xl font-bold text-white tracking-tight whitespace-nowrap">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
           </div>
 
-          {/* Controls: Add Event -> Search -> Filter */}
+          {/* Controls: Compact Mobile Row (Nav + Add + Search) -> Desktop Row */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full xl:w-auto">
 
-            {/* Add Event Button (Desktop) */}
-            <button
-              onClick={() => setShowAddEvent(true)}
-              className="bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2 whitespace-nowrap active:scale-95"
-            >
-              <span className="material-icons text-lg">add</span>
-              Add Event
-            </button>
+            {/* Mobile/Tablet: Combined Toolbar Row */}
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {/* Navigation */}
+              <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 shrink-0">
+                <button onClick={prevMonth} className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                  <span className="material-icons text-xl">chevron_left</span>
+                </button>
+                <button onClick={() => setCurrentDate(new Date())} className="px-3 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
+                  Today
+                </button>
+                <button onClick={nextMonth} className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                  <span className="material-icons text-xl">chevron_right</span>
+                </button>
+              </div>
 
-            {/* Search Bar */}
-            <div className="flex-1 w-full md:w-64 lg:w-80 relative group">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors">search</span>
-              <input
-                type="text"
-                placeholder="Search events..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
-              />
+              {/* Add Event Button (Compact on Mobile, Full on Desktop) */}
+              <button
+                onClick={() => setShowAddEvent(true)}
+                className="bg-primary hover:bg-primary-dark text-white p-3 md:px-5 md:py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
+                title="Add Event"
+              >
+                <span className="material-icons text-lg">add</span>
+                <span className="hidden md:inline">Add Event</span>
+              </button>
+
+              {/* Search Bar (Flex-1 to fill remaining space) */}
+              <div className="flex-1 relative group min-w-[120px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors text-lg">search</span>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-10 pr-3 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
+                />
+              </div>
             </div>
 
-            {/* Filter Dropdown */}
-            <div className="relative group z-50">
+            {/* Filter Dropdown (Separate Row on Mobile, Inline on Desktop) */}
+            <div className="relative group z-50 w-full md:w-auto">
               <button className="w-full md:w-auto flex items-center gap-2 bg-[#09101d] border border-white/5 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-all text-sm font-medium justify-between min-w-[150px]">
                 <span className="truncate">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
                 <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
