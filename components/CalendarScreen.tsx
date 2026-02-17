@@ -50,7 +50,7 @@ const CalendarScreen: React.FC = () => {
     meeting: 'bg-blue-500 text-white border border-blue-400/30',
     lecture: 'bg-purple-500 text-white border border-purple-400/30',
     exam: 'bg-yellow-500 text-white border border-yellow-400/30',
-    pickleball: 'bg-emerald-500 text-white border border-emerald-400/30',
+
     other: 'bg-slate-600 text-white border border-slate-400/30',
     rotation: 'bg-indigo-500 text-white',
     call: 'bg-red-500 text-white',
@@ -62,7 +62,7 @@ const CalendarScreen: React.FC = () => {
     meeting: 'bg-blue-500',
     lecture: 'bg-purple-500',
     exam: 'bg-yellow-500',
-    pickleball: 'bg-emerald-500',
+
     other: 'bg-slate-500',
     rotation: 'bg-indigo-500',
     call: 'bg-red-500',
@@ -272,12 +272,12 @@ const CalendarScreen: React.FC = () => {
     exam: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
     leave: 'bg-rose-500/20 text-rose-400 border-rose-500/20', // Updated to match screenshot style
     meeting: 'bg-blue-500/20 text-blue-400 border-blue-500/20',
-    pickleball: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
+
     other: 'bg-slate-500/20 text-slate-400 border-slate-500/20',
     pcr: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/20',
   };
 
-  const allowedTypes: EventType[] = ['leave', 'meeting', 'pcr', 'lecture', 'exam', 'pickleball', 'other'];
+  const allowedTypes: EventType[] = ['leave', 'meeting', 'pcr', 'lecture', 'exam', 'other'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
 
 
@@ -482,7 +482,7 @@ const CalendarScreen: React.FC = () => {
                                             ${newEventType === type ? eventTypeColors[type] + ' ring-primary/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}
                                         `}
                     >
-                      {type}
+                      {type === 'pcr' ? 'PCR' : type}
                     </button>
                   ))}
                 </div>
