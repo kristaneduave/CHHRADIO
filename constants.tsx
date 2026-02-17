@@ -42,7 +42,15 @@ export const QUICK_ACTIONS: QuickAction[] = [
   { label: 'Calendar', icon: 'calendar_month', target: 'calendar' },
   { label: 'Announcements', icon: 'campaign', target: 'announcements' },
   { label: 'Quick Links', icon: 'link', target: 'quick-links' },
-  { label: 'Institution', icon: 'apartment', target: 'institution' }
+  { label: 'Resident\'s Corner', icon: 'school', target: 'residents-corner' }
+];
+
+export const RESIDENT_TOOLS = [
+  { name: 'Radiopaedia', url: 'https://radiopaedia.org/', icon: 'menu_book', description: 'The wiki-based collaborative radiology resource.' },
+  { name: 'e-Anatomy', url: 'https://www.imaios.com/en/e-Anatomy', icon: 'accessibility_new', description: 'Interactive atlas of human anatomy.' },
+  { name: 'StatDx', url: 'https://www.statdx.com/', icon: 'library_books', description: 'Diagnostic decision support system.' },
+  { name: 'ACR Appropriateness Criteria', url: 'https://www.acr.org/Clinical-Resources/ACR-Appropriateness-Criteria', icon: 'assignment_turned_in', description: 'Evidence-based guidelines for specific clinical conditions.' },
+  { name: 'RSNA', url: 'https://www.rsna.org/', icon: 'medical_services', description: 'Radiological Society of North America.' }
 ];
 
 export const PROFILE_IMAGE = "https://lh3.googleusercontent.com/aida-public/AB6AXuB-x0-omqmt3sjc_U-NudpSCPInH2TI-8DgF1wcb0rj6sqDlc7i-xj2jJf_3X4KkgL602OK0aiFuI22M7U7kgSQEgT2uGZudJcFhMifhsrSe6XxvvZRhCRtsqcrkhg5ZqP1l0CQy-kd0F9W1Mq-H_RLCMQRlqHD4yfeNK9ixhw4tyKp4XvavVNz1CEJyYtpAwG8ynwEFOuPAINAQd_KqYbiqKdWRgCSAzt0mTCYiWygqryZql68elToElXDQ8jvlygZnWwi3-k";
@@ -118,6 +126,8 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     summary: 'A multi-center study led by the Radiology department shows 94% accuracy using new contrast-enhanced spectral imaging protocols.',
     author: 'Dr. Sarah Vance',
     authorTitle: 'Head of Research',
+    author_id: 'u1',
+    authorAvatar: null,
     date: 'Oct 24, 2024',
     views: 1240,
     imageUrl: 'https://images.unsplash.com/photo-1559757175-5700dde675bc?auto=format&fit=crop&q=80&w=800'
@@ -129,6 +139,8 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     summary: 'The hospital is proud to announce the installation of two state-of-the-art 3T MRI units, operational starting next Monday.',
     author: 'Admin Office',
     authorTitle: 'Hospital Operations',
+    author_id: 'u2',
+    authorAvatar: null,
     date: 'Oct 22, 2024',
     views: 856
   },
@@ -139,6 +151,8 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     summary: 'Join us for a 3-day deep dive into AI integration in modern radiology. Registration is now open for all staff members.',
     author: 'CME Committee',
     authorTitle: 'Medical Education',
+    author_id: 'u3',
+    authorAvatar: null,
     date: 'Nov 12, 2024',
     views: 432,
     imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=800'
@@ -150,6 +164,8 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     summary: 'Please review the updated guidelines regarding the mandatory booster shots for clinical staff in patient-facing roles.',
     author: 'Infection Control',
     authorTitle: 'Staff Health',
+    author_id: 'u4',
+    authorAvatar: null,
     date: 'Oct 20, 2024',
     views: 3105
   }
