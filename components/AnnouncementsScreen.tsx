@@ -35,7 +35,8 @@ const AnnouncementsScreen: React.FC = () => {
                     profiles:author_id (
                         full_name,
                         avatar_url,
-                        role
+                        role,
+                        nickname
                     )
                 `)
                 .order('created_at', { ascending: false })
@@ -49,7 +50,9 @@ const AnnouncementsScreen: React.FC = () => {
                     title: item.title,
                     summary: item.content.length > 200 ? item.content.substring(0, 200) + '...' : item.content,
                     content: item.content,
-                    author: item.profiles?.full_name || 'Hospital Staff',
+                    author: item.profiles?.nickname || item.profiles?.full_name || 'Hospital Staff',
+                    authorFullName: item.profiles?.full_name || 'Hospital Staff',
+                    authorNickname: item.profiles?.nickname,
                     author_id: item.author_id,
                     authorAvatar: item.profiles?.avatar_url,
                     authorTitle: item.profiles?.role ? item.profiles.role.charAt(0).toUpperCase() + item.profiles.role.slice(1) : 'Staff',

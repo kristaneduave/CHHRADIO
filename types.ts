@@ -148,8 +148,11 @@ export interface Announcement {
   summary: string; // We can keep summary or rename to content, plan says content but keeping summary for now to match interface till full refactor
   content?: string; // Adding content field for full text
   author: string;
-  author_id?: string; // Added for RBAC ownership checks
+  author_id: string;
+  authorAvatar: string | null;
   authorTitle: string;
+  authorNickname?: string | null; // Added
+  authorFullName?: string | null; // Added
   date: string;
   category: 'Research' | 'Announcement' | 'Event' | 'Misc' | 'Clinical';
   imageUrl?: string;

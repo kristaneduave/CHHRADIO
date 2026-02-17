@@ -11,7 +11,7 @@ interface AnnouncementDetailModalProps {
 const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ announcement, onClose }) => {
     if (!announcement) return null;
 
-    const [viewers, setViewers] = useState<{ avatar_url: string | null; full_name: string | null }[]>([]);
+    const [viewers, setViewers] = useState<{ avatar_url: string | null; full_name: string | null; nickname?: string | null }[]>([]);
 
     useEffect(() => {
         if (!announcement) return;
@@ -47,7 +47,8 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                     user_id,
                     profiles:user_id (
                         avatar_url,
-                        full_name
+                        full_name,
+                        nickname
                     )
                 `)
                 .eq('announcement_id', announcement.id)
@@ -56,7 +57,8 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
             if (data) {
                 const uniqueViewers = data.map((item: any) => ({
                     avatar_url: item.profiles?.avatar_url,
-                    full_name: item.profiles?.full_name
+                    full_name: item.profiles?.full_name,
+                    nickname: item.profiles?.nickname
                 }));
                 setViewers(uniqueViewers);
             }
@@ -140,7 +142,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                             )}
                         </div>
                         <div>
-                            <p className="text-sm font-bold text-white">{announcement.author}</p>
+                            <p className="text-sm font-bold text-white">{announcement.authorFullName || announcement.author}</p>
                             <p className="text-[10px] text-slate-500 font-medium flex items-center gap-2">
                                 {announcement.authorTitle || 'Hospital Staff'}
                                 <span className="w-1 h-1 rounded-full bg-slate-600" />
@@ -261,11 +263,11 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                             <div className="flex items-center mr-3">
                                 <div className="flex -space-x-2 overflow-hidden">
                                     {viewers.slice(0, 5).map((viewer, i) => (
-                                        <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-[#0F1720] bg-slate-700 flex items-center justify-center overflow-hidden" title={viewer.full_name || 'User'}>
+                                        <div key={i} className="inline-block h-6 w-6 rounded-full ring-2 ring-[#0F1720] bg-slate-700 flex items-center justify-center overflow-hidden" title={viewer.nickname || viewer.full_name || 'User'}>
                                             {viewer.avatar_url ? (
                                                 <img src={viewer.avatar_url} alt="Viewer" className="w-full h-full object-cover" />
                                             ) : (
-                                                <span className="text-[8px] text-white font-bold">{viewer.full_name?.charAt(0) || 'U'}</span>
+                                                <span className="text-[8px] text-white font-bold">{(viewer.nickname || viewer.full_name || 'U').charAt(0)}</span>
                                             )}
                                         </div>
                                     ))}
