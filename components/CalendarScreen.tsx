@@ -12,7 +12,15 @@ const CalendarScreen: React.FC = () => {
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Search & Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<EventType | 'all'>('all');
+  const [searchResults, setSearchResults] = useState<CalendarEvent[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   // Form state
+  // Form state - Minimalist by default
+  const [showMoreOptions, setShowMoreOptions] = useState(false); // Toggle for advanced fields
   const [newEventStartDate, setNewEventStartDate] = useState('');
   const [newEventEndDate, setNewEventEndDate] = useState('');
   const [newEventTime, setNewEventTime] = useState('08:00');
@@ -80,6 +88,26 @@ const CalendarScreen: React.FC = () => {
     fetchEvents();
   }, [currentDate]);
 
+  useEffect(() => {
+    // Debounce search
+    const timer = setTimeout(async () => {
+      if (searchQuery.trim().length > 1) {
+        setIsSearching(true);
+        try {
+          const results = await CalendarService.searchEvents(searchQuery);
+          setSearchResults(results);
+        } catch (error) {
+          console.error("Search error", error);
+        } finally {
+          setIsSearching(false);
+        }
+      } else {
+        setSearchResults([]);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
   // Pre-fill dates when opening modal
   useEffect(() => {
     if (showAddEvent) {
@@ -92,6 +120,7 @@ const CalendarScreen: React.FC = () => {
       setAssignedToName('');
       setNewEventDescription('');
       setIsAllDay(true);
+      setShowMoreOptions(false); // Reset minimalist view
     }
   }, [showAddEvent, selectedDate]);
 
@@ -115,7 +144,7 @@ const CalendarScreen: React.FC = () => {
   };
 
   // Updated: Get unique event types for a day to show dots
-  const getEventTypesForDay = (day: number) => {
+  const getEventTypesForDay = (day: number): EventType[] => {
     const targetStart = new Date(year, month, day, 0, 0, 0);
     const targetEnd = new Date(year, month, day, 23, 59, 59);
 
@@ -125,22 +154,33 @@ const CalendarScreen: React.FC = () => {
       return eStart <= targetEnd && eEnd >= targetStart;
     });
 
-    const types = Array.from(new Set(dayEvents.map(e => e.event_type)));
+    const types = Array.from(new Set(dayEvents.map(e => e.event_type))) as EventType[];
     // Sort to ensure consistency (e.g. Leave always first if present?)
     return types.slice(0, 3); // Max 3 dots
   };
 
   const getAgendaEvents = () => {
-    if (isSelectedDateToday()) {
-      return upcomingEvents;
+    // If active filter is set to something other than 'all', filter everything by that type
+    // If search query is present, return search results matching type if any
+
+    let baseEvents = [];
+
+    if (searchQuery.length > 1) {
+      baseEvents = searchResults;
+    } else if (isSelectedDateToday()) {
+      baseEvents = upcomingEvents;
+    } else {
+      const startOfSelected = new Date(selectedDate);
+      startOfSelected.setHours(0, 0, 0, 0);
+      baseEvents = events.filter(e => new Date(e.end_time) >= startOfSelected)
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     }
 
-    const startOfSelected = new Date(selectedDate);
-    startOfSelected.setHours(0, 0, 0, 0);
+    if (activeFilter !== 'all') {
+      baseEvents = baseEvents.filter(e => e.event_type === activeFilter);
+    }
 
-    return events
-      .filter(e => new Date(e.end_time) >= startOfSelected)
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return baseEvents;
   };
 
   const agendaEvents = getAgendaEvents();
@@ -228,7 +268,7 @@ const CalendarScreen: React.FC = () => {
     call: 'bg-red-500/20 text-red-400 border-red-500/20',
     lecture: 'bg-purple-500/20 text-purple-400 border-purple-500/20',
     exam: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20',
-    leave: 'bg-pink-500/20 text-pink-400 border-pink-500/20',
+    leave: 'bg-rose-500/20 text-rose-400 border-rose-500/20', // Updated to match screenshot style
     meeting: 'bg-blue-500/20 text-blue-400 border-blue-500/20',
     pickleball: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
     other: 'bg-slate-500/20 text-slate-400 border-slate-500/20',
@@ -325,92 +365,110 @@ const CalendarScreen: React.FC = () => {
               </div>
             </div>
 
-            {/* Leave Logic */}
-            {(newEventType === 'leave') && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            {/* Basic Who/Title Input always visible */}
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block pl-1">
+                {newEventType === 'leave' ? 'Who is on Leave?' : 'Title'}
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-sm">
+                  {newEventType === 'leave' ? 'person' : 'title'}
+                </span>
+                <input
+                  type="text"
+                  value={assignedToName}
+                  onChange={(e) => setAssignedToName(e.target.value)}
+                  placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
+                  className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+                />
+              </div>
+            </div>
+
+
+            {/* Toggle More Options */}
+            <button
+              onClick={() => setShowMoreOptions(!showMoreOptions)}
+              className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-colors"
+            >
+              <span className="material-icons text-sm">{showMoreOptions ? 'expand_less' : 'expand_more'}</span>
+              {showMoreOptions ? 'Hide Details' : 'More Options (Coverage, Notes)'}
+            </button>
+
+            {/* Collapsible Advanced Options */}
+            {showMoreOptions && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                {/* Coverage Logic - Only for leave */}
+                {(newEventType === 'leave') && (
+                  <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
+                    <div
+                      className="flex justify-between items-center cursor-pointer mb-3"
+                    >
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {coverageDetails.map((detail, idx) => (
+                        <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
+                          <div className="flex gap-2 mb-2">
+                            <input
+                              type="text"
+                              value={detail.name}
+                              onChange={(e) => updateCoverageName(idx, e.target.value)}
+                              placeholder="Who is covering?"
+                              className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
+                            />
+
+                            <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
+                              <span className="material-icons text-base">remove</span>
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5">
+                            {availableModalities.map(modality => {
+                              const isActive = detail.modalities?.includes(modality);
+                              return (
+                                <button
+                                  key={modality}
+                                  onClick={() => toggleCoverageModality(idx, modality)}
+                                  className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
+                                                                            ${isActive
+                                      ? 'bg-purple-500 text-white border-purple-500'
+                                      : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
+                                    }`}
+                                >
+                                  {modality}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      {coverageDetails.length < 5 && (
+                        <button
+                          onClick={addCoverage}
+                          className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 text-xs font-bold hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
+                        >
+                          <span className="material-icons text-sm">add</span> Add Coverage
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block pl-1">Who is on Leave?</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-sm">person</span>
-                    <input
-                      type="text"
-                      value={assignedToName}
-                      onChange={(e) => setAssignedToName(e.target.value)}
-                      placeholder="Enter name (e.g., Dr. Reyes)"
-                      className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
-                  <div
-                    className="flex justify-between items-center cursor-pointer mb-3"
-                  >
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
-                    </span>
-                  </div>
-
-                  <div className="space-y-3">
-                    {coverageDetails.map((detail, idx) => (
-                      <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
-                        <div className="flex gap-2 mb-2">
-                          <input
-                            type="text"
-                            value={detail.name}
-                            onChange={(e) => updateCoverageName(idx, e.target.value)}
-                            placeholder="Who is covering? (e.g. Dr. Smith)"
-                            className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
-                          />
-
-                          <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
-                            <span className="material-icons text-base">remove</span>
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5">
-                          {availableModalities.map(modality => {
-                            const isActive = detail.modalities?.includes(modality);
-                            return (
-                              <button
-                                key={modality}
-                                onClick={() => toggleCoverageModality(idx, modality)}
-                                className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
-                                                                    ${isActive
-                                    ? 'bg-purple-500 text-white border-purple-500'
-                                    : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
-                                  }`}
-                              >
-                                {modality}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    ))}
-
-                    {coverageDetails.length < 5 && (
-                      <button
-                        onClick={addCoverage}
-                        className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 text-xs font-bold hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
-                      >
-                        <span className="material-icons text-sm">add</span> Add Coverage
-                      </button>
-                    )}
-                  </div>
+                  <textarea
+                    value={newEventDescription}
+                    onChange={(e) => setNewEventDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Add notes..."
+                    className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
+                  />
                 </div>
               </div>
             )}
-
-            <div>
-              <textarea
-                value={newEventDescription}
-                onChange={(e) => setNewEventDescription(e.target.value)}
-                rows={3}
-                placeholder="Add notes..."
-                className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
-              />
-            </div>
           </div>
 
           <div className="pt-6 mt-2 border-t border-white/5">
@@ -430,30 +488,62 @@ const CalendarScreen: React.FC = () => {
 
   return (
     <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
-      {/* Top Header */}
-      <header className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
-        </div>
-        <div className="flex gap-4">
-          <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
-            <button onClick={prevMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-              <span className="material-icons text-xl">chevron_left</span>
-            </button>
-            <button onClick={() => setCurrentDate(new Date())} className="px-4 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
-              Today
-            </button>
-            <button onClick={nextMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-              <span className="material-icons text-xl">chevron_right</span>
+      {/* Top Header with Search and Filter */}
+      <header className="flex flex-col gap-6 mb-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
+          </div>
+
+          {/* Search Bar - New Feature */}
+          <div className="flex-1 max-w-md w-full relative group">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 material-icons text-slate-500/50 group-focus-within:text-primary transition-colors">search</span>
+            <input
+              type="text"
+              placeholder="Search consultant, exam..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white/5 border border-white/5 rounded-2xl pl-12 pr-4 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-primary/50 focus:ring-4 focus:ring-primary/10 outline-none transition-all placeholder:text-slate-600"
+            />
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex bg-white/5 rounded-xl p-1 border border-white/10">
+              <button onClick={prevMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                <span className="material-icons text-xl">chevron_left</span>
+              </button>
+              <button onClick={() => setCurrentDate(new Date())} className="px-4 py-1.5 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide">
+                Today
+              </button>
+              <button onClick={nextMonth} className="px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                <span className="material-icons text-xl">chevron_right</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setShowAddEvent(true)}
+              className="hidden lg:flex bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2"
+            >
+              <span className="material-icons text-lg">add</span>
+              Add Event
             </button>
           </div>
-          <button
-            onClick={() => setShowAddEvent(true)}
-            className="hidden lg:flex bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2"
-          >
-            <span className="material-icons text-lg">add</span>
-            Add Event
-          </button>
+        </div>
+
+        {/* Quick Filters */}
+        <div className="flex gap-2 relative overflow-x-auto pb-2 scrollbar-hide">
+          {[{ id: 'all', label: 'All Events' }, { id: 'exam', label: 'Exams' }, { id: 'leave', label: 'Leaves' }, { id: 'meeting', label: 'Meetings' }].map(filter => (
+            <button
+              key={filter.id}
+              onClick={() => setActiveFilter(filter.id as any)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap
+                    ${activeFilter === filter.id
+                  ? 'bg-slate-700 text-white border-slate-600 shadow-lg'
+                  : 'bg-transparent text-slate-500 border-transparent hover:bg-white/5 hover:text-slate-300'
+                }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
       </header>
 
@@ -517,7 +607,7 @@ const CalendarScreen: React.FC = () => {
                 <span className="material-icons text-sm">view_agenda</span> Agenda
               </h3>
               <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-slate-400 border border-white/5">
-                {isSelectedDateToday() ? 'Upcoming' : `From ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
+                {searchQuery ? `Searching "${searchQuery}"` : isSelectedDateToday() ? 'Upcoming' : `For ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
               </span>
             </div>
 
@@ -525,43 +615,38 @@ const CalendarScreen: React.FC = () => {
             <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
-                  <div key={event.id} className="flex gap-3 items-center p-2 rounded-lg hover:bg-white/5 transition-colors border border-transparent hover:border-white/5 group">
-                    <div className={`w-10 h-10 rounded-lg flex flex-col items-center justify-center border border-white/5 bg-white/5 shrink-0`}>
-                      <span className="text-[8px] font-bold text-slate-500 uppercase leading-none mb-0.5">{new Date(event.start_time).toLocaleString('default', { month: 'short' })}</span>
-                      <span className="text-base font-bold text-white leading-none">{new Date(event.start_time).getDate()}</span>
+                  <div key={event.id} className="flex gap-4 items-center p-4 rounded-2xl bg-[#09101d] border border-white/5 hover:border-white/10 transition-all group relative overflow-hidden">
+
+                    {/* Boxed Date Style */}
+                    <div className="flex flex-col items-center justify-center w-12 h-12 bg-slate-800/50 rounded-xl border border-white/10 shrink-0">
+                      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{new Date(event.start_time).toLocaleString('default', { month: 'short' }).toUpperCase()}</span>
+                      <span className="text-lg font-black text-white leading-none">{new Date(event.start_time).getDate()}</span>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-center mb-0.5">
-                        <h4 className="text-sm font-bold text-slate-200 truncate group-hover:text-primary transition-colors">{event.title}</h4>
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase ml-2 whitespace-nowrap ${eventTypeStyles[event.event_type]}`}>
-                          {event.event_type}
-                        </span>
-                      </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">{event.title}</h4>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {event.is_all_day ? 'All Day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
 
-                      <div className="flex flex-col gap-0.5">
-                        {!event.is_all_day ? (
-                          <p className="text-[11px] text-slate-500 flex items-center gap-1">
-                            <span className="material-icons text-[10px]">schedule</span>
-                            {new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        ) : (
-                          <p className="text-[11px] text-slate-500">All Day</p>
-                        )}
-
-                        {event.coverage_details && event.coverage_details.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {event.coverage_details.map((d: any, idx) => (
-                              <span key={idx} className="text-[9px] text-purple-400 bg-purple-500/10 px-1 rounded flex items-center gap-1">
-                                <span className="material-icons text-[9px] rotate-180">reply</span>
-                                {d.name || d.user?.full_name?.split(' ')[0]}
-                                {d.modalities && d.modalities.length > 0 && ` (${d.modalities.join(', ')})`}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      {/* Coverage Pills if any */}
+                      {event.coverage_details && event.coverage_details.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {event.coverage_details.map((d: any, idx) => (
+                            <span key={idx} className="text-[9px] text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 border border-purple-500/10">
+                              <span className="material-icons text-[9px] rotate-180">reply</span>
+                              {d.name || d.user?.full_name?.split(' ')[0]}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
+
+                    {/* Badge Style */}
+                    <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${eventTypeStyles[event.event_type]}`}>
+                      {event.event_type}
+                    </div>
+
                   </div>
                 ))
               ) : (

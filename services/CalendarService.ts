@@ -201,5 +201,81 @@ export const CalendarService = {
 
         if (error) throw error;
         return data as CalendarEvent[];
+    },
+
+    async searchEvents(query: string) {
+        if (!query) return [];
+
+        // 1. Find users matching the query
+        const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url, role')
+            .ilike('full_name', `%${query}%`);
+
+        if (profileError) throw profileError;
+
+        let userIds: string[] = [];
+        if (profiles) {
+            userIds = profiles.map(p => p.id);
+        }
+
+        // 2. Find events where:
+        //    - Title matches query OR
+        //    - Description matches query OR
+        //    - Assigned_to is in userIds OR
+        //    - Created_by is in userIds (for leaves)
+
+        let eventQuery = supabase
+            .from('events')
+            .select('*')
+            .gte('end_time', new Date().toISOString()) // Only future events? Or all? Let's say all future for now as user asked for "dates where that consultant WOULD BE on leave"
+            .order('start_time', { ascending: true });
+
+        // Currently Supabase JS client doesn't support complex ORs easily with joined tables in one go without raw SQL or multiple queries.
+        // We will fetch based on text match OR user match.
+
+        // Simple text match on event fields
+        const textConditions = `title.ilike.%${query}%,description.ilike.%${query}%`;
+
+        // If we found users, add their IDs to the OR condition
+        let orCondition = textConditions;
+        if (userIds.length > 0) {
+            // assigned_to.in.(${userIds}),created_by.in.(${userIds})
+            // proper syntax for .or() is `column.operator.value,column.operator.value`
+            const userConditions = `assigned_to.in.(${userIds.join(',')}),created_by.in.(${userIds.join(',')})`;
+            orCondition = `${textConditions},${userConditions}`;
+        }
+
+        const { data: events, error: eventError } = await eventQuery.or(orCondition);
+
+        if (eventError) throw eventError;
+
+        // 3. hydration (profiles)
+        // We might need to fetch MORE profiles if the events returned involve users NOT in our initial `profiles` search
+        // For simplicity, let's just re-fetch all needed profiles for the result set.
+        const allUserIds = new Set<string>();
+        events?.forEach(e => {
+            if (e.covered_by) allUserIds.add(e.covered_by);
+            if (e.assigned_to) allUserIds.add(e.assigned_to);
+            if (e.created_by) allUserIds.add(e.created_by);
+        });
+
+        if (allUserIds.size > 0) {
+            const { data: allProfiles } = await supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url, role')
+                .in('id', Array.from(allUserIds));
+
+            if (allProfiles) {
+                return events?.map(event => ({
+                    ...event,
+                    covered_user: event.covered_by ? allProfiles.find(p => p.id === event.covered_by) : undefined,
+                    user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
+                        allProfiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
+                })) as CalendarEvent[];
+            }
+        }
+
+        return events as CalendarEvent[];
     }
 };
