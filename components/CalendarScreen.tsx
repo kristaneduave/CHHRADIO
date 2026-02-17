@@ -53,7 +53,8 @@ const CalendarScreen: React.FC = () => {
     pickleball: 'bg-emerald-500 text-white border border-emerald-400/30',
     other: 'bg-slate-600 text-white border border-slate-400/30',
     rotation: 'bg-indigo-500 text-white',
-    call: 'bg-red-500 text-white'
+    call: 'bg-red-500 text-white',
+    pcr: 'bg-cyan-500 text-white border border-cyan-400/30'
   };
 
   const eventDotColors: Record<EventType, string> = {
@@ -64,7 +65,8 @@ const CalendarScreen: React.FC = () => {
     pickleball: 'bg-emerald-500',
     other: 'bg-slate-500',
     rotation: 'bg-indigo-500',
-    call: 'bg-red-500'
+    call: 'bg-red-500',
+    pcr: 'bg-cyan-500'
   };
 
   const fetchEvents = async () => {
@@ -272,9 +274,10 @@ const CalendarScreen: React.FC = () => {
     meeting: 'bg-blue-500/20 text-blue-400 border-blue-500/20',
     pickleball: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20',
     other: 'bg-slate-500/20 text-slate-400 border-slate-500/20',
+    pcr: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/20',
   };
 
-  const allowedTypes: EventType[] = ['leave', 'meeting', 'lecture', 'exam', 'pickleball', 'other'];
+  const allowedTypes: EventType[] = ['leave', 'meeting', 'pcr', 'lecture', 'exam', 'pickleball', 'other'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
 
 
