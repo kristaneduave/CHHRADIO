@@ -93,14 +93,17 @@ export interface CalendarEvent {
   covered_user?: {
     full_name: string | null;
     avatar_url: string | null;
+    nickname?: string | null; // Added nickname
   };
   user?: {
     full_name: string | null;
     avatar_url: string | null;
+    nickname?: string | null;
   };
   creator?: {
     full_name: string | null;
     avatar_url: string | null;
+    nickname?: string | null;
   };
   coverage_details?: {
     user_id: string;
@@ -109,6 +112,7 @@ export interface CalendarEvent {
     user?: {
       full_name: string | null;
       avatar_url: string | null;
+      nickname?: string | null;
     };
   }[];
   is_all_day: boolean;
@@ -119,8 +123,6 @@ export interface CalendarEvent {
   date?: string;
   type?: EventType; // mapped to event_type
 }
-
-
 
 // ... existing types ...
 
@@ -134,6 +136,7 @@ export interface Profile {
   year_level: string | null;
   avatar_url: string | null;
   role: UserRole; // Added role field
+  nickname?: string | null;
   updated_at: string;
 }
 

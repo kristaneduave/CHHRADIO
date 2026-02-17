@@ -22,7 +22,7 @@ export const CalendarService = {
         events.forEach(e => {
             if (e.covered_by) userIds.add(e.covered_by);
             if (e.assigned_to) userIds.add(e.assigned_to);
-            if (e.assigned_to) userIds.add(e.assigned_to);
+
             // Always fetch creator
             if (e.created_by) userIds.add(e.created_by);
 
@@ -37,7 +37,7 @@ export const CalendarService = {
         if (userIds.size > 0) {
             const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url, role')
+                .select('id, full_name, avatar_url, role, nickname')
                 .in('id', Array.from(userIds));
 
             if (!profilesError && profiles) {
@@ -67,9 +67,11 @@ export const CalendarService = {
     },
 
     async createEvent(event: Omit<CalendarEvent, 'id' | 'created_at' | 'created_by' | 'covered_user'>) {
+        const { data: { user } } = await supabase.auth.getUser();
+
         const { data, error } = await supabase
             .from('events')
-            .insert([event])
+            .insert([{ ...event, created_by: user?.id }])
             .select()
             .single();
 
@@ -136,7 +138,7 @@ export const CalendarService = {
 
         const { data: profiles, error: profilesError } = await supabase
             .from('profiles')
-            .select('id, full_name, role, avatar_url')
+            .select('id, full_name, role, avatar_url, nickname')
             .in('id', Array.from(userIds));
 
         if (profilesError) throw profilesError;
@@ -191,7 +193,7 @@ export const CalendarService = {
             if (userIds.size > 0) {
                 const { data: profiles } = await supabase
                     .from('profiles')
-                    .select('id, full_name, avatar_url, role')
+                    .select('id, full_name, avatar_url, role, nickname')
                     .in('id', Array.from(userIds));
 
                 if (profiles) {
@@ -215,7 +217,7 @@ export const CalendarService = {
         // 1. Find users matching the query
         const { data: profiles, error: profileError } = await supabase
             .from('profiles')
-            .select('id, full_name, avatar_url, role')
+            .select('id, full_name, avatar_url, role, nickname')
             .ilike('full_name', `%${query}%`);
 
         if (profileError) throw profileError;
@@ -271,7 +273,7 @@ export const CalendarService = {
         if (allUserIds.size > 0) {
             const { data: allProfiles } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url, role')
+                .select('id, full_name, avatar_url, role, nickname')
                 .in('id', Array.from(allUserIds));
 
             if (allProfiles) {

@@ -559,7 +559,9 @@ const CalendarScreen: React.FC = () => {
                             ) : (
                               <span className="material-icons text-[10px] text-slate-500">account_circle</span>
                             )}
-                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">{event.creator.full_name}</span>
+                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">
+                              {event.creator.nickname || event.creator.full_name}
+                            </span>
                           </div>
                         )}
 

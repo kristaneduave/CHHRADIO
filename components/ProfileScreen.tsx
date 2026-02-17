@@ -25,7 +25,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     specialty: 'Radiology',
 
     avatar_url: '',
-    role: 'resident' as UserRole
+    role: 'resident' as UserRole,
+    nickname: '' // Added nickname
   });
   const [myCases, setMyCases] = useState<any[]>([]);
   const [loadingCases, setLoadingCases] = useState(false);
@@ -86,7 +87,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           specialty: 'Radiology',
 
           avatar_url: data.avatar_url || '',
-          role: (data.role as UserRole) || 'resident'
+          role: (data.role as UserRole) || 'resident',
+          nickname: data.nickname || ''
         });
       }
     } catch (error: any) {
@@ -108,9 +110,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         id: user.id,
         full_name: profile.full_name,
         username: profile.username,
+        nickname: profile.nickname, // Added nickname
         bio: profile.bio,
         year_level: profile.year_level,
         avatar_url: avatarUrl || profile.avatar_url,
+        role: profile.role, // FIX: Ensure role is included to satisfy constraint
         updated_at: new Date().toISOString(),
       };
 
@@ -264,6 +268,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
                 onChange={handleChange}
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
                 placeholder="Dr. Alex Smith"
+              />
+            </div>
+            <div>
+              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nickname (Optional)</label>
+              <input
+                name="nickname"
+                value={profile.nickname || ''}
+                onChange={handleChange}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
+                placeholder="e.g. Alex"
               />
             </div>
             <div>
