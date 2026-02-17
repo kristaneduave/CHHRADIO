@@ -294,12 +294,11 @@ const CalendarScreen: React.FC = () => {
             <h1 className="text-3xl font-bold text-white tracking-tight whitespace-nowrap">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
           </div>
 
-          {/* Controls: Compact Mobile Row (Nav + Add + Search) -> Desktop Row */}
+          {/* Controls Container */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full xl:w-auto">
 
-            {/* Mobile/Tablet: Combined Toolbar Row */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              {/* Navigation */}
+            {/* Row 1 (Mobile): Nav + Add Event */}
+            <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
               <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 shrink-0">
                 <button onClick={prevMonth} className="px-2 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
                   <span className="material-icons text-xl">chevron_left</span>
@@ -312,18 +311,55 @@ const CalendarScreen: React.FC = () => {
                 </button>
               </div>
 
-              {/* Add Event Button (Compact on Mobile, Full on Desktop) */}
               <button
                 onClick={() => setShowAddEvent(true)}
-                className="bg-primary hover:bg-primary-dark text-white p-3 md:px-5 md:py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0"
-                title="Add Event"
+                className="flex-1 md:flex-initial bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
               >
                 <span className="material-icons text-lg">add</span>
-                <span className="hidden md:inline">Add Event</span>
+                Add Event
               </button>
+            </div>
 
-              {/* Search Bar (Flex-1 to fill remaining space) */}
-              <div className="flex-1 relative group min-w-[120px]">
+            {/* Row 2 (Mobile): Filter + Search */}
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              {/* Filter Dropdown */}
+              <div className="relative group z-50 shrink-0">
+                <button className="flex items-center gap-2 bg-[#09101d] border border-white/5 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-all text-sm font-medium justify-between min-w-[140px]">
+                  <span className="truncate">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
+                  <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
+                </button>
+
+                {/* Dropdown Menu */}
+                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-48 md:w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left md:origin-top-right scale-95 group-hover:scale-100">
+                  <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+                    {([
+                      { id: 'all', label: 'All Events' },
+                      { id: 'leave', label: 'Leaves' },
+                      { id: 'exam', label: 'Exams' },
+                      { id: 'lecture', label: 'Lectures' },
+                      { id: 'meeting', label: 'Meetings' },
+                      { id: 'pcr', label: 'PCR' },
+                      { id: 'pickleball', label: 'Pickleball' }
+                    ] as { id: EventType | 'all', label: string }[]).map(filter => (
+                      <button
+                        key={filter.id}
+                        onClick={() => setActiveFilter(filter.id)}
+                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-all border-b border-white/5 last:border-0 hover:bg-white/5 flex items-center justify-between
+                              ${activeFilter === filter.id
+                            ? 'text-primary bg-primary/5'
+                            : 'text-slate-400'
+                          }`}
+                      >
+                        {filter.label}
+                        {activeFilter === filter.id && <span className="material-icons text-sm">check</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="flex-1 relative group">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors text-lg">search</span>
                 <input
                   type="text"
@@ -332,42 +368,6 @@ const CalendarScreen: React.FC = () => {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-10 pr-3 py-3 text-sm text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
                 />
-              </div>
-            </div>
-
-            {/* Filter Dropdown (Separate Row on Mobile, Inline on Desktop) */}
-            <div className="relative group z-50 w-full md:w-auto">
-              <button className="w-full md:w-auto flex items-center gap-2 bg-[#09101d] border border-white/5 text-slate-300 hover:text-white px-4 py-3 rounded-xl transition-all text-sm font-medium justify-between min-w-[150px]">
-                <span className="truncate">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
-                <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
-              </button>
-
-              {/* Dropdown Menu */}
-              <div className="absolute right-0 top-full mt-2 w-full md:w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right scale-95 group-hover:scale-100">
-                <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                  {([
-                    { id: 'all', label: 'All Events' },
-                    { id: 'leave', label: 'Leaves' },
-                    { id: 'exam', label: 'Exams' },
-                    { id: 'lecture', label: 'Lectures' },
-                    { id: 'meeting', label: 'Meetings' },
-                    { id: 'pcr', label: 'PCR' },
-                    { id: 'pickleball', label: 'Pickleball' }
-                  ] as { id: EventType | 'all', label: string }[]).map(filter => (
-                    <button
-                      key={filter.id}
-                      onClick={() => setActiveFilter(filter.id)}
-                      className={`w-full text-left px-4 py-3 text-sm font-medium transition-all border-b border-white/5 last:border-0 hover:bg-white/5 flex items-center justify-between
-                            ${activeFilter === filter.id
-                          ? 'text-primary bg-primary/5'
-                          : 'text-slate-400'
-                        }`}
-                    >
-                      {filter.label}
-                      {activeFilter === filter.id && <span className="material-icons text-sm">check</span>}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 
