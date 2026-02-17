@@ -77,7 +77,7 @@ export interface SearchFilters {
   diagnosticCode: string;
 }
 
-export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'pcr' | 'other';
+export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'pcr' | 'pickleball';
 
 export interface CalendarEvent {
   id: string;
