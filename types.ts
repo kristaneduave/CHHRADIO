@@ -98,6 +98,10 @@ export interface CalendarEvent {
     full_name: string | null;
     avatar_url: string | null;
   };
+  creator?: {
+    full_name: string | null;
+    avatar_url: string | null;
+  };
   coverage_details?: {
     user_id: string;
     name?: string; // Manual name entry

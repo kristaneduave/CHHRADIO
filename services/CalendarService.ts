@@ -22,7 +22,9 @@ export const CalendarService = {
         events.forEach(e => {
             if (e.covered_by) userIds.add(e.covered_by);
             if (e.assigned_to) userIds.add(e.assigned_to);
-            if (e.event_type === 'leave') userIds.add(e.created_by);
+            if (e.assigned_to) userIds.add(e.assigned_to);
+            // Always fetch creator
+            if (e.created_by) userIds.add(e.created_by);
 
             // Handle coverage_details
             if (e.coverage_details && Array.isArray(e.coverage_details)) {
@@ -54,6 +56,7 @@ export const CalendarService = {
                         covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
                         user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
                             profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
+                        creator: event.created_by ? profiles.find(p => p.id === event.created_by) : undefined,
                         coverage_details: enrichedCoverage
                     }
                 }) as CalendarEvent[];
@@ -143,6 +146,7 @@ export const CalendarService = {
             const userId = event.assigned_to || event.created_by;
             const profile = profiles?.find(p => p.id === userId);
             const coverProfile = event.covered_by ? profiles?.find(p => p.id === event.covered_by) : undefined;
+            const creatorProfile = event.created_by ? profiles?.find(p => p.id === event.created_by) : undefined;
 
             // Enrich coverage_details
             let enrichedCoverage = event.coverage_details;
@@ -157,6 +161,7 @@ export const CalendarService = {
                 ...event,
                 user: profile,
                 covered_user: coverProfile,
+                creator: creatorProfile,
                 coverage_details: enrichedCoverage
             };
         });
@@ -179,7 +184,8 @@ export const CalendarService = {
             data.forEach(e => {
                 if (e.covered_by) userIds.add(e.covered_by);
                 if (e.assigned_to) userIds.add(e.assigned_to);
-                if (e.event_type === 'leave') userIds.add(e.created_by);
+                if (e.assigned_to) userIds.add(e.assigned_to);
+                if (e.created_by) userIds.add(e.created_by);
             });
 
             if (userIds.size > 0) {
@@ -257,6 +263,8 @@ export const CalendarService = {
         events?.forEach(e => {
             if (e.covered_by) allUserIds.add(e.covered_by);
             if (e.assigned_to) allUserIds.add(e.assigned_to);
+            if (e.assigned_to) allUserIds.add(e.assigned_to);
+            if (e.assigned_to) allUserIds.add(e.assigned_to);
             if (e.created_by) allUserIds.add(e.created_by);
         });
 
@@ -271,7 +279,8 @@ export const CalendarService = {
                     ...event,
                     covered_user: event.covered_by ? allProfiles.find(p => p.id === event.covered_by) : undefined,
                     user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
-                        allProfiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
+                        allProfiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
+                    creator: event.created_by ? allProfiles.find(p => p.id === event.created_by) : undefined
                 })) as CalendarEvent[];
             }
         }
