@@ -313,7 +313,7 @@ const CalendarScreen: React.FC = () => {
             {/* Add Event Button (Desktop) */}
             <button
               onClick={() => setShowAddEvent(true)}
-              className="hidden md:flex bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all items-center gap-2 whitespace-nowrap active:scale-95"
+              className="bg-primary hover:bg-primary-dark text-white px-5 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center gap-2 whitespace-nowrap active:scale-95"
             >
               <span className="material-icons text-lg">add</span>
               Add Event
@@ -343,11 +343,9 @@ const CalendarScreen: React.FC = () => {
                 <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                   {([
                     { id: 'all', label: 'All Events' },
-                    { id: 'rotation', label: 'Rotations' },
-                    { id: 'call', label: 'Calls' },
+                    { id: 'leave', label: 'Leaves' },
                     { id: 'exam', label: 'Exams' },
                     { id: 'lecture', label: 'Lectures' },
-                    { id: 'leave', label: 'Leaves' },
                     { id: 'meeting', label: 'Meetings' },
                     { id: 'pcr', label: 'PCR' },
                     { id: 'pickleball', label: 'Pickleball' }
@@ -411,18 +409,7 @@ const CalendarScreen: React.FC = () => {
             </div>
           </div>
 
-          {/* Add Event Button (Below Calendar for Mobile) */}
-          <div className="lg:hidden mt-2">
-            <button
-              onClick={() => setShowAddEvent(true)}
-              className="w-full py-3.5 bg-primary hover:bg-primary-dark border border-white/10 rounded-xl text-white font-bold shadow-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
-            >
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
-                <span className="material-icons text-lg">add</span>
-              </div>
-              <span>Add Event</span>
-            </button>
-          </div>
+
         </div>
 
         {/* Agenda */}
