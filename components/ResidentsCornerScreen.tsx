@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
+import { Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
@@ -19,12 +20,15 @@ const ResidentsCornerScreen: React.FC = () => {
     // State for cover overrides: { [slotId]: CoverEntry[] }
     const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>({});
 
+    const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+
     // Fetch user and covers on mount
     useEffect(() => {
         const init = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             setCurrentUser(user);
             fetchCovers();
+            fetchProfiles();
         };
         init();
 
@@ -40,6 +44,25 @@ const ResidentsCornerScreen: React.FC = () => {
             supabase.removeChannel(channel);
         };
     }, []);
+
+    const fetchProfiles = async () => {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*');
+
+        if (error) {
+            console.error('Error fetching profiles:', error);
+            return;
+        }
+
+        if (data) {
+            const profileMap: Record<string, Profile> = {};
+            data.forEach((p: any) => {
+                profileMap[p.id] = p;
+            });
+            setProfiles(profileMap);
+        }
+    };
 
     const fetchCovers = async () => {
         const { data, error } = await supabase
@@ -174,7 +197,7 @@ const ResidentsCornerScreen: React.FC = () => {
 
         if (field === 'informed') {
             newInformed = !newInformed;
-            newInformedBy = newInformed ? (currentUser?.email || 'Unknown') : null;
+            newInformedBy = newInformed ? (currentUser?.id || currentUser?.email || 'Unknown') : null;
         } else if (field === 'read') {
             newReadStatus =
                 cover.readStatus === 'none' ? 'partial' :
@@ -184,7 +207,7 @@ const ResidentsCornerScreen: React.FC = () => {
             if (newReadStatus === 'partial' || newReadStatus === 'complete') {
                 if (!newInformed) {
                     newInformed = true;
-                    newInformedBy = currentUser?.email || 'Unknown';
+                    newInformedBy = currentUser?.id || currentUser?.email || 'Unknown';
                 }
             }
         }
@@ -222,10 +245,12 @@ const ResidentsCornerScreen: React.FC = () => {
         const cover = currentSlotCovers?.find(c => c.id === coverId);
         if (!cover) return;
 
+        const nickname = profiles[currentUser?.id]?.nickname || currentUser?.user_metadata?.nickname || currentUser?.email?.split('@')[0] || 'Anonymous';
+
         const newLog: LogEntry = {
             id: Date.now().toString(),
             userId: currentUser?.id || 'anon',
-            userName: currentUser?.email?.split('@')[0] || 'Anonymous',
+            userName: nickname,
             message: message.trim(),
             timestamp: new Date().toISOString(),
             type: 'note'
@@ -382,21 +407,27 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                     {item.doctor}
                                                                                 </div>
                                                                             ) : (
-                                                                                // Showing Covering Doctors (Replacements)
-                                                                                <div className="space-y-1">
+                                                                                // Showing Covering Doctors (Replacements) - Single Row
+                                                                                <div className="flex flex-wrap items-center gap-1">
                                                                                     {activeCovers.map((cover, cIdx) => (
-                                                                                        <div key={cover.id} className="flex items-center gap-2">
+                                                                                        <React.Fragment key={cover.id}>
                                                                                             <span className={`text-base font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' :
                                                                                                 cover.readStatus === 'partial' ? 'text-amber-400' : 'text-rose-400'
                                                                                                 }`}>
                                                                                                 {cover.doctorName}
                                                                                             </span>
                                                                                             {cover.scope !== 'All' && (
-                                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
+                                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10 ml-1">
                                                                                                     {cover.scope}
                                                                                                 </span>
                                                                                             )}
-                                                                                        </div>
+                                                                                            {cIdx < activeCovers.length - 1 && (
+                                                                                                <span className="text-slate-500 mr-1">, </span>
+                                                                                            )}
+                                                                                            {cIdx === activeCovers.length - 2 && (
+                                                                                                <span className="text-slate-500 mr-1">and </span>
+                                                                                            )}
+                                                                                        </React.Fragment>
                                                                                     ))}
                                                                                 </div>
                                                                             )}
@@ -407,12 +438,23 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                             <div className="mt-2 flex items-center justify-between">
                                                                                 <div className="flex -space-x-1.5 overflow-hidden">
                                                                                     {/* Avatars or Icons for "Who is covering" */}
-                                                                                    {activeCovers.map(c => (
-                                                                                        <div key={c.id} className={`w-5 h-5 rounded-full flex items-center justify-center border border-black text-[10px] font-bold ${c.informed ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'
-                                                                                            }`} title={c.informed ? `Informed by ${c.informedBy}` : "Not informed"}>
-                                                                                            {c.doctorName.charAt(4)}
-                                                                                        </div>
-                                                                                    ))}
+                                                                                    {/* Avatars or Icons for "Who is covering" */}
+                                                                                    {activeCovers.map(c => {
+                                                                                        const isId = c.informedBy && c.informedBy.includes('-');
+                                                                                        const profile = isId ? profiles[c.informedBy!] : null;
+                                                                                        const informedName = profile?.nickname || profile?.full_name || c.informedBy;
+
+                                                                                        return (
+                                                                                            <div key={c.id} className={`w-5 h-5 rounded-full flex items-center justify-center border border-black text-[10px] font-bold overflow-hidden ${c.informed ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'
+                                                                                                }`} title={c.informed ? `Informed by ${informedName}` : "Not informed"}>
+                                                                                                {c.informed && profile?.avatar_url ? (
+                                                                                                    <img src={profile.avatar_url} alt={informedName || ''} className="w-full h-full object-cover" />
+                                                                                                ) : (
+                                                                                                    c.informed ? (informedName?.charAt(0) || '?') : (c.doctorName.split(' ').pop()?.charAt(0) || '?')
+                                                                                                )}
+                                                                                            </div>
+                                                                                        );
+                                                                                    })}
                                                                                 </div>
                                                                                 <span className="text-[10px] text-slate-500 flex items-center gap-1">
                                                                                     {isCardExpanded ? 'Collapse' : 'Tap for details'}
@@ -425,13 +467,17 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                     {/* EXPANDED SECTION: Controls & Logbook */}
                                                                     {hasCovers && isCardExpanded && (
                                                                         <div className="border-t border-rose-500/20 bg-black/20 animate-in slide-in-from-top-2">
-                                                                            {activeCovers.map((cover) => (
-                                                                                <div key={cover.id} className="p-3 border-b border-white/5 last:border-0">
-                                                                                    <div className="flex items-center justify-between mb-3">
-                                                                                        <span className="text-sm font-bold text-white">{cover.doctorName}</span>
-                                                                                        {/* Action Buttons (Right Aligned) */}
+                                                                            {/* 1. Status Controls for each doctor */}
+                                                                            <div className="p-3 border-b border-white/5 space-y-3">
+                                                                                {activeCovers.map((cover) => (
+                                                                                    <div key={cover.id} className="flex items-center justify-between">
                                                                                         <div className="flex items-center gap-2">
-                                                                                            {/* Informed Button */}
+                                                                                            <span className="text-sm font-bold text-white">{cover.doctorName}</span>
+                                                                                            {cover.scope !== 'All' && <span className="text-[10px] text-slate-400 bg-white/5 px-1.5 py-0.5 rounded">{cover.scope}</span>}
+                                                                                        </div>
+
+                                                                                        {/* Action Buttons */}
+                                                                                        <div className="flex items-center gap-2">
                                                                                             <button
                                                                                                 onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
                                                                                                 className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${cover.informed
@@ -444,7 +490,6 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                 </span>
                                                                                             </button>
 
-                                                                                            {/* Read Status Pill */}
                                                                                             <button
                                                                                                 onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
                                                                                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-xs font-bold uppercase tracking-wide ${cover.readStatus === 'complete'
@@ -461,47 +506,57 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                             </button>
                                                                                         </div>
                                                                                     </div>
+                                                                                ))}
+                                                                            </div>
 
-                                                                                    {/* Logbook / Notes */}
-                                                                                    <div className="bg-black/40 rounded-lg p-2 border border-white/5">
-                                                                                        <div className="flex items-center gap-2 mb-2">
-                                                                                            <span className="material-icons text-slate-600 text-[10px]">history</span>
-                                                                                            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Activity Log</span>
-                                                                                        </div>
-
-                                                                                        {/* Log List */}
-                                                                                        <div className="space-y-1.5 mb-2 max-h-24 overflow-y-auto scrollbar-hide">
-                                                                                            {(cover.logs || []).length === 0 ? (
-                                                                                                <div className="text-[10px] text-slate-600 italic px-1">No updates yet</div>
-                                                                                            ) : (
-                                                                                                cover.logs?.map((log, lIdx) => (
-                                                                                                    <div key={lIdx} className="flex gap-2 text-[10px]">
-                                                                                                        <span className="text-slate-500 whitespace-nowrap">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                                                                                        <div className="text-slate-300">
-                                                                                                            <span className="font-bold text-slate-400">{log.userName}:</span> {log.message}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                ))
-                                                                                            )}
-                                                                                        </div>
-
-                                                                                        {/* Add Note Input */}
-                                                                                        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                placeholder="Add a note..."
-                                                                                                className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-rose-500/50"
-                                                                                                onKeyDown={(e) => {
-                                                                                                    if (e.key === 'Enter') {
-                                                                                                        handleAddLog(slotId, cover.id, e.currentTarget.value);
-                                                                                                        e.currentTarget.value = '';
-                                                                                                    }
-                                                                                                }}
-                                                                                            />
-                                                                                        </div>
-                                                                                    </div>
+                                                                            {/* 2. Consolidated Logbook */}
+                                                                            <div className="p-3 bg-black/40">
+                                                                                <div className="flex items-center gap-2 mb-2">
+                                                                                    <span className="material-icons text-slate-600 text-[10px]">history</span>
+                                                                                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Activity Log</span>
                                                                                 </div>
-                                                                            ))}
+
+                                                                                <div className="space-y-1.5 mb-2 max-h-32 overflow-y-auto scrollbar-hide">
+                                                                                    {(() => {
+                                                                                        // Aggregate all logs from active covers
+                                                                                        const allLogs = activeCovers.flatMap(c => c.logs || [])
+                                                                                            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+                                                                                        if (allLogs.length === 0) {
+                                                                                            return <div className="text-[10px] text-slate-600 italic px-1">No updates yet</div>;
+                                                                                        }
+
+                                                                                        return allLogs.map((log, lIdx) => (
+                                                                                            <div key={`${log.timestamp}-${lIdx}`} className="flex gap-2 text-[10px]">
+                                                                                                <span className="text-slate-500 whitespace-nowrap w-12 text-right">
+                                                                                                    {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                                                </span>
+                                                                                                <div className="text-slate-300 flex-1">
+                                                                                                    <span className="font-bold text-slate-400">{log.userName}:</span> {log.message}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        ));
+                                                                                    })()}
+                                                                                </div>
+
+                                                                                {/* Add Note Input - Attaches to the first cover for now */}
+                                                                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        placeholder="Add a note..."
+                                                                                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-rose-500/50"
+                                                                                        onKeyDown={(e) => {
+                                                                                            if (e.key === 'Enter') {
+                                                                                                // Default to adding log to the first active cover
+                                                                                                if (activeCovers.length > 0) {
+                                                                                                    handleAddLog(slotId, activeCovers[0].id, e.currentTarget.value);
+                                                                                                    e.currentTarget.value = '';
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
                                                                         </div>
                                                                     )}
                                                                 </div>
@@ -591,8 +646,8 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                     <button
                                                                                                         onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
                                                                                                         className={`h-6 px-1.5 flex items-center gap-1 rounded-full border transition-all text-[8px] font-bold uppercase ${cover.readStatus === 'complete' ? 'bg-emerald-500 text-white border-emerald-500' :
-                                                                                                                cover.readStatus === 'partial' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' :
-                                                                                                                    'bg-white/5 border-white/10 text-slate-400'
+                                                                                                            cover.readStatus === 'partial' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' :
+                                                                                                                'bg-white/5 border-white/10 text-slate-400'
                                                                                                             }`}
                                                                                                     >
                                                                                                         <span className="material-icons text-[10px]">
