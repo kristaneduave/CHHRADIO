@@ -37,12 +37,12 @@ export const ACTIVITIES: Activity[] = [
 ];
 
 export const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'Upload Case', icon: 'cloud_upload', target: 'upload' },
-  { label: 'Start Quiz', icon: 'quiz', target: 'quiz' },
-  { label: 'Calendar', icon: 'calendar_month', target: 'calendar' },
-  { label: 'Announcements', icon: 'campaign', target: 'announcements' },
-  { label: 'Quick Links', icon: 'link', target: 'quick-links' },
-  { label: 'Resident\'s Corner', icon: 'school', target: 'residents-corner' }
+  { label: 'Upload Case', icon: 'cloud_upload', target: 'upload', subtitle: 'Add new studies' },
+  { label: 'Start Quiz', icon: 'quiz', target: 'quiz', subtitle: 'Test your knowledge' },
+  { label: 'Calendar', icon: 'calendar_month', target: 'calendar', subtitle: 'Department schedule' },
+  { label: 'Announcements', icon: 'campaign', target: 'announcements', subtitle: 'Latest news' },
+  { label: 'Quick Links', icon: 'link', target: 'quick-links', subtitle: 'Resources & tools' },
+  { label: 'Resident\'s Corner', icon: 'school', target: 'residents-corner', subtitle: 'Schedules & guides' }
 ];
 
 export const RESIDENT_TOOLS = [
