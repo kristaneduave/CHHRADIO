@@ -182,70 +182,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             }
         ],
     },
-    {
-        id: 'medical_mall',
-        name: 'Medical Mall',
-        modalities: [
-            {
-                id: 'gen_us',
-                name: 'General Ultrasound',
-                schedule: {
-                    Monday: [
-                        { doctor: 'Dr. Tornilla', time: '6:00 AM - 5:00 PM' },
-                        { doctor: 'Dr. Padillo', time: '6:00 AM - 12:00 NN' },
-                        { doctor: 'Dr. Paredes', time: '12:00 PM - 5:00 PM' },
-                    ],
-                    Tuesday: [
-                        { doctor: 'Dr. Tarongoy', time: '6:00 AM - 5:00 PM' },
-                        { doctor: 'Dr. Abrigonda', time: '6:00 AM - 11:00 AM' },
-                        { doctor: 'Dr. Padillo', time: '11:00 AM - 2:00 PM' },
-                    ],
-                    Wednesday: [
-                        { doctor: 'Dr. Tornilla', time: '6:00 AM - 5:00 PM' },
-                        { doctor: 'Dr. Padillo', time: '6:00 AM - 12:00 NN' },
-                        { doctor: 'Dr. Paredes', time: '12:00 PM - 2:00 PM' },
-                    ],
-                    Thursday: [
-                        { doctor: 'Dr. Tarongoy', time: '6:00 AM - 5:00 PM' },
-                        { doctor: 'Dr. Abrigonda', time: '6:00 AM - 11:00 AM' },
-                        { doctor: 'Dr. Padillo', time: '11:00 AM - 2:00 PM' },
-                    ],
-                    Friday: [
-                        { doctor: 'Dr. Tornilla', time: '6:00 AM - 2:00 PM' },
-                        { doctor: 'Dr. Padillo', time: '6:00 AM - 12:00 NN' },
-                        { doctor: 'Dr. Paredes', time: '12:00 PM - 5:00 PM' },
-                    ],
-                    Saturday: [
-                        { doctor: 'Dr. Tarongoy', time: '6:00 AM - 12:00 PM' },
-                        { doctor: 'Dr. Abrigonda/Paredes', time: '6:00 AM - 11:00 AM' },
-                    ],
-                    Sunday: [],
-                },
-            },
-            {
-                id: 'mammo',
-                name: 'Breast / Mammo',
-                schedule: {
-                    Monday: [{ doctor: 'Dr. Avila', time: 'AM-PM' }],
-                    Tuesday: [{ doctor: 'Dr. Avila', time: 'AM-PM' }],
-                    Wednesday: [{ doctor: 'Dr. Jorge', time: 'AM-PM' }],
-                    Thursday: [
-                        { doctor: 'Dr. Avila', time: 'AM' },
-                        { doctor: 'Dr. Guinto', time: 'AM-PM' },
-                    ],
-                    Friday: [
-                        { doctor: 'Dr. Avila', time: 'AM' },
-                        { doctor: 'Dr. Guinto', time: 'AM-PM' },
-                    ],
-                    Saturday: [
-                        { doctor: 'Dr. Ledesma', time: 'AM' },
-                        { doctor: 'Dr. Guinto', time: 'PM' },
-                    ],
-                    Sunday: [],
-                }
-            }
-        ],
-    },
+
     {
         id: 'mandaue',
         name: 'Mandaue',

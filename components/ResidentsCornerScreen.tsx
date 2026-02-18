@@ -140,6 +140,12 @@ const ResidentsCornerScreen: React.FC = () => {
                 await supabase.from('consultant_covers').upsert(payload);
             }
 
+            // Optimistic update
+            setCoverOverrides(prev => ({
+                ...prev,
+                [slotId]: covers
+            }));
+
             fetchCovers();
         } catch (err) {
             console.error("Error saving covers:", err);
