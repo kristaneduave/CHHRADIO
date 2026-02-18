@@ -322,292 +322,329 @@ const ResidentsCornerScreen: React.FC = () => {
 
 
     return (
-        <>
-            <div className="px-6 pt-12 pb-24 flex flex-col min-h-full animate-in fade-in duration-700">
-                <header className="mb-6">
-                    <h1 className="text-xl font-bold text-white tracking-tight">Resident's Corner</h1>
-                    <p className="text-slate-500 text-[11px] uppercase tracking-[0.2em] mt-1">Tools & Cover</p>
-                </header>
+        <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-[#050B14]">
+            <div className="max-w-md mx-auto space-y-8">
+                {/* Header Section */}
+                <div className="text-center mb-8">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-orange-500/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_-10px_rgba(244,63,94,0.3)] border border-rose-500/20">
+                        <span className="material-icons text-3xl text-rose-400">calendar_month</span>
+                    </div>
+                    <h1 className="text-xl font-bold text-white mb-1">Consultant Schedule</h1>
+                    <p className="text-rose-500 text-[10px] font-bold uppercase tracking-[0.2em]">
+                        Residents Corner
+                    </p>
+                </div>
 
-                <div className="space-y-6">
-                    {/* Consultant Cover Section */}
-                    <section>
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                                <span className="material-icons text-lg text-rose-500">medical_services</span>
-                                Consultant Cover
-                            </h2>
-                            {/* Live Indicator */}
-                            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                </span>
-                                <span className="text-[10px] uppercase font-bold text-emerald-500 tracking-wide">Live</span>
-                            </div>
+                {/* Patient List - Prominent Action */}
+                <div className="relative group">
+                    <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                    <a
+                        href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?tab=t.wyylmpp68x5s"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative w-full py-4 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-center gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                            <span className="material-icons text-cyan-400">description</span>
                         </div>
+                        <div className="text-left">
+                            <span className="block text-xs font-bold text-white tracking-wide">VIEW PATIENT DECKING LIST</span>
+                            <span className="block text-[9px] text-cyan-400 font-medium">Google Docs • Live Updates</span>
+                        </div>
+                        <span className="material-icons text-cyan-500/50 absolute right-4 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </a>
+                </div>
 
-                        {/* Hospital Selector */}
-                        <div className="flex overflow-x-auto gap-2 mb-4 pb-2 scrollbar-hide">
-                            {CONSULTANT_SCHEDULE.map((hospital) => (
-                                <button
-                                    key={hospital.id}
-                                    onClick={() => setSelectedHospitalId(hospital.id)}
-                                    className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${selectedHospitalId === hospital.id
-                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                {/* Hospital Selector - Segmented Control Style */}
+                <div className="glass-card-enhanced p-1.5 rounded-xl border border-white/5 flex relative">
+                    {/* Sliding Indicator (simplified) */}
+                    {CONSULTANT_SCHEDULE.map((hospital) => (
+                        <button
+                            key={hospital.id}
+                            onClick={() => setSelectedHospitalId(hospital.id)}
+                            className={`flex-1 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
+                                ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/20'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                }`}
+                        >
+                            {hospital.name}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Schedule Content */}
+                <div className="space-y-3">
+                    {selectedHospital && (
+                        selectedHospital.modalities.map((modality) => {
+                            const todaySchedule = modality.schedule[currentDayName] || [];
+                            const isExpanded = expandedModality === modality.id;
+
+                            // Calculate active covers count for badge
+                            let activeCoverCount = 0;
+                            const daysToCheck = isExpanded ? daysOfWeek : [currentDayName];
+
+                            daysToCheck.forEach(day => {
+                                const daySched = modality.schedule[day] || [];
+                                daySched.forEach((_, idx) => {
+                                    const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
+                                    if (coverOverrides[slotId]?.length > 0) activeCoverCount++;
+                                });
+                            });
+
+
+                            return (
+                                <div
+                                    key={modality.id}
+                                    className={`glass-card-enhanced rounded-xl border border-white/5 overflow-hidden transition-all duration-500 ${isExpanded ? 'ring-1 ring-rose-500/20 bg-[#0F1621]' : 'hover:bg-white/5'
                                         }`}
                                 >
-                                    {hospital.name}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Schedule Display */}
-                        <div className="space-y-3">
-                            {selectedHospital?.modalities.length === 0 ? (
-                                <div className="text-center py-8 text-slate-500 text-xs italic">
-                                    Schedule not available yet.
-                                </div>
-                            ) : (
-                                selectedHospital?.modalities.map((modality) => {
-                                    const isExpanded = expandedModality === modality.id;
-                                    const todaySchedule = modality.schedule[currentDayName] || [];
-
-                                    return (
-                                        <div key={modality.id} className="glass-card-enhanced rounded-xl border border-white/10 overflow-hidden relative">
-                                            {/* Modality Header & Today's Preview */}
-                                            <div
-                                                className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
-                                                onClick={() => toggleModality(modality.id)}
-                                            >
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="text-sm font-bold text-white">{modality.name}</h3>
-                                                    <span className={`material-icons text-slate-500 text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                                        expand_more
-                                                    </span>
-                                                </div>
-
-                                                {/* Today's Schedule - Prominent Display */}
-                                                <div className="space-y-2">
-                                                    {todaySchedule.length > 0 ? (
-                                                        todaySchedule.map((item, idx) => {
-                                                            const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
-                                                            const activeCovers = coverOverrides[slotId] || [];
-                                                            const hasCovers = activeCovers.length > 0;
-
-                                                            return (
-                                                                <div
-                                                                    key={idx}
-                                                                    onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
-                                                                    className={`flex flex-col rounded-lg border relative group transition-all cursor-pointer ${hasCovers
-                                                                        ? 'bg-rose-500/5 border-rose-500/20 shadow-md shadow-rose-900/10'
-                                                                        : 'bg-white/5 border-white/5 hover:bg-white/10'
-                                                                        }`}
-                                                                >
-                                                                    {/* Main Card Content */}
-                                                                    <div className="p-3">
-                                                                        <div className="flex items-center justify-between mb-2">
-                                                                            {/* Time Label */}
-                                                                            <div className="flex items-center gap-2">
-                                                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${hasCovers ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 bg-white/10'
-                                                                                    }`}>
-                                                                                    {item.time}
-                                                                                </span>
-                                                                                {item.subtext && <span className="text-[10px] text-slate-500">{item.subtext}</span>}
-                                                                            </div>
-
-                                                                            {/* Edit Icon */}
-                                                                            <button
-                                                                                className="p-1.5 rounded-full hover:bg-white/10 text-slate-600 hover:text-white transition-colors"
-                                                                                onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
-                                                                                title="Manage Covers"
-                                                                            >
-                                                                                <span className="material-icons text-sm">edit</span>
-                                                                            </button>
-                                                                        </div>
-
-                                                                        {/* Doctor Name Display */}
-                                                                        <div className="flex items-center justify-between">
-                                                                            {!hasCovers ? (
-                                                                                // Showing Original Doctor
-                                                                                <div className="text-base font-bold text-slate-200">
-                                                                                    {item.doctor}
-                                                                                </div>
-                                                                            ) : (
-                                                                                // Showing Covering Doctors (Replacements) - Single Row
-                                                                                <div className="flex flex-wrap items-center gap-1">
-                                                                                    {activeCovers.map((cover, cIdx) => (
-                                                                                        <React.Fragment key={cover.id}>
-                                                                                            <span className={`text-base font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' :
-                                                                                                cover.readStatus === 'partial' ? 'text-amber-400' : 'text-rose-400'
-                                                                                                }`}>
-                                                                                                {cover.doctorName}
-                                                                                            </span>
-                                                                                            {cIdx < activeCovers.length - 1 && (
-                                                                                                <span className="text-slate-500 mr-1">, </span>
-                                                                                            )}
-                                                                                            {cIdx === activeCovers.length - 2 && (
-                                                                                                <span className="text-slate-500 mr-1">and </span>
-                                                                                            )}
-                                                                                        </React.Fragment>
-                                                                                    ))}
-                                                                                </div>
-                                                                            )}
-
-                                                                            {/* Tap for details hint (if covers exist) */}
-                                                                            {hasCovers && (
-                                                                                <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                                                                                    Tap to view
-                                                                                    <span className="material-icons text-[12px]">chevron_right</span>
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })
-                                                    ) : (
-                                                        <div className="text-[10px] text-slate-500 italic py-1 pl-1">No schedule for today</div>
-                                                    )}
-                                                </div>
+                                    {/* Accordion Header */}
+                                    <button
+                                        onClick={() => toggleModality(modality.id)}
+                                        className="w-full p-4 flex items-center justify-between"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'
+                                                }`}>
+                                                <span className="material-icons text-lg">{modality.icon}</span>
                                             </div>
+                                            <div className="text-left">
+                                                <h3 className={`text-sm font-bold transition-colors ${isExpanded ? 'text-white' : 'text-slate-300'}`}>
+                                                    {modality.name}
+                                                </h3>
+                                                <p className="text-[10px] text-slate-500">
+                                                    {isExpanded ? 'Full Weekly Schedule' : 'Today\'s Consultants'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            {activeCoverCount > 0 && (
+                                                <div className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center gap-1">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                                    <span className="text-[9px] font-bold text-amber-500">{activeCoverCount} Cover{activeCoverCount > 1 ? 's' : ''}</span>
+                                                </div>
+                                            )}
+                                            <span className={`material-icons text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                keyboard_arrow_down
+                                            </span>
+                                        </div>
+                                    </button>
 
-                                            {/* EXPANDED: Full Week Schedule */}
-                                            {isExpanded && (
-                                                <div className="border-t border-white/5 bg-black/20 animate-in slide-in-from-top-2 duration-300">
-                                                    {daysOfWeek.map((day) => {
-                                                        const daySchedule = modality.schedule[day] || [];
-                                                        if (daySchedule.length === 0) return null;
-
-                                                        const isToday = day === currentDayName;
+                                    {/* COLLAPSED: Today's View */}
+                                    {!isExpanded && (
+                                        <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-1">
+                                            <div className="pl-[3.25rem]"> {/* Align with text */}
+                                                {todaySchedule.length > 0 ? (
+                                                    todaySchedule.map((item, idx) => {
+                                                        const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
+                                                        const activeCovers = coverOverrides[slotId] || [];
+                                                        const hasCovers = activeCovers.length > 0;
 
                                                         return (
-                                                            <div key={day} className={`p-4 grid grid-cols-12 gap-3 border-b border-white/5 last:border-0 ${isToday ? 'bg-rose-500/5' : ''}`}>
-                                                                {/* Day Label */}
-                                                                <div className="col-span-3 pt-1">
-                                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isToday ? 'text-rose-400' : 'text-slate-500'}`}>
-                                                                        {day.substring(0, 3)}
-                                                                    </span>
-                                                                </div>
+                                                            <div
+                                                                key={idx}
+                                                                onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
+                                                                className={`relative group rounded-lg border transition-all cursor-pointer mb-2 last:mb-0 ${hasCovers
+                                                                    ? 'bg-rose-500/5 border-rose-500/20 shadow-[0_0_15px_-5px_rgba(244,63,94,0.1)]'
+                                                                    : 'bg-black/20 border-white/5 hover:border-white/10 hover:bg-white/5'
+                                                                    }`}
+                                                            >
+                                                                {/* Interactive Shine Effect */}
+                                                                <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 
-                                                                {/* Shifts */}
-                                                                <div className="col-span-9 space-y-3">
-                                                                    {daySchedule.map((item, idx) => {
-                                                                        const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
-                                                                        const activeCovers = coverOverrides[slotId] || [];
-                                                                        const hasCovers = activeCovers.length > 0;
+                                                                <div className="p-3">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${hasCovers ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 bg-white/10'
+                                                                                }`}>
+                                                                                {item.time}
+                                                                            </span>
+                                                                            {item.subtext && <span className="text-[9px] text-slate-500">{item.subtext}</span>}
+                                                                        </div>
 
-                                                                        return (
-                                                                            <div key={idx} className="relative group/item flex flex-col gap-1">
-                                                                                <div className="flex items-start justify-between gap-2">
-                                                                                    <div className="flex-1">
-                                                                                        <div className={`text-xs font-medium transition-all ${hasCovers ? 'text-slate-500 line-through decoration-rose-500/30' : 'text-slate-300'}`}>
-                                                                                            {item.doctor}
-                                                                                        </div>
-                                                                                        <span className="text-[10px] text-slate-500 block mt-0.5">
-                                                                                            {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
-                                                                                        </span>
-                                                                                    </div>
+                                                                        <button
+                                                                            className="w-6 h-6 rounded-full flex items-center justify-center bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+                                                                            onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
+                                                                            title="Manage Covers"
+                                                                        >
+                                                                            <span className="material-icons text-[12px]">edit</span>
+                                                                        </button>
+                                                                    </div>
 
-                                                                                    <button
-                                                                                        className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
-                                                                                        onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
-                                                                                    >
-                                                                                        <span className="material-icons text-[12px]">edit</span>
-                                                                                    </button>
-                                                                                </div>
-
-                                                                                {/* Active Covers List (Week View) */}
-                                                                                {hasCovers && (
-                                                                                    <div className="space-y-2 mt-1">
-                                                                                        {activeCovers.map((cover) => (
-                                                                                            <div key={cover.id} className="flex items-center justify-between border-l-2 border-rose-500/20 pl-2 py-1">
-                                                                                                <div className="flex flex-col">
-                                                                                                    <span className={`text-xs font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' : 'text-slate-300'}`}>
-                                                                                                        {cover.doctorName}
-                                                                                                    </span>
-                                                                                                    {cover.scope !== 'All' && (
-                                                                                                        <span className="text-[8px] text-slate-500">
-                                                                                                            {cover.scope}
-                                                                                                        </span>
-                                                                                                    )}
-                                                                                                    {cover.informed && cover.informedBy && (
-                                                                                                        <span className="text-[7px] text-slate-600 block leading-tight mt-0.5">
-                                                                                                            by {cover.informedBy.includes('-') ? (profiles[cover.informedBy!]?.nickname || 'User') : cover.informedBy.split('@')[0]}
-                                                                                                        </span>
-                                                                                                    )}
-                                                                                                </div>
-                                                                                                <div className="flex items-center gap-1 scale-90 origin-right">
-                                                                                                    <button
-                                                                                                        onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
-                                                                                                        className={`w-6 h-6 flex items-center justify-center rounded-full border transition-all ${cover.informed ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 border-white/10 text-slate-400'
-                                                                                                            }`}
-                                                                                                    >
-                                                                                                        <span className="material-icons text-[10px]">
-                                                                                                            {cover.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
-                                                                                                        </span>
-                                                                                                    </button>
-                                                                                                    <button
-                                                                                                        onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
-                                                                                                        className={`h-6 px-1.5 flex items-center gap-1 rounded-full border transition-all text-[8px] font-bold uppercase ${cover.readStatus === 'complete' ? 'bg-emerald-500 text-white border-emerald-500' :
-                                                                                                            cover.readStatus === 'partial' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' :
-                                                                                                                'bg-white/5 border-white/10 text-slate-400'
-                                                                                                            }`}
-                                                                                                    >
-                                                                                                        <span className="material-icons text-[10px]">
-                                                                                                            {cover.readStatus === 'complete' ? 'check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'circle'}
-                                                                                                        </span>
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        ))}
-                                                                                    </div>
-                                                                                )}
+                                                                    <div className="flex items-center justify-between">
+                                                                        {!hasCovers ? (
+                                                                            <div className="text-sm font-bold text-slate-200">
+                                                                                {item.doctor}
                                                                             </div>
-                                                                        );
-                                                                    })}
+                                                                        ) : (
+                                                                            <div className="flex flex-wrap items-center gap-1">
+                                                                                {activeCovers.map((cover, cIdx) => (
+                                                                                    <React.Fragment key={cover.id}>
+                                                                                        <span className={`text-sm font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' :
+                                                                                            cover.readStatus === 'partial' ? 'text-amber-400' : 'text-rose-400'
+                                                                                            }`}>
+                                                                                            {cover.doctorName}
+                                                                                        </span>
+                                                                                        {cIdx < activeCovers.length - 1 && (
+                                                                                            <span className="text-slate-500 mr-1">, </span>
+                                                                                        )}
+                                                                                        {cIdx === activeCovers.length - 2 && (
+                                                                                            <span className="text-slate-500 mr-1">and </span>
+                                                                                        )}
+                                                                                    </React.Fragment>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+
+                                                                        {hasCovers && (
+                                                                            <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                                                                                Details
+                                                                                <span className="material-icons text-[10px]">chevron_right</span>
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         );
-                                                    })}
-                                                </div>
-                                            )}
+                                                    })
+                                                ) : (
+                                                    <div className="text-[10px] text-slate-600 italic py-2">No schedule for today</div>
+                                                )}
+                                            </div>
                                         </div>
-                                    );
-                                })
-                            )}
-                        </div>
-                    </section>
+                                    )}
 
-                    {/* Tools Section */}
-                    <section>
-                        <h2 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-2">
-                            <span className="material-icons text-lg text-primary">build</span>
-                            Essential Tools
-                        </h2>
-                        <div className="grid grid-cols-1 gap-3">
-                            {RESIDENT_TOOLS.map((tool, idx) => (
-                                <a
-                                    key={idx}
-                                    href={tool.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 group hover:bg-white/5 transition-all active:scale-[0.99]"
-                                >
-                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                                        <span className="material-icons text-xl">{tool.icon}</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="text-sm font-semibold text-white group-hover:text-primary transition-colors">{tool.name}</h3>
-                                        <p className="text-xs text-slate-500 line-clamp-1">{tool.description}</p>
-                                    </div>
-                                    <span className="material-icons text-slate-600 group-hover:text-slate-300">open_in_new</span>
-                                </a>
-                            ))}
-                        </div>
-                    </section>
+                                    {/* EXPANDED: Full Week Schedule */}
+                                    {isExpanded && (
+                                        <div className="border-t border-white/5 bg-black/20">
+                                            {daysOfWeek.map((day) => {
+                                                const daySchedule = modality.schedule[day] || [];
+                                                if (daySchedule.length === 0) return null;
+                                                const isToday = day === currentDayName;
+
+                                                return (
+                                                    <div key={day} className={`p-4 grid grid-cols-12 gap-3 border-b border-white/5 last:border-0 ${isToday ? 'bg-rose-500/5' : ''}`}>
+                                                        <div className="col-span-3 pt-1">
+                                                            <span className={`text-[9px] font-bold uppercase tracking-wider block ${isToday ? 'text-rose-400' : 'text-slate-500'}`}>
+                                                                {day.substring(0, 3)}
+                                                            </span>
+                                                            {isToday && <span className="text-[8px] text-rose-500/70 font-bold uppercase tracking-widest mt-0.5">Today</span>}
+                                                        </div>
+
+                                                        <div className="col-span-9 space-y-3">
+                                                            {daySchedule.map((item, idx) => {
+                                                                const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
+                                                                const activeCovers = coverOverrides[slotId] || [];
+                                                                const hasCovers = activeCovers.length > 0;
+
+                                                                return (
+                                                                    <div key={idx} className="relative group/item flex flex-col gap-1">
+                                                                        <div className="flex items-start justify-between gap-2">
+                                                                            <div className="flex-1">
+                                                                                <div className={`text-xs font-medium transition-all ${hasCovers ? 'text-slate-500 line-through decoration-rose-500/30' : 'text-slate-300'}`}>
+                                                                                    {item.doctor}
+                                                                                </div>
+                                                                                <span className="text-[10px] text-slate-500 block mt-0.5">
+                                                                                    {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            <button
+                                                                                className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                                                                onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
+                                                                            >
+                                                                                <span className="material-icons text-[12px]">edit</span>
+                                                                            </button>
+                                                                        </div>
+
+                                                                        {hasCovers && (
+                                                                            <div className="space-y-2 mt-1 bg-white/5 rounded-lg p-2 border border-white/5">
+                                                                                {activeCovers.map((cover) => (
+                                                                                    <div key={cover.id} className="flex items-center justify-between">
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className={`text-xs font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' : 'text-slate-300'}`}>
+                                                                                                {cover.doctorName}
+                                                                                            </span>
+                                                                                            {cover.scope !== 'All' && (
+                                                                                                <span className="text-[8px] text-slate-500">
+                                                                                                    {cover.scope}
+                                                                                                </span>
+                                                                                            )}
+                                                                                            {cover.informed && cover.informedBy && (
+                                                                                                <span className="text-[7px] text-slate-600 block leading-tight mt-0.5">
+                                                                                                    by {cover.informedBy.includes('-') ? (profiles[cover.informedBy]?.nickname || 'User') : cover.informedBy.split('@')[0]}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <div className="flex items-center gap-1 scale-90 origin-right">
+                                                                                            <button
+                                                                                                onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
+                                                                                                className={`w-6 h-6 flex items-center justify-center rounded-full border transition-all ${cover.informed ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/5 border-white/10 text-slate-400'
+                                                                                                    }`}
+                                                                                            >
+                                                                                                <span className="material-icons text-[10px]">
+                                                                                                    {cover.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
+                                                                                                </span>
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
+                                                                                                className={`h-6 px-1.5 flex items-center gap-1 rounded-full border transition-all text-[8px] font-bold uppercase ${cover.readStatus === 'complete' ? 'bg-emerald-500 text-white border-emerald-500' :
+                                                                                                    cover.readStatus === 'partial' ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' :
+                                                                                                        'bg-white/5 border-white/10 text-slate-400'
+                                                                                                    }`}
+                                                                                            >
+                                                                                                <span className="material-icons text-[10px]">
+                                                                                                    {cover.readStatus === 'complete' ? 'check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'circle'}
+                                                                                                </span>
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
                 </div>
+
+                {/* Tools Section */}
+                <section>
+                    <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 pl-1">
+                        <span className="material-icons text-sm text-primary">build</span>
+                        Essential Tools
+                    </h2>
+                    <div className="grid grid-cols-1 gap-3">
+                        {RESIDENT_TOOLS.map((tool, idx) => (
+                            <a
+                                key={idx}
+                                href={tool.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                    <span className="material-icons text-xl">{tool.icon}</span>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{tool.name}</h3>
+                                    <p className="text-[10px] text-slate-500">{tool.description}</p>
+                                </div>
+                                <span className="material-icons text-slate-600 ml-auto group-hover:translate-x-1 transition-transform">open_in_new</span>
+                            </a>
+                        ))}
+                    </div>
+                </section>
             </div>
 
             {/* Manage Covers Modal */}
@@ -642,7 +679,7 @@ const ResidentsCornerScreen: React.FC = () => {
                     });
                 }}
             />
-        </>
+        </div>
     );
 };
 

@@ -11,6 +11,7 @@ export type DaySchedule = {
 export type ModalitySchedule = {
     id: string;
     name: string;
+    icon: string; // Added icon field
     schedule: DaySchedule;
 };
 
@@ -28,6 +29,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'gen_rad',
                 name: 'General Radiology',
+                icon: 'calendar_view_month',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Ding', time: '7:01 AM - 4:00 PM' },
@@ -68,6 +70,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'mri',
                 name: 'MRI',
+                icon: 'blur_circular',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Fernandez/Dr. Yu', time: '7:01 - 7:00 AM', subtext: '(Next Day)' },
@@ -97,6 +100,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'ct',
                 name: 'CT',
+                icon: 'donut_large',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Chan', time: '7:01 - 7:00 AM', subtext: '(Next Day)' },
@@ -125,6 +129,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'gen_us',
                 name: 'General Ultrasound',
+                icon: 'waves',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Tornilla', time: '6:00 AM - 5:00 PM' },
@@ -161,6 +166,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'mammo',
                 name: 'Breast / Mammo',
+                icon: 'spa',
                 schedule: {
                     Monday: [{ doctor: 'Dr. Avila', time: 'AM-PM' }],
                     Tuesday: [{ doctor: 'Dr. Avila', time: 'AM-PM' }],
@@ -190,6 +196,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'gen_ultrasound',
                 name: 'General Ultrasound',
+                icon: 'waves',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Gimeno', time: '6:00 - 10:00 AM' },
@@ -223,6 +230,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'breast_mammo',
                 name: 'Breast / Mammo',
+                icon: 'spa',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Jorge', time: '8:00 AM - 5:00 PM' },
@@ -254,6 +262,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'gen_ultrasound',
                 name: 'General Ultrasound',
+                icon: 'waves',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Ledesma', time: '6:00 AM - 12:00 NN' },
@@ -281,6 +290,7 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
             {
                 id: 'breast_mammo',
                 name: 'Breast / Mammo',
+                icon: 'spa',
                 schedule: {
                     Monday: [
                         { doctor: 'Dr. Ledesma', time: '6:00 AM - 12:00 PM' },
