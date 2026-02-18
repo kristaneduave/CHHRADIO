@@ -1,28 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
+import ManageCoversModal, { CoverEntry } from './ManageCoversModal';
 
 // Generate a unique ID for each slot to track overrides
 const getSlotId = (hospitalId: string, modalityId: string, day: string, index: number) => {
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
-type CoverOverride = {
-    doctor: string;
-    informed: boolean;
-    read: boolean;
-};
-
 const ResidentsCornerScreen: React.FC = () => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
 
-    // State for cover overrides: { [slotId]: { doctor: "Name", informed: false, read: false } }
-    const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverOverride>>({});
+    // State for cover overrides: { [slotId]: CoverEntry[] }
+    const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>({});
 
-    // Edit state
-    const [editingSlot, setEditingSlot] = useState<{ id: string, current: string } | null>(null);
-    const [tempCoverName, setTempCoverName] = useState('');
+    // Modal state
+    const [modalData, setModalData] = useState<{
+        isOpen: boolean;
+        slotId: string;
+        originalDoctor: string;
+        timeSlot: string;
+    }>({
+        isOpen: false,
+        slotId: '',
+        originalDoctor: '',
+        timeSlot: ''
+    });
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
 
@@ -35,364 +39,355 @@ const ResidentsCornerScreen: React.FC = () => {
         setExpandedModality(prev => prev === modalityId ? null : modalityId);
     };
 
-    const handleEditClick = (e: React.MouseEvent, slotId: string, currentName: string) => {
-        e.stopPropagation(); // Prevent toggling the accordion
-        setEditingSlot({ id: slotId, current: currentName });
-        // Initialize temp name with existing override or empty
-        const existing = coverOverrides[slotId];
-        setTempCoverName(existing?.doctor || '');
-    };
-
-    const handleSaveCover = () => {
-        if (editingSlot) {
-            if (tempCoverName.trim()) {
-                setCoverOverrides(prev => ({
-                    ...prev,
-                    [editingSlot.id]: {
-                        doctor: tempCoverName.trim(),
-                        informed: prev[editingSlot.id]?.informed || false,
-                        read: prev[editingSlot.id]?.read || false,
-                    }
-                }));
-            } else {
-                // If empty, remove override
-                const newOverrides = { ...coverOverrides };
-                delete newOverrides[editingSlot.id];
-                setCoverOverrides(newOverrides);
-            }
-            setEditingSlot(null);
-            setTempCoverName('');
-        }
-    };
-
-    const handleCancelEdit = () => {
-        setEditingSlot(null);
-        setTempCoverName('');
-    };
-
-    const toggleStatus = (e: React.MouseEvent, slotId: string, field: 'informed' | 'read') => {
+    const handleEditClick = (e: React.MouseEvent, slotId: string, doctorName: string, time: string) => {
         e.stopPropagation();
+        setModalData({
+            isOpen: true,
+            slotId,
+            originalDoctor: doctorName,
+            timeSlot: time
+        });
+    };
+
+    const handleSaveCovers = (covers: CoverEntry[]) => {
+        if (covers.length === 0) {
+            const newOverrides = { ...coverOverrides };
+            delete newOverrides[modalData.slotId];
+            setCoverOverrides(newOverrides);
+        } else {
+            setCoverOverrides(prev => ({
+                ...prev,
+                [modalData.slotId]: covers
+            }));
+        }
+        setModalData(prev => ({ ...prev, isOpen: false }));
+    };
+
+    const toggleStatus = (e: React.MouseEvent, slotId: string, coverId: string, field: 'informed' | 'read') => {
+        e.stopPropagation();
+        // This is a quick toggle for convenience, though the modal handles detailed editing.
+        // For 'read', we might toggle between none/complete or cycle through. 
+        // Let's cycle none -> partial -> complete -> none for read.
+        // For informed, simple toggle.
+
         setCoverOverrides(prev => {
-            const current = prev[slotId];
-            if (!current) return prev;
+            const currentCovers = prev[slotId];
+            if (!currentCovers) return prev;
+
             return {
                 ...prev,
-                [slotId]: {
-                    ...current,
-                    [field]: !current[field]
-                }
+                [slotId]: currentCovers.map(cov => {
+                    if (cov.id !== coverId) return cov;
+
+                    if (field === 'informed') {
+                        return { ...cov, informed: !cov.informed };
+                    } else if (field === 'read') {
+                        const nextStatus =
+                            cov.readStatus === 'none' ? 'partial' :
+                                cov.readStatus === 'partial' ? 'complete' : 'none';
+                        return { ...cov, readStatus: nextStatus };
+                    }
+                    return cov;
+                })
             };
         });
     };
 
-    const renderCoverStatus = (slotId: string, override: CoverOverride) => {
+    const renderCoverStatus = (slotId: string, cover: CoverEntry) => {
         return (
-            <div className="flex items-center gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
                 <button
-                    onClick={(e) => toggleStatus(e, slotId, 'informed')}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-bold transition-all ${override.informed
+                    onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] uppercase font-bold transition-all ${cover.informed
                             ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
                             : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
                         }`}
                 >
-                    <span className="material-icons text-[12px]">
-                        {override.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
+                    <span className="material-icons text-[10px]">
+                        {cover.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
                     </span>
-                    Informed
+                    {cover.informed ? 'Informed' : 'Inform'}
                 </button>
 
                 <button
-                    onClick={(e) => toggleStatus(e, slotId, 'read')}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-bold transition-all ${override.read
+                    onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
+                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] uppercase font-bold transition-all ${cover.readStatus === 'complete'
                             ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
-                            : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
+                            : cover.readStatus === 'partial'
+                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
+                                : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
                         }`}
                 >
-                    <span className="material-icons text-[12px]">
-                        {override.read ? 'fact_check' : 'checklist'}
+                    <span className="material-icons text-[10px]">
+                        {cover.readStatus === 'complete' ? 'fact_check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'checklist'}
                     </span>
-                    Read
+                    {cover.readStatus === 'complete' ? 'Done' : cover.readStatus === 'partial' ? 'Partial' : 'Read'}
                 </button>
             </div>
         );
     };
 
     return (
-        <div className="px-6 pt-12 pb-24 flex flex-col min-h-full animate-in fade-in duration-700">
-            <header className="mb-6">
-                <h1 className="text-xl font-bold text-white tracking-tight">Resident's Corner</h1>
-                <p className="text-slate-500 text-[11px] uppercase tracking-[0.2em] mt-1">Tools & Cover</p>
-            </header>
+        <>
+            <div className="px-6 pt-12 pb-24 flex flex-col min-h-full animate-in fade-in duration-700">
+                <header className="mb-6">
+                    <h1 className="text-xl font-bold text-white tracking-tight">Resident's Corner</h1>
+                    <p className="text-slate-500 text-[11px] uppercase tracking-[0.2em] mt-1">Tools & Cover</p>
+                </header>
 
-            <div className="space-y-6">
-                {/* Consultant Cover Section */}
-                <section>
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                            <span className="material-icons text-lg text-rose-500">medical_services</span>
-                            Consultant Cover
-                        </h2>
-                        {/* Live Indicator */}
-                        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                            <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                            </span>
-                            <span className="text-[10px] uppercase font-bold text-emerald-500 tracking-wide">Live</span>
-                        </div>
-                    </div>
-
-                    {/* Hospital Selector */}
-                    <div className="flex overflow-x-auto gap-2 mb-4 pb-2 scrollbar-hide">
-                        {CONSULTANT_SCHEDULE.map((hospital) => (
-                            <button
-                                key={hospital.id}
-                                onClick={() => setSelectedHospitalId(hospital.id)}
-                                className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${selectedHospitalId === hospital.id
-                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                                    }`}
-                            >
-                                {hospital.name}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Schedule Display */}
-                    <div className="space-y-3">
-                        {selectedHospital?.modalities.length === 0 ? (
-                            <div className="text-center py-8 text-slate-500 text-xs italic">
-                                Schedule not available yet.
+                <div className="space-y-6">
+                    {/* Consultant Cover Section */}
+                    <section>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-sm font-medium text-slate-400 flex items-center gap-2">
+                                <span className="material-icons text-lg text-rose-500">medical_services</span>
+                                Consultant Cover
+                            </h2>
+                            {/* Live Indicator */}
+                            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span className="text-[10px] uppercase font-bold text-emerald-500 tracking-wide">Live</span>
                             </div>
-                        ) : (
-                            selectedHospital?.modalities.map((modality) => {
-                                const isExpanded = expandedModality === modality.id;
-                                const todaySchedule = modality.schedule[currentDayName] || [];
+                        </div>
 
-                                return (
-                                    <div key={modality.id} className="glass-card-enhanced rounded-xl border border-white/10 overflow-hidden relative">
-                                        {/* Modality Header & Today's Preview */}
-                                        <div
-                                            className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
-                                            onClick={() => toggleModality(modality.id)}
-                                        >
-                                            <div className="flex items-center justify-between mb-2">
-                                                <h3 className="text-sm font-bold text-white">{modality.name}</h3>
-                                                <span className={`material-icons text-slate-500 text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                                                    expand_more
-                                                </span>
-                                            </div>
+                        {/* Hospital Selector */}
+                        <div className="flex overflow-x-auto gap-2 mb-4 pb-2 scrollbar-hide">
+                            {CONSULTANT_SCHEDULE.map((hospital) => (
+                                <button
+                                    key={hospital.id}
+                                    onClick={() => setSelectedHospitalId(hospital.id)}
+                                    className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${selectedHospitalId === hospital.id
+                                            ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                                        }`}
+                                >
+                                    {hospital.name}
+                                </button>
+                            ))}
+                        </div>
 
-                                            {/* Today's Schedule - Prominent Display */}
-                                            <div className="space-y-2">
-                                                {todaySchedule.length > 0 ? (
-                                                    todaySchedule.map((item, idx) => {
-                                                        const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
-                                                        const override = coverOverrides[slotId];
-                                                        const isEditing = editingSlot?.id === slotId;
+                        {/* Schedule Display */}
+                        <div className="space-y-3">
+                            {selectedHospital?.modalities.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500 text-xs italic">
+                                    Schedule not available yet.
+                                </div>
+                            ) : (
+                                selectedHospital?.modalities.map((modality) => {
+                                    const isExpanded = expandedModality === modality.id;
+                                    const todaySchedule = modality.schedule[currentDayName] || [];
 
-                                                        return (
-                                                            <div key={idx} className={`flex flex-col p-3 rounded-lg border relative group transition-all ${override?.read ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/5 border-white/5'
-                                                                }`}>
-                                                                <div className="flex items-center justify-between">
-                                                                    {/* Time & Role Label */}
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
-                                                                            TODAY
-                                                                        </span>
-                                                                        <span className="text-[10px] text-slate-500 font-medium">
-                                                                            {item.time} {item.subtext && ` ${item.subtext}`}
-                                                                        </span>
+                                    return (
+                                        <div key={modality.id} className="glass-card-enhanced rounded-xl border border-white/10 overflow-hidden relative">
+                                            {/* Modality Header & Today's Preview */}
+                                            <div
+                                                className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                                                onClick={() => toggleModality(modality.id)}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h3 className="text-sm font-bold text-white">{modality.name}</h3>
+                                                    <span className={`material-icons text-slate-500 text-xl transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                                                        expand_more
+                                                    </span>
+                                                </div>
+
+                                                {/* Today's Schedule - Prominent Display */}
+                                                <div className="space-y-2">
+                                                    {todaySchedule.length > 0 ? (
+                                                        todaySchedule.map((item, idx) => {
+                                                            const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
+                                                            const activeCovers = coverOverrides[slotId] || [];
+                                                            const hasCovers = activeCovers.length > 0;
+
+                                                            return (
+                                                                <div key={idx} className={`flex flex-col p-3 rounded-lg border relative group transition-all ${hasCovers ? 'bg-white/5 border-rose-500/20' : 'bg-white/5 border-white/5'
+                                                                    }`}>
+                                                                    <div className="flex items-center justify-between">
+                                                                        {/* Time & Role Label */}
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
+                                                                                TODAY
+                                                                            </span>
+                                                                            <span className="text-[10px] text-slate-500 font-medium">
+                                                                                {item.time} {item.subtext && ` ${item.subtext}`}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
-                                                                </div>
 
-                                                                {/* Doctor Name */}
-                                                                {isEditing ? (
-                                                                    <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
-                                                                        <input
-                                                                            autoFocus
-                                                                            className="flex-1 bg-black/50 border border-rose-500/50 text-sm text-white px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-rose-500 transition-all"
-                                                                            placeholder="Enter covering doctor..."
-                                                                            value={tempCoverName}
-                                                                            onChange={(e) => setTempCoverName(e.target.value)}
-                                                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCover()}
-                                                                        />
-                                                                        <button onClick={handleSaveCover} className="text-emerald-400 hover:text-emerald-300">
-                                                                            <span className="material-icons text-lg">check</span>
-                                                                        </button>
-                                                                        <button onClick={handleCancelEdit} className="text-slate-400 hover:text-slate-300">
-                                                                            <span className="material-icons text-lg">close</span>
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="flex-1 truncate">
-                                                                                {override ? (
-                                                                                    <div className="flex flex-col">
-                                                                                        <span className={`text-sm font-bold flex items-center gap-1 ${override.read ? 'text-emerald-400' : 'text-amber-400'
-                                                                                            }`}>
-                                                                                            {override.doctor}
-                                                                                            <span className="material-icons text-[10px]">
-                                                                                                {override.read ? 'verified' : 'history_edu'}
-                                                                                            </span>
-                                                                                        </span>
-                                                                                        <span className="text-[10px] text-slate-500 line-through Decoration-rose-500/50 decoration-2">
-                                                                                            {item.doctor}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                ) : (
-                                                                                    <span className="text-sm font-semibold text-slate-200">
-                                                                                        {item.doctor}
-                                                                                    </span>
-                                                                                )}
+                                                                    <div className="flex flex-col gap-2 mt-1">
+                                                                        {/* Original Doctor */}
+                                                                        <div className="flex items-center justify-between gap-2">
+                                                                            <div className={`text-sm font-semibold transition-all ${hasCovers ? 'text-slate-500 line-through decoration-rose-500/50 decoration-2' : 'text-slate-200'}`}>
+                                                                                {item.doctor}
                                                                             </div>
-
                                                                             {/* Quick Edit Button */}
                                                                             <button
-                                                                                className="p-1.5 rounded-full hover:bg-white/10 text-slate-600 hover:text-rose-400 transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                                                                                onClick={(e) => handleEditClick(e, slotId, item.doctor)}
+                                                                                className="p-1.5 rounded-full hover:bg-white/10 text-slate-600 hover:text-rose-400 transition-colors"
+                                                                                onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
+                                                                                title="Manage Covers"
                                                                             >
                                                                                 <span className="material-icons text-sm">edit</span>
                                                                             </button>
                                                                         </div>
-                                                                        {/* Status Toggles - Only show if override exists */}
-                                                                        {override && renderCoverStatus(slotId, override)}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <div className="text-[10px] text-slate-500 italic py-1 pl-1">No schedule for today</div>
-                                                )}
-                                            </div>
-                                        </div>
 
-                                        {/* EXPANDED: Full Week Schedule */}
-                                        {isExpanded && (
-                                            <div className="border-t border-white/5 bg-black/20 animate-in slide-in-from-top-2 duration-300">
-                                                {daysOfWeek.map((day) => {
-                                                    const daySchedule = modality.schedule[day] || [];
-                                                    if (daySchedule.length === 0) return null;
-
-                                                    // Skip rendering Today again in the expanded view to reduce noise? 
-                                                    // Or keep it for continuity? keeping it for now but maybe styled differently.
-                                                    const isToday = day === currentDayName;
-
-                                                    return (
-                                                        <div key={day} className={`p-4 grid grid-cols-12 gap-3 border-b border-white/5 last:border-0 ${isToday ? 'bg-rose-500/5' : ''}`}>
-                                                            {/* Day Label */}
-                                                            <div className="col-span-3 pt-1">
-                                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${isToday ? 'text-rose-400' : 'text-slate-500'}`}>
-                                                                    {day.substring(0, 3)}
-                                                                </span>
-                                                            </div>
-
-                                                            {/* Shifts */}
-                                                            <div className="col-span-9 space-y-3">
-                                                                {daySchedule.map((item, idx) => {
-                                                                    const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
-                                                                    const override = coverOverrides[slotId];
-                                                                    const isEditing = editingSlot?.id === slotId;
-
-                                                                    return (
-                                                                        <div key={idx} className="relative group/item">
-                                                                            {isEditing ? (
-                                                                                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                                                                                    <input
-                                                                                        autoFocus
-                                                                                        className="flex-1 bg-black/50 border border-primary/50 text-xs text-white px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-primary"
-                                                                                        value={tempCoverName}
-                                                                                        onChange={(e) => setTempCoverName(e.target.value)}
-                                                                                        onKeyDown={(e) => e.key === 'Enter' && handleSaveCover()}
-                                                                                    />
-                                                                                    <button onClick={handleSaveCover} className="text-emerald-400"><span className="material-icons text-sm">check</span></button>
-                                                                                    <button onClick={handleCancelEdit} className="text-slate-400"><span className="material-icons text-sm">close</span></button>
-                                                                                </div>
-                                                                            ) : (
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <div className="flex items-start justify-between gap-2">
-                                                                                        <div className="flex-1">
-                                                                                            {override ? (
-                                                                                                <div className="flex flex-col">
-                                                                                                    <span className={`text-xs font-bold ${override.read ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                                                                                        {override.doctor}
-                                                                                                    </span>
-                                                                                                    <span className="text-[10px] text-slate-500 line-through decoration-rose-500/30">
-                                                                                                        {item.doctor}
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            ) : (
-                                                                                                <span className="text-xs font-medium text-slate-300">
-                                                                                                    {item.doctor}
+                                                                        {/* Active Covers List */}
+                                                                        {hasCovers && (
+                                                                            <div className="space-y-2 pl-2 border-l-2 border-rose-500/20 mt-1">
+                                                                                {activeCovers.map((cover) => (
+                                                                                    <div key={cover.id} className="flex flex-col">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <span className={`text-sm font-bold flex items-center gap-1 ${cover.readStatus === 'complete' ? 'text-emerald-400' :
+                                                                                                    cover.readStatus === 'partial' ? 'text-amber-400' : 'text-slate-300'
+                                                                                                }`}>
+                                                                                                {cover.doctorName}
+                                                                                                {cover.readStatus === 'complete' && <span className="material-icons text-[10px]">verified</span>}
+                                                                                            </span>
+                                                                                            {cover.scope !== 'All' && (
+                                                                                                <span className="text-[9px] px-1.5 py-0.5 bg-white/10 rounded text-slate-400 font-medium">
+                                                                                                    {cover.scope}
                                                                                                 </span>
                                                                                             )}
-                                                                                            <span className="text-[10px] text-slate-500 block mt-0.5">
-                                                                                                {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
-                                                                                            </span>
                                                                                         </div>
-
-                                                                                        {/* Edit Button for Week View */}
-                                                                                        <button
-                                                                                            className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
-                                                                                            onClick={(e) => handleEditClick(e, slotId, item.doctor)}
-                                                                                        >
-                                                                                            <span className="material-icons text-[12px]">edit</span>
-                                                                                        </button>
+                                                                                        {renderCoverStatus(slotId, cover)}
                                                                                     </div>
-                                                                                    {/* Status Toggles Inline for Week View */}
-                                                                                    {override && renderCoverStatus(slotId, override)}
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="text-[10px] text-slate-500 italic py-1 pl-1">No schedule for today</div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-                </section>
 
-                {/* Tools Section */}
-                <section>
-                    <h2 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-2">
-                        <span className="material-icons text-lg text-primary">build</span>
-                        Essential Tools
-                    </h2>
-                    <div className="grid grid-cols-1 gap-3">
-                        {RESIDENT_TOOLS.map((tool, idx) => (
-                            <a
-                                key={idx}
-                                href={tool.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 group hover:bg-white/5 transition-all active:scale-[0.99]"
-                            >
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                                    <span className="material-icons text-xl">{tool.icon}</span>
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="text-sm font-semibold text-white group-hover:text-primary transition-colors">{tool.name}</h3>
-                                    <p className="text-xs text-slate-500 line-clamp-1">{tool.description}</p>
-                                </div>
-                                <span className="material-icons text-slate-600 group-hover:text-slate-300">open_in_new</span>
-                            </a>
-                        ))}
-                    </div>
-                </section>
+                                            {/* EXPANDED: Full Week Schedule */}
+                                            {isExpanded && (
+                                                <div className="border-t border-white/5 bg-black/20 animate-in slide-in-from-top-2 duration-300">
+                                                    {daysOfWeek.map((day) => {
+                                                        const daySchedule = modality.schedule[day] || [];
+                                                        if (daySchedule.length === 0) return null;
+
+                                                        const isToday = day === currentDayName;
+
+                                                        return (
+                                                            <div key={day} className={`p-4 grid grid-cols-12 gap-3 border-b border-white/5 last:border-0 ${isToday ? 'bg-rose-500/5' : ''}`}>
+                                                                {/* Day Label */}
+                                                                <div className="col-span-3 pt-1">
+                                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isToday ? 'text-rose-400' : 'text-slate-500'}`}>
+                                                                        {day.substring(0, 3)}
+                                                                    </span>
+                                                                </div>
+
+                                                                {/* Shifts */}
+                                                                <div className="col-span-9 space-y-3">
+                                                                    {daySchedule.map((item, idx) => {
+                                                                        const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
+                                                                        const activeCovers = coverOverrides[slotId] || [];
+                                                                        const hasCovers = activeCovers.length > 0;
+
+                                                                        return (
+                                                                            <div key={idx} className="relative group/item flex flex-col gap-1">
+                                                                                <div className="flex items-start justify-between gap-2">
+                                                                                    <div className="flex-1">
+                                                                                        <div className={`text-xs font-medium transition-all ${hasCovers ? 'text-slate-500 line-through decoration-rose-500/30' : 'text-slate-300'}`}>
+                                                                                            {item.doctor}
+                                                                                        </div>
+                                                                                        <span className="text-[10px] text-slate-500 block mt-0.5">
+                                                                                            {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
+                                                                                        </span>
+                                                                                    </div>
+
+                                                                                    <button
+                                                                                        className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                                                                        onClick={(e) => handleEditClick(e, slotId, item.doctor, item.time)}
+                                                                                    >
+                                                                                        <span className="material-icons text-[12px]">edit</span>
+                                                                                    </button>
+                                                                                </div>
+
+                                                                                {/* Active Covers List (Simplified for week view) */}
+                                                                                {hasCovers && (
+                                                                                    <div className="space-y-2 mt-1">
+                                                                                        {activeCovers.map((cover) => (
+                                                                                            <div key={cover.id} className="flex flex-col border-l-2 border-rose-500/20 pl-2">
+                                                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                                    <span className={`text-xs font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' : 'text-slate-300'
+                                                                                                        }`}>
+                                                                                                        {cover.doctorName}
+                                                                                                    </span>
+                                                                                                    {cover.scope !== 'All' && (
+                                                                                                        <span className="text-[8px] px-1 bg-white/10 rounded text-slate-400">
+                                                                                                            {cover.scope}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                </div>
+                                                                                                {renderCoverStatus(slotId, cover)}
+                                                                                            </div>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </section>
+
+                    {/* Tools Section */}
+                    <section>
+                        <h2 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-2">
+                            <span className="material-icons text-lg text-primary">build</span>
+                            Essential Tools
+                        </h2>
+                        <div className="grid grid-cols-1 gap-3">
+                            {RESIDENT_TOOLS.map((tool, idx) => (
+                                <a
+                                    key={idx}
+                                    href={tool.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 group hover:bg-white/5 transition-all active:scale-[0.99]"
+                                >
+                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                        <span className="material-icons text-xl">{tool.icon}</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-sm font-semibold text-white group-hover:text-primary transition-colors">{tool.name}</h3>
+                                        <p className="text-xs text-slate-500 line-clamp-1">{tool.description}</p>
+                                    </div>
+                                    <span className="material-icons text-slate-600 group-hover:text-slate-300">open_in_new</span>
+                                </a>
+                            ))}
+                        </div>
+                    </section>
+                </div>
             </div>
-        </div>
+
+            <ManageCoversModal
+                isOpen={modalData.isOpen}
+                onClose={() => setModalData(prev => ({ ...prev, isOpen: false }))}
+                onSave={handleSaveCovers}
+                initialCovers={coverOverrides[modalData.slotId] || []}
+                originalDoctor={modalData.originalDoctor}
+                timeSlot={modalData.timeSlot}
+            />
+        </>
     );
 };
-
-
 
 export default ResidentsCornerScreen;
