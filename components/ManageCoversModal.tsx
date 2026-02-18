@@ -9,6 +9,7 @@ export type CoverEntry = {
     scope: string; // e.g., "All", "Cardiac", "Remaining"
     informed: boolean;
     readStatus: ReadStatus;
+    informedBy?: string;
 };
 
 interface ManageCoversModalProps {
@@ -112,8 +113,8 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                                     <button
                                         onClick={() => handleUpdateCover(cover.id, { informed: !cover.informed })}
                                         className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${cover.informed
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/5 text-slate-500 hover:bg-white/10 border border-transparent'
+                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                            : 'bg-white/5 text-slate-500 hover:bg-white/10 border border-transparent'
                                             }`}
                                     >
                                         <span className="material-icons text-[12px]">
@@ -129,10 +130,10 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                                                 key={status}
                                                 onClick={() => handleUpdateCover(cover.id, { readStatus: status })}
                                                 className={`flex-1 py-1 rounded-[2px] text-[10px] font-bold uppercase transition-all ${cover.readStatus === status
-                                                        ? status === 'complete' ? 'bg-emerald-500 text-black'
-                                                            : status === 'partial' ? 'bg-amber-500 text-black'
-                                                                : 'bg-slate-600 text-white'
-                                                        : 'text-slate-500 hover:text-white'
+                                                    ? status === 'complete' ? 'bg-emerald-500 text-black'
+                                                        : status === 'partial' ? 'bg-amber-500 text-black'
+                                                            : 'bg-slate-600 text-white'
+                                                    : 'text-slate-500 hover:text-white'
                                                     }`}
                                                 title={status}
                                             >

@@ -249,6 +249,123 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
     {
         id: 'mandaue',
         name: 'Mandaue',
-        modalities: [], // Placeholder
+        modalities: [
+            {
+                id: 'gen_ultrasound',
+                name: 'General Ultrasound',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 - 10:00 AM' },
+                        { doctor: 'Dr. Jorge', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 - 10:00 AM' },
+                        { doctor: 'Dr. Paredes', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 - 10:00 AM' },
+                        { doctor: 'Dr. Guinto', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 - 7:30 AM' },
+                        { doctor: 'Dr. Guinto', time: '7:30 - 10:00 AM' },
+                        { doctor: 'Dr. Paredes', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 - 7:30 AM' },
+                        { doctor: 'Dr. Guinto', time: '7:30 - 10:00 AM' },
+                        { doctor: 'Dr. Cadiz', time: '1:00 - 5:00 PM' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Guinto', time: '6:00 - 12:00 NN' },
+                        { doctor: 'Dr. Ledesma', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Sunday: [],
+                },
+            },
+            {
+                id: 'breast_mammo',
+                name: 'Breast / Mammo',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Jorge', time: '8:00 AM - 5:00 PM' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Jorge', time: '8:00 AM - 2:00 PM' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Guinto', time: '8:00 AM - 5:00 PM' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Jorge', time: '8:00 AM - 2:00 PM' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Jorge', time: '8:00 AM - 1:30 PM' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Guinto', time: '8:00 AM - 12:00 AM' },
+                    ],
+                    Sunday: [],
+                },
+            },
+        ],
+    },
+    {
+        id: 'medical_mall',
+        name: 'Medical Mall',
+        modalities: [
+            {
+                id: 'gen_ultrasound',
+                name: 'General Ultrasound',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Ledesma', time: '6:00 AM - 12:00 NN' },
+                        { doctor: 'Dr. Gimeno', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Tornilla', time: '6:00 AM - 5:00 PM' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Tarongoy', time: '6:00 AM - 5:00 PM' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Tornilla', time: '6:00 AM - 5:00 PM' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Tarongoy', time: '6:00 AM - 5:00 PM' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Gimeno', time: '6:00 AM - 12:00 NN' },
+                        { doctor: 'Dr. Ledesma', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Sunday: [],
+                },
+            },
+            {
+                id: 'breast_mammo',
+                name: 'Breast / Mammo',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Ledesma', time: '6:00 AM - 12:00 PM' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Ledesma', time: '10:00 AM - 5:00 PM' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Ledesma', time: '10:00 AM - 5:00 PM' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Ledesma', time: '10:00 AM - 5:00 PM' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Ledesma', time: '10:00 AM - 5:00 PM' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Ledesma', time: '1:00 PM - 5:00 PM' },
+                    ],
+                    Sunday: [],
+                },
+            },
+        ],
     },
 ];

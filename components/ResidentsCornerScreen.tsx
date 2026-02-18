@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
 import ManageCoversModal, { CoverEntry } from './ManageCoversModal';
+import { supabase } from '../services/supabase';
+import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 
 // Generate a unique ID for each slot to track overrides
 const getSlotId = (hospitalId: string, modalityId: string, day: string, index: number) => {
@@ -11,9 +13,62 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
 const ResidentsCornerScreen: React.FC = () => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     // State for cover overrides: { [slotId]: CoverEntry[] }
     const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>({});
+
+    // Fetch user and covers on mount
+    useEffect(() => {
+        const init = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setCurrentUser(user);
+            fetchCovers();
+        };
+        init();
+
+        // Real-time subscription
+        const channel = supabase
+            .channel('consultant_covers_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'consultant_covers' }, (payload) => {
+                fetchCovers();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
+
+    const fetchCovers = async () => {
+        const { data, error } = await supabase
+            .from('consultant_covers')
+            .select('*');
+
+        if (error) {
+            console.error('Error fetching covers:', error);
+            return;
+        }
+
+        if (data) {
+            const overrides: Record<string, CoverEntry[]> = {};
+            data.forEach((row: any) => {
+                const entry: CoverEntry = {
+                    id: row.id,
+                    doctorName: row.doctor_name,
+                    scope: row.scope,
+                    informed: row.informed,
+                    readStatus: row.read_status as any,
+                    informedBy: row.informed_by
+                };
+                if (!overrides[row.slot_id]) {
+                    overrides[row.slot_id] = [];
+                }
+                overrides[row.slot_id].push(entry);
+            });
+            setCoverOverrides(overrides);
+        }
+    };
 
     // Modal state
     const [modalData, setModalData] = useState<{
@@ -49,48 +104,107 @@ const ResidentsCornerScreen: React.FC = () => {
         });
     };
 
-    const handleSaveCovers = (covers: CoverEntry[]) => {
-        if (covers.length === 0) {
-            const newOverrides = { ...coverOverrides };
-            delete newOverrides[modalData.slotId];
-            setCoverOverrides(newOverrides);
-        } else {
+    const handleSaveCovers = async (covers: CoverEntry[]) => {
+        const slotId = modalData.slotId;
+        const currentSlotCovers = coverOverrides[slotId] || [];
+
+        try {
+            // Identify deletions
+            const newIds = new Set(covers.map(c => c.id));
+            const toDelete = currentSlotCovers.filter(c => !newIds.has(c.id));
+
+            for (const del of toDelete) {
+                // Only delete if it's a UUID (not temp which shouldn't exist in DB yet unless persisted)
+                if (!del.id.startsWith('temp-')) {
+                    await supabase.from('consultant_covers').delete().eq('id', del.id);
+                }
+            }
+
+            // Upsert new/updated
+            for (const cover of covers) {
+                const isTemp = cover.id.startsWith('temp-') || /^\d+$/.test(cover.id);
+
+                const payload: any = {
+                    slot_id: slotId,
+                    doctor_name: cover.doctorName,
+                    scope: cover.scope,
+                    informed: cover.informed,
+                    read_status: cover.readStatus,
+                    informed_by: cover.informed ? (cover.informedBy || currentUser?.email) : null
+                };
+
+                if (!isTemp) {
+                    payload.id = cover.id;
+                }
+
+                await supabase.from('consultant_covers').upsert(payload);
+            }
+
+            fetchCovers();
+        } catch (err) {
+            console.error("Error saving covers:", err);
+            // Fallback to local state if offline/error
             setCoverOverrides(prev => ({
                 ...prev,
-                [modalData.slotId]: covers
+                [slotId]: covers
             }));
         }
+
         setModalData(prev => ({ ...prev, isOpen: false }));
     };
 
-    const toggleStatus = (e: React.MouseEvent, slotId: string, coverId: string, field: 'informed' | 'read') => {
+    const toggleStatus = async (e: React.MouseEvent, slotId: string, coverId: string, field: 'informed' | 'read') => {
         e.stopPropagation();
-        // This is a quick toggle for convenience, though the modal handles detailed editing.
-        // For 'read', we might toggle between none/complete or cycle through. 
-        // Let's cycle none -> partial -> complete -> none for read.
-        // For informed, simple toggle.
 
-        setCoverOverrides(prev => {
-            const currentCovers = prev[slotId];
-            if (!currentCovers) return prev;
+        const currentSlotCovers = coverOverrides[slotId];
+        const cover = currentSlotCovers?.find(c => c.id === coverId);
+        if (!cover) return;
 
-            return {
-                ...prev,
-                [slotId]: currentCovers.map(cov => {
-                    if (cov.id !== coverId) return cov;
+        let newInformed = cover.informed;
+        let newReadStatus = cover.readStatus;
+        let newInformedBy = cover.informedBy;
 
-                    if (field === 'informed') {
-                        return { ...cov, informed: !cov.informed };
-                    } else if (field === 'read') {
-                        const nextStatus =
-                            cov.readStatus === 'none' ? 'partial' :
-                                cov.readStatus === 'partial' ? 'complete' : 'none';
-                        return { ...cov, readStatus: nextStatus };
-                    }
-                    return cov;
+        if (field === 'informed') {
+            newInformed = !newInformed;
+            newInformedBy = newInformed ? (currentUser?.email || 'Unknown') : null;
+        } else if (field === 'read') {
+            newReadStatus =
+                cover.readStatus === 'none' ? 'partial' :
+                    cover.readStatus === 'partial' ? 'complete' : 'none';
+
+            // Auto-inform logic
+            if (newReadStatus === 'partial' || newReadStatus === 'complete') {
+                if (!newInformed) {
+                    newInformed = true;
+                    newInformedBy = currentUser?.email || 'Unknown';
+                }
+            }
+        }
+
+        try {
+            const { error } = await supabase
+                .from('consultant_covers')
+                .update({
+                    informed: newInformed,
+                    read_status: newReadStatus,
+                    informed_by: newInformedBy
                 })
-            };
-        });
+                .eq('id', coverId);
+
+            if (error) throw error;
+            // No need to manually update state as subscription will handle it, 
+            // but for instant feedback we can:
+            setCoverOverrides(prev => ({
+                ...prev,
+                [slotId]: prev[slotId].map(c =>
+                    c.id === coverId
+                        ? { ...c, informed: newInformed, readStatus: newReadStatus, informedBy: newInformedBy }
+                        : c
+                )
+            }));
+        } catch (err) {
+            console.error("Error updating status:", err);
+        }
     };
 
     const renderCoverStatus = (slotId: string, cover: CoverEntry) => {
@@ -253,6 +367,12 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                     Scope: <span className="text-slate-400">{cover.scope}</span>
                                                                                                 </span>
                                                                                             )}
+                                                                                            {cover.informed && cover.informedBy && (
+                                                                                                <span className="text-[8px] text-slate-600 mt-0.5 flex items-center gap-1">
+                                                                                                    <span className="material-icons text-[8px]">face</span>
+                                                                                                    Inf by: {cover.informedBy.split('@')[0]}
+                                                                                                </span>
+                                                                                            )}
                                                                                         </div>
 
                                                                                         {/* Right: Actions */}
@@ -329,6 +449,11 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                     {cover.scope !== 'All' && (
                                                                                                         <span className="text-[8px] text-slate-500">
                                                                                                             {cover.scope}
+                                                                                                        </span>
+                                                                                                    )}
+                                                                                                    {cover.informed && cover.informedBy && (
+                                                                                                        <span className="text-[7px] text-slate-600 block leading-tight mt-0.5">
+                                                                                                            by {cover.informedBy.split('@')[0]}
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
