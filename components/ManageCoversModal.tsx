@@ -3,6 +3,15 @@ import ReactDOM from 'react-dom';
 
 export type ReadStatus = 'none' | 'partial' | 'complete';
 
+export type LogEntry = {
+    id: string;
+    userId: string;
+    userName: string;
+    message: string;
+    timestamp: string;
+    type: 'status' | 'note';
+};
+
 export type CoverEntry = {
     id: string;
     doctorName: string;
@@ -10,6 +19,7 @@ export type CoverEntry = {
     informed: boolean;
     readStatus: ReadStatus;
     informedBy?: string;
+    logs?: LogEntry[];
 };
 
 interface ManageCoversModalProps {
