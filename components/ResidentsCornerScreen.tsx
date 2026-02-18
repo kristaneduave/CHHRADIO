@@ -95,31 +95,33 @@ const ResidentsCornerScreen: React.FC = () => {
 
     const renderCoverStatus = (slotId: string, cover: CoverEntry) => {
         return (
-            <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+                {/* Informed Toggle */}
                 <button
                     onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] uppercase font-bold transition-all ${cover.informed
-                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                            : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
+                    className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${cover.informed
+                            ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/20'
+                            : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
                         }`}
+                    title={cover.informed ? "Informed" : "Mark as Informed"}
                 >
-                    <span className="material-icons text-[10px]">
+                    <span className="material-icons text-sm">
                         {cover.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
                     </span>
-                    {cover.informed ? 'Informed' : 'Inform'}
                 </button>
 
+                {/* Read Status Toggle */}
                 <button
                     onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
-                    className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] uppercase font-bold transition-all ${cover.readStatus === 'complete'
-                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                    className={`h-7 px-2.5 flex items-center gap-1.5 rounded-lg border transition-all font-bold text-[10px] uppercase tracking-wide ${cover.readStatus === 'complete'
+                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/20'
                             : cover.readStatus === 'partial'
-                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-                                : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+                                : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
                         }`}
                 >
-                    <span className="material-icons text-[10px]">
-                        {cover.readStatus === 'complete' ? 'fact_check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'checklist'}
+                    <span className="material-icons text-sm">
+                        {cover.readStatus === 'complete' ? 'check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'circle'}
                     </span>
                     {cover.readStatus === 'complete' ? 'Done' : cover.readStatus === 'partial' ? 'Partial' : 'Read'}
                 </button>
@@ -160,8 +162,8 @@ const ResidentsCornerScreen: React.FC = () => {
                                     key={hospital.id}
                                     onClick={() => setSelectedHospitalId(hospital.id)}
                                     className={`px-4 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${selectedHospitalId === hospital.id
-                                            ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                                            : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                                        : 'bg-white/5 text-slate-400 hover:bg-white/10'
                                         }`}
                                 >
                                     {hospital.name}
@@ -235,22 +237,25 @@ const ResidentsCornerScreen: React.FC = () => {
 
                                                                         {/* Active Covers List */}
                                                                         {hasCovers && (
-                                                                            <div className="space-y-2 pl-2 border-l-2 border-rose-500/20 mt-1">
+                                                                            <div className="space-y-2 mt-1">
                                                                                 {activeCovers.map((cover) => (
-                                                                                    <div key={cover.id} className="flex flex-col">
-                                                                                        <div className="flex items-center gap-2">
+                                                                                    <div key={cover.id} className="flex items-center justify-between bg-black/30 rounded-lg p-2 border border-white/5">
+                                                                                        {/* Left: Info */}
+                                                                                        <div className="flex flex-col">
                                                                                             <span className={`text-sm font-bold flex items-center gap-1 ${cover.readStatus === 'complete' ? 'text-emerald-400' :
-                                                                                                    cover.readStatus === 'partial' ? 'text-amber-400' : 'text-slate-300'
+                                                                                                    cover.readStatus === 'partial' ? 'text-amber-400' : 'text-slate-200'
                                                                                                 }`}>
                                                                                                 {cover.doctorName}
-                                                                                                {cover.readStatus === 'complete' && <span className="material-icons text-[10px]">verified</span>}
+                                                                                                {cover.readStatus === 'complete' && <span className="material-icons text-[12px] text-emerald-500">verified</span>}
                                                                                             </span>
                                                                                             {cover.scope !== 'All' && (
-                                                                                                <span className="text-[9px] px-1.5 py-0.5 bg-white/10 rounded text-slate-400 font-medium">
-                                                                                                    {cover.scope}
+                                                                                                <span className="text-[9px] text-slate-500 font-medium mt-0.5">
+                                                                                                    Scope: <span className="text-slate-400">{cover.scope}</span>
                                                                                                 </span>
                                                                                             )}
                                                                                         </div>
+
+                                                                                        {/* Right: Actions */}
                                                                                         {renderCoverStatus(slotId, cover)}
                                                                                     </div>
                                                                                 ))}
