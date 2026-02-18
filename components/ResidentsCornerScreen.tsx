@@ -189,7 +189,7 @@ const ResidentsCornerScreen: React.FC = () => {
                     scope: cover.scope,
                     informed: cover.informed,
                     read_status: cover.readStatus,
-                    informed_by: cover.informed ? (cover.informedBy || currentUser?.email) : null
+                    informed_by: cover.informed ? (cover.informedBy || currentUser?.id) : null
                 };
 
                 if (!isTemp) {
@@ -231,7 +231,7 @@ const ResidentsCornerScreen: React.FC = () => {
 
         if (field === 'informed') {
             newInformed = !newInformed;
-            newInformedBy = newInformed ? (currentUser?.id || currentUser?.email || 'Unknown') : null;
+            newInformedBy = newInformed ? (currentUser?.id || 'Unknown') : null;
         } else if (field === 'read') {
             newReadStatus =
                 cover.readStatus === 'none' ? 'partial' :
@@ -241,7 +241,7 @@ const ResidentsCornerScreen: React.FC = () => {
             if (newReadStatus === 'partial' || newReadStatus === 'complete') {
                 if (!newInformed) {
                     newInformed = true;
-                    newInformedBy = currentUser?.id || currentUser?.email || 'Unknown';
+                    newInformedBy = currentUser?.id || 'Unknown';
                 }
             }
         }

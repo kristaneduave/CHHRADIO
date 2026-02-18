@@ -87,11 +87,11 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                                                     <img src={profile.avatar_url} alt={informedName || ''} className="w-4 h-4 rounded-full object-cover" />
                                                 ) : (
                                                     <div className="w-4 h-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[8px] font-bold text-white uppercase shadow-sm">
-                                                        {(profile?.nickname?.charAt(0) || profile?.full_name?.charAt(0) || cover.informedBy?.charAt(0) || '?')}
+                                                        {(profile?.nickname?.charAt(0) || profile?.full_name?.charAt(0) || profile?.username?.charAt(0) || cover.informedBy?.charAt(0) || '?')}
                                                     </div>
                                                 )}
                                                 <span className="text-[9px] text-slate-300 font-bold max-w-[80px] truncate">
-                                                    {profile?.nickname || profile?.full_name?.split(' ')[0] || cover.informedBy}
+                                                    {profile?.nickname || profile?.full_name?.split(' ')[0] || profile?.username || cover.informedBy}
                                                 </span>
                                             </div>
                                         )}
@@ -117,14 +117,6 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
 
                                         {/* Read Status Segmented Control */}
                                         <div className="flex-[2] flex bg-white/5 rounded-lg border border-white/5 p-0.5">
-                                            {(['none', 'partial', 'complete'] as const).map((status) => (
-                                                <button
-                                                    key={status}
-                                                    onClick={(e) => onToggleStatus(e, slotId, cover.id, 'read')}
-                                                    className={`hidden`}
-                                                />
-                                            ))}
-
                                             <button
                                                 onClick={(e) => onToggleStatus(e, slotId, cover.id, 'read')}
                                                 className={`w-full py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all outline-none ${cover.readStatus === 'complete' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
@@ -147,42 +139,36 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                     </div>
 
                     {/* Improved Activity Log */}
-                    <div className="pt-4 border-t border-white/5 mt-2">
-                        <div className="flex items-center gap-2 mb-3 px-1">
-                            <span className="material-icons text-rose-500 text-[14px]">history_edu</span>
+                    <div className="pt-4 border-t border-white/5 mt-2 flex-1 flex flex-col min-h-0">
+                        <div className="flex items-center gap-2 mb-2 px-1 shrink-0">
+                            <span className="material-icons text-rose-500 text-[14px]">forum</span>
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Activity Log</span>
                         </div>
 
-                        <div className="relative pl-4 space-y-4 mb-4 ml-1">
-                            {/* Timeline Line */}
-                            <div className="absolute left-[3px] top-2 bottom-2 w-[1px] bg-white/10"></div>
-
+                        <div className="relative pl-1 pr-1 space-y-3 mb-2 flex-1 overflow-y-auto custom-scrollbar">
                             {allLogs.length === 0 ? (
-                                <div className="text-[10px] text-slate-600 italic pl-2 py-1">
+                                <div className="text-[10px] text-slate-600 italic py-4 text-center">
                                     No activity recorded.
                                 </div>
                             ) : (
                                 allLogs.map((log, lIdx) => (
-                                    <div key={`${log.timestamp}-${lIdx}`} className="relative pl-4 group">
-                                        <span className="absolute left-[-5px] top-[6px] w-[5px] h-[5px] rounded-full bg-slate-700 border border-[#0F1720] ring-2 ring-[#0F1720] group-hover:bg-rose-500 transition-colors z-10"></span>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] font-bold text-slate-300">{log.userName}</span>
-                                                <span className="text-[9px] text-slate-600">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                            </div>
-                                            <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">{log.message}</p>
+                                    <div key={`${log.timestamp}-${lIdx}`} className="bg-white/5 rounded-lg p-2 border border-white/5">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-[10px] font-bold text-rose-400">{log.userName}</span>
+                                            <span className="text-[9px] text-slate-600">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                         </div>
+                                        <p className="text-[11px] text-slate-300 leading-relaxed break-words">{log.message}</p>
                                     </div>
                                 ))
                             )}
                         </div>
 
-                        {/* Minimalist Input */}
-                        <div className="relative group mx-1">
+                        {/* Chat Input */}
+                        <div className="relative flex gap-2 pt-2 border-t border-white/5 shrink-0">
                             <input
                                 type="text"
                                 placeholder="Add a note..."
-                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-3 pr-8 text-[11px] text-white focus:outline-none focus:border-rose-500/50 transition-all placeholder:text-slate-600 focus:bg-black/40"
+                                className="flex-1 bg-black/20 border border-white/10 rounded-lg py-2 px-3 text-[11px] text-white focus:outline-none focus:border-rose-500/50 transition-all placeholder:text-slate-600 focus:bg-black/40"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         if (e.currentTarget.value.trim() && covers.length > 0) {
@@ -192,7 +178,18 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                                     }
                                 }}
                             />
-                            <button className="material-icons absolute right-2 top-2 text-slate-600 text-[14px] hover:text-white transition-colors">send</button>
+                            <button
+                                className="bg-rose-500 hover:bg-rose-600 text-white rounded-lg px-3 py-1 flex items-center justify-center transition-colors shadow-lg shadow-rose-500/20"
+                                onClick={(e) => {
+                                    const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                    if (input.value.trim() && covers.length > 0) {
+                                        onAddLog(slotId, covers[0].id, input.value.trim());
+                                        input.value = '';
+                                    }
+                                }}
+                            >
+                                <span className="material-icons text-[14px]">send</span>
+                            </button>
                         </div>
                     </div>
                 </div>
