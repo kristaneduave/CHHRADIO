@@ -202,6 +202,18 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5 flex gap-3">
                     <button
+                        onClick={() => {
+                            if (window.confirm('Are you sure you want to reset to default? This will remove all covers.')) {
+                                onSave([]);
+                                onClose();
+                            }
+                        }}
+                        className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-rose-500/10 text-slate-400 hover:text-rose-500 font-medium text-sm transition-colors border border-transparent hover:border-rose-500/30 flex items-center justify-center gap-2"
+                    >
+                        <span className="material-icons text-base">restart_alt</span>
+                        Reset
+                    </button>
+                    <button
                         onClick={onClose}
                         className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white font-medium text-sm transition-colors"
                     >
@@ -209,9 +221,9 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition-colors"
+                        className="flex-[2] py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition-colors"
                     >
-                        Save Changes
+                        Save
                     </button>
                 </div>
             </div>

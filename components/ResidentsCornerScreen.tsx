@@ -3,6 +3,7 @@ import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
 import { Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
+import CoverDetailsModal from './CoverDetailsModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 
@@ -14,7 +15,6 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
 const ResidentsCornerScreen: React.FC = () => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
-    const [expandedCard, setExpandedCard] = useState<string | null>(null); // New state for expanded schedule card
     const [currentUser, setCurrentUser] = useState<any>(null);
 
     // State for cover overrides: { [slotId]: CoverEntry[] }
@@ -95,8 +95,21 @@ const ResidentsCornerScreen: React.FC = () => {
         }
     };
 
-    // Modal state
-    const [modalData, setModalData] = useState<{
+    // Manage Covers Modal state
+    const [manageModalData, setManageModalData] = useState<{
+        isOpen: boolean;
+        slotId: string;
+        originalDoctor: string;
+        timeSlot: string;
+    }>({
+        isOpen: false,
+        slotId: '',
+        originalDoctor: '',
+        timeSlot: ''
+    });
+
+    // Details Modal state
+    const [detailsModalData, setDetailsModalData] = useState<{
         isOpen: boolean;
         slotId: string;
         originalDoctor: string;
@@ -121,7 +134,7 @@ const ResidentsCornerScreen: React.FC = () => {
 
     const handleEditClick = (e: React.MouseEvent, slotId: string, doctorName: string, time: string) => {
         e.stopPropagation();
-        setModalData({
+        setManageModalData({
             isOpen: true,
             slotId,
             originalDoctor: doctorName,
@@ -129,8 +142,29 @@ const ResidentsCornerScreen: React.FC = () => {
         });
     };
 
+    const handleCardClick = (e: React.MouseEvent, slotId: string, doctorName: string, time: string, hasCovers: boolean) => {
+        e.stopPropagation();
+        if (hasCovers) {
+            setDetailsModalData({
+                isOpen: true,
+                slotId,
+                originalDoctor: doctorName,
+                timeSlot: time
+            });
+        } else {
+            // If no covers, maybe just open manage? Or do nothing?
+            // Let's open Manage if clicked directly, similar to edit button
+            setManageModalData({
+                isOpen: true,
+                slotId,
+                originalDoctor: doctorName,
+                timeSlot: time
+            });
+        }
+    };
+
     const handleSaveCovers = async (covers: CoverEntry[]) => {
-        const slotId = modalData.slotId;
+        const slotId = manageModalData.slotId;
         const currentSlotCovers = coverOverrides[slotId] || [];
 
         try {
@@ -181,11 +215,11 @@ const ResidentsCornerScreen: React.FC = () => {
             }));
         }
 
-        setModalData(prev => ({ ...prev, isOpen: false }));
+        setManageModalData(prev => ({ ...prev, isOpen: false }));
     };
 
-    const toggleStatus = async (e: React.MouseEvent, slotId: string, coverId: string, field: 'informed' | 'read') => {
-        e.stopPropagation();
+    const toggleStatus = async (e: React.MouseEvent | undefined, slotId: string, coverId: string, field: 'informed' | 'read') => {
+        if (e) e.stopPropagation();
 
         const currentSlotCovers = coverOverrides[slotId];
         const cover = currentSlotCovers?.find(c => c.id === coverId);
@@ -362,16 +396,10 @@ const ResidentsCornerScreen: React.FC = () => {
                                                             const activeCovers = coverOverrides[slotId] || [];
                                                             const hasCovers = activeCovers.length > 0;
 
-                                                            // Key change: We track expansion per slot
-                                                            const isCardExpanded = expandedCard === slotId;
-
                                                             return (
                                                                 <div
                                                                     key={idx}
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setExpandedCard(prev => prev === slotId ? null : slotId);
-                                                                    }}
+                                                                    onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
                                                                     className={`flex flex-col rounded-lg border relative group transition-all cursor-pointer ${hasCovers
                                                                         ? 'bg-rose-500/5 border-rose-500/20 shadow-md shadow-rose-900/10'
                                                                         : 'bg-white/5 border-white/5 hover:bg-white/10'
@@ -400,7 +428,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                         </div>
 
                                                                         {/* Doctor Name Display */}
-                                                                        <div>
+                                                                        <div className="flex items-center justify-between">
                                                                             {!hasCovers ? (
                                                                                 // Showing Original Doctor
                                                                                 <div className="text-base font-bold text-slate-200">
@@ -431,134 +459,16 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                     ))}
                                                                                 </div>
                                                                             )}
-                                                                        </div>
 
-                                                                        {/* Card Footer / Hint */}
-                                                                        {hasCovers && (
-                                                                            <div className="mt-2 flex items-center justify-between">
-                                                                                <div className="flex -space-x-1.5 overflow-hidden">
-                                                                                    {/* Avatars or Icons for "Who is covering" */}
-                                                                                    {/* Avatars or Icons for "Who is covering" */}
-                                                                                    {activeCovers.map(c => {
-                                                                                        const isId = c.informedBy && c.informedBy.includes('-');
-                                                                                        const profile = isId ? profiles[c.informedBy!] : null;
-                                                                                        const informedName = profile?.nickname || profile?.full_name || c.informedBy;
-
-                                                                                        return (
-                                                                                            <div key={c.id} className={`w-5 h-5 rounded-full flex items-center justify-center border border-black text-[10px] font-bold overflow-hidden ${c.informed ? 'bg-blue-500 text-white' : 'bg-slate-700 text-slate-300'
-                                                                                                }`} title={c.informed ? `Informed by ${informedName}` : "Not informed"}>
-                                                                                                {c.informed && profile?.avatar_url ? (
-                                                                                                    <img src={profile.avatar_url} alt={informedName || ''} className="w-full h-full object-cover" />
-                                                                                                ) : (
-                                                                                                    c.informed ? (informedName?.charAt(0) || '?') : (c.doctorName.split(' ').pop()?.charAt(0) || '?')
-                                                                                                )}
-                                                                                            </div>
-                                                                                        );
-                                                                                    })}
-                                                                                </div>
+                                                                            {/* Tap for details hint (if covers exist) */}
+                                                                            {hasCovers && (
                                                                                 <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                                                                                    {isCardExpanded ? 'Collapse' : 'Tap for details'}
-                                                                                    <span className={`material-icons text-[12px] transition-transform ${isCardExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                                                                                    Tap to view
+                                                                                    <span className="material-icons text-[12px]">chevron_right</span>
                                                                                 </span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* EXPANDED SECTION: Controls & Logbook */}
-                                                                    {hasCovers && isCardExpanded && (
-                                                                        <div className="border-t border-rose-500/20 bg-black/20 animate-in slide-in-from-top-2">
-                                                                            {/* 1. Status Controls for each doctor */}
-                                                                            <div className="p-3 border-b border-white/5 space-y-3">
-                                                                                {activeCovers.map((cover) => (
-                                                                                    <div key={cover.id} className="flex items-center justify-between">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <span className="text-sm font-bold text-white">{cover.doctorName}</span>
-                                                                                            {cover.scope !== 'All' && <span className="text-[10px] text-slate-400 bg-white/5 px-1.5 py-0.5 rounded">{cover.scope}</span>}
-                                                                                        </div>
-
-                                                                                        {/* Action Buttons */}
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <button
-                                                                                                onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
-                                                                                                className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${cover.informed
-                                                                                                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/20'
-                                                                                                    : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                                                                                                    }`}
-                                                                                            >
-                                                                                                <span className="material-icons text-sm">
-                                                                                                    {cover.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
-                                                                                                </span>
-                                                                                            </button>
-
-                                                                                            <button
-                                                                                                onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
-                                                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all text-xs font-bold uppercase tracking-wide ${cover.readStatus === 'complete'
-                                                                                                    ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/20'
-                                                                                                    : cover.readStatus === 'partial'
-                                                                                                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-                                                                                                        : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
-                                                                                                    }`}
-                                                                                            >
-                                                                                                <span className="material-icons text-sm">
-                                                                                                    {cover.readStatus === 'complete' ? 'check' : cover.readStatus === 'partial' ? 'hourglass_top' : 'circle'}
-                                                                                                </span>
-                                                                                                {cover.readStatus === 'complete' ? 'Done' : cover.readStatus === 'partial' ? 'Partial' : 'Read'}
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-
-                                                                            {/* 2. Consolidated Logbook */}
-                                                                            <div className="p-3 bg-black/40">
-                                                                                <div className="flex items-center gap-2 mb-2">
-                                                                                    <span className="material-icons text-slate-600 text-[10px]">history</span>
-                                                                                    <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Activity Log</span>
-                                                                                </div>
-
-                                                                                <div className="space-y-1.5 mb-2 max-h-32 overflow-y-auto scrollbar-hide">
-                                                                                    {(() => {
-                                                                                        // Aggregate all logs from active covers
-                                                                                        const allLogs = activeCovers.flatMap(c => c.logs || [])
-                                                                                            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-                                                                                        if (allLogs.length === 0) {
-                                                                                            return <div className="text-[10px] text-slate-600 italic px-1">No updates yet</div>;
-                                                                                        }
-
-                                                                                        return allLogs.map((log, lIdx) => (
-                                                                                            <div key={`${log.timestamp}-${lIdx}`} className="flex gap-2 text-[10px]">
-                                                                                                <span className="text-slate-500 whitespace-nowrap w-12 text-right">
-                                                                                                    {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                                                </span>
-                                                                                                <div className="text-slate-300 flex-1">
-                                                                                                    <span className="font-bold text-slate-400">{log.userName}:</span> {log.message}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        ));
-                                                                                    })()}
-                                                                                </div>
-
-                                                                                {/* Add Note Input - Attaches to the first cover for now */}
-                                                                                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                                                                                    <input
-                                                                                        type="text"
-                                                                                        placeholder="Add a note..."
-                                                                                        className="flex-1 bg-white/5 border border-white/10 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-rose-500/50"
-                                                                                        onKeyDown={(e) => {
-                                                                                            if (e.key === 'Enter') {
-                                                                                                // Default to adding log to the first active cover
-                                                                                                if (activeCovers.length > 0) {
-                                                                                                    handleAddLog(slotId, activeCovers[0].id, e.currentTarget.value);
-                                                                                                    e.currentTarget.value = '';
-                                                                                                }
-                                                                                            }
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                            </div>
+                                                                            )}
                                                                         </div>
-                                                                    )}
+                                                                    </div>
                                                                 </div>
                                                             );
                                                         })
@@ -629,7 +539,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                     )}
                                                                                                     {cover.informed && cover.informedBy && (
                                                                                                         <span className="text-[7px] text-slate-600 block leading-tight mt-0.5">
-                                                                                                            by {cover.informedBy.split('@')[0]}
+                                                                                                            by {cover.informedBy.includes('-') ? (profiles[cover.informedBy!]?.nickname || 'User') : cover.informedBy.split('@')[0]}
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
@@ -705,13 +615,37 @@ const ResidentsCornerScreen: React.FC = () => {
                 </div>
             </div>
 
+            {/* Manage Covers Modal */}
             <ManageCoversModal
-                isOpen={modalData.isOpen}
-                onClose={() => setModalData(prev => ({ ...prev, isOpen: false }))}
+                isOpen={manageModalData.isOpen}
+                onClose={() => setManageModalData(prev => ({ ...prev, isOpen: false }))}
                 onSave={handleSaveCovers}
-                initialCovers={coverOverrides[modalData.slotId] || []}
-                originalDoctor={modalData.originalDoctor}
-                timeSlot={modalData.timeSlot}
+                initialCovers={coverOverrides[manageModalData.slotId] || []}
+                originalDoctor={manageModalData.originalDoctor}
+                timeSlot={manageModalData.timeSlot}
+            />
+
+            {/* Cover Details Modal */}
+            <CoverDetailsModal
+                isOpen={detailsModalData.isOpen}
+                onClose={() => setDetailsModalData(prev => ({ ...prev, isOpen: false }))}
+                slotId={detailsModalData.slotId}
+                covers={coverOverrides[detailsModalData.slotId] || []}
+                originalDoctor={detailsModalData.originalDoctor}
+                timeSlot={detailsModalData.timeSlot}
+                profiles={profiles}
+                currentUser={currentUser}
+                onToggleStatus={toggleStatus}
+                onAddLog={handleAddLog}
+                onEdit={(e) => {
+                    setDetailsModalData(prev => ({ ...prev, isOpen: false }));
+                    setManageModalData({
+                        isOpen: true,
+                        slotId: detailsModalData.slotId,
+                        originalDoctor: detailsModalData.originalDoctor,
+                        timeSlot: detailsModalData.timeSlot
+                    });
+                }}
             />
         </>
     );
