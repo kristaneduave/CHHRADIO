@@ -7,13 +7,18 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
+type CoverOverride = {
+    doctor: string;
+    informed: boolean;
+    read: boolean;
+};
+
 const ResidentsCornerScreen: React.FC = () => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
 
-    // State for cover overrides: { [slotId]: "Dr. New Name" }
-    // In a real app, this would be persisted to a backend (Supabase)
-    const [coverOverrides, setCoverOverrides] = useState<Record<string, string>>({});
+    // State for cover overrides: { [slotId]: { doctor: "Name", informed: false, read: false } }
+    const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverOverride>>({});
 
     // Edit state
     const [editingSlot, setEditingSlot] = useState<{ id: string, current: string } | null>(null);
@@ -33,7 +38,9 @@ const ResidentsCornerScreen: React.FC = () => {
     const handleEditClick = (e: React.MouseEvent, slotId: string, currentName: string) => {
         e.stopPropagation(); // Prevent toggling the accordion
         setEditingSlot({ id: slotId, current: currentName });
-        setTempCoverName(coverOverrides[slotId] || ''); // Start with existing override or empty? Maybe empty to placeholder, or existing.
+        // Initialize temp name with existing override or empty
+        const existing = coverOverrides[slotId];
+        setTempCoverName(existing?.doctor || '');
     };
 
     const handleSaveCover = () => {
@@ -41,7 +48,11 @@ const ResidentsCornerScreen: React.FC = () => {
             if (tempCoverName.trim()) {
                 setCoverOverrides(prev => ({
                     ...prev,
-                    [editingSlot.id]: tempCoverName.trim()
+                    [editingSlot.id]: {
+                        doctor: tempCoverName.trim(),
+                        informed: prev[editingSlot.id]?.informed || false,
+                        read: prev[editingSlot.id]?.read || false,
+                    }
                 }));
             } else {
                 // If empty, remove override
@@ -57,6 +68,53 @@ const ResidentsCornerScreen: React.FC = () => {
     const handleCancelEdit = () => {
         setEditingSlot(null);
         setTempCoverName('');
+    };
+
+    const toggleStatus = (e: React.MouseEvent, slotId: string, field: 'informed' | 'read') => {
+        e.stopPropagation();
+        setCoverOverrides(prev => {
+            const current = prev[slotId];
+            if (!current) return prev;
+            return {
+                ...prev,
+                [slotId]: {
+                    ...current,
+                    [field]: !current[field]
+                }
+            };
+        });
+    };
+
+    const renderCoverStatus = (slotId: string, override: CoverOverride) => {
+        return (
+            <div className="flex items-center gap-2 mt-1.5" onClick={e => e.stopPropagation()}>
+                <button
+                    onClick={(e) => toggleStatus(e, slotId, 'informed')}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-bold transition-all ${override.informed
+                            ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                            : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
+                        }`}
+                >
+                    <span className="material-icons text-[12px]">
+                        {override.informed ? 'mark_chat_read' : 'chat_bubble_outline'}
+                    </span>
+                    Informed
+                </button>
+
+                <button
+                    onClick={(e) => toggleStatus(e, slotId, 'read')}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] uppercase font-bold transition-all ${override.read
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : 'bg-white/5 border-white/10 text-slate-500 hover:bg-white/10'
+                        }`}
+                >
+                    <span className="material-icons text-[12px]">
+                        {override.read ? 'fact_check' : 'checklist'}
+                    </span>
+                    Read
+                </button>
+            </div>
+        );
     };
 
     return (
@@ -130,12 +188,13 @@ const ResidentsCornerScreen: React.FC = () => {
                                                 {todaySchedule.length > 0 ? (
                                                     todaySchedule.map((item, idx) => {
                                                         const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
-                                                        const overrideName = coverOverrides[slotId];
+                                                        const override = coverOverrides[slotId];
                                                         const isEditing = editingSlot?.id === slotId;
 
                                                         return (
-                                                            <div key={idx} className="flex items-center justify-center p-3 rounded-lg bg-white/5 border border-white/5 relative group">
-                                                                <div className="flex-1 min-w-0">
+                                                            <div key={idx} className={`flex flex-col p-3 rounded-lg border relative group transition-all ${override?.read ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-white/5 border-white/5'
+                                                                }`}>
+                                                                <div className="flex items-center justify-between">
                                                                     {/* Time & Role Label */}
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <span className="text-[10px] font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">
@@ -145,33 +204,38 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                             {item.time} {item.subtext && ` ${item.subtext}`}
                                                                         </span>
                                                                     </div>
+                                                                </div>
 
-                                                                    {/* Doctor Name */}
-                                                                    {isEditing ? (
-                                                                        <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
-                                                                            <input
-                                                                                autoFocus
-                                                                                className="flex-1 bg-black/50 border border-rose-500/50 text-sm text-white px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-rose-500 transition-all"
-                                                                                placeholder="Enter covering doctor..."
-                                                                                value={tempCoverName}
-                                                                                onChange={(e) => setTempCoverName(e.target.value)}
-                                                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveCover()}
-                                                                            />
-                                                                            <button onClick={handleSaveCover} className="text-emerald-400 hover:text-emerald-300">
-                                                                                <span className="material-icons text-lg">check</span>
-                                                                            </button>
-                                                                            <button onClick={handleCancelEdit} className="text-slate-400 hover:text-slate-300">
-                                                                                <span className="material-icons text-lg">close</span>
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : (
+                                                                {/* Doctor Name */}
+                                                                {isEditing ? (
+                                                                    <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
+                                                                        <input
+                                                                            autoFocus
+                                                                            className="flex-1 bg-black/50 border border-rose-500/50 text-sm text-white px-2 py-1 rounded focus:outline-none focus:ring-1 focus:ring-rose-500 transition-all"
+                                                                            placeholder="Enter covering doctor..."
+                                                                            value={tempCoverName}
+                                                                            onChange={(e) => setTempCoverName(e.target.value)}
+                                                                            onKeyDown={(e) => e.key === 'Enter' && handleSaveCover()}
+                                                                        />
+                                                                        <button onClick={handleSaveCover} className="text-emerald-400 hover:text-emerald-300">
+                                                                            <span className="material-icons text-lg">check</span>
+                                                                        </button>
+                                                                        <button onClick={handleCancelEdit} className="text-slate-400 hover:text-slate-300">
+                                                                            <span className="material-icons text-lg">close</span>
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex flex-col gap-1">
                                                                         <div className="flex items-center gap-2">
                                                                             <div className="flex-1 truncate">
-                                                                                {overrideName ? (
+                                                                                {override ? (
                                                                                     <div className="flex flex-col">
-                                                                                        <span className="text-sm font-bold text-emerald-400 flex items-center gap-1">
-                                                                                            {overrideName}
-                                                                                            <span className="material-icons text-[10px]">verified</span>
+                                                                                        <span className={`text-sm font-bold flex items-center gap-1 ${override.read ? 'text-emerald-400' : 'text-amber-400'
+                                                                                            }`}>
+                                                                                            {override.doctor}
+                                                                                            <span className="material-icons text-[10px]">
+                                                                                                {override.read ? 'verified' : 'history_edu'}
+                                                                                            </span>
                                                                                         </span>
                                                                                         <span className="text-[10px] text-slate-500 line-through Decoration-rose-500/50 decoration-2">
                                                                                             {item.doctor}
@@ -192,8 +256,10 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                 <span className="material-icons text-sm">edit</span>
                                                                             </button>
                                                                         </div>
-                                                                    )}
-                                                                </div>
+                                                                        {/* Status Toggles - Only show if override exists */}
+                                                                        {override && renderCoverStatus(slotId, override)}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })
@@ -227,7 +293,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                                             <div className="col-span-9 space-y-3">
                                                                 {daySchedule.map((item, idx) => {
                                                                     const slotId = getSlotId(selectedHospital.id, modality.id, day, idx);
-                                                                    const overrideName = coverOverrides[slotId];
+                                                                    const override = coverOverrides[slotId];
                                                                     const isEditing = editingSlot?.id === slotId;
 
                                                                     return (
@@ -245,33 +311,38 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                     <button onClick={handleCancelEdit} className="text-slate-400"><span className="material-icons text-sm">close</span></button>
                                                                                 </div>
                                                                             ) : (
-                                                                                <div className="flex items-start justify-between gap-2">
-                                                                                    <div className="flex-1">
-                                                                                        {overrideName ? (
-                                                                                            <div className="flex flex-col">
-                                                                                                <span className="text-xs font-bold text-emerald-400">{overrideName}</span>
-                                                                                                <span className="text-[10px] text-slate-500 line-through decoration-rose-500/30">
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <div className="flex items-start justify-between gap-2">
+                                                                                        <div className="flex-1">
+                                                                                            {override ? (
+                                                                                                <div className="flex flex-col">
+                                                                                                    <span className={`text-xs font-bold ${override.read ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                                                                                        {override.doctor}
+                                                                                                    </span>
+                                                                                                    <span className="text-[10px] text-slate-500 line-through decoration-rose-500/30">
+                                                                                                        {item.doctor}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            ) : (
+                                                                                                <span className="text-xs font-medium text-slate-300">
                                                                                                     {item.doctor}
                                                                                                 </span>
-                                                                                            </div>
-                                                                                        ) : (
-                                                                                            <span className="text-xs font-medium text-slate-300">
-                                                                                                {item.doctor}
+                                                                                            )}
+                                                                                            <span className="text-[10px] text-slate-500 block mt-0.5">
+                                                                                                {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
                                                                                             </span>
-                                                                                        )}
-                                                                                        <span className="text-[10px] text-slate-500 block mt-0.5">
-                                                                                            {item.time} {item.subtext && <span className="text-amber-500/60 ml-1">{item.subtext}</span>}
-                                                                                        </span>
-                                                                                    </div>
+                                                                                        </div>
 
-                                                                                    {/* Edit Button for Week View */}
-                                                                                    {/* Only show if not today, since today has its own big card above? Actually let's allow editing here too for consistency. */}
-                                                                                    <button
-                                                                                        className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
-                                                                                        onClick={(e) => handleEditClick(e, slotId, item.doctor)}
-                                                                                    >
-                                                                                        <span className="material-icons text-[12px]">edit</span>
-                                                                                    </button>
+                                                                                        {/* Edit Button for Week View */}
+                                                                                        <button
+                                                                                            className="text-slate-600 hover:text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                                                                            onClick={(e) => handleEditClick(e, slotId, item.doctor)}
+                                                                                        >
+                                                                                            <span className="material-icons text-[12px]">edit</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    {/* Status Toggles Inline for Week View */}
+                                                                                    {override && renderCoverStatus(slotId, override)}
                                                                                 </div>
                                                                             )}
                                                                         </div>
