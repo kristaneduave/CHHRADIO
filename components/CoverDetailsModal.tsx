@@ -82,15 +82,17 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                                         </div>
                                         {/* Informed By - Minimalist Pill */}
                                         {cover.informed && (
-                                            <div className="flex items-center gap-1.5 bg-white/5 px-2 py-1 rounded-full border border-white/5" title={`Informed by ${informedName}`}>
+                                            <div className="flex items-center gap-1.5 bg-white/5 pl-0.5 pr-2 py-0.5 rounded-full border border-white/5" title={`Informed by ${informedName}`}>
                                                 {profile?.avatar_url ? (
-                                                    <img src={profile.avatar_url} alt={informedName || ''} className="w-3 h-3 rounded-full object-cover" />
+                                                    <img src={profile.avatar_url} alt={informedName || ''} className="w-4 h-4 rounded-full object-cover" />
                                                 ) : (
-                                                    <div className="w-3 h-3 rounded-full bg-slate-700 flex items-center justify-center text-[6px] font-bold text-white uppercase">
-                                                        {(informedName?.charAt(0) || '?')}
+                                                    <div className="w-4 h-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[8px] font-bold text-white uppercase shadow-sm">
+                                                        {(profile?.nickname?.charAt(0) || profile?.full_name?.charAt(0) || cover.informedBy?.charAt(0) || '?')}
                                                     </div>
                                                 )}
-                                                <span className="text-[9px] text-slate-400 font-medium max-w-[60px] truncate">{informedName}</span>
+                                                <span className="text-[9px] text-slate-300 font-bold max-w-[80px] truncate">
+                                                    {profile?.nickname || profile?.full_name?.split(' ')[0] || cover.informedBy}
+                                                </span>
                                             </div>
                                         )}
                                     </div>
@@ -118,32 +120,16 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                                             {(['none', 'partial', 'complete'] as const).map((status) => (
                                                 <button
                                                     key={status}
-                                                    onClick={(e) => onToggleStatus(e, slotId, cover.id, 'read')} // Using toggle status logic, might need adjustment if it toggles vs sets. Assuming parent handles 'read' by cycling or we might need to send specific value if parent supports it. The current parent implementation toggles next status. *Correction*: The parent `toggleStatus` usually cycles. If I want specific selection, I need to check `ResidentsCornerScreen`. 
-                                                    // Since I can't easily change the parent prop signature without more edits, I will simulate the toggle behavior or just keep it simple. 
-                                                    // WAIT: `manageModal` sets specific status. `ResidentsCorner` `toggleStatus` logic: "if informed... if read...".
-                                                    // Actually `toggleStatus` in `ResidentsCornerScreen` toggles:
-                                                    // `const next = current === 'none' ? 'partial' : current === 'partial' ? 'complete' : 'none';`
-                                                    // So clicking specific buttons here won't work with the current `onToggleStatus` if it just cycles.
-                                                    // HOWEVER, `ManageCoversModal` has `handleUpdateCover` which sets state locally. 
-                                                    // `CoverDetailsModal` calls `onToggleStatus` which updates Supabase directly.
-                                                    // To support specific status selection, I should probably stick to the toggle cycle OR update `toggleStatus` to accept a value.
-                                                    // For now, let's just make the button that corresponds to the current status look active, and clicking it cycles (or maybe just keep the cycle button but style it better). 
-                                                    // actually, the user requested "Buttons... are overpowering. I want it subtle". A segmented control implies direct selection.
-                                                    // Let's stick to the cycle button but make it look like a segmented control that shows progress? No, that's confusing.
-                                                    // Let's keep it as a single button that cycles, but style it like a sleek pill.
-                                                    // OR: Just make the current "Read" button much more subtle.
-                                                    // Let's try a single "Status" button that cycles: [Circle Icon] [Text]
-                                                    // 
-                                                    // Revised plan: Single button for Read Status that cycles: None -> Partial -> Read.
-                                                    className={`hidden`} // Hiding this loop approach.
+                                                    onClick={(e) => onToggleStatus(e, slotId, cover.id, 'read')}
+                                                    className={`hidden`}
                                                 />
                                             ))}
 
                                             <button
                                                 onClick={(e) => onToggleStatus(e, slotId, cover.id, 'read')}
                                                 className={`w-full py-1.5 px-2 rounded-md flex items-center justify-center gap-1.5 transition-all outline-none ${cover.readStatus === 'complete' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                                    cover.readStatus === 'partial' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                                        'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'
+                                                        cover.readStatus === 'partial' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                                            'bg-white/5 text-slate-500 border border-white/5 hover:bg-white/10'
                                                     }`}
                                             >
                                                 <span className="material-icons text-[14px]">
@@ -161,23 +147,26 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                     </div>
 
                     {/* Improved Activity Log */}
-                    <div className="pt-2">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="w-1 h-3 rounded-full bg-rose-500"></span>
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Activity Log</span>
+                    <div className="pt-4 border-t border-white/5 mt-2">
+                        <div className="flex items-center gap-2 mb-3 px-1">
+                            <span className="material-icons text-rose-500 text-[14px]">history_edu</span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Activity Log</span>
                         </div>
 
-                        <div className="relative pl-3 space-y-4 mb-4 before:absolute before:left-[5px] before:top-2 before:bottom-2 before:w-[1px] before:bg-white/5">
+                        <div className="relative pl-4 space-y-4 mb-4 ml-1">
+                            {/* Timeline Line */}
+                            <div className="absolute left-[3px] top-2 bottom-2 w-[1px] bg-white/10"></div>
+
                             {allLogs.length === 0 ? (
-                                <div className="text-[10px] text-slate-600 italic pl-4">
+                                <div className="text-[10px] text-slate-600 italic pl-2 py-1">
                                     No activity recorded.
                                 </div>
                             ) : (
                                 allLogs.map((log, lIdx) => (
                                     <div key={`${log.timestamp}-${lIdx}`} className="relative pl-4 group">
-                                        <span className="absolute left-[3px] top-[5px] w-[5px] h-[5px] rounded-full bg-slate-700 border border-[#1e1e1e] group-hover:bg-rose-500 transition-colors"></span>
+                                        <span className="absolute left-[-5px] top-[6px] w-[5px] h-[5px] rounded-full bg-slate-700 border border-[#0F1720] ring-2 ring-[#0F1720] group-hover:bg-rose-500 transition-colors z-10"></span>
                                         <div className="flex flex-col">
-                                            <div className="flex items-baseline gap-2">
+                                            <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-bold text-slate-300">{log.userName}</span>
                                                 <span className="text-[9px] text-slate-600">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
@@ -189,21 +178,21 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
                         </div>
 
                         {/* Minimalist Input */}
-                        <div className="relative group">
+                        <div className="relative group mx-1">
                             <input
                                 type="text"
                                 placeholder="Add a note..."
-                                className="w-full bg-black/20 border-b border-white/10 py-2 pl-0 pr-8 text-[11px] text-white focus:outline-none focus:border-rose-500/50 transition-all placeholder:text-slate-600 focus:bg-transparent"
+                                className="w-full bg-black/20 border border-white/10 rounded-lg py-2 pl-3 pr-8 text-[11px] text-white focus:outline-none focus:border-rose-500/50 transition-all placeholder:text-slate-600 focus:bg-black/40"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
-                                        if (covers.length > 0) {
-                                            onAddLog(slotId, covers[0].id, e.currentTarget.value);
+                                        if (e.currentTarget.value.trim() && covers.length > 0) {
+                                            onAddLog(slotId, covers[0].id, e.currentTarget.value.trim());
                                             e.currentTarget.value = '';
                                         }
                                     }
                                 }}
                             />
-                            <span className="material-icons absolute right-0 top-2 text-slate-600 text-[12px] opacity-0 group-hover:opacity-100 transition-opacity">send</span>
+                            <button className="material-icons absolute right-2 top-2 text-slate-600 text-[14px] hover:text-white transition-colors">send</button>
                         </div>
                     </div>
                 </div>

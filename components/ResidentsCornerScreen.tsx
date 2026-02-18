@@ -444,11 +444,6 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                                 }`}>
                                                                                                 {cover.doctorName}
                                                                                             </span>
-                                                                                            {cover.scope !== 'All' && (
-                                                                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10 ml-1">
-                                                                                                    {cover.scope}
-                                                                                                </span>
-                                                                                            )}
                                                                                             {cIdx < activeCovers.length - 1 && (
                                                                                                 <span className="text-slate-500 mr-1">, </span>
                                                                                             )}
