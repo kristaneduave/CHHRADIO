@@ -100,8 +100,8 @@ const ResidentsCornerScreen: React.FC = () => {
                 <button
                     onClick={(e) => toggleStatus(e, slotId, cover.id, 'informed')}
                     className={`w-7 h-7 flex items-center justify-center rounded-lg border transition-all ${cover.informed
-                            ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/20'
-                            : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
+                        ? 'bg-blue-500 text-white border-blue-500 shadow-sm shadow-blue-500/20'
+                        : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
                         }`}
                     title={cover.informed ? "Informed" : "Mark as Informed"}
                 >
@@ -114,10 +114,10 @@ const ResidentsCornerScreen: React.FC = () => {
                 <button
                     onClick={(e) => toggleStatus(e, slotId, cover.id, 'read')}
                     className={`h-7 px-2.5 flex items-center gap-1.5 rounded-lg border transition-all font-bold text-[10px] uppercase tracking-wide ${cover.readStatus === 'complete'
-                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/20'
-                            : cover.readStatus === 'partial'
-                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-                                : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
+                        ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/20'
+                        : cover.readStatus === 'partial'
+                            ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+                            : 'bg-white/5 border-white/5 text-slate-600 hover:bg-white/10 hover:text-slate-400'
                         }`}
                 >
                     <span className="material-icons text-sm">
@@ -243,7 +243,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                         {/* Left: Info */}
                                                                                         <div className="flex flex-col">
                                                                                             <span className={`text-sm font-bold flex items-center gap-1 ${cover.readStatus === 'complete' ? 'text-emerald-400' :
-                                                                                                    cover.readStatus === 'partial' ? 'text-amber-400' : 'text-slate-200'
+                                                                                                cover.readStatus === 'partial' ? 'text-amber-400' : 'text-slate-200'
                                                                                                 }`}>
                                                                                                 {cover.doctorName}
                                                                                                 {cover.readStatus === 'complete' && <span className="material-icons text-[12px] text-emerald-500">verified</span>}
@@ -316,23 +316,26 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                                     </button>
                                                                                 </div>
 
-                                                                                {/* Active Covers List (Simplified for week view) */}
+                                                                                {/* Active Covers List (Week View) */}
                                                                                 {hasCovers && (
                                                                                     <div className="space-y-2 mt-1">
                                                                                         {activeCovers.map((cover) => (
-                                                                                            <div key={cover.id} className="flex flex-col border-l-2 border-rose-500/20 pl-2">
-                                                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                                            <div key={cover.id} className="flex items-center justify-between border-l-2 border-rose-500/20 pl-2 py-0.5">
+                                                                                                <div className="flex flex-col">
                                                                                                     <span className={`text-xs font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' : 'text-slate-300'
                                                                                                         }`}>
                                                                                                         {cover.doctorName}
                                                                                                     </span>
                                                                                                     {cover.scope !== 'All' && (
-                                                                                                        <span className="text-[8px] px-1 bg-white/10 rounded text-slate-400">
+                                                                                                        <span className="text-[8px] text-slate-500">
                                                                                                             {cover.scope}
                                                                                                         </span>
                                                                                                     )}
                                                                                                 </div>
-                                                                                                {renderCoverStatus(slotId, cover)}
+                                                                                                {/* Simplified status for week view to avoid clutter, or reusable component */}
+                                                                                                <div className="scale-75 origin-right">
+                                                                                                    {renderCoverStatus(slotId, cover)}
+                                                                                                </div>
                                                                                             </div>
                                                                                         ))}
                                                                                     </div>
