@@ -342,16 +342,18 @@ const ResidentsCornerScreen: React.FC = () => {
                         href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?tab=t.wyylmpp68x5s"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative w-full py-3 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-center gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
+                        className="relative w-full py-3 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-between px-4 gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
                     >
-                        <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
-                            <span className="material-icons text-cyan-400">description</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
+                                <span className="material-icons text-cyan-400">description</span>
+                            </div>
+                            <div className="text-left">
+                                <span className="block text-xs font-bold text-white tracking-wide">VIEW PATIENT DECKING LIST</span>
+                                <span className="block text-[9px] text-cyan-400 font-medium">Google Docs • Live Updates</span>
+                            </div>
                         </div>
-                        <div className="text-left">
-                            <span className="block text-xs font-bold text-white tracking-wide">VIEW PATIENT DECKING LIST</span>
-                            <span className="block text-[9px] text-cyan-400 font-medium">Google Docs • Live Updates</span>
-                        </div>
-                        <span className="material-icons text-cyan-500/50 absolute right-4 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        <span className="material-icons text-cyan-500/50 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                     </a>
                 </div>
 
@@ -433,7 +435,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                     {/* COLLAPSED: Today's View */}
                                     {!isExpanded && (
                                         <div className="px-3 pb-3 animate-in fade-in slide-in-from-top-1">
-                                            <div className="pl-[3.25rem]"> {/* Align with text */}
+                                            <div className=""> {/* Removed pl indentation */}
                                                 {todaySchedule.length > 0 ? (
                                                     todaySchedule.map((item, idx) => {
                                                         const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
