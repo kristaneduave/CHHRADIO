@@ -323,9 +323,9 @@ const ResidentsCornerScreen: React.FC = () => {
 
     return (
         <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-[#050B14]">
-            <div className="max-w-md mx-auto space-y-8">
+            <div className="max-w-md mx-auto space-y-6">
                 {/* Header Section */}
-                <div className="text-center mb-8">
+                <div className="text-center mb-6">
                     <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-orange-500/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_-10px_rgba(244,63,94,0.3)] border border-rose-500/20">
                         <span className="material-icons text-3xl text-rose-400">calendar_month</span>
                     </div>
@@ -342,7 +342,7 @@ const ResidentsCornerScreen: React.FC = () => {
                         href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?tab=t.wyylmpp68x5s"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative w-full py-4 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-center gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
+                        className="relative w-full py-3 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-center gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
                     >
                         <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
                             <span className="material-icons text-cyan-400">description</span>
@@ -356,13 +356,13 @@ const ResidentsCornerScreen: React.FC = () => {
                 </div>
 
                 {/* Hospital Selector - Segmented Control Style */}
-                <div className="glass-card-enhanced p-1.5 rounded-xl border border-white/5 flex relative">
+                <div className="glass-card-enhanced p-1 rounded-xl border border-white/5 flex relative">
                     {/* Sliding Indicator (simplified) */}
                     {CONSULTANT_SCHEDULE.map((hospital) => (
                         <button
                             key={hospital.id}
                             onClick={() => setSelectedHospitalId(hospital.id)}
-                            className={`flex-1 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
                                 ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/20'
                                 : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                                 }`}
@@ -373,7 +373,7 @@ const ResidentsCornerScreen: React.FC = () => {
                 </div>
 
                 {/* Schedule Content */}
-                <div className="space-y-3">
+                <div className="space-y-2">
                     {selectedHospital && (
                         selectedHospital.modalities.map((modality) => {
                             const todaySchedule = modality.schedule[currentDayName] || [];
@@ -401,7 +401,7 @@ const ResidentsCornerScreen: React.FC = () => {
                                     {/* Accordion Header */}
                                     <button
                                         onClick={() => toggleModality(modality.id)}
-                                        className="w-full p-4 flex items-center justify-between"
+                                        className="w-full p-3 flex items-center justify-between"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'
@@ -432,7 +432,7 @@ const ResidentsCornerScreen: React.FC = () => {
 
                                     {/* COLLAPSED: Today's View */}
                                     {!isExpanded && (
-                                        <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-1">
+                                        <div className="px-3 pb-3 animate-in fade-in slide-in-from-top-1">
                                             <div className="pl-[3.25rem]"> {/* Align with text */}
                                                 {todaySchedule.length > 0 ? (
                                                     todaySchedule.map((item, idx) => {
