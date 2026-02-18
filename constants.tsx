@@ -38,18 +38,10 @@ export const ACTIVITIES: Activity[] = [
 
 export const QUICK_ACTIONS: QuickAction[] = [
   {
-    label: 'Upload Case',
-    icon: 'cloud_upload',
-    target: 'upload',
-    subtitle: 'Add new studies',
-    color: 'text-cyan-400',
-    gradient: 'from-slate-800/40 to-slate-900/40' // Unified dark theme
-  },
-  {
-    label: 'Start Quiz',
-    icon: 'quiz',
-    target: 'quiz',
-    subtitle: 'Test your knowledge',
+    label: 'Announcements',
+    icon: 'campaign',
+    target: 'announcements',
+    subtitle: '', // Removed for minimalism
     color: 'text-cyan-400',
     gradient: 'from-slate-800/40 to-slate-900/40'
   },
@@ -57,15 +49,31 @@ export const QUICK_ACTIONS: QuickAction[] = [
     label: 'Calendar',
     icon: 'calendar_month',
     target: 'calendar',
-    subtitle: 'Department schedule',
+    subtitle: '',
     color: 'text-cyan-400',
     gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
-    label: 'Announcements',
-    icon: 'campaign',
-    target: 'announcements',
-    subtitle: 'Latest news',
+    label: 'Database',
+    icon: 'folder_shared', // Or 'storage' or 'search'
+    target: 'database',
+    subtitle: '',
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
+  },
+  {
+    label: 'Upload Case',
+    icon: 'cloud_upload',
+    target: 'upload',
+    subtitle: '',
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
+  },
+  {
+    label: 'Quiz',
+    icon: 'quiz',
+    target: 'quiz',
+    subtitle: '',
     color: 'text-cyan-400',
     gradient: 'from-slate-800/40 to-slate-900/40'
   },
@@ -73,7 +81,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     label: 'Resident\'s Corner',
     icon: 'school',
     target: 'residents-corner',
-    subtitle: 'Schedules & guides',
+    subtitle: '',
     color: 'text-cyan-400',
     gradient: 'from-slate-800/40 to-slate-900/40'
   }

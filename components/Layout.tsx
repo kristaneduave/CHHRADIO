@@ -10,8 +10,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) => {
   const navItems: { screen: Screen; icon: string; outlineIcon: string }[] = [
     { screen: 'dashboard', icon: 'home', outlineIcon: 'home' },
-    { screen: 'newsfeed', icon: 'newspaper', outlineIcon: 'feed' }, // Newsfeed
-    { screen: 'search', icon: 'folder', outlineIcon: 'folder_open' }, // Database
+    { screen: 'newsfeed', icon: 'newspaper', outlineIcon: 'feed' },
     { screen: 'profile', icon: 'person', outlineIcon: 'person_outline' },
   ];
 

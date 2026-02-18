@@ -90,6 +90,7 @@ const App: React.FC = () => {
             }}
           />
         );
+      case 'database':
       case 'search':
         return (
           <SearchScreen
