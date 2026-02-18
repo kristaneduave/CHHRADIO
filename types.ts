@@ -15,6 +15,8 @@ export interface QuickAction {
   icon: string;
   target: Screen;
   subtitle?: string;
+  color: string;
+  gradient: string;
 }
 
 export interface CaseData {

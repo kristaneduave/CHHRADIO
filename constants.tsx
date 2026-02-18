@@ -37,12 +37,54 @@ export const ACTIVITIES: Activity[] = [
 ];
 
 export const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'Upload Case', icon: 'cloud_upload', target: 'upload', subtitle: 'Add new studies' },
-  { label: 'Start Quiz', icon: 'quiz', target: 'quiz', subtitle: 'Test your knowledge' },
-  { label: 'Calendar', icon: 'calendar_month', target: 'calendar', subtitle: 'Department schedule' },
-  { label: 'Announcements', icon: 'campaign', target: 'announcements', subtitle: 'Latest news' },
-  { label: 'Quick Links', icon: 'link', target: 'quick-links', subtitle: 'Resources & tools' },
-  { label: 'Resident\'s Corner', icon: 'school', target: 'residents-corner', subtitle: 'Schedules & guides' }
+  {
+    label: 'Upload Case',
+    icon: 'cloud_upload',
+    target: 'upload',
+    subtitle: 'Add new studies',
+    color: 'text-cyan-400',
+    gradient: 'from-cyan-500/20 to-cyan-500/5'
+  },
+  {
+    label: 'Start Quiz',
+    icon: 'quiz',
+    target: 'quiz',
+    subtitle: 'Test your knowledge',
+    color: 'text-violet-400',
+    gradient: 'from-violet-500/20 to-violet-500/5'
+  },
+  {
+    label: 'Calendar',
+    icon: 'calendar_month',
+    target: 'calendar',
+    subtitle: 'Department schedule',
+    color: 'text-amber-400',
+    gradient: 'from-amber-500/20 to-amber-500/5'
+  },
+  {
+    label: 'Announcements',
+    icon: 'campaign',
+    target: 'announcements',
+    subtitle: 'Latest news',
+    color: 'text-rose-400',
+    gradient: 'from-rose-500/20 to-rose-500/5'
+  },
+  {
+    label: 'Quick Links',
+    icon: 'link',
+    target: 'quick-links',
+    subtitle: 'Resources & tools',
+    color: 'text-emerald-400',
+    gradient: 'from-emerald-500/20 to-emerald-500/5'
+  },
+  {
+    label: 'Resident\'s Corner',
+    icon: 'school',
+    target: 'residents-corner',
+    subtitle: 'Schedules & guides',
+    color: 'text-blue-400',
+    gradient: 'from-blue-500/20 to-blue-500/5'
+  }
 ];
 
 export const RESIDENT_TOOLS = [
