@@ -70,14 +70,6 @@ export const QUICK_ACTIONS: QuickAction[] = [
     gradient: 'from-rose-500/20 to-rose-500/5'
   },
   {
-    label: 'Quick Links',
-    icon: 'link',
-    target: 'quick-links',
-    subtitle: 'Resources & tools',
-    color: 'text-emerald-400',
-    gradient: 'from-emerald-500/20 to-emerald-500/5'
-  },
-  {
     label: 'Resident\'s Corner',
     icon: 'school',
     target: 'residents-corner',

@@ -10,7 +10,6 @@ import ProfileScreen from './components/ProfileScreen';
 import AnnouncementsScreen from './components/AnnouncementsScreen';
 import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
-import QuickLinksScreen from './components/QuickLinksScreen';
 import ResidentsCornerScreen from './components/ResidentsCornerScreen';
 import NewsfeedScreen from './components/NewsfeedScreen';
 import { Screen } from './types';
@@ -117,8 +116,6 @@ const App: React.FC = () => {
         return <AnnouncementsScreen />;
       case 'newsfeed':
         return <NewsfeedScreen />;
-      case 'quick-links':
-        return <QuickLinksScreen />;
       case 'residents-corner':
         return <ResidentsCornerScreen />;
       default:
