@@ -43,39 +43,39 @@ export const QUICK_ACTIONS: QuickAction[] = [
     target: 'upload',
     subtitle: 'Add new studies',
     color: 'text-cyan-400',
-    gradient: 'from-cyan-500/20 to-cyan-500/5'
+    gradient: 'from-slate-800/40 to-slate-900/40' // Unified dark theme
   },
   {
     label: 'Start Quiz',
     icon: 'quiz',
     target: 'quiz',
     subtitle: 'Test your knowledge',
-    color: 'text-violet-400',
-    gradient: 'from-violet-500/20 to-violet-500/5'
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
     label: 'Calendar',
     icon: 'calendar_month',
     target: 'calendar',
     subtitle: 'Department schedule',
-    color: 'text-amber-400',
-    gradient: 'from-amber-500/20 to-amber-500/5'
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
     label: 'Announcements',
     icon: 'campaign',
     target: 'announcements',
     subtitle: 'Latest news',
-    color: 'text-rose-400',
-    gradient: 'from-rose-500/20 to-rose-500/5'
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
     label: 'Resident\'s Corner',
     icon: 'school',
     target: 'residents-corner',
     subtitle: 'Schedules & guides',
-    color: 'text-blue-400',
-    gradient: 'from-blue-500/20 to-blue-500/5'
+    color: 'text-cyan-400',
+    gradient: 'from-slate-800/40 to-slate-900/40'
   }
 ];
 
