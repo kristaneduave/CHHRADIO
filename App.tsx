@@ -12,6 +12,7 @@ import LoginScreen from './components/LoginScreen';
 import CaseViewScreen from './components/CaseViewScreen';
 import QuickLinksScreen from './components/QuickLinksScreen';
 import ResidentsCornerScreen from './components/ResidentsCornerScreen';
+import NewsfeedScreen from './components/NewsfeedScreen';
 import { Screen } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -114,6 +115,8 @@ const App: React.FC = () => {
         );
       case 'announcements':
         return <AnnouncementsScreen />;
+      case 'newsfeed':
+        return <NewsfeedScreen />;
       case 'quick-links':
         return <QuickLinksScreen />;
       case 'residents-corner':
