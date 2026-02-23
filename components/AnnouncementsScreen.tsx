@@ -3,6 +3,8 @@ import { supabase } from '../services/supabase';
 import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
 import AnnouncementDetailModal from './AnnouncementDetailModal';
+import { getRoleLabel, normalizeUserRole } from '../utils/roles';
+import LoadingButton from './LoadingButton';
 
 const AnnouncementsScreen: React.FC = () => {
     const [userRole, setUserRole] = useState<UserRole>('resident');
@@ -18,6 +20,10 @@ const AnnouncementsScreen: React.FC = () => {
     const ITEMS_PER_PAGE = 5;
 
     const categories = ['All', 'Announcement', 'Research', 'Event', 'Misc'];
+    const canCreateAnnouncement = ['admin', 'training_officer', 'moderator', 'consultant'].includes(userRole);
+    const canManageAnyAnnouncement = ['admin', 'training_officer', 'moderator'].includes(userRole);
+    const canManageOwnAnnouncement = (authorId: string) => userRole === 'consultant' && currentUserId === authorId;
+    const canManageAnnouncement = (authorId: string) => canManageAnyAnnouncement || canManageOwnAnnouncement(authorId);
 
     const fetchAnnouncements = async (pageNumber: number = 0, reset: boolean = false) => {
         try {
@@ -55,7 +61,7 @@ const AnnouncementsScreen: React.FC = () => {
                     authorNickname: item.profiles?.nickname,
                     author_id: item.author_id,
                     authorAvatar: item.profiles?.avatar_url,
-                    authorTitle: item.profiles?.role ? item.profiles.role.charAt(0).toUpperCase() + item.profiles.role.slice(1) : 'Staff',
+                    authorTitle: getRoleLabel(item.profiles?.role),
                     date: new Date(item.created_at).toLocaleString([], { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     category: item.category,
                     imageUrl: item.image_url,
@@ -92,7 +98,7 @@ const AnnouncementsScreen: React.FC = () => {
                 setCurrentUserId(user.id);
                 const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
                 if (data?.role) {
-                    setUserRole(data.role.toLowerCase() as UserRole);
+                    setUserRole(normalizeUserRole(data.role));
                 }
             }
         };
@@ -174,7 +180,7 @@ const AnnouncementsScreen: React.FC = () => {
                     {heroAnnouncement && (
                         <div
                             onClick={() => setSelectedAnnouncement(heroAnnouncement)}
-                            className="group relative w-full p-6 sm:p-8 rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-[#0c1829] hover:bg-white/5 transition-colors flex flex-col"
+                            className="group relative w-full p-6 sm:p-8 rounded-3xl overflow-hidden cursor-pointer border border-white/10 shadow-2xl bg-surface hover:bg-white/5 transition-colors flex flex-col"
                         >
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center gap-2 flex-wrap">
@@ -203,7 +209,7 @@ const AnnouncementsScreen: React.FC = () => {
                                 </div>
 
                                 {/* Action Buttons */}
-                                {(userRole === 'admin' || (currentUserId === heroAnnouncement.author_id)) && (
+                                {canManageAnnouncement(heroAnnouncement.author_id) && (
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={(e) => handleEdit(heroAnnouncement, e)}
@@ -297,7 +303,7 @@ const AnnouncementsScreen: React.FC = () => {
                                         <span className="text-[10px] font-medium text-slate-400 truncate max-w-[100px]">{post.author}</span>
                                     </div>
 
-                                    {(userRole === 'admin' || (currentUserId === post.author_id)) && (
+                                    {canManageAnnouncement(post.author_id) && (
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={(e) => handleEdit(post, e)}
@@ -328,31 +334,25 @@ const AnnouncementsScreen: React.FC = () => {
                     {/* Load More Button */}
                     {activeCategory === 'All' && hasMore && filteredAnnouncements.length > 0 && (
                         <div className="flex justify-center pt-4 pb-8">
-                            <button
+                            <LoadingButton
                                 onClick={() => {
                                     const nextPage = page + 1;
                                     setPage(nextPage);
                                     fetchAnnouncements(nextPage, false);
                                 }}
-                                disabled={loading}
+                                isLoading={loading}
+                                loadingText="Loading..."
                                 className="px-6 py-2 rounded-full bg-white/5 hover:bg-white/10 text-xs font-bold text-slate-400 hover:text-white transition-colors border border-white/5 flex items-center gap-2"
                             >
-                                {loading ? (
-                                    <>
-                                        <div className="w-3 h-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></div>
-                                        <span>Loading...</span>
-                                    </>
-                                ) : (
-                                    <span>Load More</span>
-                                )}
-                            </button>
+                                Load More
+                            </LoadingButton>
                         </div>
                     )}
                 </div>
             )}
 
             {/* Create FAB */}
-            {['admin', 'faculty', 'consultant'].includes(userRole.toLowerCase()) && (
+            {canCreateAnnouncement && (
                 <button
                     onClick={() => setShowCreateModal(true)}
                     className="fixed bottom-24 right-6 w-12 h-12 rounded-full bg-gradient-to-r from-primary to-blue-600 text-white shadow-xl shadow-primary/30 flex items-center justify-center transition-all z-40 hover:scale-110 active:scale-95 group"
@@ -388,3 +388,4 @@ const AnnouncementsScreen: React.FC = () => {
 };
 
 export default AnnouncementsScreen;
+

@@ -194,6 +194,88 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
         name: 'Mandaue',
         modalities: [
             {
+                id: 'gen_radiology',
+                name: 'General Radiology',
+                icon: 'calendar_view_month',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Paredes', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Paredes', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Paredes', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Paredes', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Acuna', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 12:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Acuna', time: '12:00 AM - 12:00 NN' },
+                        { doctor: 'Dr. Yu', time: '12:01 NN - 3:00 PM' },
+                        { doctor: 'Dr. Acuna', time: '3:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Sunday: [
+                        { doctor: 'Dr. Reynes', time: '7:01 AM - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                },
+            },
+            {
+                id: 'ct_mri',
+                name: 'CT Scan / MRI',
+                icon: 'medical_services',
+                schedule: {
+                    Monday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Madarang (MRI)', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Koa (CT)', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Tuesday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Madarang', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Wednesday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Yu', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Thursday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Sucaldito', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Friday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 12:00 NN' },
+                        { doctor: 'Dr. Yu', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 12:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Saturday: [
+                        { doctor: 'Dr. Reynes/Dr. Alvar', time: '12:00 AM - 11:59 AM' },
+                        { doctor: 'Dr. Koa', time: '12:01 NN - 5:00 PM' },
+                        { doctor: 'Dr. Balili', time: '5:01 PM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                    Sunday: [
+                        { doctor: 'Dr. Balili', time: '7:01 AM - 7:00 AM', subtext: '(Next Day)' },
+                    ],
+                },
+            },
+            {
                 id: 'gen_ultrasound',
                 name: 'General Ultrasound',
                 icon: 'waves',

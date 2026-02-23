@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
+import { createSystemNotification } from '../services/newsfeedService';
 
 const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -329,10 +330,43 @@ const CalendarScreen: React.FC = () => {
         coverage_details: coverageDetails.filter(d => d.name.trim() !== '')
       };
 
+      let savedEvent: CalendarEvent;
       if (editingEventId) {
-        await CalendarService.updateEvent(editingEventId, payload);
+        savedEvent = await CalendarService.updateEvent(editingEventId, payload);
       } else {
-        await CalendarService.createEvent(payload);
+        savedEvent = await CalendarService.createEvent(payload);
+      }
+
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const actorUserId = auth.user?.id || '';
+        const recipientUserIds = Array.from(
+          new Set(
+            [
+              ...(savedEvent.coverage_details || []).map((d) => d.user_id).filter(Boolean),
+              ...coverageDetails.map((d) => d.user_id).filter(Boolean),
+              savedEvent.assigned_to || '',
+              savedEvent.covered_by || '',
+            ].filter(Boolean),
+          ),
+        );
+
+        if (actorUserId && recipientUserIds.length > 0) {
+          const severity = newEventType === 'exam' ? 'warning' : 'info';
+          const dateLabel = new Date(savedEvent.start_time).toLocaleDateString();
+          await createSystemNotification({
+            actorUserId,
+            type: 'calendar',
+            severity,
+            title: editingEventId ? 'Calendar Event Updated' : 'New Calendar Event',
+            message: `${savedEvent.title} 鈥?${dateLabel}`,
+            linkScreen: 'calendar',
+            linkEntityId: savedEvent.id,
+            recipientUserIds,
+          });
+        }
+      } catch (notifError) {
+        console.error('Failed to emit calendar notification:', notifError);
       }
 
       setShowAddEvent(false);
@@ -408,7 +442,7 @@ const CalendarScreen: React.FC = () => {
             <div className="flex items-center gap-3 w-full md:w-auto">
               {/* Filter Dropdown */}
               <div className="relative group z-50 shrink-0">
-                <div className="flex items-center bg-[#09101d] border border-white/5 rounded-xl transition-all hover:border-white/10">
+                <div className="flex items-center bg-surface-alt border border-white/5 rounded-xl transition-all hover:border-white/10">
                   <button className="flex items-center gap-2 text-slate-300 hover:text-white px-4 py-3 text-sm font-medium min-w-[120px] justify-between">
                     <span className="truncate max-w-[100px]">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
                     <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
@@ -427,7 +461,7 @@ const CalendarScreen: React.FC = () => {
                 </div>
 
                 {/* Dropdown Menu */}
-                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-48 md:w-56 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left md:origin-top-right scale-95 group-hover:scale-100">
+                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-48 md:w-56 bg-surface border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left md:origin-top-right scale-95 group-hover:scale-100">
                   <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {([
                       { id: 'all', label: 'All Events' },
@@ -463,7 +497,7 @@ const CalendarScreen: React.FC = () => {
                   placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#09101d] border border-white/5 rounded-xl pl-10 pr-3 py-3 text-base text-white focus:bg-[#0f172a] focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
+                  className="w-full bg-surface-alt border border-white/5 rounded-xl pl-10 pr-3 py-3 text-base text-white focus:bg-surface focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
                 />
               </div>
             </div>
@@ -532,7 +566,7 @@ const CalendarScreen: React.FC = () => {
                   <div
                     key={event.id}
                     onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
-                    className={`flex flex-col p-4 rounded-2xl bg-[#09101d] border border-white/5 hover:border-white/10 transition-all cursor-pointer event-card group bg-gradient-to-br from-[#09101d] to-[#09101d] ${expandedEventId === event.id ? 'from-white/5 to-[#09101d] border-white/10 shadow-lg shadow-black/20' : ''}`}
+                    className={`flex flex-col p-4 rounded-2xl bg-surface-alt border border-white/5 hover:border-white/10 transition-all cursor-pointer event-card group bg-gradient-to-br from-[#09101d] to-[#09101d] ${expandedEventId === event.id ? 'from-white/5 to-[#09101d] border-white/10 shadow-lg shadow-black/20' : ''}`}
                   >
 
                     <div className="flex gap-4 items-center">
@@ -618,8 +652,8 @@ const CalendarScreen: React.FC = () => {
 
       {/* Render Portal Modal directly without nested component */}
       {showAddEvent && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-[#050B14] animate-in fade-in duration-300">
-          <div className="bg-[#0f172a] border border-white/10 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-visible flex flex-col h-auto max-h-full">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-app animate-in fade-in duration-300">
+          <div className="bg-surface border border-white/10 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-visible flex flex-col h-auto max-h-full">
 
             <div className="absolute top-4 right-4 z-50">
               <button onClick={() => setShowAddEvent(false)} className="bg-white/5 hover:bg-white/10 rounded-full p-2 text-slate-400 hover:text-white transition-colors">
@@ -827,3 +861,5 @@ const CalendarScreen: React.FC = () => {
 };
 
 export default CalendarScreen;
+
+

@@ -85,14 +85,14 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4" onClick={onClose}>
             <div
-                className="w-full max-w-md bg-[#0F1720] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+                className="w-full max-w-md bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="p-4 border-b border-white/5 bg-white/5">
                     <h2 className="text-lg font-bold text-white">Manage Cover</h2>
                     <div className="text-xs text-slate-400 mt-1">
-                        For: <span className="text-rose-400 font-medium">{originalDoctor}</span> â€¢ <span className="text-slate-500">{timeSlot}</span>
+                        For: <span className="text-rose-400 font-medium">{originalDoctor}</span> â€?<span className="text-slate-500">{timeSlot}</span>
                     </div>
                 </div>
 
@@ -233,3 +233,4 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
 };
 
 export default ManageCoversModal;
+

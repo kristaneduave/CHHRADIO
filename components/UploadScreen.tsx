@@ -1,8 +1,10 @@
-
+﻿
 import React, { useState, useRef, useEffect } from 'react';
 import { generateCasePDF } from '../services/pdfService';
 import { supabase } from '../services/supabase';
 import { generateViberText } from '../utils/formatters';
+import { SubmissionType } from '../types';
+import { toastError, toastSuccess, toastInfo } from '../utils/toast';
 
 const ORGAN_SYSTEMS = [
   'Neuroradiology',
@@ -36,29 +38,15 @@ interface ImageUpload {
   description: string;
 }
 
-const RELIABILITY_COLORS: Record<string, string> = {
-  'Certain': 'text-emerald-400',
-  'Probable': 'text-blue-400',
-  'Possible': 'text-amber-400',
-  'Unlikely': 'text-rose-400'
-};
-
-const RELIABILITY_BG_COLORS: Record<string, string> = {
-  'Certain': 'bg-emerald-500',
-  'Probable': 'bg-blue-500',
-  'Possible': 'bg-amber-500',
-  'Unlikely': 'bg-rose-500'
-};
-
-const RELIABILITY_OPTIONS = ['Certain', 'Probable', 'Possible', 'Unlikely'];
-
 interface UploadScreenProps {
   existingCase?: any; // Replace with proper type if available, e.g., Case
+  initialSubmissionType?: SubmissionType;
   onClose?: () => void;
 }
 
-const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) => {
+const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmissionType = 'interesting_case', onClose }) => {
   const [formData, setFormData] = useState({
+    submissionType: (existingCase?.submission_type as SubmissionType) || initialSubmissionType,
     initials: existingCase?.patient_initials || '',
     age: existingCase?.patient_age || '',
     sex: existingCase?.patient_sex || 'M',
@@ -68,10 +56,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
     notes: existingCase?.educational_summary || '', // Mapped to educational_summary for notes
+    radiologicClinchers: existingCase?.radiologic_clinchers || '',
     diagnosis: existingCase?.diagnosis || '',
-    date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0],
-    reliability: existingCase?.analysis_result?.reliability || 'Certain'
+    date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0]
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const [customTitle, setCustomTitle] = useState(existingCase?.title || '');
   const [images, setImages] = useState<ImageUpload[]>(
@@ -125,6 +114,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
   useEffect(() => {
     if (!existingCase) {
       setFormData({
+        submissionType: initialSubmissionType,
         initials: '',
         age: '',
         sex: 'M',
@@ -134,18 +124,24 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         findings: '',
         impression: '',
         notes: '',
+        radiologicClinchers: '',
         diagnosis: '',
-        date: new Date().toISOString().split('T')[0],
-        reliability: 'Certain'
+        date: new Date().toISOString().split('T')[0]
       });
       setCustomTitle('');
       setImages([]);
       setStep(1);
     }
-  }, [existingCase]);
+  }, [existingCase, initialSubmissionType]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -179,7 +175,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
     });
 
     if (files.length + images.length > 8) {
-      alert("Maximum of 8 images allowed. Some images may have been skipped.");
+      toastInfo('Maximum of 8 images allowed', 'Some images were skipped.');
     }
   };
 
@@ -193,7 +189,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
   const handleGenerateReport = () => {
     if (images.length === 0) {
-      alert("Please upload at least one image.");
+      toastError('Please upload at least one image.');
       return;
     }
     setStep(2);
@@ -202,12 +198,36 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
   const handleCopyToViber = () => {
     const text = generateViberText({ ...formData, organ: formData.organSystem }); // Backward compat if needed
     navigator.clipboard.writeText(text).then(() => {
-      alert('Copied to clipboard! Ready to paste into Viber.');
+      toastSuccess('Copied to clipboard', 'Ready to paste into Viber.');
     });
   };
 
+  const validateForPublish = () => {
+    const nextErrors: Record<string, string> = {};
+    if (formData.submissionType === 'interesting_case' && !formData.initials.trim()) nextErrors.initials = 'Initials are required.';
+    if (formData.submissionType !== 'aunt_minnie' && !formData.clinicalData.trim()) nextErrors.clinicalData = 'Clinical data is required.';
+    if (!formData.findings.trim()) {
+      nextErrors.findings = formData.submissionType === 'aunt_minnie' ? 'Description is required for Aunt Minnie.' : 'Findings are required.';
+    }
+    if (images.length === 0) nextErrors.images = 'At least one image is required.';
+
+    if (formData.submissionType === 'rare_pathology' && !formData.radiologicClinchers.trim()) {
+      nextErrors.radiologicClinchers = 'Radiologic clinchers are required for Rare Pathology.';
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
   const handleSave = async (status: 'draft' | 'published') => {
-    if (images.length === 0 || !formData.initials) return;
+    if (status === 'published' && !validateForPublish()) {
+      toastError('Please complete required fields before publishing.');
+      return;
+    }
+    if (status === 'draft' && images.length === 0) {
+      toastError('Draft needs at least one image.');
+      return;
+    }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -251,57 +271,83 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
       const imageMetadata = images.map(img => ({ description: img.description }));
 
+      const isMinimalSubmission = formData.submissionType === 'rare_pathology' || formData.submissionType === 'aunt_minnie';
       const casePayload = {
-        title: customTitle || `Case: ${formData.initials}`,
-        patient_initials: formData.initials, // Ensure these match DB columns
-        patient_age: formData.age,
-        patient_sex: formData.sex,
-        clinical_history: formData.clinicalData, // Updated to use clinicalData
-        educational_summary: formData.notes, // Updated from notes
+        title: customTitle
+          || (formData.submissionType === 'rare_pathology' ? 'Rare Pathology Case' : formData.submissionType === 'aunt_minnie' ? 'Aunt Minnie Case' : `Case: ${formData.initials}`),
+        patient_initials: isMinimalSubmission ? null : formData.initials, // Ensure these match DB columns
+        patient_age: isMinimalSubmission ? null : formData.age,
+        patient_sex: isMinimalSubmission ? null : formData.sex,
+        clinical_history: formData.submissionType === 'aunt_minnie' ? null : formData.clinicalData, // Updated to use clinicalData
+        educational_summary: formData.submissionType === 'rare_pathology' ? null : formData.notes, // Keep notes for Aunt Minnie and Interesting Case
+        radiologic_clinchers: formData.submissionType === 'rare_pathology' ? formData.radiologicClinchers : null,
+        submission_type: formData.submissionType,
         findings: formData.findings,
         image_url: distinctUploadedUrls[0], // Primary thumbnail
         image_urls: distinctUploadedUrls,   // All images
         difficulty: 'Medium',
         created_by: user.id,
-        category: formData.organSystem,
-        organ_system: formData.organSystem,
+        category: isMinimalSubmission ? null : formData.organSystem,
+        organ_system: isMinimalSubmission ? null : formData.organSystem,
         diagnosis: finalDiagnosis, // Save generated or existing code
         analysis_result: {
-          modality: formData.modality,
-          anatomy_region: formData.organSystem,
+          modality: isMinimalSubmission ? null : formData.modality,
+          anatomy_region: isMinimalSubmission ? null : formData.organSystem,
           keyFindings: [formData.findings],
-          impression: formData.impression,
-          educationalSummary: formData.notes,
+          impression: isMinimalSubmission ? null : formData.impression,
+          educationalSummary: formData.submissionType === 'rare_pathology' ? null : formData.notes,
           imagesMetadata: imageMetadata, // Store descriptions here
-          studyDate: formData.date,
-          reliability: formData.reliability
+          studyDate: formData.date
         },
-        modality: formData.modality,
+        modality: isMinimalSubmission ? null : formData.modality,
         status: status
       };
 
-      let error;
-      if (existingCase?.id) {
-        // Update
-        const { error: updateError } = await supabase
-          .from('cases')
-          .update(casePayload)
-          .eq('id', existingCase.id);
-        error = updateError;
-      } else {
-        // Insert
+      const writeCase = async (payload: any) => {
+        if (existingCase?.id) {
+          const { error: updateError } = await supabase
+            .from('cases')
+            .update(payload)
+            .eq('id', existingCase.id);
+          return updateError;
+        }
         const { error: insertError } = await supabase
           .from('cases')
-          .insert(casePayload);
-        error = insertError;
+          .insert(payload);
+        return insertError;
+      };
+
+      let error = await writeCase(casePayload);
+      if (error) {
+        const message = String(error?.message || '');
+        const missingNewColumns =
+          message.includes("radiologic_clinchers")
+          || message.includes("submission_type")
+          || message.includes("schema cache");
+
+        if (missingNewColumns) {
+          // Backward-compatible fallback for older schemas: only Interesting Case can proceed.
+          if (formData.submissionType !== 'interesting_case') {
+            toastError(
+              'Database migration required',
+              'Please run the latest Supabase migration to use Rare Pathology and Aunt Minnie.'
+            );
+            return;
+          }
+
+          const { radiologic_clinchers, submission_type, ...legacyPayload } = casePayload as any;
+          void radiologic_clinchers;
+          void submission_type;
+          error = await writeCase(legacyPayload);
+        }
       }
 
       if (error) throw error;
 
       if (status === 'published') {
-        alert(`Case successfully published!\n\nDiagnostic Code: ${finalDiagnosis}\n\nShare this code for easy lookup.`);
+        toastSuccess('Case published', `Diagnostic Code: ${finalDiagnosis}`);
       } else {
-        alert(`Case saved as Private Draft.`);
+        toastSuccess('Private draft saved');
       }
 
       if (onClose) {
@@ -309,6 +355,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
       } else {
         setStep(1);
         setFormData({
+          submissionType: 'interesting_case',
           initials: '',
           age: '',
           sex: 'M',
@@ -318,9 +365,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
           findings: '',
           impression: '',
           notes: '',
+          radiologicClinchers: '',
           diagnosis: '',
-          date: new Date().toISOString().split('T')[0],
-          reliability: 'Certain'
+          date: new Date().toISOString().split('T')[0]
         });
         setImages([]);
         setCustomTitle('');
@@ -328,7 +375,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
     } catch (error: any) {
       console.error('Error saving case:', error);
-      alert('Failed to save case: ' + error.message);
+      toastError('Failed to save case', error.message);
     }
   };
 
@@ -345,12 +392,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#050B14] relative">
+    <div className="flex flex-col h-full bg-app relative">
       {/* Screenshot Overlay */}
       {isScreenshotMode && (
         <div
           onClick={handleScreenTap}
-          className="fixed inset-0 z-[100] bg-[#050B14] p-6 flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-y-auto cursor-pointer"
+          className="fixed inset-0 z-[100] bg-app p-6 flex flex-col items-center justify-center animate-in fade-in duration-300 overflow-y-auto cursor-pointer"
         >
           {/* Exit Button - Floating (Auto-hide) */}
           <button
@@ -361,7 +408,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 
           <div className="w-full max-w-md space-y-6 my-auto">
             <header className="text-center flex flex-row items-center justify-center gap-3">
-              <div className={`w-3.5 h-3.5 rounded-full shadow-[0_0_10px_currentColor] ${RELIABILITY_BG_COLORS[formData.reliability]}`} />
               <h1 className="text-3xl font-bold text-white tracking-tight leading-none pt-1">{customTitle || 'Case Report'}</h1>
             </header>
 
@@ -382,6 +428,45 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 </div>
               ))}
             </div>
+
+            {formData.submissionType === 'interesting_case' && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Clinical Data</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.clinicalData || 'No clinical data provided.'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Findings</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.findings || 'No findings provided.'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Impression</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.impression || 'No impression provided.'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Notes / Remarks</p>
+                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-line">{formData.notes || 'No notes provided.'}</p>
+                </div>
+              </div>
+            )}
+
+            {formData.submissionType === 'rare_pathology' && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Clinical Data</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.clinicalData || 'No clinical data provided.'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Findings</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.findings || 'No findings provided.'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Radiologic Clinchers</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.radiologicClinchers || 'No radiologic clinchers provided.'}</p>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
@@ -401,16 +486,51 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
             <header className="space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'interesting_case' }))}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
+                    formData.submissionType === 'interesting_case'
+                      ? 'bg-primary text-white'
+                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Interesting Case
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'rare_pathology' }))}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
+                    formData.submissionType === 'rare_pathology'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Rare Pathology
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'aunt_minnie' }))}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
+                    formData.submissionType === 'aunt_minnie'
+                      ? 'bg-amber-500 text-slate-950'
+                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                  }`}
+                >
+                  Aunt Minnie
+                </button>
+              </div>
               <input
                 type="text"
                 value={customTitle}
                 onChange={handleTitleChange}
-                placeholder="Enter Case Title..."
+                placeholder={formData.submissionType === 'rare_pathology' ? 'Enter Pathology Name...' : formData.submissionType === 'aunt_minnie' ? 'Enter Aunt Minnie Title...' : 'Enter Case Title...'}
                 autoComplete="off"
                 className="text-2xl font-bold text-white bg-transparent border-none focus:ring-0 placeholder-slate-600 w-full p-0"
               />
 
-              {/* Date and Reliability Row */}
+              {/* Date Row */}
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <input
@@ -420,21 +540,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                     onChange={handleInputChange}
                     className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-base md:text-xs text-white focus:border-primary transition-all max-w-[130px]"
                   />
-                </div>
-                <div className="relative flex-1 flex justify-end">
-                  <div className="bg-white/5 rounded-lg px-3 py-1.5 flex items-center gap-3">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Reliability</span>
-                    <div className="flex gap-2">
-                      {RELIABILITY_OPTIONS.map(option => (
-                        <button
-                          key={option}
-                          onClick={() => setFormData(prev => ({ ...prev, reliability: option }))}
-                          className={`w-6 h-6 rounded-full transition-all duration-300 ${RELIABILITY_BG_COLORS[option]} ${formData.reliability === option ? 'ring-2 ring-white ring-offset-2 ring-offset-[#050B14] scale-110' : 'opacity-40 hover:opacity-100'}`}
-                          title={option}
-                        />
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </header>
@@ -508,14 +613,19 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   </div>
                 </div>
               )}
+              {fieldErrors.images && (
+                <p className="text-[10px] text-rose-400">{fieldErrors.images}</p>
+              )}
             </div>
 
             <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
               {/* Row 1: Initials, Age, Sex */}
+              {formData.submissionType === 'interesting_case' && (
               <div className="grid grid-cols-12 gap-3">
                 <div className="col-span-5 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
                   <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
+                  {fieldErrors.initials && <p className="text-[10px] text-rose-400">{fieldErrors.initials}</p>}
                 </div>
                 <div className="col-span-3 space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
@@ -536,15 +646,17 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Row 2: Modality, Organ System */}
+              {formData.submissionType === 'interesting_case' && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
                   <div className="relative">
                     <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
                       {MODALITIES.map(m => (
-                        <option key={m} value={m} className="bg-[#0c1829] text-white">{m}</option>
+                        <option key={m} value={m} className="bg-surface text-white">{m}</option>
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -557,7 +669,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   <div className="relative">
                     <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
                       {ORGAN_SYSTEMS.map(os => (
-                        <option key={os} value={os} className="bg-[#0c1829] text-white">{os}</option>
+                        <option key={os} value={os} className="bg-surface text-white">{os}</option>
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
@@ -566,33 +678,64 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                   </div>
                 </div>
               </div>
+              )}
 
               {/* New Row: Clinical Data */}
+              {formData.submissionType !== 'aunt_minnie' && (
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Data</label>
                 <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                {fieldErrors.clinicalData && <p className="text-[10px] text-rose-400">{fieldErrors.clinicalData}</p>}
               </div>
+              )}
 
               {/* Row 3: Findings */}
               <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Findings</label>
-                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder="Key observations..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
+                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder={formData.submissionType === 'aunt_minnie' ? 'Enter description...' : 'Key observations...'} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                {fieldErrors.findings && <p className="text-[10px] text-rose-400">{fieldErrors.findings}</p>}
               </div>
 
+              {formData.submissionType === 'rare_pathology' && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Radiologic Clinchers</label>
+                  <textarea
+                    name="radiologicClinchers"
+                    value={formData.radiologicClinchers}
+                    onChange={handleInputChange}
+                    rows={2}
+                    placeholder="Distinctive radiologic features..."
+                    className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none"
+                  />
+                  {fieldErrors.radiologicClinchers && <p className="text-[10px] text-rose-400">{fieldErrors.radiologicClinchers}</p>}
+                </div>
+              )}
+
               {/* Row 4: Impression */}
+              {formData.submissionType === 'interesting_case' && (
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Impression</label>
                 <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
               </div>
+              )}
 
               {/* Row 5: Notes / Remarks */}
+              {formData.submissionType === 'interesting_case' && (
               <div className="space-y-1">
                 <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
                 <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
               </div>
+              )}
+
+              {formData.submissionType === 'aunt_minnie' && (
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
+                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Additional notes..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+              </div>
+              )}
             </div>
 
-            <button onClick={handleGenerateReport} disabled={!formData.initials} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
+            <button onClick={handleGenerateReport} disabled={images.length === 0} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
               Generate Reports
               <span className="material-icons text-sm">arrow_forward</span>
             </button>
@@ -606,10 +749,18 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-500">{formData.date}</span>
-                  <span className="text-slate-600">•</span>
-                  <span className={`${RELIABILITY_COLORS[formData.reliability] || 'text-slate-400'} font-bold`}>
-                    {formData.reliability}
-                  </span>
+                  {formData.submissionType === 'rare_pathology' && (
+                    <>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-rose-300 font-bold uppercase tracking-wide">Rare Pathology</span>
+                    </>
+                  )}
+                  {formData.submissionType === 'aunt_minnie' && (
+                    <>
+                      <span className="text-slate-600">|</span>
+                      <span className="text-amber-300 font-bold uppercase tracking-wide">Aunt Minnie</span>
+                    </>
+                  )}
                 </div>
               </div>
               <button onClick={() => setStep(1)} className="w-10 h-10 rounded-full glass-card-enhanced flex items-center justify-center text-slate-400"><span className="material-icons">edit</span></button>
@@ -629,16 +780,20 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               )}
 
               <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4">
-                <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
-                  <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
-                </div>
-                <div>
-                  <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
-                  <p className="text-white text-sm font-bold">{formData.modality}</p>
-                  <p className="text-slate-400 text-xs">{formData.organSystem}</p>
-                </div>
-                {formData.clinicalData && (
+                {formData.submissionType === 'interesting_case' && (
+                  <>
+                    <div>
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">Patient</span>
+                      <p className="text-white text-sm font-bold">{formData.initials} ({formData.age}/{formData.sex})</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
+                      <p className="text-white text-sm font-bold">{formData.modality}</p>
+                      <p className="text-slate-400 text-xs">{formData.organSystem}</p>
+                    </div>
+                  </>
+                )}
+                {formData.submissionType !== 'aunt_minnie' && formData.clinicalData && (
                   <div className="col-span-2">
                     <span className="text-[9px] text-slate-500 uppercase font-bold">Clinical Data</span>
                     <p className="text-white text-xs">{formData.clinicalData}</p>
@@ -654,14 +809,36 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
                 </div>
               )}
 
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
-                <p className="text-white text-sm font-medium">{formData.impression}</p>
-              </div>
-              <div>
-                <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
-                <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
-              </div>
+              {formData.submissionType === 'interesting_case' && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Impression</span>
+                  <p className="text-white text-sm font-medium">{formData.impression}</p>
+                </div>
+              )}
+              {formData.submissionType === 'rare_pathology' && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Radiologic Clinchers</span>
+                  <p className="text-white text-sm font-medium">{formData.radiologicClinchers || 'Not provided'}</p>
+                </div>
+              )}
+              {formData.submissionType === 'aunt_minnie' && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Description</span>
+                  <p className="text-white text-sm font-medium">{formData.findings || 'Not provided'}</p>
+                </div>
+              )}
+              {formData.submissionType === 'aunt_minnie' && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Notes / Remarks</span>
+                  <p className="text-slate-300 text-sm">{formData.notes || 'No notes provided.'}</p>
+                </div>
+              )}
+              {formData.submissionType === 'interesting_case' && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
+                  <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -682,15 +859,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
               <button onClick={() => {
                 console.log('Export button clicked');
                 try {
-                  // Pass reliability to PDF if needed, or append to Impression
                   const extendedData = {
-                    ...formData,
-                    impression: `${formData.impression} (${formData.reliability})`
+                    ...formData
                   };
                   generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
                 } catch (e) {
                   console.error('Export failed immediately:', e);
-                  alert('Export failed: ' + e);
+                  toastError('Export failed', String(e));
                 }
               }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
                 <span className="material-icons text-rose-500">picture_as_pdf</span>
@@ -714,3 +889,4 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, onClose }) =>
 };
 
 export default UploadScreen;
+

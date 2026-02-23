@@ -4,11 +4,57 @@ import { supabase } from '../services/supabase';
 import { PROFILE_IMAGE } from '../constants';
 import { UserRole } from '../types';
 import AdminUserManagement from './AdminUserManagement';
+import LoadingButton from './LoadingButton';
+import LoadingState from './LoadingState';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
   onViewCase?: (caseItem: any) => void; // Added for navigation
 }
+
+const getSubmissionTypeMeta = (submissionType?: string) => {
+  switch (submissionType) {
+    case 'rare_pathology':
+      return {
+        icon: 'biotech',
+        tintClass: 'text-rose-300',
+        boxClass: 'bg-gradient-to-br from-rose-500/15 to-rose-900/20 border-rose-500/25',
+      };
+    case 'aunt_minnie':
+      return {
+        icon: 'psychology',
+        tintClass: 'text-amber-300',
+        boxClass: 'bg-gradient-to-br from-amber-500/15 to-amber-900/20 border-amber-500/25',
+      };
+    default:
+      return {
+        icon: 'library_books',
+        tintClass: 'text-primary',
+        boxClass: 'bg-gradient-to-br from-primary/20 to-blue-900/20 border-primary/30',
+      };
+  }
+};
+
+const getPrimaryMeta = (item: any) => {
+  const type = item?.submission_type || 'interesting_case';
+  if (type === 'interesting_case') return 'Interesting Case';
+  if (type === 'rare_pathology') return 'Rare Pathology';
+  if (type === 'aunt_minnie') return 'Aunt Minnie';
+  if (item?.organ_system) return item.organ_system;
+  if (item?.modality) return item.modality;
+  return 'Case';
+};
+
+const getDisplayTitle = (item: any) => {
+  const type = item?.submission_type || 'interesting_case';
+  if (type === 'aunt_minnie') {
+    return String(item?.findings || item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Aunt Minnie').toUpperCase();
+  }
+  if (type === 'rare_pathology') {
+    return String(item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Rare Pathology').toUpperCase();
+  }
+  return String(item?.analysis_result?.impression || item?.diagnosis || item?.title || 'Interesting Case').toUpperCase();
+};
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase }) => {
   const [loading, setLoading] = useState(true);
@@ -201,7 +247,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   }
 
   if (loading) {
-    return <div className="p-8 text-center text-slate-400">Loading profile...</div>;
+    return <LoadingState title="Loading profile..." />;
   }
 
   return (
@@ -343,13 +389,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       <div className="space-y-3 mt-4">
         {isEditing ? (
           <>
-            <button
+            <LoadingButton
               onClick={() => updateProfile()}
-              disabled={updating}
+              isLoading={updating}
+              loadingText="Saving..."
               className="w-full py-4 bg-primary hover:bg-primary-dark rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-white transition-all uppercase tracking-widest shadow-lg shadow-primary/20 disabled:opacity-50"
             >
-              {updating ? 'Saving...' : 'Save Changes'}
-            </button>
+              Save Changes
+            </LoadingButton>
             <button
               onClick={() => { setIsEditing(false); setMessage(null); }}
               className="w-full py-4 bg-white/5 hover:bg-white/10 rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-slate-400 transition-all uppercase tracking-widest"
@@ -390,30 +437,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           </div>
         ) : (
           <div className="space-y-3">
-            {myCases.map((c) => (
+            {myCases.map((c) => {
+              const typeMeta = getSubmissionTypeMeta(c.submission_type || 'interesting_case');
+              const displayTitle = getDisplayTitle(c);
+              const primaryMeta = getPrimaryMeta(c);
+              return (
               <div
                 key={c.id}
                 onClick={() => onViewCase && onViewCase(c)}
                 className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all group cursor-pointer relative"
               >
-                <div className="w-16 h-16 rounded-lg bg-black/50 border border-white/10 overflow-hidden shrink-0">
-                  {c.image_url ? (
-                    <img src={c.image_url} className="w-full h-full object-cover" alt="" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-600">
-                      <span className="material-icons text-xl">image</span>
-                    </div>
-                  )}
+                <div className={`w-16 h-16 rounded-lg border flex items-center justify-center shrink-0 shadow-[inset_0_0_15px_rgba(13,162,231,0.1)] ${typeMeta.boxClass}`}>
+                  <span className={`material-icons text-xl ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <h4 className="text-sm font-bold text-white truncate pr-2 group-hover:text-primary transition-colors">{c.title}</h4>
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${c.status === 'published' ? 'bg-blue-500/20 text-blue-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                      {c.status || 'Draft'}
-                    </span>
+                  <h4 className="text-sm font-bold text-white truncate pr-2 mb-1">{displayTitle}</h4>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-tighter">
+                    <span>{primaryMeta}</span>
+                    <span className="text-slate-700">|</span>
+                    <span>{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 line-clamp-2">{c.analysis_result?.impression || c.findings || 'No description'}</p>
-                  <p className="text-[9px] text-slate-600 mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -433,7 +476,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

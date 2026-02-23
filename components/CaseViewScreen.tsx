@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { generateCasePDF } from '../services/pdfService';
 import { generateViberText } from '../utils/formatters';
 import { supabase } from '../services/supabase';
@@ -13,6 +13,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isOwner, setIsOwner] = useState(false);
     const [activeTab, setActiveTab] = useState<'details' | 'discussion'>('details');
+    const submissionType = caseData.submission_type || 'interesting_case';
+    const isInterestingCase = submissionType === 'interesting_case';
 
     useEffect(() => {
         checkOwnership();
@@ -26,13 +28,6 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const images = caseData.image_urls || [caseData.image_url].filter(Boolean);
-    const reliabilityColor = {
-        'Certain': 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-        'Probable': 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-        'Possible': 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-        'Unlikely': 'text-rose-400 bg-rose-500/10 border-rose-500/20'
-    }[caseData.analysis_result?.reliability || 'Certain'];
-
     const handleCopyToViber = () => {
         // Map DB fields to formatter expectation
         const formattedData = {
@@ -43,7 +38,6 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             organSystem: caseData.organ_system,
             findings: caseData.findings,
             impression: caseData.analysis_result?.impression || caseData.diagnosis, // Fallback
-            reliability: caseData.analysis_result?.reliability,
             notes: caseData.clinical_history
         };
         const text = generateViberText(formattedData);
@@ -60,6 +54,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         }));
 
         const formattedData = {
+            submissionType: caseData.submission_type || 'interesting_case',
             initials: caseData.patient_initials,
             age: caseData.patient_age,
             sex: caseData.patient_sex,
@@ -67,9 +62,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             organSystem: caseData.organ_system,
             findings: caseData.findings,
             impression: caseData.analysis_result?.impression || caseData.diagnosis,
-            reliability: caseData.analysis_result?.reliability,
-            notes: caseData.clinical_history,
-            clinicalData: caseData.clinicalData, // Pass explicit clinicalData if exists
+            notes: caseData.educational_summary,
+            clinicalData: caseData.clinical_history || caseData.clinicalData,
+            radiologicClinchers: caseData.radiologic_clinchers,
             pearl: caseData.pearl || caseData.analysis_result?.pearl,
             additionalNotes: caseData.notes // Attempt to pass generic notes if they exist
         };
@@ -78,8 +73,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             // Header: User input title (e.g. "SINONASAL MENINGIOMA")
             const headerTitle = (caseData.title || 'RADIOLOGY CASE').toUpperCase();
 
-            // Filename: ORGAN SYSTEM - TITLE (RELIABILITY)
-            const fileName = `${caseData.organ_system || 'GENERAL'} - ${caseData.title || 'CASE'} (${caseData.analysis_result?.reliability || 'N/A'})`.toUpperCase();
+            // Filename: TITLE
+            const fileName = `${caseData.title || 'CASE'}`.toUpperCase();
 
             generateCasePDF(formattedData, null, pdfImages, headerTitle, 'Radiologist', fileName);
         } catch (e: any) {
@@ -88,9 +83,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     return (
-        <div className="flex flex-col h-full bg-[#050B14] relative overflow-hidden">
+        <div className="flex flex-col h-full bg-app relative overflow-hidden">
             {/* Top Navigation Bar */}
-            <header className="px-6 pt-12 pb-4 flex items-center justify-between z-10 bg-[#050B14]/80 backdrop-blur-md sticky top-0">
+            <header className="px-6 pt-12 pb-4 flex items-center justify-between z-10 bg-app/80 backdrop-blur-md sticky top-0">
                 <button
                     onClick={onBack}
                     className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-all"
@@ -179,18 +174,34 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     {/* Header Info */}
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex-1">
-                            <h1 className={`text-2xl font-bold mb-2 leading-tight ${reliabilityColor.split(' ')[0]}`}>
-                                {caseData.title || `Case ${caseData.patient_initials}`}
-                            </h1>
                             <div className="flex flex-wrap items-center gap-3 text-xs">
-                                <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
-                                    {caseData.modality}
-                                </span>
-                                <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
-                                    {caseData.organ_system}
-                                </span>
+                                {isInterestingCase && (
+                                    <span className="px-2 py-1 rounded-md bg-primary/15 text-primary border border-primary/30 font-bold uppercase tracking-wide">
+                                        Interesting Case
+                                    </span>
+                                )}
+                                {caseData.modality && (
+                                    <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
+                                        {caseData.modality}
+                                    </span>
+                                )}
+                                {caseData.organ_system && (
+                                    <span className="px-2 py-1 rounded-md bg-white/5 text-slate-300 border border-white/5 font-medium">
+                                        {caseData.organ_system}
+                                    </span>
+                                )}
+                                {submissionType === 'aunt_minnie' && (
+                                    <span className="px-2 py-1 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/25 font-bold uppercase tracking-wide">
+                                        Aunt Minnie
+                                    </span>
+                                )}
+                                {submissionType === 'rare_pathology' && (
+                                    <span className="px-2 py-1 rounded-md bg-rose-500/10 text-rose-300 border border-rose-500/25 font-bold uppercase tracking-wide">
+                                        Rare Pathology
+                                    </span>
+                                )}
                                 <span className="text-slate-500 whitespace-nowrap">{new Date(caseData.created_at).toLocaleDateString()}</span>
-                                <span className="text-slate-600 hidden sm:inline">•</span>
+                                <span className="text-slate-600 hidden sm:inline">|</span>
                                 <span className="text-emerald-400 font-bold flex items-center gap-1 whitespace-nowrap">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                                     Published
@@ -198,60 +209,113 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                             </div>
                         </div>
 
-                        <div className={`self-start px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${reliabilityColor}`}>
-                            {caseData.analysis_result?.reliability || 'Certain'}
-                        </div>
                     </div>
 
-                    {/* Patient Demographics */}
-                    <div className="glass-card-enhanced p-4 rounded-xl space-y-4">
-                        <div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Patient</div>
-                            <div className="flex items-center justify-between text-white font-bold">
-                                <div className="text-lg">{caseData.patient_initials}</div>
-                                <div className="flex items-center gap-3">
-                                    <span>{caseData.patient_age} yo</span>
-                                    <span className="text-slate-500 font-normal">|</span>
-                                    <span className={`text-xs px-2 py-0.5 rounded-md ${caseData.patient_sex === 'M' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-pink-500/10 text-pink-400 border border-pink-500/20'}`}>
-                                        {caseData.patient_sex || '?'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {caseData.clinical_history && (
-                            <div className="pt-2 border-t border-white/5">
-                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Clinical Data</div>
-                                <div className="text-sm text-slate-300 italic text-justify">
-                                    "{caseData.clinical_history}"
+                    {/* Main Content */}
+                    <div className="space-y-6">
+                        {isInterestingCase && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">person</span>
+                                    Patient + Clinical Data
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-[15px] text-slate-200 leading-relaxed whitespace-pre-line">
+                                    <span>{caseData.patient_initials || 'N/A'} {caseData.patient_age || '?'}{caseData.patient_sex ? `/${caseData.patient_sex}` : ''}</span>
+                                    <span className="mx-2 text-slate-500">presented with</span>
+                                    <span className="text-slate-300">{caseData.clinical_history || 'no clinical data recorded'}</span>
                                 </div>
                             </div>
                         )}
-                    </div>
 
-                    {/* Main Content Tabs (Optional visual separation) */}
-                    <div className="space-y-6">
+                        {/* Clinical Data */}
+                        {submissionType !== 'aunt_minnie' && !isInterestingCase && (
+                        <div className="space-y-2">
+                            <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                <span className="material-icons text-base text-primary">medical_information</span>
+                                Clinical Data
+                            </h3>
+                            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                {caseData.clinical_history || "No clinical data recorded."}
+                            </div>
+                        </div>
+                        )}
 
                         {/* Findings */}
                         <div className="space-y-2">
-                            <h3 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                                <span className="material-icons text-sm">search</span>
+                            <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                <span className="material-icons text-base text-primary">search</span>
                                 Findings
                             </h3>
-                            <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-white/10 text-justify">
+                            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
                                 {caseData.findings || "No findings recorded."}
                             </div>
                         </div>
 
-                        {/* Notes / Remarks */}
-                        {caseData.educational_summary && (
+                        {submissionType === 'aunt_minnie' && (
                             <div className="space-y-2">
-                                <h3 className="text-xs font-bold text-rose-500 uppercase tracking-widest flex items-center gap-2">
-                                    <span className="material-icons text-sm">description</span>
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">image</span>
+                                    Description
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {(() => {
+                                        const descriptions = (caseData.analysis_result?.imagesMetadata || [])
+                                          .map((item: any) => item?.description?.trim())
+                                          .filter((value: string) => Boolean(value));
+                                        if (descriptions.length > 0) return descriptions.join('\n');
+                                        return caseData.findings || "No description recorded.";
+                                    })()}
+                                </div>
+                            </div>
+                        )}
+
+                        {submissionType === 'aunt_minnie' && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">description</span>
                                     Notes / Remarks
                                 </h3>
-                                <div className="text-sm text-slate-300 leading-relaxed whitespace-pre-line pl-4 border-l-2 border-rose-500/20 text-justify">
-                                    {caseData.educational_summary}
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {caseData.educational_summary || "No notes recorded."}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Impression */}
+                        {isInterestingCase && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">assignment_turned_in</span>
+                                    Impression
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {caseData.analysis_result?.impression || caseData.diagnosis || "No impression recorded."}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Notes / Remarks */}
+                        {isInterestingCase && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">description</span>
+                                    Notes / Remarks
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {caseData.educational_summary || "No notes recorded."}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Radiologic Clinchers */}
+                        {submissionType === 'rare_pathology' && caseData.radiologic_clinchers && (
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">flare</span>
+                                    Radiologic Clinchers
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {caseData.radiologic_clinchers}
                                 </div>
                             </div>
                         )}
@@ -282,3 +346,5 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 };
 
 export default CaseViewScreen;
+
+

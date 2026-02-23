@@ -39,7 +39,7 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
             <div
-                className="bg-[#0F1720] border border-white/10 rounded-2xl w-full max-w-[320px] shadow-2xl overflow-hidden flex flex-col max-h-[75vh] animate-in zoom-in-95 duration-200"
+                className="bg-surface border border-white/10 rounded-2xl w-full max-w-[320px] shadow-2xl overflow-hidden flex flex-col max-h-[75vh] animate-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
@@ -225,3 +225,4 @@ const CoverDetailsModal: React.FC<CoverDetailsModalProps> = ({
 };
 
 export default CoverDetailsModal;
+

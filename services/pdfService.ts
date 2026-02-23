@@ -21,6 +21,242 @@ export const generateCasePDF = (
         const {
             initials, age, sex, modality, organSystem, findings, impression, notes, diagnosis, clinical_history
         } = data;
+        const isAuntMinnie = data.submissionType === 'aunt_minnie';
+        const isRarePathology = data.submissionType === 'rare_pathology';
+
+        if (isAuntMinnie) {
+            // --- Aunt Minnie Theme ---
+            doc.setFillColor(245, 158, 11); // Amber
+            doc.rect(0, 0, pageWidth, 40, 'F');
+
+            doc.setFontSize(20);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.text(customTitle || 'AUNT MINNIE', margin, 20);
+
+            yPos = 55;
+            const sectionTitleColor: [number, number, number] = [180, 83, 9];
+            const bodyColor: [number, number, number] = [20, 20, 20];
+
+            const writeSection = (label: string, value: string) => {
+                if (yPos + 24 > pageHeight) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(...sectionTitleColor);
+                doc.text(label, margin, yPos);
+                yPos += 6;
+
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...bodyColor);
+                const split = doc.splitTextToSize(value, pageWidth - (margin * 2));
+                doc.text(split, margin, yPos);
+                yPos += (split.length * 5) + 8;
+            };
+
+            // --- Images first ---
+            let imageList: Array<{ url: string, description?: string }> = [];
+            if (Array.isArray(images)) {
+                imageList = images.map(img => {
+                    if (typeof img === 'string') return { url: img, description: '' };
+                    return img;
+                });
+            } else if (typeof images === 'string') {
+                imageList = [{ url: images, description: '' }];
+            }
+
+            if (imageList.length > 0) {
+                if (yPos + 10 > pageHeight) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                const colWidth = (pageWidth - (margin * 3)) / 2;
+                let currentRowMaxHeight = 0;
+
+                imageList.forEach((img, index) => {
+                    if (yPos + 50 > pageHeight) {
+                        doc.addPage();
+                        yPos = 20;
+                        currentRowMaxHeight = 0;
+                    }
+
+                    const x = index % 2 === 0 ? margin : margin + colWidth + margin;
+
+                    try {
+                        const imgProps = doc.getImageProperties(img.url);
+                        const imgHeight = (imgProps.height * colWidth) / imgProps.width;
+
+                        if (imgHeight > currentRowMaxHeight) currentRowMaxHeight = imgHeight;
+                        doc.addImage(img.url, 'JPEG', x, yPos, colWidth, imgHeight);
+                    } catch (e) {
+                        const fallbackHeight = colWidth * 0.75;
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(x, yPos, colWidth, fallbackHeight, 'F');
+                        doc.setFontSize(8);
+                        doc.setTextColor(255, 0, 0);
+                        doc.text('Image Error', x + 5, yPos + 10);
+                        if (fallbackHeight > currentRowMaxHeight) currentRowMaxHeight = fallbackHeight;
+                    }
+
+                    if (index % 2 === 1 || index === imageList.length - 1) {
+                        yPos += currentRowMaxHeight + 10;
+                        currentRowMaxHeight = 0;
+                    }
+                });
+            }
+
+            const findingsText = findings || 'No findings recorded.';
+            const descriptionText = (
+                imageList
+                    .map((img) => (img.description || '').trim())
+                    .filter((value) => value.length > 0)
+                    .join('\n')
+            ) || 'No description recorded.';
+            const remarksText = data.notes || data.educational_summary || data.additionalNotes || 'No notes recorded.';
+
+            writeSection('FINDINGS', findingsText);
+            writeSection('DESCRIPTION', descriptionText);
+            writeSection('NOTES / REMARKS', remarksText);
+
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+            }
+
+            let filename = 'Aunt_Minnie_Report.pdf';
+            if (customFileName) {
+                filename = customFileName.replace(/[^a-z0-9 \-\(\)\_\.]/gi, '_') + '.pdf';
+            } else {
+                const safeTitle = (customTitle || 'Aunt_Minnie').replace(/[^a-z0-9]/gi, '_').substring(0, 24);
+                const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).replace(/\//g, '-');
+                filename = `${dateStr}_${safeTitle}_AUNT_MINNIE.pdf`;
+            }
+
+            doc.save(filename);
+            return;
+        }
+
+        if (isRarePathology) {
+            // --- Rare Pathology Theme ---
+            doc.setFillColor(225, 29, 72); // Rose
+            doc.rect(0, 0, pageWidth, 40, 'F');
+
+            doc.setFontSize(20);
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.text(customTitle || 'RARE PATHOLOGY', margin, 20);
+
+            yPos = 55;
+            const sectionTitleColor: [number, number, number] = [190, 24, 93];
+            const bodyColor: [number, number, number] = [20, 20, 20];
+
+            const writeSection = (label: string, value: string) => {
+                if (yPos + 24 > pageHeight) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(...sectionTitleColor);
+                doc.text(label, margin, yPos);
+                yPos += 6;
+
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(...bodyColor);
+                const split = doc.splitTextToSize(value, pageWidth - (margin * 2));
+                doc.text(split, margin, yPos);
+                yPos += (split.length * 5) + 8;
+            };
+
+            // --- Images (first, no section title) ---
+            let imageList: Array<{ url: string, description?: string }> = [];
+            if (Array.isArray(images)) {
+                imageList = images.map(img => {
+                    if (typeof img === 'string') return { url: img, description: '' };
+                    return img;
+                });
+            } else if (typeof images === 'string') {
+                imageList = [{ url: images, description: '' }];
+            }
+
+            if (imageList.length > 0) {
+                if (yPos + 10 > pageHeight) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                const colWidth = (pageWidth - (margin * 3)) / 2;
+                let currentRowMaxHeight = 0;
+
+                imageList.forEach((img, index) => {
+                    if (yPos + 50 > pageHeight) {
+                        doc.addPage();
+                        yPos = 20;
+                        currentRowMaxHeight = 0;
+                    }
+
+                    const x = index % 2 === 0 ? margin : margin + colWidth + margin;
+
+                    try {
+                        const imgProps = doc.getImageProperties(img.url);
+                        const imgHeight = (imgProps.height * colWidth) / imgProps.width;
+
+                        if (imgHeight > currentRowMaxHeight) currentRowMaxHeight = imgHeight;
+                        doc.addImage(img.url, 'JPEG', x, yPos, colWidth, imgHeight);
+                    } catch (e) {
+                        const fallbackHeight = colWidth * 0.75;
+                        doc.setFillColor(245, 245, 245);
+                        doc.rect(x, yPos, colWidth, fallbackHeight, 'F');
+                        doc.setFontSize(8);
+                        doc.setTextColor(255, 0, 0);
+                        doc.text('Image Error', x + 5, yPos + 10);
+                        if (fallbackHeight > currentRowMaxHeight) currentRowMaxHeight = fallbackHeight;
+                    }
+
+                    if (index % 2 === 1 || index === imageList.length - 1) {
+                        yPos += currentRowMaxHeight + 10;
+                        currentRowMaxHeight = 0;
+                    }
+                });
+            }
+
+            const clinicalText = data.clinicalData || clinical_history || 'No clinical data provided.';
+            const findingsText = findings || 'No specific findings recorded.';
+            const clinchersText = data.radiologicClinchers || data.radiologic_clinchers || 'No radiologic clinchers provided.';
+
+            writeSection('CLINICAL DATA', clinicalText);
+            writeSection('FINDINGS', findingsText);
+            writeSection('RADIOLOGIC CLINCHERS', clinchersText);
+
+            // Footer page numbers
+            const pageCount = (doc as any).internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+            }
+
+            let filename = 'Rare_Pathology_Report.pdf';
+            if (customFileName) {
+                filename = customFileName.replace(/[^a-z0-9 \-\(\)\_\.]/gi, '_') + '.pdf';
+            } else {
+                const safeTitle = (customTitle || 'Rare_Pathology').replace(/[^a-z0-9]/gi, '_').substring(0, 24);
+                const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).replace(/\//g, '-');
+                filename = `${dateStr}_${safeTitle}_RARE_PATHOLOGY.pdf`;
+            }
+
+            doc.save(filename);
+            return;
+        }
 
         // --- 1. Header Section ---
         doc.setFillColor(0, 102, 204); // Primary Blue
@@ -126,8 +362,8 @@ export const generateCasePDF = (
         doc.text(splitFindings, margin, yPos);
         yPos += (splitFindings.length * 5) + 8; // Compact spacing
 
-        // --- 4. Notes / Remarks ---
-        const remarksText = data.pearl || data.additionalNotes;
+        // --- 4. Notes / Remarks (right after findings) ---
+        const remarksText = data.notes || data.educational_summary || data.pearl || data.additionalNotes;
         if (remarksText) {
             if (yPos + 30 > pageHeight) {
                 doc.addPage();

@@ -1,5 +1,21 @@
 
 export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed';
+export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
+
+export type ToastKind = 'success' | 'error' | 'info';
+
+export interface ToastMessage {
+  id: string;
+  kind: ToastKind;
+  title: string;
+  description?: string;
+}
+
+export interface ScreenMeta {
+  screen: Screen;
+  label: string;
+  icon: string;
+}
 
 export interface Activity {
   id: string;
@@ -71,6 +87,8 @@ export interface PatientRecord {
   specialty: string;
   diagnosticCode: string;
   status: 'Completed' | 'Pending' | 'Draft' | 'Published';
+  submission_type?: SubmissionType;
+  radiologic_clinchers?: string;
 }
 
 export interface SearchFilters {
@@ -78,6 +96,8 @@ export interface SearchFilters {
   endDate: string;
   specialty: string;
   diagnosticCode: string;
+  submissionType: '' | SubmissionType;
+  datePreset: 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
 }
 
 export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'pcr' | 'pickleball';
@@ -129,7 +149,7 @@ export interface CalendarEvent {
 
 // ... existing types ...
 
-export type UserRole = 'admin' | 'faculty' | 'consultant' | 'resident';
+export type UserRole = 'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer';
 
 export interface Profile {
   id: string;
@@ -169,3 +189,69 @@ export interface Announcement {
   links?: { url: string; title: string }[];
   icon?: string;
 }
+
+export type NotificationSeverity = 'info' | 'warning' | 'critical';
+
+export interface NewsfeedNotification {
+  id: string;
+  title: string;
+  message: string;
+  severity: NotificationSeverity;
+  type: string;
+  time: string;
+  createdAt: string;
+  read: boolean;
+  linkScreen?: Screen | null;
+  linkEntityId?: string | null;
+}
+
+export interface DashboardSnapshotData {
+  newAnnouncementsCount: number;
+  latestAnnouncementTitle?: string;
+  newCaseLibraryCount: number;
+  latestCaseTitle?: string;
+  newCalendarCount: number;
+  latestCalendarTitle?: string;
+  leaveToday: Array<{ id: string; name: string; coverageNames: string[] }>;
+}
+
+export interface QuizExam {
+  id: string;
+  title: string;
+  specialty: string;
+  description: string | null;
+  duration_minutes: number;
+  pass_mark_percent: number;
+  status: 'draft' | 'published' | 'archived';
+  is_published: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  exam_id: string;
+  question_text: string;
+  question_type: 'mcq' | 'image';
+  image_url: string | null;
+  options: string[];
+  correct_answer_index: number;
+  explanation: string | null;
+  points: number;
+  sort_order: number;
+  estimated_time_sec?: number | null;
+  created_at: string;
+}
+
+export interface QuizAttemptSummary {
+  attempt_id: string;
+  score: number;
+  total_points: number;
+  correct_count: number;
+  is_pass: boolean;
+  duration_seconds: number;
+  completed_at: string;
+}
+
+export type QuizAnswerMap = Record<string, { selected_answer_index: number; response_time_ms: number }>;

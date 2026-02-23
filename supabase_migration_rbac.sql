@@ -1,6 +1,6 @@
 -- Add role column to profiles table
 ALTER TABLE profiles 
-ADD COLUMN IF NOT EXISTS role text DEFAULT 'resident' CHECK (role IN ('admin', 'faculty', 'consultant', 'resident'));
+ADD COLUMN IF NOT EXISTS role text DEFAULT 'resident' CHECK (role IN ('admin', 'moderator', 'consultant', 'resident', 'fellow', 'training_officer'));
 
 -- Update existing profiles to have a default role if null (though default handles new ones)
 UPDATE profiles SET role = 'resident' WHERE role IS NULL;
@@ -16,11 +16,11 @@ CREATE POLICY "Admins can do everything on announcements"
   );
 
 -- Policy: Faculty and Consultants can insert their own announcements
-CREATE POLICY "Faculty and Consultants can insert announcements"
+CREATE POLICY "Moderators and Consultants can insert announcements"
   ON announcements
   FOR INSERT
   WITH CHECK (
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('faculty', 'consultant')
+    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('moderator', 'training_officer', 'consultant', 'admin')
   );
 
 -- Policy: Faculty and Consultants can update/delete their own announcements
@@ -41,33 +41,33 @@ DROP POLICY IF EXISTS "Users can update their own announcements" ON announcement
 
 -- 1. View: Everyone can view (already exists: "Announcements are viewable by everyone")
 
--- 2. Insert: Only Admin, Faculty, Consultant
+-- 2. Insert: Only Admin, Moderator/Training Officer, Consultant
 CREATE POLICY "Privileged users can insert announcements"
   ON announcements
   FOR INSERT
   WITH CHECK (
     auth.role() = 'authenticated' AND
-    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'faculty', 'consultant')
+    (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'moderator', 'training_officer', 'consultant')
   );
 
--- 3. Update: Admin (any), Author (if privileged)
+-- 3. Update: Admin/Moderator/Training Officer (any), Consultant (own)
 CREATE POLICY "Privileged users can update announcements"
   ON announcements
   FOR UPDATE
   USING (
     auth.role() = 'authenticated' AND (
-      (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR
-      ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('faculty', 'consultant') AND author_id = auth.uid())
+      (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'moderator', 'training_officer') OR
+      ((SELECT role FROM profiles WHERE id = auth.uid()) = 'consultant' AND author_id = auth.uid())
     )
   );
 
--- 4. Delete: Admin (any), Author (if privileged)
+-- 4. Delete: Admin/Moderator/Training Officer (any), Consultant (own)
 CREATE POLICY "Privileged users can delete announcements"
   ON announcements
   FOR DELETE
   USING (
     auth.role() = 'authenticated' AND (
-      (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' OR
-      ((SELECT role FROM profiles WHERE id = auth.uid()) IN ('faculty', 'consultant') AND author_id = auth.uid())
+      (SELECT role FROM profiles WHERE id = auth.uid()) IN ('admin', 'moderator', 'training_officer') OR
+      ((SELECT role FROM profiles WHERE id = auth.uid()) = 'consultant' AND author_id = auth.uid())
     )
   );

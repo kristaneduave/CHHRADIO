@@ -1,11 +1,11 @@
-
+﻿
 import { Activity, QuickAction, PatientRecord, CalendarEvent, Announcement } from './types';
 
 export const ACTIVITIES: Activity[] = [
   {
     id: '1',
     title: 'Completed Neuro Quiz',
-    subtitle: 'Score: 92% • 20 questions',
+    subtitle: 'Score: 92% - 20 questions',
     time: '2h ago',
     icon: 'check_circle',
     colorClass: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 group-hover:bg-emerald-500'
@@ -13,7 +13,7 @@ export const ACTIVITIES: Activity[] = [
   {
     id: '2',
     title: 'Case Upload: Chest X-Ray',
-    subtitle: 'Pending Review • ID #4921',
+    subtitle: 'Pending Review - ID #4921',
     time: '5h ago',
     icon: 'upload_file',
     colorClass: 'bg-primary/10 text-primary border-primary/20 group-hover:bg-primary'
@@ -54,7 +54,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
-    label: 'Database',
+    label: 'Case Library',
     icon: 'folder_shared', // Or 'storage' or 'search'
     target: 'database',
     subtitle: '',
@@ -212,3 +212,4 @@ export const MOCK_ANNOUNCEMENTS: Announcement[] = [
     views: 3105
   }
 ];
+

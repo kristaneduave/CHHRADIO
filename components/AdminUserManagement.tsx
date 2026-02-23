@@ -59,11 +59,11 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
         user.username?.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    const ROLES: UserRole[] = ['resident', 'fellow' as any, 'consultant', 'faculty', 'admin']; // Add fellow if needed, mostly matching types
+    const ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-[#0c1829] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+            <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
 
                 {/* Header */}
                 <div className="p-6 border-b border-white/5 flex justify-between items-center">
@@ -85,7 +85,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                             placeholder="Search users by name..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-[#050B14] border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 outline-none transition-colors"
+                            className="w-full bg-app border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 outline-none transition-colors"
                         />
                     </div>
                 </div>
@@ -116,7 +116,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                     </div>
                                     <div>
                                         <h3 className="text-sm font-bold text-slate-200">{user.full_name || 'Unnamed User'}</h3>
-                                        <p className="text-[10px] text-slate-500">@{user.username || 'unknown'} â€¢ {user.year_level || 'N/A'}</p>
+                                        <p className="text-[10px] text-slate-500">@{user.username || 'unknown'} â€?{user.year_level || 'N/A'}</p>
                                     </div>
                                 </div>
 
@@ -125,14 +125,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                     onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
                                     className={`bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary transition-colors cursor-pointer
                                         ${user.role === 'admin' ? 'text-rose-400 border-rose-500/30' :
-                                            user.role === 'faculty' ? 'text-indigo-400 border-indigo-500/30' :
+                                            user.role === 'moderator' ? 'text-violet-300 border-violet-500/30' :
+                                                user.role === 'training_officer' ? 'text-emerald-400 border-emerald-500/30' :
                                                 user.role === 'consultant' ? 'text-amber-400 border-amber-500/30' :
                                                     'text-slate-400'}`}
                                 >
                                     <option value="resident">Resident</option>
                                     <option value="fellow">Fellow</option>
                                     <option value="consultant">Consultant</option>
-                                    <option value="faculty">Faculty</option>
+                                    <option value="training_officer">Training Officer</option>
+                                    <option value="moderator">Moderator</option>
                                     <option value="admin">Admin</option>
                                 </select>
                             </div>
@@ -145,3 +147,4 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
 };
 
 export default AdminUserManagement;
+

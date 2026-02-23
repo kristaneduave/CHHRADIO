@@ -1,8 +1,9 @@
-
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Announcement } from '../types';
+import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
+import LoadingButton from './LoadingButton';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
@@ -50,7 +51,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [newLinkUrl, setNewLinkUrl] = useState('');
 
     const categories = ['Announcement', 'Research', 'Event', 'Misc'];
-    const emojis = ['📣', '😊', '😂', '🔥', '👍', '🎉', '❤️', '🏥', '💊', '🩺', '🚑', '🧪', '📋', '✅', '⚠️', '📎', '📅', '👋', '🌟', '💡'];
+    const emojis = ['announce', 'smile', 'laugh', 'hot', 'thumbs-up', 'party', 'heart', 'hospital', 'pill', 'stethoscope', 'ambulance', 'lab', 'clipboard', 'check', 'warning', 'attach', 'calendar', 'wave', 'star', 'idea'];
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -148,9 +149,11 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
             // NOTE: This implementation replaces/adds. Real production needs full edit capability of arrays.
             // Given the scope, we will save `uploadedAttachments` as the attachments.
 
+            let announcementId: string | undefined = editingAnnouncement?.id;
+
             if (editingAnnouncement) {
                 // Update
-                const { error: updateError } = await supabase
+                const { data: updatedAnnouncement, error: updateError } = await supabase
                     .from('announcements')
                     .update({
                         title,
@@ -163,28 +166,63 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         icon: icon,
                         created_at: new Date().toISOString() // Bump
                     })
-                    .eq('id', editingAnnouncement.id);
+                    .eq('id', editingAnnouncement.id)
+                    .select('id')
+                    .single();
 
                 if (updateError) throw updateError;
+                announcementId = updatedAnnouncement?.id;
             } else {
                 // Insert
-                const { error: insertError } = await supabase.from('announcements').insert({
-                    title,
-                    content,
-                    category,
-                    author_id: user.id,
-                    image_url: finalImageUrl,
-                    attachments: uploadedAttachments,
-                    external_link: links.length > 0 ? links[0].url : '',
-                    links: links,
-                    icon: icon
-                });
+                const { data: insertedAnnouncement, error: insertError } = await supabase
+                    .from('announcements')
+                    .insert({
+                        title,
+                        content,
+                        category,
+                        author_id: user.id,
+                        image_url: finalImageUrl,
+                        attachments: uploadedAttachments,
+                        external_link: links.length > 0 ? links[0].url : '',
+                        links: links,
+                        icon: icon
+                    })
+                    .select('id')
+                    .single();
 
                 if (insertError) throw insertError;
+                announcementId = insertedAnnouncement?.id;
+            }
+
+            // Emit newsfeed notification to all users.
+            let notificationDeliveryWarning = '';
+            try {
+                const recipients = await fetchAllRecipientUserIds();
+                await createSystemNotification({
+                    actorUserId: user.id,
+                    type: 'announcement',
+                    severity: 'info',
+                    title: editingAnnouncement ? 'Announcement Updated' : 'New Announcement',
+                    message: title,
+                    linkScreen: 'announcements',
+                    linkEntityId: announcementId,
+                    recipientUserIds: recipients.length > 0 ? recipients : [user.id],
+                });
+            } catch (notifError) {
+                // Non-blocking; announcement save succeeded already.
+                console.error('Failed to emit announcement notification:', notifError);
+                const errorMessage =
+                    notifError && typeof notifError === 'object' && 'message' in notifError
+                        ? String((notifError as { message?: string }).message || '')
+                        : '';
+                notificationDeliveryWarning = `Announcement saved, but notification delivery failed.${errorMessage ? `\n\nReason: ${errorMessage}` : ''}`;
             }
 
             onSuccess();
             onClose();
+            if (notificationDeliveryWarning) {
+                window.alert(notificationDeliveryWarning);
+            }
         } catch (err: any) {
             console.error('Error saving announcement:', err);
             setError(err.message || 'Failed to save announcement');
@@ -194,8 +232,8 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     };
 
     return ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-            <div className="w-full max-w-lg bg-[#0c1829] border border-white/10 rounded-3xl shadow-2xl animate-in slide-in-from-bottom-10 sm:zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+            <div className="w-full max-w-lg bg-surface border border-white/10 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[82vh] flex flex-col">
                 {/* Background Glow */}
                 <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
 
@@ -235,7 +273,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                     {icon || <span className="material-icons text-xl opacity-50">add_reaction</span>}
                                 </button>
                                 {showEmojiPicker && (
-                                    <div className="absolute top-14 left-0 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="absolute top-14 left-0 bg-surface border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
                                         <button
                                             type="button"
                                             onClick={() => {
@@ -271,7 +309,6 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                     onChange={(e) => setTitle(e.target.value)}
                                     className="w-full bg-transparent border-none p-0 text-2xl sm:text-3xl font-bold text-white placeholder-slate-600 focus:ring-0 focus:outline-none transition-all"
                                     placeholder="What's happening?"
-                                    autoFocus
                                     required
                                 />
                             </div>
@@ -295,7 +332,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                             {showCategoryDropdown && (
                                 <>
                                     <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
-                                    <div className="absolute top-full left-0 mt-1 w-48 bg-[#0F1720] border border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
+                                    <div className="absolute top-full left-0 mt-1 w-48 bg-surface border border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
                                         {categories.map((cat) => (
                                             <button
                                                 key={cat}
@@ -489,7 +526,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 </div>
 
                 {/* Footer - Fixed */}
-                <div className="flex justify-between items-center p-4 border-t border-white/5 bg-[#0c1829] relative z-20 shrink-0">
+                <div className="flex justify-between items-center p-4 border-t border-white/5 bg-surface relative z-20 shrink-0">
                     <div className="flex gap-3">
                         <button
                             type="button"
@@ -498,24 +535,16 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         >
                             Cancel
                         </button>
-                        <button
+                        <LoadingButton
                             type="submit"
-                            disabled={loading}
+                            isLoading={loading}
+                            loadingText="Posting..."
+                            icon="send"
                             form="create-announcement-form"
                             className="px-6 py-2.5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
                         >
-                            {loading ? (
-                                <>
-                                    <span className="material-icons animate-spin text-sm">sync</span>
-                                    Posting...
-                                </>
-                            ) : (
-                                <>
-                                    <span>POST</span>
-                                    <span className="material-icons text-sm">send</span>
-                                </>
-                            )}
-                        </button>
+                            POST
+                        </LoadingButton>
                     </div>
                 </div>
             </div>
@@ -525,3 +554,4 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 };
 
 export default CreateAnnouncementModal;
+

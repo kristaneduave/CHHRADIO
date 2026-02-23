@@ -1,16 +1,17 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en">
 
 <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
-    <meta content="#050B14" name="theme-color" />
-    <title>MedLink AI Dashboard</title>
+    <meta content="#101922" name="theme-color" />
+    <title>CHH Radiology Portal</title>
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script>
         tailwind.config = {
@@ -18,12 +19,25 @@
             theme: {
                 extend: {
                     colors: {
-                        "primary": "#0da2e7",
-                        "primary-dark": "#0a8cc7",
-                        "background-dark": "#050B14",
+                        "primary": "rgb(var(--action-primary) / <alpha-value>)",
+                        "primary-dark": "rgb(var(--action-primary-hover) / <alpha-value>)",
+                        "app": "rgb(var(--bg-app) / <alpha-value>)",
+                        "surface": "rgb(var(--bg-surface) / <alpha-value>)",
+                        "surface-alt": "rgb(var(--bg-surface-alt) / <alpha-value>)",
+                        "border-default": "rgb(var(--border-default) / <alpha-value>)",
+                        "text-primary": "rgb(var(--text-primary) / <alpha-value>)",
+                        "text-secondary": "rgb(var(--text-secondary) / <alpha-value>)",
+                        "text-tertiary": "rgb(var(--text-tertiary) / <alpha-value>)",
+                        "success": "rgb(var(--status-success) / <alpha-value>)",
+                        "warning": "rgb(var(--status-warning) / <alpha-value>)",
+                        "error": "rgb(var(--status-error) / <alpha-value>)"
                     },
                     fontFamily: {
-                        "display": ["Inter", "sans-serif"]
+                        "display": ["Inter", "\"Segoe UI\"", "Roboto", "Helvetica", "Arial", "sans-serif"]
+                    },
+                    boxShadow: {
+                        "clinical": "0 1px 3px 0 rgba(0,0,0,.12), 0 1px 2px -1px rgba(0,0,0,.12)",
+                        "clinical-hover": "0 8px 16px -4px rgba(0,0,0,.18), 0 4px 6px -4px rgba(0,0,0,.12)"
                     },
                 },
             },
@@ -31,6 +45,37 @@
     </script>
     <style>
         :root {
+            --bg-app: 248 250 252;
+            --bg-surface: 255 255 255;
+            --bg-surface-alt: 241 245 249;
+            --border-default: 226 232 240;
+            --text-primary: 30 41 59;
+            --text-secondary: 71 85 105;
+            --text-tertiary: 148 163 184;
+            --action-primary: 30 100 192;
+            --action-primary-hover: 22 82 160;
+            --action-primary-active: 16 63 126;
+            --status-success: 22 163 74;
+            --status-warning: 202 138 4;
+            --status-error: 220 38 38;
+            color-scheme: light;
+            --font-ui: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        html.dark {
+            --bg-app: 16 25 34;
+            --bg-surface: 28 36 45;
+            --bg-surface-alt: 37 45 56;
+            --border-default: 40 48 57;
+            --text-primary: 248 250 252;
+            --text-secondary: 148 163 184;
+            --text-tertiary: 100 116 139;
+            --action-primary: 17 115 212;
+            --action-primary-hover: 14 94 168;
+            --action-primary-active: 11 77 138;
+            --status-success: 34 197 94;
+            --status-warning: 234 179 8;
+            --status-error: 239 68 68;
             color-scheme: dark;
         }
 
@@ -39,52 +84,177 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #050B14;
-            /* Fallback */
+            background-color: rgb(var(--bg-app));
             overscroll-behavior-y: none;
             overflow: hidden;
-            /* Prevent body scroll */
-            /* Prevent bounce */
         }
 
         .glass-panel {
-            background: rgba(16, 28, 34, 0.6);
+            background: color-mix(in srgb, rgb(var(--bg-surface)) 82%, transparent);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid color-mix(in srgb, rgb(var(--border-default)) 85%, transparent);
         }
 
         .glass-card-enhanced {
-            background: linear-gradient(160deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+            background: linear-gradient(160deg,
+                    color-mix(in srgb, rgb(var(--bg-surface)) 92%, transparent) 0%,
+                    color-mix(in srgb, rgb(var(--bg-surface-alt)) 88%, transparent) 100%);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            border: 1px solid color-mix(in srgb, rgb(var(--border-default)) 80%, transparent);
         }
-
-
 
         body {
-            background: linear-gradient(180deg, #050B14 0%, #0c1829 100%);
-            color: white;
+            font-family: var(--font-ui);
+            letter-spacing: 0;
+            background: linear-gradient(180deg,
+                    color-mix(in srgb, rgb(var(--bg-app)) 100%, black 0%) 0%,
+                    color-mix(in srgb, rgb(var(--bg-app)) 90%, rgb(var(--bg-surface-alt)) 10%) 100%);
+            color: rgb(var(--text-primary));
             background-attachment: fixed;
-            /* Fix gradient on scroll */
+            font-feature-settings: "cv11" 1, "ss01" 1;
         }
 
-        /* Custom Scrollbar - Hidden */
+        .material-icons {
+            font-family: "Material Symbols Rounded";
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+            font-variation-settings:
+                'FILL' 1,
+                'wght' 700,
+                'GRAD' 0,
+                'opsz' 24;
+        }
+
         ::-webkit-scrollbar {
-            width: 0px;
-            height: 0px;
-            background: transparent;
+            width: 8px;
+            height: 8px;
         }
 
         ::-webkit-scrollbar-track {
-            background: transparent;
+            background: rgb(var(--bg-surface-alt));
         }
 
         ::-webkit-scrollbar-thumb {
-            background: transparent;
-            border: none;
+            background: color-mix(in srgb, rgb(var(--text-tertiary)) 50%, transparent);
+            border-radius: 9999px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: color-mix(in srgb, rgb(var(--text-tertiary)) 80%, transparent);
+        }
+
+        .surface-card {
+            background: rgb(var(--bg-surface));
+            border: 1px solid rgb(var(--border-default));
+            color: rgb(var(--text-primary));
+        }
+
+        .text-muted {
+            color: rgb(var(--text-secondary));
+        }
+
+        /*
+          Legacy arbitrary Tailwind class overrides:
+          keep existing feature components working while making both themes readable.
+        */
+        .bg-\[\#050B14\],
+        .bg-\[\#050a10\],
+        .bg-\[\#101c22\],
+        .bg-\[\#050b14\] {
+            background-color: rgb(var(--bg-app)) !important;
+        }
+
+        .bg-\[\#0c1829\],
+        .bg-\[\#0F1720\],
+        .bg-\[\#0f172a\],
+        .bg-\[\#0A121A\],
+        .bg-\[\#0f1621\],
+        .bg-\[\#131b29\],
+        .bg-\[\#09101d\] {
+            background-color: rgb(var(--bg-surface)) !important;
+        }
+
+        .border-\[\#1a2332\] {
+            border-color: rgb(var(--border-default)) !important;
+        }
+
+        .from-\[\#050B14\],
+        .via-\[\#050B14\] {
+            --tw-gradient-from: rgb(var(--bg-app)) var(--tw-gradient-from-position) !important;
+            --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+        }
+
+        .to-\[\#09101d\],
+        .from-\[\#09101d\] {
+            --tw-gradient-to: rgb(var(--bg-surface)) var(--tw-gradient-to-position) !important;
+            --tw-gradient-from: rgb(var(--bg-surface)) var(--tw-gradient-from-position) !important;
+        }
+
+        .ring-offset-\[\#050B14\] {
+            --tw-ring-offset-color: rgb(var(--bg-app)) !important;
+        }
+
+        .bg-\[\#7360f2\] {
+            background-color: rgb(var(--action-primary)) !important;
+        }
+
+        .hover\:bg-\[\#5e4ecc\]:hover {
+            background-color: rgb(var(--action-primary-hover)) !important;
+        }
+
+        html:not(.dark) .text-white {
+            color: rgb(var(--text-primary)) !important;
+        }
+
+        html:not(.dark) .border-white\/10,
+        html:not(.dark) .border-white\/5 {
+            border-color: rgb(var(--border-default)) !important;
+        }
+
+        html:not(.dark) .bg-white\/5,
+        html:not(.dark) .bg-white\/10 {
+            background-color: color-mix(in srgb, rgb(var(--bg-surface-alt)) 88%, transparent) !important;
+        }
+
+        html:not(.dark) .bg-black\/20,
+        html:not(.dark) .bg-black\/30,
+        html:not(.dark) .bg-black\/40,
+        html:not(.dark) .bg-black\/50,
+        html:not(.dark) .bg-black\/80 {
+            background-color: color-mix(in srgb, rgb(var(--bg-surface-alt)) 92%, transparent) !important;
+        }
+
+        .bg-primary.text-white,
+        .bg-primary-dark.text-white,
+        .bg-red-600.text-white,
+        .bg-rose-600.text-white,
+        .bg-blue-600.text-white,
+        .bg-\[\#7360f2\].text-white {
+            color: white !important;
+        }
+
+        @keyframes logo-flicker {
+            0% { opacity: 0.45; transform: scale(0.98); }
+            30% { opacity: 1; transform: scale(1); }
+            60% { opacity: 0.62; transform: scale(0.992); }
+            100% { opacity: 0.95; transform: scale(1); }
+        }
+
+        .logo-flicker {
+            animation: logo-flicker 1.15s ease-in-out infinite;
+            filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.35));
         }
     </style>
 </head>

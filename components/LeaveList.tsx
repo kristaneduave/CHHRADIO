@@ -34,7 +34,7 @@ export const LeaveList: React.FC<LeaveListProps> = ({ date }) => {
         fetchLeaves();
     }, [date]);
 
-    const consultants = leaves.filter(l => l.user?.role === 'consultant' || l.user?.role === 'faculty');
+    const consultants = leaves.filter(l => l.user?.role === 'consultant' || l.user?.role === 'moderator' || l.user?.role === 'training_officer' || l.user?.role === 'admin');
     const residents = leaves.filter(l => l.user?.role === 'resident');
 
     if (loading) {
@@ -89,7 +89,7 @@ export const LeaveList: React.FC<LeaveListProps> = ({ date }) => {
             {renderSection('Consultants', consultants)}
             {renderSection('Residents', residents)}
             {/* Fallback for others if needed */}
-            {renderSection('Others', leaves.filter(l => !['consultant', 'faculty', 'resident'].includes(l.user?.role || '')))}
+            {renderSection('Others', leaves.filter(l => !['consultant', 'moderator', 'training_officer', 'admin', 'resident'].includes(l.user?.role || '')))}
         </div>
     );
 };

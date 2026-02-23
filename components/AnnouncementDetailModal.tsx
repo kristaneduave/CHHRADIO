@@ -104,11 +104,11 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-6" onClick={onClose}>
             <div
-                className="w-full max-w-lg bg-[#0A121A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]"
+                className="w-full max-w-lg bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header - Compact */}
-                <div className="flex justify-between items-start p-4 border-b border-white/5 shrink-0 bg-[#0F1720] relative z-20">
+                <div className="flex justify-between items-start p-4 border-b border-white/5 shrink-0 bg-surface relative z-20">
                     <div className="pr-8">
                         <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border mb-2 ${getCategoryBadgeStyle(announcement.category)}`}>
                             {announcement.category}
@@ -257,7 +257,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
                 </div>
 
                 {/* Footer Actions (Optional) */}
-                <div className="p-3 border-t border-white/5 bg-[#0F1720]/50 flex justify-end shrink-0">
+                <div className="p-3 border-t border-white/5 bg-surface/50 flex justify-end shrink-0">
                     <div className="flex items-center gap-[-8px]">
                         {viewers.length > 0 && (
                             <div className="flex items-center mr-3">
@@ -291,3 +291,4 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({ annou
 };
 
 export default AnnouncementDetailModal;
+

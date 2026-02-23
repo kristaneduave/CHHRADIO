@@ -1,35 +1,54 @@
-import { CaseData } from '../types';
-
 export const generateViberText = (data: any): string => {
-    const {
-        initials,
-        age,
-        sex,
-        modality,
-        organSystem,
-        clinicalData,
-        findings,
-        impression,
-        reliability,
-        notes,
-        diagnosis
-    } = data;
+  const {
+    submissionType,
+    initials,
+    age,
+    sex,
+    modality,
+    organSystem,
+    clinicalData,
+    findings,
+    impression,
+    notes,
+    diagnosis,
+  } = data;
 
-    return `🚨 *INTERESTING CASE* 🚨
-    
-🎯 *Reliability:* ${reliability || 'N/A'}
+  if (submissionType === 'rare_pathology') {
+    return `*RARE PATHOLOGY*
 
-👤 *Pt:* ${initials || 'N/A'} (${age || '?'} / ${sex || '?'})
-📷 *Exam:* ${modality || 'N/A'} - ${organSystem || 'N/A'}
-${clinicalData ? `📋 *Clinical:* ${clinicalData}` : ''}
+*Clinical Data:*
+${clinicalData || 'No clinical data provided.'}
 
-📝 *Findings:*
+*Findings:*
 ${findings || 'No specific findings.'}
 
-💡 *Impression:*
-${impression || 'Pending Diagnosis'}
-${diagnosis ? `🔑 *Code:* ${diagnosis}` : ''}
+*Radiologic Clinchers:*
+${data.radiologicClinchers || data.radiologic_clinchers || 'No radiologic clinchers provided.'}`;
+  }
 
-📌 *Notes:*
+  if (submissionType === 'aunt_minnie') {
+    return `*AUNT MINNIE*
+
+*Description:*
+${findings || 'No description provided.'}
+
+*Notes / Remarks:*
+${notes || 'No notes provided.'}`;
+  }
+
+  return `*INTERESTING CASE*
+
+*Pt:* ${initials || 'N/A'} (${age || '?'} / ${sex || '?'})
+*Exam:* ${modality || 'N/A'} - ${organSystem || 'N/A'}
+${clinicalData ? `*Clinical:* ${clinicalData}` : ''}
+
+*Findings:*
+${findings || 'No specific findings.'}
+
+*Impression:*
+${impression || 'Pending Diagnosis'}
+${diagnosis ? `*Code:* ${diagnosis}` : ''}
+
+*Notes:*
 ${notes || 'No notes provided.'}`;
 };

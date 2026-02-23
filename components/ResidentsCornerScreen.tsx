@@ -322,7 +322,7 @@ const ResidentsCornerScreen: React.FC = () => {
 
 
     return (
-        <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-[#050B14]">
+        <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
             <div className="max-w-md mx-auto space-y-6">
                 {/* Header Section */}
                 <div className="text-center mb-6">
@@ -339,10 +339,10 @@ const ResidentsCornerScreen: React.FC = () => {
                 <div className="relative group">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
                     <a
-                        href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?tab=t.wyylmpp68x5s"
+                        href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative w-full py-3 bg-[#0c1829] border border-cyan-500/30 rounded-2xl flex items-center justify-between px-4 gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
+                        className="relative w-full py-3 bg-surface border border-cyan-500/30 rounded-2xl flex items-center justify-between px-4 gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
                     >
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
@@ -350,7 +350,7 @@ const ResidentsCornerScreen: React.FC = () => {
                             </div>
                             <div className="text-left">
                                 <span className="block text-xs font-bold text-white tracking-wide">VIEW PATIENT DECKING LIST</span>
-                                <span className="block text-[9px] text-cyan-400 font-medium">Google Docs â€¢ Live Updates</span>
+                                <span className="block text-[9px] text-cyan-400 font-medium">Google Docs â€?Live Updates</span>
                             </div>
                         </div>
                         <span className="material-icons text-cyan-500/50 group-hover:translate-x-1 transition-transform">arrow_forward</span>
@@ -686,3 +686,4 @@ const ResidentsCornerScreen: React.FC = () => {
 };
 
 export default ResidentsCornerScreen;
+
