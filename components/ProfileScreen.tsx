@@ -6,6 +6,17 @@ import { UserRole } from '../types';
 import AdminUserManagement from './AdminUserManagement';
 import LoadingButton from './LoadingButton';
 import LoadingState from './LoadingState';
+import {
+  fetchHiddenAnnouncements,
+  unhideAllAnnouncementsForUser,
+  unhideAnnouncementForUser,
+} from '../services/announcementVisibilityService';
+import {
+  fetchHiddenNotificationsForUser,
+  unhideAllNotificationsForUser,
+  unhideNotificationForUser,
+} from '../services/newsfeedService';
+import { toastError, toastSuccess } from '../utils/toast';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
@@ -77,12 +88,20 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   const [myCases, setMyCases] = useState<any[]>([]);
   const [loadingCases, setLoadingCases] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null); // For delete confirmation
+  const [hiddenAnnouncements, setHiddenAnnouncements] = useState<any[]>([]);
+  const [loadingHiddenAnnouncements, setLoadingHiddenAnnouncements] = useState(false);
+  const [unhidingAnnouncementId, setUnhidingAnnouncementId] = useState<string | null>(null);
+  const [hiddenNotifications, setHiddenNotifications] = useState<any[]>([]);
+  const [unhidingNotificationId, setUnhidingNotificationId] = useState<string | null>(null);
+  const [unhidingAll, setUnhidingAll] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getProfile();
     getMyCases();
+    getHiddenAnnouncements();
+    getHiddenNotifications();
   }, []);
 
   const getMyCases = async () => {
@@ -141,6 +160,34 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       console.error('Error loading profile:', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getHiddenAnnouncements = async () => {
+    try {
+      setLoadingHiddenAnnouncements(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const rows = await fetchHiddenAnnouncements(user.id, 50);
+      setHiddenAnnouncements(rows);
+    } catch (error) {
+      console.error('Error loading hidden announcements:', error);
+    } finally {
+      setLoadingHiddenAnnouncements(false);
+    }
+  };
+
+  const getHiddenNotifications = async () => {
+    try {
+      setLoadingHiddenAnnouncements(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const rows = await fetchHiddenNotificationsForUser(user.id, 50);
+      setHiddenNotifications(rows);
+    } catch (error) {
+      console.error('Error loading hidden notifications:', error);
+    } finally {
+      setLoadingHiddenAnnouncements(false);
     }
   };
 
@@ -249,6 +296,56 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   if (loading) {
     return <LoadingState title="Loading profile..." />;
   }
+
+  const handleUnhideAnnouncement = async (announcementId: string) => {
+    try {
+      setUnhidingAnnouncementId(announcementId);
+      await unhideAnnouncementForUser(announcementId);
+      setHiddenAnnouncements(prev => prev.filter((item) => item.id !== announcementId));
+      toastSuccess('News restored');
+    } catch (error: any) {
+      console.error('Error unhiding announcement:', error);
+      toastError('Failed to restore announcement', error?.message || 'Please try again.');
+    } finally {
+      setUnhidingAnnouncementId(null);
+    }
+  };
+
+  const handleUnhideAllAnnouncements = async () => {
+    try {
+      setUnhidingAll(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user');
+      await Promise.all([
+        unhideAllAnnouncementsForUser(),
+        unhideAllNotificationsForUser(user.id),
+      ]);
+      setHiddenAnnouncements([]);
+      setHiddenNotifications([]);
+      toastSuccess('All hidden items restored');
+    } catch (error: any) {
+      console.error('Error restoring hidden announcements:', error);
+      toastError('Failed to restore hidden items', error?.message || 'Please try again.');
+    } finally {
+      setUnhidingAll(false);
+    }
+  };
+
+  const handleUnhideNotification = async (notificationId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user');
+      setUnhidingNotificationId(notificationId);
+      await unhideNotificationForUser(notificationId, user.id);
+      setHiddenNotifications(prev => prev.filter((item) => item.id !== notificationId));
+      toastSuccess('Notification restored');
+    } catch (error: any) {
+      console.error('Error unhiding notification:', error);
+      toastError('Failed to restore notification', error?.message || 'Please try again.');
+    } finally {
+      setUnhidingNotificationId(null);
+    }
+  };
 
   return (
     <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -478,6 +575,73 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
               </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Hidden News Section */}
+      <div className="mt-10">
+        <div className="mb-4 ml-1 flex items-center justify-between">
+          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Hidden News</h2>
+          {(hiddenAnnouncements.length > 0 || hiddenNotifications.length > 0) && (
+            <button
+              onClick={handleUnhideAllAnnouncements}
+              disabled={unhidingAll}
+              className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 hover:text-white disabled:opacity-50"
+            >
+              {unhidingAll ? 'Restoring...' : 'Unhide all'}
+            </button>
+          )}
+        </div>
+
+        {loadingHiddenAnnouncements ? (
+          <div className="text-center py-6 text-slate-500 text-xs">Loading hidden news...</div>
+        ) : hiddenAnnouncements.length === 0 && hiddenNotifications.length === 0 ? (
+          <div className="glass-card-enhanced p-5 rounded-2xl border border-white/10">
+            <p className="text-xs text-slate-400">No hidden news.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {hiddenAnnouncements.map((item) => (
+              <div
+                key={item.id}
+                className="glass-card-enhanced p-3 rounded-xl border border-white/5 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{item.title}</p>
+                  <p className="text-[10px] text-slate-500 truncate">By {item.author} • {item.date}</p>
+                </div>
+                <button
+                  onClick={() => handleUnhideAnnouncement(item.id)}
+                  disabled={unhidingAnnouncementId === item.id}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-semibold uppercase tracking-wider text-slate-300 disabled:opacity-50"
+                >
+                  {unhidingAnnouncementId === item.id ? 'Restoring...' : 'Unhide'}
+                </button>
+              </div>
+            ))}
+            {hiddenNotifications.map((item) => (
+              <div
+                key={`notif-${item.id}`}
+                className="glass-card-enhanced p-3 rounded-xl border border-white/5 flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">
+                    {(item.type || 'Notification').replace(/[_-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} by {item.actorName || 'Hospital Staff'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 truncate">
+                    {new Date(item.createdAt).toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' })}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleUnhideNotification(item.id)}
+                  disabled={unhidingNotificationId === item.id}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-[10px] font-semibold uppercase tracking-wider text-slate-300 disabled:opacity-50"
+                >
+                  {unhidingNotificationId === item.id ? 'Restoring...' : 'Unhide'}
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </div>

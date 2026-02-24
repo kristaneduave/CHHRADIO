@@ -13,7 +13,7 @@ const formatTimeAgo = (iso: string): string => {
   return `${days}d ago`;
 };
 
-const mapRowToNotification = (row: any): NewsfeedNotification => ({
+const mapRowToNotification = (row: any, actorName?: string): NewsfeedNotification => ({
   id: row.notification_id,
   title: row.notifications?.title || 'Notification',
   message: row.notifications?.message || '',
@@ -22,6 +22,7 @@ const mapRowToNotification = (row: any): NewsfeedNotification => ({
   time: formatTimeAgo(row.created_at || row.notifications?.created_at),
   createdAt: row.created_at || row.notifications?.created_at,
   read: !!row.read_at,
+  actorName: actorName || 'Hospital Staff',
   linkScreen: (row.notifications?.link_screen || null) as Screen | null,
   linkEntityId: row.notifications?.link_entity_id || null,
 });
@@ -46,6 +47,7 @@ export const fetchNotificationsPage = async (
           message,
           severity,
           type,
+          created_by,
           link_screen,
           link_entity_id,
           created_at
@@ -64,7 +66,36 @@ export const fetchNotificationsPage = async (
   const { data, error } = await query;
   if (error) throw error;
 
-  const rows = (data || []).map(mapRowToNotification);
+  const creatorIds = Array.from(
+    new Set(
+      (data || [])
+        .map((row: any) => row.notifications?.created_by as string | null)
+        .filter((id: string | null): id is string => Boolean(id)),
+    ),
+  );
+
+  let actorById = new Map<string, string>();
+  if (creatorIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, nickname')
+      .in('id', creatorIds);
+
+    if (!profilesError && profiles) {
+      actorById = new Map(
+        profiles.map((profile: any) => [
+          profile.id as string,
+          (profile.nickname as string | null) || (profile.full_name as string | null) || 'Hospital Staff',
+        ]),
+      );
+    }
+  }
+
+  const rows = (data || []).map((row: any) => {
+    const createdBy = row.notifications?.created_by as string | null;
+    const actorName = createdBy ? actorById.get(createdBy) || (createdBy === userId ? 'You' : 'Hospital Staff') : 'Hospital Staff';
+    return mapRowToNotification(row, actorName);
+  });
   const hasMore = rows.length > limit;
   return {
     data: hasMore ? rows.slice(0, limit) : rows,
@@ -91,6 +122,128 @@ export const markAllNotificationsRead = async (userId: string): Promise<void> =>
     .is('read_at', null);
 
   if (error) throw error;
+};
+
+export const hideNotificationForUser = async (notificationId: string, userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notification_recipients')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('notification_id', notificationId)
+    .eq('user_id', userId)
+    .is('archived_at', null);
+
+  if (error) throw error;
+};
+
+export const hideAllNotificationsForUser = async (userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notification_recipients')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .is('archived_at', null);
+
+  if (error) throw error;
+};
+
+export const unhideNotificationForUser = async (notificationId: string, userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notification_recipients')
+    .update({ archived_at: null })
+    .eq('notification_id', notificationId)
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null);
+
+  if (error) throw error;
+};
+
+export const unhideAllNotificationsForUser = async (userId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('notification_recipients')
+    .update({ archived_at: null })
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null);
+
+  if (error) throw error;
+};
+
+export const fetchHiddenNotificationsForUser = async (
+  userId: string,
+  limit = 50,
+): Promise<NewsfeedNotification[]> => {
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('notification_recipients')
+    .select(
+      `
+        id,
+        notification_id,
+        user_id,
+        read_at,
+        created_at,
+        archived_at,
+        notifications:notification_id (
+          id,
+          title,
+          message,
+          severity,
+          type,
+          created_by,
+          link_screen,
+          link_entity_id,
+          created_at
+        )
+      `,
+    )
+    .eq('user_id', userId)
+    .not('archived_at', 'is', null)
+    .order('archived_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  const creatorIds = Array.from(
+    new Set(
+      (data || [])
+        .map((row: any) => row.notifications?.created_by as string | null)
+        .filter((id: string | null): id is string => Boolean(id)),
+    ),
+  );
+
+  let actorById = new Map<string, string>();
+  if (creatorIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, nickname')
+      .in('id', creatorIds);
+
+    if (!profilesError && profiles) {
+      actorById = new Map(
+        profiles.map((profile: any) => [
+          profile.id as string,
+          (profile.nickname as string | null) || (profile.full_name as string | null) || 'Hospital Staff',
+        ]),
+      );
+    }
+  }
+
+  return (data || []).map((row: any) => {
+    const createdBy = row.notifications?.created_by as string | null;
+    const actorName = createdBy ? actorById.get(createdBy) || (createdBy === userId ? 'You' : 'Hospital Staff') : 'Hospital Staff';
+    return mapRowToNotification(row, actorName);
+  });
+};
+
+export const fetchUnreadNotificationsCount = async (userId: string): Promise<number> => {
+  const { count, error } = await supabase
+    .from('notification_recipients')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .is('archived_at', null)
+    .is('read_at', null);
+
+  if (error) throw error;
+  return count || 0;
 };
 
 export const subscribeToNotifications = (
@@ -126,10 +279,9 @@ export const createSystemNotification = async (params: {
   linkEntityId?: string;
   recipientUserIds: string[];
 }): Promise<void> => {
-  const baseRecipients = params.recipientUserIds.filter(Boolean);
-  if (baseRecipients.length === 0 && params.actorUserId) {
-    baseRecipients.push(params.actorUserId);
-  }
+  // Always include the actor to guarantee they can see their own emitted notification,
+  // even when profile-based recipient lookup is incomplete.
+  const baseRecipients = [...params.recipientUserIds.filter(Boolean), params.actorUserId].filter(Boolean);
   const uniqueRecipients = Array.from(new Set(baseRecipients));
   if (uniqueRecipients.length === 0) return;
 

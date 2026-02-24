@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
-import { createSystemNotification } from '../services/newsfeedService';
+import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 
 const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -340,16 +340,19 @@ const CalendarScreen: React.FC = () => {
       try {
         const { data: auth } = await supabase.auth.getUser();
         const actorUserId = auth.user?.id || '';
-        const recipientUserIds = Array.from(
-          new Set(
-            [
-              ...(savedEvent.coverage_details || []).map((d) => d.user_id).filter(Boolean),
-              ...coverageDetails.map((d) => d.user_id).filter(Boolean),
-              savedEvent.assigned_to || '',
-              savedEvent.covered_by || '',
-            ].filter(Boolean),
-          ),
-        );
+        const recipients = await fetchAllRecipientUserIds();
+        const recipientUserIds = recipients.length > 0
+          ? recipients
+          : Array.from(
+              new Set(
+                [
+                  ...(savedEvent.coverage_details || []).map((d) => d.user_id).filter(Boolean),
+                  ...coverageDetails.map((d) => d.user_id).filter(Boolean),
+                  savedEvent.assigned_to || '',
+                  savedEvent.covered_by || '',
+                ].filter(Boolean),
+              ),
+            );
 
         if (actorUserId && recipientUserIds.length > 0) {
           const severity = newEventType === 'exam' ? 'warning' : 'info';
@@ -359,7 +362,7 @@ const CalendarScreen: React.FC = () => {
             type: 'calendar',
             severity,
             title: editingEventId ? 'Calendar Event Updated' : 'New Calendar Event',
-            message: `${savedEvent.title} 鈥?${dateLabel}`,
+            message: `${savedEvent.title} - ${dateLabel}`,
             linkScreen: 'calendar',
             linkEntityId: savedEvent.id,
             recipientUserIds,

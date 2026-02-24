@@ -316,7 +316,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
     <div className="px-6 pt-12 pb-24 flex flex-col min-h-full">
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-white mb-1">Case Library</h1>
-        <p className="text-slate-400 text-xs">Access centralized patient case library</p>
       </header>
 
       <div className="relative mb-4 z-40" ref={suggestionsRef}>

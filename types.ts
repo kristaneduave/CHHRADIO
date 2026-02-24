@@ -22,6 +22,7 @@ export interface Activity {
   title: string;
   subtitle: string;
   time: string;
+  createdAt?: string;
   icon: string;
   colorClass: string;
 }
@@ -170,6 +171,7 @@ export interface Announcement {
   title: string;
   summary: string; // We can keep summary or rename to content, plan says content but keeping summary for now to match interface till full refactor
   content?: string; // Adding content field for full text
+  createdAt?: string;
   author: string;
   author_id: string;
   authorAvatar: string | null;
@@ -178,6 +180,11 @@ export interface Announcement {
   authorFullName?: string | null; // Added
   date: string;
   category: 'Research' | 'Announcement' | 'Event' | 'Misc' | 'Clinical';
+  is_pinned?: boolean;
+  is_important?: boolean;
+  is_saved?: boolean;
+  pinned_at?: string | null;
+  readingMinutes?: number;
   imageUrl?: string;
   views: number;
   viewers?: {
@@ -201,8 +208,16 @@ export interface NewsfeedNotification {
   time: string;
   createdAt: string;
   read: boolean;
+  actorName?: string;
   linkScreen?: Screen | null;
   linkEntityId?: string | null;
+}
+
+export interface NewsfeedOnlineUser {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role?: UserRole;
 }
 
 export interface DashboardSnapshotData {

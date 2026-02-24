@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { SPECIALTIES } from '../constants';
 import { supabase } from '../services/supabase';
+import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import { QuizAnswerMap, QuizAttemptSummary, QuizExam, QuizQuestion, UserRole } from '../types';
 import { getRoleLabel, normalizeUserRole } from '../utils/roles';
 import { toastError, toastInfo, toastSuccess } from '../utils/toast';
@@ -334,6 +335,7 @@ const QuizScreen: React.FC = () => {
     try {
       setSaving(true);
       let id = editExam.id;
+      const isNewExam = !id;
       if (!id) {
         const ins = await supabase.from('quiz_exams').insert({ ...editExam, created_by: uid }).select('id').single();
         if (ins.error) throw ins.error;
@@ -347,6 +349,24 @@ const QuizScreen: React.FC = () => {
       const payload = valid.map((x, i) => ({ exam_id: id, question_text: x.question_text.trim(), options: x.options.map((o) => o.trim()), correct_answer_index: x.correct_answer_index, explanation: x.explanation.trim(), points: Math.max(1, n(x.points, 1)), sort_order: i, question_type: 'mcq' }));
       const insQ = await supabase.from('quiz_questions').insert(payload);
       if (insQ.error) throw insQ.error;
+
+      try {
+        const recipients = await fetchAllRecipientUserIds();
+        const isPublished = editExam.status === 'published';
+        await createSystemNotification({
+          actorUserId: uid,
+          type: 'quiz',
+          severity: isPublished ? 'warning' : 'info',
+          title: isNewExam ? 'New Quiz Created' : 'Quiz Updated',
+          message: `${editExam.title}${isPublished ? ' (Published)' : ''}`,
+          linkScreen: 'quiz',
+          linkEntityId: id,
+          recipientUserIds: recipients.length > 0 ? recipients : [uid],
+        });
+      } catch (notifError) {
+        console.error('Failed to emit quiz notification:', notifError);
+      }
+
       toastSuccess('Exam saved');
       await Promise.all([loadManage(), loadExams()]);
       if (canAnalytics) await loadAnalytics();
@@ -361,6 +381,26 @@ const QuizScreen: React.FC = () => {
   const setStatus = async (id: string, status: QuizExam['status']) => {
     const { error } = await supabase.from('quiz_exams').update({ status }).eq('id', id);
     if (error) return toastError('Status update failed', error.message);
+
+    if (status === 'published') {
+      try {
+        const exam = manageExams.find((x) => x.id === id);
+        const recipients = await fetchAllRecipientUserIds();
+        await createSystemNotification({
+          actorUserId: uid,
+          type: 'quiz',
+          severity: 'warning',
+          title: 'Quiz Published',
+          message: exam?.title || 'A quiz was published',
+          linkScreen: 'quiz',
+          linkEntityId: id,
+          recipientUserIds: recipients.length > 0 ? recipients : [uid],
+        });
+      } catch (notifError) {
+        console.error('Failed to emit quiz publish notification:', notifError);
+      }
+    }
+
     toastSuccess(`Exam marked ${status}`);
     await Promise.all([loadManage(), loadExams()]);
   };
@@ -408,7 +448,6 @@ const QuizScreen: React.FC = () => {
     <div className="px-6 pt-12 pb-6 h-full flex flex-col">
       <header className="mb-4">
         <h1 className="text-2xl font-bold text-white">Medical Quiz</h1>
-        <p className="text-xs text-slate-400">Role: {getRoleLabel(role)}</p>
       </header>
 
       <div className="flex gap-2 mb-4">
@@ -469,7 +508,7 @@ const QuizScreen: React.FC = () => {
             </div>
           ) : (
             <div className="glass-card-enhanced border border-white/10 rounded-2xl p-4">
-              <button onClick={backToList} className="text-xs text-slate-400 mb-2">°˚ Back to Exams</button>
+              <button onClick={backToList} className="text-xs text-slate-400 mb-2">‚Üê Back to Exams</button>
               <p className="text-xs text-slate-400 mb-1">Question {idx + 1}/{sessionQs.length} - {unanswered} unanswered</p>
               <h3 className="text-white font-semibold mb-3">{q?.question_text}</h3>
               <div className="space-y-2">
@@ -564,4 +603,6 @@ const QuizScreen: React.FC = () => {
 };
 
 export default QuizScreen;
+
+
 

@@ -1,6 +1,6 @@
 import { CalendarService } from './CalendarService';
 import { supabase } from './supabase';
-import { DashboardSnapshotData } from '../types';
+import { DashboardSnapshotData, Screen } from '../types';
 
 export const APP_OPEN_STORAGE_KEY = 'chh_last_app_open_at';
 export const SNAPSHOT_BASELINE_STORAGE_KEY = 'chh_snapshot_baseline_open_at';
@@ -14,6 +14,37 @@ export interface DashboardSnapshotResult {
   data: DashboardSnapshotData | null;
   sectionErrors: Partial<Record<SnapshotSection, string>>;
 }
+
+const setSeenKeyNow = (key: string) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, new Date().toISOString());
+};
+
+export const markSnapshotSectionSeen = (section: 'announcements' | 'cases' | 'calendar'): void => {
+  if (section === 'announcements') {
+    setSeenKeyNow(SNAPSHOT_SEEN_ANNOUNCEMENTS_KEY);
+    return;
+  }
+  if (section === 'calendar') {
+    setSeenKeyNow(SNAPSHOT_SEEN_CALENDAR_KEY);
+    return;
+  }
+  setSeenKeyNow(SNAPSHOT_SEEN_CASES_KEY);
+};
+
+export const markSnapshotSectionsSeenForScreen = (screen: Screen): void => {
+  if (screen === 'announcements') {
+    markSnapshotSectionSeen('announcements');
+    return;
+  }
+  if (screen === 'calendar') {
+    markSnapshotSectionSeen('calendar');
+    return;
+  }
+  if (screen === 'search' || screen === 'database') {
+    markSnapshotSectionSeen('cases');
+  }
+};
 
 const getEffectiveBaseline = (seenKey: string): string | null => {
   if (typeof window === 'undefined') return null;
@@ -49,6 +80,8 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
           .from('announcements')
           .select('id,title,created_at')
           .gt('created_at', announcementsBaseline)
+          .order('is_pinned', { ascending: false })
+          .order('is_important', { ascending: false })
           .order('created_at', { ascending: false })
       : Promise.resolve({ data: [], error: null } as any),
     casesBaseline

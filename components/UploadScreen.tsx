@@ -1,7 +1,8 @@
 ﻿
 import React, { useState, useRef, useEffect } from 'react';
-import { generateCasePDF } from '../services/pdfService';
+import { loadGenerateCasePDF } from '../services/pdfServiceLoader';
 import { supabase } from '../services/supabase';
+import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import { generateViberText } from '../utils/formatters';
 import { SubmissionType } from '../types';
 import { toastError, toastSuccess, toastInfo } from '../utils/toast';
@@ -74,6 +75,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const [uploaderName, setUploaderName] = useState<string>('');
   const [isScreenshotMode, setIsScreenshotMode] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -303,21 +305,23 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         status: status
       };
 
-      const writeCase = async (payload: any) => {
+      const writeCase = async (payload: any): Promise<{ id: string | null; error: any }> => {
         if (existingCase?.id) {
           const { error: updateError } = await supabase
             .from('cases')
             .update(payload)
             .eq('id', existingCase.id);
-          return updateError;
+          return { id: existingCase.id, error: updateError };
         }
-        const { error: insertError } = await supabase
+        const { data: insertedCase, error: insertError } = await supabase
           .from('cases')
-          .insert(payload);
-        return insertError;
+          .insert(payload)
+          .select('id')
+          .single();
+        return { id: insertedCase?.id || null, error: insertError };
       };
 
-      let error = await writeCase(casePayload);
+      let { id: savedCaseId, error } = await writeCase(casePayload);
       if (error) {
         const message = String(error?.message || '');
         const missingNewColumns =
@@ -338,11 +342,37 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           const { radiologic_clinchers, submission_type, ...legacyPayload } = casePayload as any;
           void radiologic_clinchers;
           void submission_type;
-          error = await writeCase(legacyPayload);
+          const legacyWrite = await writeCase(legacyPayload);
+          savedCaseId = legacyWrite.id;
+          error = legacyWrite.error;
         }
       }
 
       if (error) throw error;
+
+      if (status === 'published') {
+        try {
+          const recipients = await fetchAllRecipientUserIds();
+          const submissionLabel =
+            formData.submissionType === 'rare_pathology'
+              ? 'Rare Pathology'
+              : formData.submissionType === 'aunt_minnie'
+                ? 'Aunt Minnie'
+                : 'Interesting Case';
+          await createSystemNotification({
+            actorUserId: user.id,
+            type: formData.submissionType,
+            severity: 'info',
+            title: existingCase?.id ? 'Case Updated' : 'New Case Uploaded',
+            message: `${submissionLabel}: ${customTitle || casePayload.title}`,
+            linkScreen: 'search',
+            linkEntityId: savedCaseId || undefined,
+            recipientUserIds: recipients.length > 0 ? recipients : [user.id],
+          });
+        } catch (notifError) {
+          console.error('Failed to emit case notification:', notifError);
+        }
+      }
 
       if (status === 'published') {
         toastSuccess('Case published', `Diagnostic Code: ${finalDiagnosis}`);
@@ -389,6 +419,26 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       url: img.url,
       description: img.description
     }));
+  };
+
+  const handleExportPdf = async () => {
+    setIsExportingPdf(true);
+    try {
+      const generateCasePDF = await loadGenerateCasePDF().catch((error) => {
+        throw new Error(`Unable to load export module: ${String(error)}`);
+      });
+      const extendedData = {
+        ...formData
+      };
+      generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
+    } catch (e) {
+      console.error('Export failed:', e);
+      const message = e instanceof Error ? e.message : String(e);
+      const title = message.includes('Unable to load export module') ? 'Unable to load export module' : 'Export failed';
+      toastError(title, message);
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   return (
@@ -856,20 +906,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 Copy for Viber
               </button>
 
-              <button onClick={() => {
-                console.log('Export button clicked');
-                try {
-                  const extendedData = {
-                    ...formData
-                  };
-                  generateCasePDF(extendedData, null, getImagesForPdf(), customTitle, uploaderName);
-                } catch (e) {
-                  console.error('Export failed immediately:', e);
-                  toastError('Export failed', String(e));
-                }
-              }} className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5">
+              <button
+                onClick={handleExportPdf}
+                disabled={isExportingPdf}
+                className="w-full py-4 glass-card-enhanced text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-3 hover:bg-white/5 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
                 <span className="material-icons text-rose-500">picture_as_pdf</span>
-                Export to Drive (PDF)
+                {isExportingPdf ? 'Exporting PDF...' : 'Export to Drive (PDF)'}
               </button>
 
               <div className="grid grid-cols-2 gap-3">

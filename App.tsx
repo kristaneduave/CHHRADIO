@@ -1,17 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
-import UploadScreen from './components/UploadScreen';
-import QuizScreen from './components/QuizScreen';
-import SearchScreen from './components/SearchScreen';
-import CalendarScreen from './components/CalendarScreen';
-import ProfileScreen from './components/ProfileScreen';
-import AnnouncementsScreen from './components/AnnouncementsScreen';
 import LoginScreen from './components/LoginScreen';
-import CaseViewScreen from './components/CaseViewScreen';
-import ResidentsCornerScreen from './components/ResidentsCornerScreen';
-import NewsfeedScreen from './components/NewsfeedScreen';
 import ToastHost from './components/ToastHost';
 import LoadingState from './components/LoadingState';
 import { Screen, SubmissionType } from './types';
@@ -21,10 +12,19 @@ import { useThemePreference } from './utils/theme';
 import {
   APP_OPEN_STORAGE_KEY,
   SNAPSHOT_BASELINE_STORAGE_KEY,
-  SNAPSHOT_SEEN_ANNOUNCEMENTS_KEY,
-  SNAPSHOT_SEEN_CALENDAR_KEY,
-  SNAPSHOT_SEEN_CASES_KEY,
+  markSnapshotSectionsSeenForScreen,
 } from './services/dashboardSnapshotService';
+import { prefetchGenerateCasePDF } from './services/pdfServiceLoader';
+import { fetchUnreadNotificationsCount, subscribeToNotifications } from './services/newsfeedService';
+
+declare global {
+  interface NetworkInformation {
+    saveData?: boolean;
+  }
+  interface Navigator {
+    connection?: NetworkInformation;
+  }
+}
 
 const RECENT_SCREENS_STORAGE_KEY = 'chh_recent_screens';
 const TRACKABLE_SCREENS: Screen[] = [
@@ -38,6 +38,16 @@ const TRACKABLE_SCREENS: Screen[] = [
   'profile',
 ];
 
+const UploadScreen = lazy(() => import('./components/UploadScreen'));
+const QuizScreen = lazy(() => import('./components/QuizScreen'));
+const SearchScreen = lazy(() => import('./components/SearchScreen'));
+const CalendarScreen = lazy(() => import('./components/CalendarScreen'));
+const ProfileScreen = lazy(() => import('./components/ProfileScreen'));
+const AnnouncementsScreen = lazy(() => import('./components/AnnouncementsScreen'));
+const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
+const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
+const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
+
 const App: React.FC = () => {
   useThemePreference();
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
@@ -45,6 +55,9 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [caseToEdit, setCaseToEdit] = useState<any>(null);
   const [initialUploadType, setInitialUploadType] = useState<SubmissionType>('interesting_case');
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
+  const hasPrefetchedPdfRef = useRef(false);
 
   if (!isSupabaseConfigured) {
     return (
@@ -93,6 +106,73 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (!session || hasPrefetchedPdfRef.current || typeof window === 'undefined') {
+      return;
+    }
+    if (navigator.connection?.saveData) {
+      return;
+    }
+
+    hasPrefetchedPdfRef.current = true;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+
+    const triggerPrefetch = () => {
+      void prefetchGenerateCasePDF();
+    };
+
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(() => {
+        triggerPrefetch();
+      });
+    } else {
+      timeoutId = setTimeout(() => {
+        triggerPrefetch();
+      }, 1500);
+    }
+
+    return () => {
+      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [session]);
+
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) {
+      setUnreadNotificationsCount(0);
+      return;
+    }
+
+    let mounted = true;
+    const refreshUnreadCount = async () => {
+      try {
+        const count = await fetchUnreadNotificationsCount(uid);
+        if (mounted) {
+          setUnreadNotificationsCount(count);
+        }
+      } catch (error) {
+        console.error('Failed to refresh unread notifications count:', error);
+      }
+    };
+
+    refreshUnreadCount();
+    const unsubscribe = subscribeToNotifications(uid, () => {
+      refreshUnreadCount().catch((error) => console.error('Failed to refresh unread notifications count:', error));
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [session?.user?.id]);
+
   const updateRecentScreens = (screen: Screen) => {
     if (typeof window === 'undefined' || !TRACKABLE_SCREENS.includes(screen)) return;
     const raw = window.localStorage.getItem(RECENT_SCREENS_STORAGE_KEY);
@@ -102,21 +182,24 @@ const App: React.FC = () => {
   };
 
   const navigateToScreen = (screen: Screen) => {
-    if (typeof window !== 'undefined') {
-      const nowIso = new Date().toISOString();
-      if (screen === 'announcements') {
-        window.localStorage.setItem(SNAPSHOT_SEEN_ANNOUNCEMENTS_KEY, nowIso);
-      }
-      if (screen === 'calendar') {
-        window.localStorage.setItem(SNAPSHOT_SEEN_CALENDAR_KEY, nowIso);
-      }
-      if (screen === 'search' || screen === 'database') {
-        window.localStorage.setItem(SNAPSHOT_SEEN_CASES_KEY, nowIso);
-      }
+    markSnapshotSectionsSeenForScreen(screen);
+    if (screen !== 'announcements') {
+      setPendingAnnouncementId(null);
     }
 
     setCurrentScreen(screen);
     updateRecentScreens(screen);
+  };
+
+  const handleNewsfeedNavigate = (screen: Screen, entityId?: string | null) => {
+    if (screen === 'announcements') {
+      setPendingAnnouncementId(entityId || null);
+    }
+    if (screen === 'database') {
+      navigateToScreen('search');
+      return;
+    }
+    navigateToScreen(screen);
   };
 
   const startUploadFlow = (submissionType: SubmissionType) => {
@@ -182,9 +265,14 @@ const App: React.FC = () => {
           />
         );
       case 'announcements':
-        return <AnnouncementsScreen />;
+        return (
+          <AnnouncementsScreen
+            initialOpenAnnouncementId={pendingAnnouncementId}
+            onHandledInitialOpen={() => setPendingAnnouncementId(null)}
+          />
+        );
       case 'newsfeed':
-        return <NewsfeedScreen />;
+        return <NewsfeedScreen onNavigateToTarget={handleNewsfeedNavigate} />;
       case 'residents-corner':
         return <ResidentsCornerScreen />;
       default:
@@ -206,8 +294,14 @@ const App: React.FC = () => {
 
   return (
     <>
-      <Layout activeScreen={currentScreen} setScreen={navigateToScreen}>
-        {renderScreen()}
+      <Layout
+        activeScreen={currentScreen}
+        setScreen={navigateToScreen}
+        unreadNotificationsCount={unreadNotificationsCount}
+      >
+        <Suspense fallback={<LoadingState title="Loading module..." compact />}>
+          {renderScreen()}
+        </Suspense>
       </Layout>
       <ToastHost />
     </>

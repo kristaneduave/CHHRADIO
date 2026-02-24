@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (advisory phase)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Test (advisory phase)
+        run: npm run test
+        continue-on-error: true
+
+      - name: Typecheck (required)
+        run: npm run typecheck
+
+      - name: Build (required)
+        run: npm run build

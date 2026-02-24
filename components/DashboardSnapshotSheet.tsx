@@ -95,9 +95,9 @@ const DashboardSnapshotSheet: React.FC<DashboardSnapshotSheetProps> = ({
                     onNavigate('announcements');
                   }}
                   className="w-full text-left rounded-xl border border-white/10 bg-white/5 p-3 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-                  aria-label="Open announcements"
+                  aria-label="Open news"
                 >
-                  <h3 className="mb-1 text-xs font-bold text-slate-200">Announcements</h3>
+                  <h3 className="mb-1 text-xs font-bold text-slate-200">News</h3>
                   <p className="text-sm font-semibold text-white">{data?.newAnnouncementsCount} new posts</p>
                   <p className="text-[11px] text-slate-400 truncate">{data?.latestAnnouncementTitle || 'New announcement'}</p>
                 </button>

@@ -1,46 +1,158 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../services/supabase';
 import ThemeToggle from './ThemeToggle';
 import { toastError, toastSuccess } from '../utils/toast';
 import LoadingButton from './LoadingButton';
 
+type AuthMethod = 'email' | 'phone';
+type PhoneStep = 'request' | 'verify';
+
+const E164_PHONE_REGEX = /^\+[1-9]\d{7,14}$/;
+
+const mapAuthError = (message: string): string => {
+  const normalized = String(message || '').toLowerCase();
+  if (normalized.includes('invalid phone')) return 'Invalid phone format. Use E.164 (example: +15551234567).';
+  if (normalized.includes('otp') && (normalized.includes('invalid') || normalized.includes('expired'))) {
+    return 'The verification code is invalid or expired. Request a new one.';
+  }
+  if (normalized.includes('sms') && normalized.includes('provider')) {
+    return 'SMS provider is not configured. Contact administrator.';
+  }
+  if (normalized.includes('invalid login credentials')) {
+    return 'Invalid email or password.';
+  }
+  return message;
+};
+
 const LoginScreen: React.FC = () => {
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>('request');
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [isResending, setIsResending] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = window.setInterval(() => {
+      setCooldownSeconds((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  useEffect(() => {
+    setError(null);
+    setMessage(null);
+  }, [authMethod]);
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setMessage(null);
 
     try {
-      if (isSignUp) {
-        const { error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (signUpError) throw signUpError;
-        const info = 'Check your email for the confirmation link!';
-        setMessage(info);
-        toastSuccess('Account created', info);
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) throw signInError;
     } catch (err: any) {
-      setError(err.message);
-      toastError('Authentication failed', err.message);
+      const humanMessage = mapAuthError(err.message);
+      setError(humanMessage);
+      toastError('Authentication failed', humanMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const requestPhoneCode = async (resend = false) => {
+    const cleanedPhone = phone.trim();
+    if (!E164_PHONE_REGEX.test(cleanedPhone)) {
+      const invalidMessage = 'Use E.164 format (example: +15551234567).';
+      setError(invalidMessage);
+      toastError('Invalid phone format', invalidMessage);
+      return;
+    }
+
+    if (resend) {
+      setIsResending(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+    setMessage(null);
+
+    try {
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        phone: cleanedPhone,
+      });
+      if (otpError) throw otpError;
+
+      setPhone(cleanedPhone);
+      setPhoneStep('verify');
+      setCooldownSeconds(30);
+      setOtp('');
+      const successMessage = resend ? 'Code resent via SMS.' : 'Verification code sent via SMS.';
+      setMessage(successMessage);
+      toastSuccess('Code sent', successMessage);
+    } catch (err: any) {
+      const humanMessage = mapAuthError(err.message);
+      setError(humanMessage);
+      toastError('Phone sign-in failed', humanMessage);
+    } finally {
+      if (resend) {
+        setIsResending(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handlePhoneRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await requestPhoneCode(false);
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = otp.trim();
+    if (!/^\d{6}$/.test(token)) {
+      const invalidOtpMessage = 'Enter the 6-digit code sent to your phone.';
+      setError(invalidOtpMessage);
+      toastError('Invalid code', invalidOtpMessage);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        phone: phone.trim(),
+        token,
+        type: 'sms',
+      });
+      if (verifyError) throw verifyError;
+      toastSuccess('Verified', 'Phone verification successful.');
+    } catch (err: any) {
+      const humanMessage = mapAuthError(err.message);
+      setError(humanMessage);
+      toastError('Verification failed', humanMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendCode = async () => {
+    if (cooldownSeconds > 0 || isResending || loading) return;
+    await requestPhoneCode(true);
   };
 
   const handleGoogleLogin = async () => {
@@ -50,8 +162,9 @@ const LoginScreen: React.FC = () => {
       });
       if (oauthError) throw oauthError;
     } catch (err: any) {
-      setError(err.message);
-      toastError('Google sign-in failed', err.message);
+      const humanMessage = mapAuthError(err.message);
+      setError(humanMessage);
+      toastError('Google sign-in failed', humanMessage);
     }
   };
 
@@ -61,7 +174,28 @@ const LoginScreen: React.FC = () => {
         <ThemeToggle compact />
       </div>
       <div className="glass-panel p-8 rounded-2xl w-full max-w-md z-10 border border-border-default/70 shadow-2xl backdrop-blur-md">
-        <h2 className="text-3xl font-bold mb-6 text-center text-text-primary">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+        <h2 className="text-3xl font-bold mb-6 text-center text-text-primary">Welcome Back</h2>
+
+        <div className="mb-5 flex bg-surface-alt border border-border-default rounded-lg p-1">
+          <button
+            type="button"
+            onClick={() => setAuthMethod('email')}
+            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${
+              authMethod === 'email' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Email
+          </button>
+          <button
+            type="button"
+            onClick={() => setAuthMethod('phone')}
+            className={`flex-1 py-2 text-sm font-semibold rounded-md transition-colors ${
+              authMethod === 'phone' ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Phone
+          </button>
+        </div>
 
         {error ? <div className="bg-red-500/10 border border-red-500/40 text-red-500 p-3 rounded-lg mb-4 text-sm">{error}</div> : null}
 
@@ -69,39 +203,110 @@ const LoginScreen: React.FC = () => {
           <div className="bg-green-500/10 border border-green-500/40 text-green-600 p-3 rounded-lg mb-4 text-sm">{message}</div>
         ) : null}
 
-        <form onSubmit={handleAuth} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all"
-              placeholder="doctor@example.com"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all"
-              placeholder="********"
-              required
-            />
-          </div>
+        {authMethod === 'email' ? (
+          <form onSubmit={handleEmailSignIn} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all"
+                placeholder="doctor@example.com"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all"
+                placeholder="********"
+                required
+              />
+            </div>
 
-          <LoadingButton
-            type="submit"
-            isLoading={loading}
-            loadingText="Processing..."
-            className="w-full py-3 px-4 bg-primary hover:bg-primary-dark rounded-lg font-semibold text-white shadow-lg shadow-primary/30 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
-          >
-            {isSignUp ? 'Sign Up' : 'Sign In'}
-          </LoadingButton>
-        </form>
+            <LoadingButton
+              type="submit"
+              isLoading={loading}
+              loadingText="Signing in..."
+              className="w-full py-3 px-4 bg-primary hover:bg-primary-dark rounded-lg font-semibold text-white shadow-lg shadow-primary/30 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              Sign In
+            </LoadingButton>
+          </form>
+        ) : (
+          <form onSubmit={phoneStep === 'request' ? handlePhoneRequestSubmit : handleVerifyOtp} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1">Phone (E.164)</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all"
+                placeholder="+15551234567"
+                required
+              />
+              <p className="text-xs text-text-tertiary mt-1">Use international format, e.g. +15551234567</p>
+            </div>
+
+            {phoneStep === 'verify' ? (
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">6-digit code</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full px-4 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary placeholder-text-tertiary transition-all tracking-[0.2em]"
+                  placeholder="123456"
+                  required
+                />
+              </div>
+            ) : null}
+
+            <LoadingButton
+              type="submit"
+              isLoading={loading}
+              loadingText={phoneStep === 'request' ? 'Sending code...' : 'Verifying...'}
+              className="w-full py-3 px-4 bg-primary hover:bg-primary-dark rounded-lg font-semibold text-white shadow-lg shadow-primary/30 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            >
+              {phoneStep === 'request' ? 'Send SMS Code' : 'Verify Code'}
+            </LoadingButton>
+
+            {phoneStep === 'verify' ? (
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhoneStep('request');
+                    setOtp('');
+                    setCooldownSeconds(0);
+                    setMessage(null);
+                    setError(null);
+                  }}
+                  className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Change number
+                </button>
+                <LoadingButton
+                  type="button"
+                  onClick={handleResendCode}
+                  isLoading={isResending}
+                  loadingText="Resending..."
+                  disabled={cooldownSeconds > 0}
+                  className="text-sm text-primary hover:text-primary-dark font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {cooldownSeconds > 0 ? `Resend in ${cooldownSeconds}s` : 'Resend code'}
+                </LoadingButton>
+              </div>
+            ) : null}
+          </form>
+        )}
 
         <div className="mt-6">
           <div className="relative">
@@ -141,13 +346,7 @@ const LoginScreen: React.FC = () => {
         </div>
 
         <p className="mt-8 text-center text-sm text-text-secondary">
-          {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-primary hover:text-primary-dark font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded"
-          >
-            {isSignUp ? 'Sign In' : 'Sign Up'}
-          </button>
+          Accounts are managed by administrators. Contact your admin if you need access.
         </p>
       </div>
     </div>

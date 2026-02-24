@@ -5,12 +5,12 @@ interface LayoutProps {
   children: React.ReactNode;
   activeScreen: Screen;
   setScreen: (screen: Screen) => void;
+  unreadNotificationsCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unreadNotificationsCount = 0 }) => {
   const mainRef = useRef<HTMLElement>(null);
   const isDesktopWideScreen = activeScreen === 'calendar';
-  const [hideNav, setHideNav] = React.useState(false);
 
   useEffect(() => {
     // Prevent carrying scroll position across tabs on mobile.
@@ -18,15 +18,6 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
       mainRef.current.scrollTop = 0;
     }
   }, [activeScreen]);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const custom = event as CustomEvent<boolean>;
-      setHideNav(Boolean(custom.detail));
-    };
-    window.addEventListener('dashboard-snapshot-visibility', handler as EventListener);
-    return () => window.removeEventListener('dashboard-snapshot-visibility', handler as EventListener);
-  }, []);
 
   const navItems: (ScreenMeta & { outlineIcon: string })[] = [
     { screen: 'dashboard', label: 'Home', icon: 'home', outlineIcon: 'home' },
@@ -47,7 +38,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
       </main>
 
       {/* Navigation */}
-      <nav className={`fixed bottom-0 left-0 w-full z-50 px-6 pb-1 pt-2 pointer-events-none transition-opacity duration-150 ${hideNav ? 'opacity-0 invisible' : 'opacity-100 visible'}`}>
+      <nav className="fixed bottom-0 left-0 w-full z-50 px-6 pb-1 pt-2 pointer-events-none">
         <div className="glass-panel relative rounded-2xl h-16 flex items-center justify-between px-1.5 mx-auto max-w-md pointer-events-auto border border-border-default/70">
           {navItems.map((item) => (
             <button
@@ -60,6 +51,15 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen }) =>
               <span className="material-icons text-2xl">
                 {activeScreen === item.screen ? item.icon : item.outlineIcon}
               </span>
+              {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+                <span
+                  className={`absolute top-[5px] right-[24%] h-[18px] text-[10px] leading-[18px] text-white font-bold text-center bg-[#ff3040] shadow-[0_3px_8px_rgba(255,48,64,0.45)] ${
+                    unreadNotificationsCount > 9 ? 'min-w-[22px] px-1.5 rounded-full' : 'w-[18px] rounded-full'
+                  }`}
+                >
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
               {activeScreen === item.screen && (
                 <span className="absolute -bottom-1 w-1 h-1 bg-primary rounded-full shadow-[0_0_8px_2px_rgba(13,162,231,0.6)]"></span>
               )}

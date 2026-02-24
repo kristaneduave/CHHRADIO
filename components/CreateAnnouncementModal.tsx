@@ -1,9 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { supabase } from '../services/supabase';
 import { Announcement } from '../types';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import LoadingButton from './LoadingButton';
+import { normalizeUserRole } from '../utils/roles';
+import { sanitizeNewsContent, sanitizeNewsTitle } from '../utils/newsTextSanitizer';
+import { toastInfo } from '../utils/toast';
+import {
+    NEWS_CATEGORY_OPTIONS,
+    getNewsSymbolAssetPath,
+    getNewsSymbolOptions,
+    formatCategoryLabel,
+    getNewsCategoryLabelClass,
+    getNewsCategoryWatermarkClass,
+    getNewsCategoryDefaultSymbolKey,
+    normalizeCategoryForStorage,
+    normalizeCategoryForUi,
+    resolveNewsWatermarkSymbol,
+} from '../utils/newsPresentation';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
@@ -21,9 +36,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
     const [title, setTitle] = useState(editingAnnouncement?.title || '');
     const [content, setContent] = useState(editingAnnouncement?.content || '');
     // Handle legacy mappings
-    const [category, setCategory] = useState(
-        (editingAnnouncement?.category === 'Miscellaneous' ? 'Misc' : editingAnnouncement?.category) || 'Announcement'
-    );
+    const [category, setCategory] = useState(normalizeCategoryForUi(editingAnnouncement?.category || 'Announcement'));
 
     // File State
     const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -39,19 +52,39 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showSymbolPicker, setShowSymbolPicker] = useState(false);
+    const [canSetPriorityFlags, setCanSetPriorityFlags] = useState(false);
+    const [isPinned, setIsPinned] = useState<boolean>(Boolean(editingAnnouncement?.is_pinned));
+    const [isImportant, setIsImportant] = useState<boolean>(Boolean(editingAnnouncement?.is_important));
 
     // New Feature State
     const [icon, setIcon] = useState(editingAnnouncement?.icon || '');
     const [links, setLinks] = useState<{ url: string; title: string }[]>(editingAnnouncement?.links || []);
     const [showLinkInput, setShowLinkInput] = useState(false);
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+    const [symbolSearch, setSymbolSearch] = useState('');
 
     // Temp state for adding a new link
     const [newLinkUrl, setNewLinkUrl] = useState('');
 
-    const categories = ['Announcement', 'Research', 'Event', 'Misc'];
-    const emojis = ['announce', 'smile', 'laugh', 'hot', 'thumbs-up', 'party', 'heart', 'hospital', 'pill', 'stethoscope', 'ambulance', 'lab', 'clipboard', 'check', 'warning', 'attach', 'calendar', 'wave', 'star', 'idea'];
+    const categories = [...NEWS_CATEGORY_OPTIONS];
+    const symbolOptions = getNewsSymbolOptions();
+    const filteredSymbols = symbolOptions.filter((symbol) => {
+        const query = symbolSearch.trim().toLowerCase();
+        if (!query) return true;
+        return symbol.label.toLowerCase().includes(query) || symbol.key.includes(query);
+    });
+
+    useEffect(() => {
+        const loadRole = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+            const role = normalizeUserRole(data?.role);
+            setCanSetPriorityFlags(['admin', 'training_officer', 'moderator'].includes(role));
+        };
+        loadRole();
+    }, []);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -97,10 +130,16 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('Not authenticated');
+            const sanitizedTitle = sanitizeNewsTitle(title);
+            const sanitizedContent = sanitizeNewsContent(content);
+
+            if (!sanitizedTitle || !sanitizedContent) {
+                throw new Error('Title and content cannot be empty after formatting cleanup.');
+            }
+            const wasSanitized = sanitizedTitle !== title || sanitizedContent !== content;
 
             // Upload Files
             const uploadedAttachments = [];
-            let newCoverImageUrl = null;
 
             for (const att of attachments) {
                 const file = att.file;
@@ -152,20 +191,27 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
             let announcementId: string | undefined = editingAnnouncement?.id;
 
             if (editingAnnouncement) {
+                const updatePayload: Record<string, any> = {
+                    title: sanitizedTitle,
+                    content: sanitizedContent,
+                    category: normalizeCategoryForStorage(category),
+                    image_url: finalImageUrl,
+                    attachments: uploadedAttachments, // Overwrites for now (or append if we could)
+                    external_link: links.length > 0 ? links[0].url : '', // Backward compat
+                    links: links,
+                    icon: icon || null,
+                    created_at: new Date().toISOString(), // Bump
+                };
+                if (canSetPriorityFlags) {
+                    updatePayload.is_pinned = isPinned;
+                    updatePayload.is_important = isImportant;
+                    updatePayload.pinned_at = isPinned ? (editingAnnouncement?.pinned_at || new Date().toISOString()) : null;
+                }
+
                 // Update
                 const { data: updatedAnnouncement, error: updateError } = await supabase
                     .from('announcements')
-                    .update({
-                        title,
-                        content,
-                        category,
-                        image_url: finalImageUrl,
-                        attachments: uploadedAttachments, // Overwrites for now (or append if we could)
-                        external_link: links.length > 0 ? links[0].url : '', // Backward compat
-                        links: links,
-                        icon: icon,
-                        created_at: new Date().toISOString() // Bump
-                    })
+                    .update(updatePayload)
                     .eq('id', editingAnnouncement.id)
                     .select('id')
                     .single();
@@ -173,20 +219,27 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 if (updateError) throw updateError;
                 announcementId = updatedAnnouncement?.id;
             } else {
+                const insertPayload: Record<string, any> = {
+                    title: sanitizedTitle,
+                    content: sanitizedContent,
+                    category: normalizeCategoryForStorage(category),
+                    author_id: user.id,
+                    image_url: finalImageUrl,
+                    attachments: uploadedAttachments,
+                    external_link: links.length > 0 ? links[0].url : '',
+                    links: links,
+                    icon: icon || null,
+                };
+                if (canSetPriorityFlags) {
+                    insertPayload.is_pinned = isPinned;
+                    insertPayload.is_important = isImportant;
+                    insertPayload.pinned_at = isPinned ? new Date().toISOString() : null;
+                }
+
                 // Insert
                 const { data: insertedAnnouncement, error: insertError } = await supabase
                     .from('announcements')
-                    .insert({
-                        title,
-                        content,
-                        category,
-                        author_id: user.id,
-                        image_url: finalImageUrl,
-                        attachments: uploadedAttachments,
-                        external_link: links.length > 0 ? links[0].url : '',
-                        links: links,
-                        icon: icon
-                    })
+                    .insert(insertPayload)
                     .select('id')
                     .single();
 
@@ -202,30 +255,49 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     actorUserId: user.id,
                     type: 'announcement',
                     severity: 'info',
-                    title: editingAnnouncement ? 'Announcement Updated' : 'New Announcement',
-                    message: title,
+                    title: editingAnnouncement ? 'News Updated' : 'New News',
+                    message: sanitizedTitle,
                     linkScreen: 'announcements',
                     linkEntityId: announcementId,
                     recipientUserIds: recipients.length > 0 ? recipients : [user.id],
                 });
             } catch (notifError) {
                 // Non-blocking; announcement save succeeded already.
-                console.error('Failed to emit announcement notification:', notifError);
-                const errorMessage =
-                    notifError && typeof notifError === 'object' && 'message' in notifError
-                        ? String((notifError as { message?: string }).message || '')
-                        : '';
-                notificationDeliveryWarning = `Announcement saved, but notification delivery failed.${errorMessage ? `\n\nReason: ${errorMessage}` : ''}`;
+                console.error('Failed to emit announcement notification (bulk):', notifError);
+
+                // Fallback: ensure at least the posting user receives a notification.
+                try {
+                    await createSystemNotification({
+                        actorUserId: user.id,
+                        type: 'announcement',
+                        severity: 'info',
+                        title: editingAnnouncement ? 'News Updated' : 'New News',
+                        message: sanitizedTitle,
+                        linkScreen: 'announcements',
+                        linkEntityId: announcementId,
+                        recipientUserIds: [user.id],
+                    });
+                } catch (selfNotifError) {
+                    console.error('Failed to emit fallback self notification:', selfNotifError);
+                    const errorMessage =
+                        selfNotifError && typeof selfNotifError === 'object' && 'message' in selfNotifError
+                            ? String((selfNotifError as { message?: string }).message || '')
+                            : '';
+                    notificationDeliveryWarning = `News saved, but notification delivery failed.${errorMessage ? `\n\nReason: ${errorMessage}` : ''}`;
+                }
             }
 
             onSuccess();
             onClose();
+            if (wasSanitized) {
+                toastInfo('Formatting updated', 'Emoji characters were removed to keep news professional.');
+            }
             if (notificationDeliveryWarning) {
                 window.alert(notificationDeliveryWarning);
             }
         } catch (err: any) {
             console.error('Error saving announcement:', err);
-            setError(err.message || 'Failed to save announcement');
+            setError(err.message || 'Failed to save news');
         } finally {
             setLoading(false);
         }
@@ -260,43 +332,94 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                         {/* Title & Icon Header */}
                         <div className="flex items-start gap-4">
-                            {/* Icon Selector */}
                             <div className="relative shrink-0 pt-1">
                                 <button
                                     type="button"
-                                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                    className={`w-12 h-12 flex items-center justify-center rounded-2xl border transition-all text-2xl shadow-lg shadow-black/20 ${icon
-                                        ? 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                                        : 'bg-transparent border-dashed border-slate-600 hover:border-slate-400 text-slate-500 hover:text-slate-300'
-                                        }`}
+                                    onClick={() => setShowSymbolPicker((prev) => !prev)}
+                                    className={`inline-flex h-12 w-12 items-center justify-center rounded-xl border bg-white/[0.03] ${getNewsCategoryLabelClass(category)} hover:bg-white/[0.08] transition-colors`}
+                                    title="Choose watermark symbol"
                                 >
-                                    {icon || <span className="material-icons text-xl opacity-50">add_reaction</span>}
+                                    <span
+                                        className={`h-6 w-6 ${getNewsCategoryWatermarkClass(category)}`}
+                                        style={{
+                                            WebkitMaskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(icon, category))})`,
+                                            maskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(icon, category))})`,
+                                            WebkitMaskRepeat: 'no-repeat',
+                                            maskRepeat: 'no-repeat',
+                                            WebkitMaskPosition: 'center',
+                                            maskPosition: 'center',
+                                            WebkitMaskSize: 'contain',
+                                            maskSize: 'contain',
+                                        }}
+                                    />
                                 </button>
-                                {showEmojiPicker && (
-                                    <div className="absolute top-14 left-0 bg-surface border border-white/10 rounded-xl shadow-xl p-2 w-64 grid grid-cols-5 gap-1 z-50 animate-in fade-in zoom-in-95 duration-200">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setIcon('');
-                                                setShowEmojiPicker(false);
-                                            }}
-                                            className="w-full col-span-5 p-2 mb-1 text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors border border-dashed border-slate-700 hover:border-slate-500"
-                                        >
-                                            No Icon
-                                        </button>
-                                        {emojis.map(emoji => (
+                                {showSymbolPicker && (
+                                    <div className="absolute left-0 top-14 z-30 w-[18rem] rounded-xl border border-white/10 bg-surface p-2 shadow-xl">
+                                        <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Watermark Symbol</p>
+                                        <div className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1">
+                                            <span className="material-icons text-[14px] text-slate-500">search</span>
+                                            <input
+                                                value={symbolSearch}
+                                                onChange={(event) => setSymbolSearch(event.target.value)}
+                                                placeholder="Search"
+                                                className="w-full bg-transparent text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none"
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            {filteredSymbols.map((symbol) => (
+                                                <button
+                                                    key={symbol.key}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIcon(symbol.key);
+                                                        setShowSymbolPicker(false);
+                                                        setSymbolSearch('');
+                                                    }}
+                                                    className="flex items-center gap-2 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition-colors"
+                                                >
+                                                    <span
+                                                        className={`h-4 w-4 ${getNewsCategoryWatermarkClass(category)}`}
+                                                        style={{
+                                                            WebkitMaskImage: `url(${getNewsSymbolAssetPath(symbol.key)})`,
+                                                            maskImage: `url(${getNewsSymbolAssetPath(symbol.key)})`,
+                                                            WebkitMaskRepeat: 'no-repeat',
+                                                            maskRepeat: 'no-repeat',
+                                                            WebkitMaskPosition: 'center',
+                                                            maskPosition: 'center',
+                                                            WebkitMaskSize: 'contain',
+                                                            maskSize: 'contain',
+                                                        }}
+                                                    />
+                                                    <span className="truncate">{symbol.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {filteredSymbols.length === 0 && (
+                                            <p className="px-1 py-2 text-[11px] text-slate-500">No symbol match.</p>
+                                        )}
+                                        <div className="mt-2 flex items-center justify-between gap-2">
                                             <button
-                                                key={emoji}
                                                 type="button"
                                                 onClick={() => {
-                                                    setIcon(emoji);
-                                                    setShowEmojiPicker(false);
+                                                    setIcon('');
+                                                    setShowSymbolPicker(false);
+                                                    setSymbolSearch('');
                                                 }}
-                                                className="w-10 h-10 flex items-center justify-center text-xl hover:bg-white/10 rounded-lg transition-colors"
+                                                className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5"
                                             >
-                                                {emoji}
+                                                Reset to default
                                             </button>
-                                        ))}
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowSymbolPicker(false);
+                                                    setSymbolSearch('');
+                                                }}
+                                                className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5"
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -313,6 +436,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                 />
                             </div>
                         </div>
+                        <p className="pl-16 -mt-3 text-[11px] text-slate-500">
+                            Watermark symbol: <span className="text-slate-300">{icon || getNewsCategoryDefaultSymbolKey(category)}</span>
+                        </p>
 
                         {/* Category Dropdown (Compact) */}
                         <div className="relative">
@@ -325,7 +451,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                     category === 'Research' ? 'bg-indigo-400' :
                                         category === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
                                     }`} />
-                                {category}
+                                {formatCategoryLabel(category)}
                                 <span className="material-icons text-sm text-slate-500 ml-1">arrow_drop_down</span>
                             </button>
 
@@ -338,7 +464,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                                 key={cat}
                                                 type="button"
                                                 onClick={() => {
-                                                    setCategory(cat as any);
+                                                    setCategory(cat);
                                                     setShowCategoryDropdown(false);
                                                 }}
                                                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${category === cat
@@ -350,7 +476,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                                     cat === 'Research' ? 'bg-indigo-400' :
                                                         cat === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
                                                     }`} />
-                                                {cat}
+                                                {formatCategoryLabel(cat)}
                                             </button>
                                         ))}
                                     </div>
@@ -368,6 +494,39 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                 required
                             />
                         </div>
+
+                        {canSetPriorityFlags && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPinned((prev) => !prev)}
+                                    className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${isPinned
+                                        ? 'border-amber-400/60 bg-amber-500/10 text-amber-200'
+                                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                                        }`}
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        <span className="material-icons text-sm">push_pin</span>
+                                        Pin this post
+                                    </span>
+                                    <span className="material-icons text-sm">{isPinned ? 'check_circle' : 'radio_button_unchecked'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsImportant((prev) => !prev)}
+                                    className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${isImportant
+                                        ? 'border-rose-400/60 bg-rose-500/10 text-rose-200'
+                                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
+                                        }`}
+                                >
+                                    <span className="inline-flex items-center gap-2">
+                                        <span className="material-icons text-sm">priority_high</span>
+                                        Mark important
+                                    </span>
+                                    <span className="material-icons text-sm">{isImportant ? 'check_circle' : 'radio_button_unchecked'}</span>
+                                </button>
+                            </div>
+                        )}
 
                         {/* Links List */}
                         {links.length > 0 && (
@@ -538,12 +697,12 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         <LoadingButton
                             type="submit"
                             isLoading={loading}
-                            loadingText="Posting..."
+                            loadingText={editingAnnouncement ? 'Saving...' : 'Posting...'}
                             icon="send"
                             form="create-announcement-form"
                             className="px-6 py-2.5 bg-gradient-to-r from-primary to-blue-600 hover:from-primary-dark hover:to-blue-700 text-white rounded-xl text-xs font-bold tracking-wide shadow-lg shadow-primary/20 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
                         >
-                            POST
+                            {editingAnnouncement ? 'SAVE' : 'POST'}
                         </LoadingButton>
                     </div>
                 </div>

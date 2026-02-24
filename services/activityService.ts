@@ -89,6 +89,7 @@ export const fetchRecentActivity = async (userId: string, limit: number = 5): Pr
                 title: a.title,
                 subtitle: a.subtitle,
                 time: formatTimeAgo(a.time),
+                createdAt: a.originalDate,
                 icon: a.icon,
                 colorClass: a.colorClass
             }));

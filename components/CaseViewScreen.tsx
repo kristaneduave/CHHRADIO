@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { generateCasePDF } from '../services/pdfService';
+import { loadGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
 import { supabase } from '../services/supabase';
 
@@ -13,6 +13,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isOwner, setIsOwner] = useState(false);
     const [activeTab, setActiveTab] = useState<'details' | 'discussion'>('details');
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
 
@@ -46,7 +47,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         });
     };
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
+        setIsExportingPdf(true);
         // Prepare images with descriptions
         const pdfImages = images.map((url: string, idx: number) => ({
             url,
@@ -70,6 +72,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         };
 
         try {
+            const generateCasePDF = await loadGenerateCasePDF().catch((error) => {
+                throw new Error(`Unable to load export module: ${String(error)}`);
+            });
             // Header: User input title (e.g. "SINONASAL MENINGIOMA")
             const headerTitle = (caseData.title || 'RADIOLOGY CASE').toUpperCase();
 
@@ -78,7 +83,14 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
             generateCasePDF(formattedData, null, pdfImages, headerTitle, 'Radiologist', fileName);
         } catch (e: any) {
-            alert('Export failed: ' + e.message);
+            const message = e instanceof Error ? e.message : String(e);
+            if (message.includes('Unable to load export module')) {
+                alert('Unable to load export module: ' + message);
+            } else {
+                alert('Export failed: ' + message);
+            }
+        } finally {
+            setIsExportingPdf(false);
         }
     };
 
@@ -332,10 +344,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         </button>
                         <button
                             onClick={handleExportPDF}
-                            className="flex flex-col items-center justify-center gap-2 py-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 transition-all font-bold text-xs uppercase tracking-wider group"
+                            disabled={isExportingPdf}
+                            className="flex flex-col items-center justify-center gap-2 py-4 rounded-2xl bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 border border-rose-500/20 transition-all font-bold text-xs uppercase tracking-wider group disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                             <span className="material-icons group-hover:scale-110 transition-transform">picture_as_pdf</span>
-                            Export PDF
+                            {isExportingPdf ? 'Exporting PDF...' : 'Export PDF'}
                         </button>
                     </div>
 
