@@ -28,6 +28,7 @@ declare global {
 }
 
 const RECENT_SCREENS_STORAGE_KEY = 'chh_recent_screens';
+const GUEST_MODE_STORAGE_KEY = 'chh_guest_mode';
 const TRACKABLE_SCREENS: Screen[] = [
   'newsfeed',
   'search',
@@ -58,6 +59,10 @@ const App: React.FC = () => {
   const [initialUploadType, setInitialUploadType] = useState<SubmissionType>('interesting_case');
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
+  const [guestMode, setGuestMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
+  });
   const hasPrefetchedPdfRef = useRef(false);
 
   if (!isSupabaseConfigured) {
@@ -95,6 +100,10 @@ const App: React.FC = () => {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session && typeof window !== 'undefined') {
+        window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
+        setGuestMode(false);
+      }
       setLoading(false);
     });
 
@@ -102,6 +111,10 @@ const App: React.FC = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session && typeof window !== 'undefined') {
+        window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
+        setGuestMode(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -320,8 +333,17 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) {
-    return <LoginScreen />;
+  if (!session && !guestMode) {
+    return (
+      <LoginScreen
+        onContinueWithoutAuth={() => {
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem(GUEST_MODE_STORAGE_KEY, '1');
+          }
+          setGuestMode(true);
+        }}
+      />
+    );
   }
 
   return (

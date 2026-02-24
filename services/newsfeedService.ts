@@ -270,7 +270,7 @@ export const subscribeToNotifications = (
 };
 
 export const createSystemNotification = async (params: {
-  actorUserId: string;
+  actorUserId?: string | null;
   type: string;
   severity?: NotificationSeverity;
   title: string;

@@ -3,6 +3,7 @@ import { supabase } from '../services/supabase';
 import ThemeToggle from './ThemeToggle';
 import { toastError, toastSuccess } from '../utils/toast';
 import LoadingButton from './LoadingButton';
+import { createSystemNotification, fetchRecipientUserIdsByRoles } from '../services/newsfeedService';
 
 type AuthMethod = 'email' | 'phone';
 type PhoneStep = 'request' | 'verify';
@@ -24,7 +25,11 @@ const mapAuthError = (message: string): string => {
   return message;
 };
 
-const LoginScreen: React.FC = () => {
+interface LoginScreenProps {
+  onContinueWithoutAuth?: () => void;
+}
+
+const LoginScreen: React.FC<LoginScreenProps> = ({ onContinueWithoutAuth }) => {
   const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,8 +39,11 @@ const LoginScreen: React.FC = () => {
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [isResending, setIsResending] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [requestName, setRequestName] = useState('');
+  const [requestEmail, setRequestEmail] = useState('');
 
   useEffect(() => {
     if (cooldownSeconds <= 0) return;
@@ -168,6 +176,44 @@ const LoginScreen: React.FC = () => {
     }
   };
 
+  const handleRequestAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = requestName.trim();
+    const emailValue = requestEmail.trim();
+    if (!name || !emailValue) {
+      const text = 'Enter your name and email to request an account.';
+      setError(text);
+      toastError('Missing details', text);
+      return;
+    }
+
+    setRequestLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const adminIds = await fetchRecipientUserIdsByRoles(['admin', 'training_officer', 'moderator']);
+      await createSystemNotification({
+        actorUserId: null,
+        type: 'system',
+        severity: 'info',
+        title: 'New account request',
+        message: `${name} (${emailValue}) requested account access.`,
+        linkScreen: 'profile',
+        recipientUserIds: adminIds,
+      });
+      setRequestName('');
+      setRequestEmail('');
+      setMessage('Account request sent. Admin has been notified.');
+      toastSuccess('Request sent', 'Admin has been notified.');
+    } catch (err: any) {
+      const fallback = err?.message || 'Could not notify admin right now.';
+      setError(fallback);
+      toastError('Request failed', fallback);
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-app text-text-primary relative overflow-hidden px-4">
       <div className="fixed top-3 right-3 z-50">
@@ -175,6 +221,16 @@ const LoginScreen: React.FC = () => {
       </div>
       <div className="glass-panel p-8 rounded-2xl w-full max-w-md z-10 border border-border-default/70 shadow-2xl backdrop-blur-md">
         <h2 className="text-3xl font-bold mb-6 text-center text-text-primary">Welcome Back</h2>
+
+        {onContinueWithoutAuth && (
+          <button
+            type="button"
+            onClick={onContinueWithoutAuth}
+            className="mb-4 w-full rounded-lg border border-border-default bg-white/5 px-4 py-2 text-sm font-semibold text-text-primary hover:bg-white/10 transition-colors"
+          >
+            Continue without sign-in
+          </button>
+        )}
 
         <div className="mb-5 flex bg-surface-alt border border-border-default rounded-lg p-1">
           <button
@@ -348,6 +404,34 @@ const LoginScreen: React.FC = () => {
         <p className="mt-8 text-center text-sm text-text-secondary">
           Accounts are managed by administrators. Contact your admin if you need access.
         </p>
+
+        <form onSubmit={handleRequestAccount} className="mt-4 space-y-3 border-t border-border-default pt-4">
+          <p className="text-xs uppercase tracking-wider text-text-secondary">Request Account Access</p>
+          <input
+            type="text"
+            value={requestName}
+            onChange={(e) => setRequestName(e.target.value)}
+            className="w-full px-3 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm text-text-primary"
+            placeholder="Full name"
+            required
+          />
+          <input
+            type="email"
+            value={requestEmail}
+            onChange={(e) => setRequestEmail(e.target.value)}
+            className="w-full px-3 py-2 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm text-text-primary"
+            placeholder="Email"
+            required
+          />
+          <LoadingButton
+            type="submit"
+            isLoading={requestLoading}
+            loadingText="Submitting..."
+            className="w-full py-2.5 px-4 bg-surface border border-border-default text-text-primary rounded-lg font-medium hover:bg-surface-alt transition-colors"
+          >
+            Submit request
+          </LoadingButton>
+        </form>
       </div>
     </div>
   );
