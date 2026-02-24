@@ -5,34 +5,35 @@ import CreateAnnouncementModal from './CreateAnnouncementModal';
 import AnnouncementDetailModal from './AnnouncementDetailModal';
 import { getRoleLabel, normalizeUserRole } from '../utils/roles';
 import { fetchHiddenAnnouncementIds, hideAnnouncementForUser } from '../services/announcementVisibilityService';
-import { fetchSavedAnnouncementIds } from '../services/announcementSaveService';
-import { toastError, toastInfo, toastSuccess } from '../utils/toast';
-import { getNewsCategoryRailClass } from '../utils/newsPresentation';
+import { toastError, toastSuccess } from '../utils/toast';
 import {
   NEWS_FILTER_STORAGE_KEY,
-  NewsCategoryFilter,
-  NewsFilterState,
-  applyNewsFilters,
   estimateReadingMinutes,
-  normalizeAnnouncementImportant,
   normalizeAnnouncementPinned,
-  readingTimeLabel,
-  selectDigest,
   sortAnnouncementsByPriority,
 } from '../utils/newsFeedUtils';
+import {
+  normalizeCategoryForUi,
+} from '../utils/newsPresentation';
+import { getNewsCategoryStyleTokens, NEWS_SURFACE_BASE_CLASS, NEWS_SURFACE_INTERACTIVE_CLASS } from '../utils/newsStyleTokens';
 
 interface AnnouncementsScreenProps {
   initialOpenAnnouncementId?: string | null;
   onHandledInitialOpen?: () => void;
 }
 
-const NEWS_EDITORIAL_V2 = true;
+type TypeFilter = 'all' | 'Announcement' | 'Research' | 'Event' | 'Miscellaneous';
+type SortOrder = 'newest' | 'oldest';
+
+interface NewsViewPrefs {
+  typeFilter: TypeFilter;
+  sortOrder: SortOrder;
+}
+
 const ITEMS_PER_PAGE = 8;
-const DEFAULT_FILTERS: NewsFilterState = {
-  primaryTab: 'All',
-  category: null,
-  savedOnly: false,
-  sortMode: 'priority_newest',
+const DEFAULT_VIEW_PREFS: NewsViewPrefs = {
+  typeFilter: 'all',
+  sortOrder: 'newest',
 };
 
 const mapAnnouncementRow = (item: any): Announcement => ({
@@ -67,26 +68,28 @@ const mapAnnouncementRow = (item: any): Announcement => ({
   readingMinutes: estimateReadingMinutes(item.content),
 });
 
-const parseStoredFilters = (): NewsFilterState => {
-  if (typeof window === 'undefined') return DEFAULT_FILTERS;
+const parseStoredViewPrefs = (): NewsViewPrefs => {
+  if (typeof window === 'undefined') return DEFAULT_VIEW_PREFS;
   try {
     const raw = window.localStorage.getItem(NEWS_FILTER_STORAGE_KEY);
-    if (!raw) return DEFAULT_FILTERS;
-    const parsed = JSON.parse(raw) as Partial<NewsFilterState>;
-    const primaryTab = parsed.primaryTab === 'Pinned' || parsed.primaryTab === 'Important' ? parsed.primaryTab : 'All';
-    const sortMode = parsed.sortMode === 'newest' || parsed.sortMode === 'oldest' ? parsed.sortMode : 'priority_newest';
-    const categoryOptions: Array<NewsCategoryFilter> = ['Announcement', 'Research', 'Event', 'Miscellaneous', null];
-    const category = categoryOptions.includes((parsed.category ?? null) as NewsCategoryFilter)
-      ? ((parsed.category ?? null) as NewsCategoryFilter)
-      : null;
-    return {
-      primaryTab,
-      category,
-      savedOnly: Boolean(parsed.savedOnly),
-      sortMode,
-    };
+    if (!raw) return DEFAULT_VIEW_PREFS;
+
+    const parsed = JSON.parse(raw) as any;
+    const legacyType = parsed?.category ? normalizeCategoryForUi(String(parsed.category)) : 'all';
+    const typeFilter: TypeFilter =
+      parsed?.typeFilter === 'Announcement' ||
+      parsed?.typeFilter === 'Research' ||
+      parsed?.typeFilter === 'Event' ||
+      parsed?.typeFilter === 'Miscellaneous'
+        ? parsed.typeFilter
+        : legacyType === 'Announcement' || legacyType === 'Research' || legacyType === 'Event' || legacyType === 'Miscellaneous'
+          ? legacyType
+          : 'all';
+
+    const sortOrder: SortOrder = parsed?.sortOrder === 'oldest' || parsed?.sortMode === 'oldest' ? 'oldest' : 'newest';
+    return { typeFilter, sortOrder };
   } catch {
-    return DEFAULT_FILTERS;
+    return DEFAULT_VIEW_PREFS;
   }
 };
 
@@ -97,18 +100,16 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
-  const [filters, setFilters] = useState<NewsFilterState>(() => parseStoredFilters());
-  const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewPrefs, setViewPrefs] = useState<NewsViewPrefs>(() => parseStoredViewPrefs());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
   const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<Set<string>>(new Set());
-  const [savedAnnouncementIds, setSavedAnnouncementIds] = useState<Set<string>>(new Set());
-  const [supportsSavedTable, setSupportsSavedTable] = useState(true);
   const [supportsPriorityColumns, setSupportsPriorityColumns] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const [syncTick, setSyncTick] = useState(0);
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const lastHandledInitialOpenRef = useRef<string | null>(null);
 
@@ -119,17 +120,12 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(NEWS_FILTER_STORAGE_KEY, JSON.stringify(filters));
-  }, [filters]);
+    window.localStorage.setItem(NEWS_FILTER_STORAGE_KEY, JSON.stringify(viewPrefs));
+  }, [viewPrefs]);
 
   const isMissingPriorityColumnError = (error: any) => {
     const message = String(error?.message || '').toLowerCase();
     return message.includes('is_pinned') || message.includes('is_important') || message.includes('pinned_at');
-  };
-
-  const isMissingSavedTableError = (error: any) => {
-    const message = String(error?.message || '').toLowerCase();
-    return message.includes('announcement_user_saved') || message.includes('saved_at');
   };
 
   const queryAnnouncementsPage = async (from: number, to: number) => {
@@ -208,25 +204,6 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     }
   };
 
-  const loadSavedIds = async (userId: string) => {
-    if (!supportsSavedTable || !userId) return;
-    try {
-      const ids = await fetchSavedAnnouncementIds(userId);
-      setSavedAnnouncementIds(ids);
-    } catch (error: any) {
-      if (isMissingSavedTableError(error)) {
-        setSupportsSavedTable(false);
-        setSavedAnnouncementIds(new Set());
-        if (filters.savedOnly) {
-          setFilters((prev) => ({ ...prev, savedOnly: false }));
-          toastInfo('Saved posts unavailable', 'Saved feature will appear after migration.');
-        }
-        return;
-      }
-      console.error('Error loading saved announcements:', error);
-    }
-  };
-
   useEffect(() => {
     const bootstrap = async () => {
       const {
@@ -236,21 +213,13 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         setCurrentUserId(user.id);
         const hiddenIds = await fetchHiddenAnnouncementIds(user.id);
         setHiddenAnnouncementIds(hiddenIds);
-        await loadSavedIds(user.id);
         const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        if (data?.role) {
-          setUserRole(normalizeUserRole(data.role));
-        }
+        if (data?.role) setUserRole(normalizeUserRole(data.role));
       }
       await fetchAnnouncements(0, true);
     };
     bootstrap();
   }, []);
-
-  useEffect(() => {
-    if (!currentUserId) return;
-    loadSavedIds(currentUserId);
-  }, [currentUserId, syncTick]);
 
   useEffect(() => {
     if (!hiddenAnnouncementIds.size) return;
@@ -314,6 +283,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
           onHandledInitialOpen?.();
           return;
         }
+
         const mapped = mapAnnouncementRow(data);
         setAnnouncements((prev) => sortAnnouncementsByPriority(prev.some((item) => item.id === mapped.id) ? prev : [mapped, ...prev]));
         setSelectedAnnouncement(mapped);
@@ -336,22 +306,38 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     () =>
       announcements.map((item) => ({
         ...item,
-        is_saved: supportsSavedTable ? savedAnnouncementIds.has(item.id) : false,
         readingMinutes: item.readingMinutes ?? estimateReadingMinutes(item.content || item.summary),
       })),
-    [announcements, savedAnnouncementIds, supportsSavedTable],
+    [announcements],
   );
 
-  const filteredAnnouncements = useMemo(() => applyNewsFilters(hydratedAnnouncements, filters), [hydratedAnnouncements, filters]);
-  const digest = useMemo(() => selectDigest(filteredAnnouncements), [filteredAnnouncements]);
-  const featuredPinned = useMemo(
-    () => (filters.primaryTab === 'All' ? filteredAnnouncements.filter((item) => normalizeAnnouncementPinned(item)).slice(0, 3) : []),
-    [filteredAnnouncements, filters.primaryTab],
-  );
-  const latestItems = useMemo(
-    () => (filters.primaryTab === 'All' ? filteredAnnouncements.filter((item) => !normalizeAnnouncementPinned(item)) : filteredAnnouncements),
-    [filteredAnnouncements, filters.primaryTab],
-  );
+  const searchedAnnouncements = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return hydratedAnnouncements;
+    return hydratedAnnouncements.filter((item) => {
+      const title = String(item.title || '').toLowerCase();
+      const content = String(item.content || item.summary || '').toLowerCase();
+      return title.includes(q) || content.includes(q);
+    });
+  }, [hydratedAnnouncements, searchQuery]);
+
+  const typeFilteredAnnouncements = useMemo(() => {
+    if (viewPrefs.typeFilter === 'all') return searchedAnnouncements;
+    return searchedAnnouncements.filter((item) => normalizeCategoryForUi(item.category) === viewPrefs.typeFilter);
+  }, [searchedAnnouncements, viewPrefs.typeFilter]);
+
+  const sortedAnnouncements = useMemo(() => {
+    const list = [...typeFilteredAnnouncements];
+    list.sort((a, b) => {
+      const aTs = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTs = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return viewPrefs.sortOrder === 'newest' ? bTs - aTs : aTs - bTs;
+    });
+    return list;
+  }, [typeFilteredAnnouncements, viewPrefs.sortOrder]);
+
+  const pinnedItems = useMemo(() => sortedAnnouncements.filter((item) => normalizeAnnouncementPinned(item)), [sortedAnnouncements]);
+  const regularItems = useMemo(() => sortedAnnouncements.filter((item) => !normalizeAnnouncementPinned(item)), [sortedAnnouncements]);
 
   const handleHideAnnouncement = async (announcementId: string) => {
     try {
@@ -387,146 +373,233 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     }
   };
 
-  const renderPriorityChip = (post: Announcement) => {
-    if (normalizeAnnouncementPinned(post)) {
-      return (
-        <span className="inline-flex items-center rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-200">
-          Pinned
-        </span>
-      );
-    }
-    if (normalizeAnnouncementImportant(post)) {
-      return (
-        <span className="inline-flex items-center rounded-full border border-rose-400/40 bg-rose-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-rose-200">
-          Important
-        </span>
-      );
-    }
-    return null;
-  };
+  const renderCard = (post: Announcement) => {
+    const metaDateTime = post.createdAt
+      ? `${new Date(post.createdAt).toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' })} ${new Date(post.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+      : post.date;
+    const normalizedCategory = normalizeCategoryForUi(post.category);
+    const watermarkKey =
+      normalizedCategory === 'Research'
+        ? 'research'
+        : normalizedCategory === 'Event'
+          ? 'event'
+          : normalizedCategory === 'Miscellaneous'
+            ? 'misc'
+            : 'announcement';
+    const typeStyles = getNewsCategoryStyleTokens(normalizedCategory);
+    const canManageCard = canManageAnnouncement(post.author_id);
+    const canHideCard = canManageAnyAnnouncement;
+    const showActionMenu = canManageCard || canHideCard;
+    const isActionMenuOpen = actionMenuPostId === post.id;
 
-  const renderDigestItem = (label: string, item: Announcement | null) => (
-    <button
-      type="button"
-      onClick={() => item && setSelectedAnnouncement(item)}
-      disabled={!item}
-      className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2 text-left transition-colors hover:bg-white/[0.06] disabled:cursor-default disabled:opacity-70"
-    >
-      <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-        <p className="mt-0.5 truncate text-sm text-slate-100">{item?.title || 'No highlight yet'}</p>
-      </div>
-      <span className="material-icons text-[16px] text-slate-500">{item ? 'arrow_forward' : 'remove'}</span>
-    </button>
-  );
-
-  const renderCard = (post: Announcement) => (
-    <button
-      type="button"
-      key={post.id}
-      onClick={() => setSelectedAnnouncement(post)}
-      className="group relative w-full overflow-hidden rounded-2xl border border-border-default/60 bg-surface/70 px-4 pb-4 pt-3 text-left transition-all hover:border-white/20 hover:bg-surface/85"
-    >
-      <span className={`absolute left-0 right-0 top-0 h-[1.5px] ${getNewsCategoryRailClass(post.category)} opacity-55 transition-opacity group-hover:opacity-80`} />
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="min-h-[20px]">{renderPriorityChip(post)}</div>
-        <span className="text-[10px] text-slate-500">{post.date}</span>
-      </div>
-      <h3 className="line-clamp-2 text-[17px] font-semibold leading-snug text-white">{post.title}</h3>
-      <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-slate-400">{post.summary}</p>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="h-6 w-6 overflow-hidden rounded-full border border-white/10 bg-slate-700">
-            {post.authorAvatar ? (
-              <img src={post.authorAvatar} alt="Author" className="h-full w-full object-cover" />
+    return (
+      <button
+        type="button"
+        key={post.id}
+        onClick={() => {
+          setActionMenuPostId(null);
+          setSelectedAnnouncement(post);
+        }}
+        className={`group ${NEWS_SURFACE_BASE_CLASS} ${NEWS_SURFACE_INTERACTIVE_CLASS} w-full min-h-[92px] overflow-visible rounded-b-xl rounded-t-none px-4 py-3.5 text-left ${isActionMenuOpen ? 'z-40' : 'z-0'}`}
+      >
+        <span className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-b-xl rounded-t-none">
+          <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+          <span className={`absolute left-0 right-0 top-0 h-[2px] rounded-none ${typeStyles.railTint} opacity-15 blur-[0.5px]`} />
+          <span className="absolute left-0 right-0 top-[1px] h-[1px] rounded-none bg-[linear-gradient(90deg,rgba(255,255,255,0.34)_0%,rgba(255,255,255,0.12)_50%,rgba(255,255,255,0.3)_100%)] shadow-[0_0_6px_rgba(255,255,255,0.08)] backdrop-blur-[8px]" />
+          <span
+            className={`absolute -left-16 top-1/2 h-[30rem] w-[30rem] -translate-y-1/2 opacity-[0.02] ${typeStyles.watermark}`}
+            style={{
+              WebkitMaskImage: `url(/news-symbols/${watermarkKey}.svg)`,
+              maskImage: `url(/news-symbols/${watermarkKey}.svg)`,
+              WebkitMaskRepeat: 'no-repeat',
+              maskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'left center',
+              maskPosition: 'left center',
+              WebkitMaskSize: 'contain',
+              maskSize: 'contain',
+            }}
+          />
+        </span>
+        <div className="relative z-10 flex min-h-[64px] items-center gap-2.5">
+          <div className="min-w-0 flex-1 self-center pr-2">
+            <h3 className="line-clamp-1 text-[18px] font-semibold leading-tight tracking-[0.005em] text-white sm:line-clamp-2 sm:text-[20px]">
+              {post.title}
+            </h3>
+          </div>
+          <div className="relative flex shrink-0 items-center">
+            <div className="flex min-w-0 flex-col items-end gap-0.5 pr-9">
+              <div className="flex items-center gap-1 text-xs text-white/85">
+                <span className="max-w-[112px] truncate text-white/85">{post.author}</span>
+                <div className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-slate-700">
+                  {post.authorAvatar ? (
+                    <img src={post.authorAvatar} alt={post.author} className="block h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[8px] font-semibold text-slate-200">
+                      {String(post.author || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <span className="shrink-0 text-[12px] font-medium text-white/75">{metaDateTime}</span>
+            </div>
+            {showActionMenu ? (
+              <div className="absolute right-0 top-0 shrink-0" onClick={(event) => event.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => setActionMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
+                  aria-label="Open card actions"
+                >
+                  <span className="material-icons text-[14px]">more_horiz</span>
+                </button>
+                {isActionMenuOpen && (
+                  <div className="absolute right-0 top-8 z-30 min-w-[122px] rounded-lg border border-white/10 bg-[#122034] p-1.5 shadow-xl">
+                    {canManageCard && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuPostId(null);
+                          handleEditAnnouncement(post.id);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                      >
+                        Edit
+                      </button>
+                    )}
+                    {canManageCard && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuPostId(null);
+                          handleDeleteAnnouncement(post.id);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/15"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    {canHideCard && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActionMenuPostId(null);
+                          handleHideAnnouncement(post.id);
+                        }}
+                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                      >
+                        Hide
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-[9px] font-semibold text-white">{post.author.charAt(0)}</div>
+              <span className="material-icons absolute right-0 top-0 shrink-0 text-[14px] text-slate-600 transition-colors group-hover:text-slate-400">visibility_off</span>
             )}
           </div>
-          <span className="truncate text-xs text-slate-300">{post.author}</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <span>{readingTimeLabel(post.readingMinutes || 0)}</span>
-          <span>•</span>
-          <span className="inline-flex items-center gap-1">
-            <span className="material-icons text-[13px]">visibility</span>
-            {post.views}
-          </span>
-        </div>
-      </div>
-    </button>
-  );
-
-  const clearSecondaryFilters = () => {
-    setFilters((prev) => ({ ...prev, category: null, savedOnly: false, sortMode: 'priority_newest' }));
+      </button>
+    );
   };
 
-  if (!NEWS_EDITORIAL_V2) {
-    return <div className="px-6 pt-7 pb-20 text-slate-400">News v2 disabled.</div>;
-  }
+  const clearSearch = () => setSearchQuery('');
+  const resetView = () => {
+    setSearchQuery('');
+    setViewPrefs(DEFAULT_VIEW_PREFS);
+  };
+  const resultCount = sortedAnnouncements.length;
 
   return (
     <div className="min-h-full pb-24">
-      <div className="px-6 pt-7 pb-3">
-        <h1 className="mb-3 text-2xl font-semibold text-white">News</h1>
-        <div className="rounded-xl border border-border-default/60 bg-surface/60 px-3 py-2">
-          <div className="flex items-center justify-between gap-3">
-            <div className="inline-flex rounded-full border border-white/10 bg-white/[0.03] p-1">
-              {(['All', 'Pinned', 'Important'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setFilters((prev) => ({ ...prev, primaryTab: tab }))}
-                  className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
-                    filters.primaryTab === tab ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-20 px-4 pb-2 pt-3">
+        <div className="mx-auto w-full max-w-md">
+          <h1 className="mb-2 text-2xl font-semibold text-white">News</h1>
+          <div className="flex items-center gap-2">
+            {canCreateAnnouncement && (
               <button
-                onClick={() => setShowFilterDrawer(true)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/[0.02] text-slate-400 transition-colors hover:text-white hover:bg-white/[0.08]"
-                title="Open filters"
+                onClick={() => setShowCreateModal(true)}
+                className="h-10 shrink-0 rounded-xl bg-primary px-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
+                title="Add Post"
               >
-                <span className="material-icons text-[16px]">tune</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="material-icons text-[18px]">add</span>
+                  <span className="hidden sm:inline">Add Post</span>
+                </span>
               </button>
-              <span className="text-[11px] text-slate-400 whitespace-nowrap">{filteredAnnouncements.length} item(s)</span>
+            )}
+            <div className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.05]">
+              <div className="flex h-10 items-center overflow-hidden rounded-xl">
+                <div className="relative flex-1">
+                  <span className="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[19px] text-slate-500">search</span>
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search..."
+                    className="h-10 w-full border-0 bg-transparent pl-10 pr-3 text-base text-white placeholder:text-slate-500 focus:outline-none"
+                  />
+                </div>
+                <span className="h-5 w-px bg-white/10" />
+                <div className="relative w-[132px] shrink-0">
+                  <select
+                    value={viewPrefs.typeFilter}
+                    onChange={(event) =>
+                      setViewPrefs((prev) => ({
+                        ...prev,
+                        typeFilter: event.target.value as TypeFilter,
+                      }))
+                    }
+                    className="h-10 w-full appearance-none border-0 bg-transparent px-3 pr-9 text-sm font-semibold text-slate-200 focus:outline-none"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="Announcement">Announcement</option>
+                    <option value="Research">Research</option>
+                    <option value="Event">Event</option>
+                    <option value="Miscellaneous">Miscellaneous</option>
+                  </select>
+                  <span className="material-icons pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-slate-500">filter_list</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-6 space-y-5">
-        <section className="space-y-2">
-          {renderDigestItem("Today's Headline", digest.headline)}
-          {renderDigestItem('Top Pinned', digest.topPinned)}
-          {renderDigestItem('Critical Update', digest.criticalUpdate)}
-        </section>
-
-        {filters.primaryTab === 'All' && featuredPinned.length > 0 && (
+      <div className="mx-auto w-full max-w-md space-y-4 px-4 pt-1.5">
+        {pinnedItems.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-200/90">Featured</h2>
-            <div className="space-y-3">{featuredPinned.map(renderCard)}</div>
+            <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-200/90">Pinned</h2>
+            <div className="space-y-3">{pinnedItems.map(renderCard)}</div>
           </section>
         )}
 
-        {latestItems.length > 0 && (
+        {regularItems.length > 0 && (
           <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Latest</h2>
-            <div className="space-y-4">{latestItems.map(renderCard)}</div>
+            <div className="space-y-3">{regularItems.map(renderCard)}</div>
           </section>
         )}
 
-        {!loading && filteredAnnouncements.length === 0 && (
+        {!loading && resultCount === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] py-16 text-center">
             <span className="material-icons mb-3 text-4xl text-slate-600">inbox</span>
             <p className="text-xs font-medium uppercase tracking-widest text-slate-500">No news found</p>
+            {searchQuery.trim().length > 0 && (
+              <button
+                onClick={clearSearch}
+                className="mt-4 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+              >
+                Clear search
+              </button>
+            )}
+            <button
+              onClick={resetView}
+              className="mt-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+            >
+              Reset filters
+            </button>
             {canCreateAnnouncement && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="mt-4 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+                className="mt-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
               >
                 Create News
               </button>
@@ -552,101 +625,6 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         </div>
       </div>
 
-      {canCreateAnnouncement && (
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="fixed bottom-24 right-6 z-40 h-11 w-11 rounded-full border border-border-default/80 bg-surface text-slate-200 shadow-clinical transition-colors hover:bg-surface-alt hover:text-white"
-          aria-label="Create news"
-        >
-          <span className="material-icons text-[20px]">add</span>
-        </button>
-      )}
-
-      {showFilterDrawer && (
-        <div className="fixed inset-0 z-[95] flex justify-end bg-black/45 p-0" onClick={() => setShowFilterDrawer(false)}>
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="h-full w-[86%] max-w-sm border-l border-white/10 bg-[#0f1720] px-4 py-4 shadow-2xl"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Filters</h3>
-              <button onClick={() => setShowFilterDrawer(false)} className="rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white">
-                <span className="material-icons text-base">close</span>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500">Category</p>
-                <select
-                  value={filters.category || ''}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      category: (event.target.value || null) as NewsCategoryFilter,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                >
-                  <option value="">All categories</option>
-                  <option value="Announcement">Announcement</option>
-                  <option value="Research">Research</option>
-                  <option value="Event">Event</option>
-                  <option value="Miscellaneous">Miscellaneous</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-                <div>
-                  <p className="text-sm text-slate-100">Saved only</p>
-                  {!supportsSavedTable && <p className="text-[11px] text-slate-500">Run saved migration to enable.</p>}
-                </div>
-                <button
-                  disabled={!supportsSavedTable}
-                  onClick={() => setFilters((prev) => ({ ...prev, savedOnly: !prev.savedOnly }))}
-                  className={`h-6 w-11 rounded-full border transition-colors ${
-                    filters.savedOnly ? 'border-primary/60 bg-primary/30' : 'border-white/20 bg-white/10'
-                  } disabled:opacity-40`}
-                >
-                  <span
-                    className={`block h-4 w-4 rounded-full bg-white transition-transform ${
-                      filters.savedOnly ? 'translate-x-5' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-slate-500">Sort</p>
-                <select
-                  value={filters.sortMode}
-                  onChange={(event) =>
-                    setFilters((prev) => ({
-                      ...prev,
-                      sortMode: event.target.value as NewsFilterState['sortMode'],
-                    }))
-                  }
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-primary/40"
-                >
-                  <option value="priority_newest">Priority + Newest</option>
-                  <option value="newest">Newest</option>
-                  <option value="oldest">Oldest</option>
-                </select>
-              </div>
-
-              <div className="pt-1">
-                <button
-                  onClick={clearSecondaryFilters}
-                  className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.07em] text-slate-300 hover:bg-white/[0.08]"
-                >
-                  Clear filters
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showCreateModal && (
         <CreateAnnouncementModal
           onClose={() => {
@@ -671,8 +649,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
           onEdit={handleEditAnnouncement}
           onDelete={handleDeleteAnnouncement}
           canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
-          supportsSaved={supportsSavedTable}
-          onSavedChanged={() => setSyncTick((prev) => prev + 1)}
+          supportsSaved={false}
         />
       )}
     </div>
@@ -680,3 +657,4 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 };
 
 export default AnnouncementsScreen;
+

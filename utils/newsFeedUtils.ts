@@ -1,24 +1,22 @@
 import { Announcement } from '../types';
 import { normalizeCategoryForUi } from './newsPresentation';
 
-export type NewsPrimaryTab = 'All' | 'Pinned' | 'Important';
+export type NewsPrimaryTab = 'All' | 'Pinned';
 export type NewsCategoryFilter = 'Announcement' | 'Research' | 'Event' | 'Miscellaneous' | null;
 export type NewsSortMode = 'priority_newest' | 'newest' | 'oldest';
+export type NewsQuickMode = 'all' | 'saved' | 'pinned';
 
 export interface NewsFilterState {
   primaryTab: NewsPrimaryTab;
   category: NewsCategoryFilter;
   savedOnly: boolean;
+  importantOnly: boolean;
   sortMode: NewsSortMode;
-}
-
-export interface NewsDigest {
-  headline: Announcement | null;
-  topPinned: Announcement | null;
-  criticalUpdate: Announcement | null;
+  quickMode?: NewsQuickMode;
 }
 
 export const NEWS_FILTER_STORAGE_KEY = 'chh_news_filter_state_v2';
+export const NEWS_QUICK_MODE_STORAGE_KEY = 'chh_news_quick_mode_v1';
 
 export const normalizeAnnouncementPinned = (item: Partial<Announcement> & { pinned?: boolean }): boolean =>
   Boolean(item.is_pinned ?? item.pinned ?? false);
@@ -68,7 +66,7 @@ export const sortAnnouncements = (items: Announcement[], mode: NewsSortMode): An
 export const applyNewsFilters = (items: Announcement[], filters: NewsFilterState): Announcement[] => {
   let list = [...items];
   if (filters.primaryTab === 'Pinned') list = list.filter((item) => normalizeAnnouncementPinned(item));
-  if (filters.primaryTab === 'Important') list = list.filter((item) => normalizeAnnouncementImportant(item));
+  if (filters.importantOnly) list = list.filter((item) => normalizeAnnouncementImportant(item));
   if (filters.category) {
     list = list.filter((item) => normalizeCategoryForUi(item.category) === filters.category);
   }
@@ -78,10 +76,29 @@ export const applyNewsFilters = (items: Announcement[], filters: NewsFilterState
   return sortAnnouncements(list, filters.sortMode);
 };
 
-export const selectDigest = (items: Announcement[]): NewsDigest => {
-  const ordered = sortAnnouncementsByPriority(items);
-  const headline = ordered[0] || null;
-  const topPinned = ordered.find((item) => normalizeAnnouncementPinned(item)) || null;
-  const criticalUpdate = ordered.find((item) => normalizeAnnouncementImportant(item)) || null;
-  return { headline, topPinned, criticalUpdate };
+export const nextFiltersForQuickMode = (base: NewsFilterState, quickMode: NewsQuickMode): NewsFilterState => {
+  if (quickMode === 'saved') {
+    return { ...base, primaryTab: 'All', savedOnly: true, quickMode };
+  }
+  if (quickMode === 'pinned') {
+    return { ...base, primaryTab: 'Pinned', savedOnly: false, importantOnly: false, quickMode };
+  }
+  return { ...base, primaryTab: 'All', savedOnly: false, quickMode };
 };
+
+export const getActiveFilterSummary = (filters: NewsFilterState): string => {
+  const parts: string[] = [];
+  if (filters.savedOnly) parts.push('Saved');
+  if (filters.primaryTab === 'Pinned') parts.push('Pinned');
+  if (filters.importantOnly) parts.push('Important');
+  if (filters.category) parts.push(filters.category);
+  if (filters.sortMode === 'priority_newest') parts.push('Priority+Newest');
+  if (filters.sortMode === 'newest') parts.push('Newest');
+  if (filters.sortMode === 'oldest') parts.push('Oldest');
+  return parts.length ? parts.join(' · ') : 'All posts';
+};
+
+export const toCurrentPrimaryTab = (value: unknown): NewsPrimaryTab =>
+  value === 'Pinned' ? 'Pinned' : 'All';
+
+export const toLegacyImportantOnly = (value: unknown): boolean => value === 'Important';

@@ -45,7 +45,6 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const [onlineUsers, setOnlineUsers] = useState<NewsfeedOnlineUser[]>([]);
   const [loadingOnline, setLoadingOnline] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
-  const [onlineExpanded, setOnlineExpanded] = useState(false);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [snapshotData, setSnapshotData] = useState<DashboardSnapshotData | null>(null);
   const [snapshotErrors, setSnapshotErrors] = useState<
@@ -213,6 +212,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
 
     const unsubscribe = subscribeToOnlineUsers({
       currentUserId: userId,
+      trackCurrentUser: false,
       onUsersChange: (ids) => {
         if (!mounted) return;
         const deduped = Array.from(new Set(ids));
@@ -458,24 +458,15 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
 
         {(onlineCount > 0 || loadingOnline || Boolean(onlineError)) && (
           <div className="mt-2">
-            <button
-              type="button"
-              onClick={() => onlineCount > 0 && setOnlineExpanded((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-300 transition-colors"
-            >
+            <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
               <span className="uppercase tracking-[0.1em]">Online now</span>
               <span>|</span>
               <span>{onlineCount}</span>
-              {onlineCount > 0 && (
-                <span className="material-icons text-[14px]">
-                  {onlineExpanded ? 'expand_less' : 'expand_more'}
-                </span>
-              )}
-            </button>
+            </div>
 
-            {onlineExpanded && onlineCount > 0 && (
-              <div className="mt-2 overflow-x-auto">
-                <div className="inline-flex items-center gap-1.5">
+            {onlineCount > 0 && (
+              <div className="mt-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   {visibleOnlineUsers.map((user) => {
                     const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
                     return (

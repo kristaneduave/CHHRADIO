@@ -5,13 +5,12 @@ import { Announcement } from '../types';
 import { saveAnnouncementForUser, unsaveAnnouncementForUser } from '../services/announcementSaveService';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
-  formatCategoryLabel,
   getNewsSymbolAssetPath,
-  getNewsCategoryLabelClass,
-  getNewsCategoryWatermarkClass,
   resolveNewsWatermarkSymbol,
 } from '../utils/newsPresentation';
 import { readingTimeLabel } from '../utils/newsFeedUtils';
+import { getNewsCategoryStyleTokens, NEWS_SURFACE_BASE_CLASS } from '../utils/newsStyleTokens';
+import NewsActionChip from './news/NewsActionChip';
 
 interface AnnouncementDetailModalProps {
   announcement: Announcement | null;
@@ -40,6 +39,8 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
   const [isSaved, setIsSaved] = useState(Boolean(announcement.is_saved));
   const [saving, setSaving] = useState(false);
   const readingLabel = useMemo(() => readingTimeLabel(announcement.readingMinutes || 0), [announcement.readingMinutes]);
+  const categoryStyles = getNewsCategoryStyleTokens(announcement.category);
+  const categorySymbol = resolveNewsWatermarkSymbol(announcement.icon, announcement.category);
 
   useEffect(() => {
     setIsSaved(Boolean(announcement.is_saved));
@@ -95,22 +96,6 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
     trackView();
     fetchViewers();
   }, [announcement.id]);
-
-  const getCategoryBadgeStyle = (category: string) => {
-    switch (category) {
-      case 'Announcement':
-        return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
-      case 'Research':
-        return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
-      case 'Event':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
-      case 'Miscellaneous':
-      case 'Misc':
-        return 'bg-slate-500/20 text-slate-300 border-slate-500/30';
-      default:
-        return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
-    }
-  };
 
   const handleToggleSave = async () => {
     if (!supportsSaved || saving) return;
@@ -168,56 +153,39 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
     }
   };
 
-  const priorityBadges: React.ReactNode[] = [];
-  if (announcement.is_pinned) {
-    priorityBadges.push(
-      <span key="pinned" className="inline-flex items-center rounded-md border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-200">
-        Pinned
-      </span>,
-    );
-  }
-  if (announcement.is_important) {
-    priorityBadges.push(
-      <span key="important" className="inline-flex items-center rounded-md border border-rose-400/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-200">
-        Important
-      </span>,
-    );
-  }
-
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-lg bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]"
+        className={`${NEWS_SURFACE_BASE_CLASS} w-full max-w-lg rounded-b-2xl rounded-t-none shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col h-auto max-h-[85vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-start p-4 border-b border-white/5 shrink-0 bg-surface relative z-20">
+        <span className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-b-2xl rounded-t-none">
+          <span className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+          <span className="absolute inset-[1px] rounded-b-[0.95rem] rounded-t-none border border-white/5" />
+          <span className={`absolute left-0 right-0 top-0 h-[2px] rounded-none ${categoryStyles.railTint} opacity-15 blur-[0.5px]`} />
+          <span className="absolute left-0 right-0 top-[1px] h-[1px] rounded-none bg-[linear-gradient(90deg,rgba(255,255,255,0.34)_0%,rgba(255,255,255,0.12)_50%,rgba(255,255,255,0.3)_100%)] shadow-[0_0_6px_rgba(255,255,255,0.08)] backdrop-blur-[8px]" />
+          <span
+            className={`absolute -left-10 top-1/2 h-[22rem] w-[22rem] -translate-y-1/2 opacity-[0.025] ${categoryStyles.watermark}`}
+            style={{
+              WebkitMaskImage: `url(${getNewsSymbolAssetPath(categorySymbol)})`,
+              maskImage: `url(${getNewsSymbolAssetPath(categorySymbol)})`,
+              WebkitMaskRepeat: 'no-repeat',
+              maskRepeat: 'no-repeat',
+              WebkitMaskPosition: 'left center',
+              maskPosition: 'left center',
+              WebkitMaskSize: 'contain',
+              maskSize: 'contain',
+            }}
+          />
+        </span>
+        <div className="flex justify-between items-start p-4 border-b border-white/10 shrink-0 bg-transparent relative z-20">
           <div className="pr-8">
-            <div className="mb-2 flex flex-wrap items-center gap-1.5">
-              <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${getCategoryBadgeStyle(announcement.category)}`}>
-                {formatCategoryLabel(announcement.category)}
-              </span>
-              {priorityBadges}
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              {announcement.is_pinned ? <span className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${categoryStyles.accentText}`}>Pinned</span> : null}
             </div>
-            <div className="flex items-start gap-4">
-              <span className={`inline-flex h-9 min-w-9 shrink-0 items-center justify-center rounded-xl border bg-white/[0.03] ${getNewsCategoryLabelClass(announcement.category)}`}>
-                <span
-                  className={`h-5 w-5 ${getNewsCategoryWatermarkClass(announcement.category)}`}
-                  style={{
-                    WebkitMaskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(announcement.icon, announcement.category))})`,
-                    maskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(announcement.icon, announcement.category))})`,
-                    WebkitMaskRepeat: 'no-repeat',
-                    maskRepeat: 'no-repeat',
-                    WebkitMaskPosition: 'center',
-                    maskPosition: 'center',
-                    WebkitMaskSize: 'contain',
-                    maskSize: 'contain',
-                  }}
-                />
-              </span>
-              <h2 className="text-lg font-bold text-white leading-tight">{announcement.title}</h2>
-            </div>
+            <h2 className="text-[22px] font-semibold leading-tight tracking-[0.005em] text-white">{announcement.title}</h2>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 text-slate-400 hover:text-white transition-all -mr-2 -mt-2">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full border border-border-default/70 bg-black/15 hover:bg-white/10 text-slate-400 hover:text-white transition-all -mr-2 -mt-2">
             <span className="material-icons text-sm">close</span>
           </button>
         </div>
@@ -246,44 +214,23 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
           </div>
 
           <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              onClick={handleToggleSave}
-              disabled={!supportsSaved || saving}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/[0.08] disabled:opacity-40"
-            >
-              <span className="material-icons text-[14px]">{isSaved ? 'bookmark' : 'bookmark_border'}</span>
+            <NewsActionChip onClick={handleToggleSave} disabled={!supportsSaved || saving} icon={isSaved ? 'bookmark' : 'bookmark_border'} className="disabled:opacity-40">
               {isSaved ? 'Saved' : 'Save'}
-            </button>
-            <button
-              onClick={() => onHide?.(announcement.id)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/[0.08]"
-            >
-              <span className="material-icons text-[14px]">visibility_off</span>
+            </NewsActionChip>
+            <NewsActionChip onClick={() => onHide?.(announcement.id)} icon="visibility_off">
               Hide
-            </button>
-            <button
-              onClick={handleShare}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/[0.08]"
-            >
-              <span className="material-icons text-[14px]">share</span>
+            </NewsActionChip>
+            <NewsActionChip onClick={handleShare} icon="share">
               Share
-            </button>
+            </NewsActionChip>
             {canManage && (
               <>
-                <button
-                  onClick={() => onEdit?.(announcement.id)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] text-slate-200 hover:bg-white/[0.08]"
-                >
-                  <span className="material-icons text-[14px]">edit</span>
+                <NewsActionChip onClick={() => onEdit?.(announcement.id)} icon="edit">
                   Edit
-                </button>
-                <button
-                  onClick={() => onDelete?.(announcement.id)}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-[11px] text-rose-200 hover:bg-rose-500/20"
-                >
-                  <span className="material-icons text-[14px]">delete</span>
+                </NewsActionChip>
+                <NewsActionChip onClick={() => onDelete?.(announcement.id)} icon="delete" danger>
                   Delete
-                </button>
+                </NewsActionChip>
               </>
             )}
           </div>
@@ -381,7 +328,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
           )}
         </div>
 
-        <div className="p-3 border-t border-white/5 bg-surface/50 flex items-center justify-between shrink-0">
+        <div className="p-3 border-t border-white/10 bg-transparent flex items-center justify-between shrink-0 relative z-10">
           <div className="flex items-center mr-3">
             {viewers.length > 0 && (
               <>
@@ -400,9 +347,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
               </>
             )}
           </div>
-          <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all text-[10px] font-bold uppercase tracking-wider" onClick={onClose}>
-            Close
-          </button>
+          <NewsActionChip onClick={onClose} icon="close">Close</NewsActionChip>
         </div>
       </div>
     </div>,

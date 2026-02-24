@@ -16,6 +16,7 @@ import {
 } from './services/dashboardSnapshotService';
 import { prefetchGenerateCasePDF } from './services/pdfServiceLoader';
 import { fetchUnreadNotificationsCount, subscribeToNotifications } from './services/newsfeedService';
+import { createAppPresenceTracker } from './services/newsfeedPresenceService';
 
 declare global {
   interface NetworkInformation {
@@ -170,6 +171,37 @@ const App: React.FC = () => {
     return () => {
       mounted = false;
       unsubscribe();
+    };
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid || typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const tracker = createAppPresenceTracker({
+      currentUserId: uid,
+      onError: (message) => console.error(message),
+    });
+
+    tracker.start();
+    tracker.setVisible(!document.hidden);
+
+    const handleVisibilityChange = () => {
+      tracker.setVisible(!document.hidden);
+    };
+    const handleBeforeUnload = () => {
+      tracker.stop();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      tracker.stop();
     };
   }, [session?.user?.id]);
 

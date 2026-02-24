@@ -4,8 +4,11 @@ import {
   NewsFilterState,
   applyNewsFilters,
   estimateReadingMinutes,
-  selectDigest,
+  getActiveFilterSummary,
+  nextFiltersForQuickMode,
   sortAnnouncementsByPriority,
+  toCurrentPrimaryTab,
+  toLegacyImportantOnly,
 } from '../utils/newsFeedUtils';
 
 const makeAnnouncement = (overrides: Partial<Announcement>): Announcement => ({
@@ -36,17 +39,17 @@ describe('newsFeedUtils', () => {
     expect(sorted.map((item) => item.id)).toEqual(['pinned', 'important', 'recent']);
   });
 
-  it('filters pinned and important views correctly', () => {
+  it('filters pinned, important, category, and saved views correctly', () => {
     const items = [
       makeAnnouncement({ id: 'pinned', is_pinned: true, is_saved: true }),
       makeAnnouncement({ id: 'important', is_important: true, is_saved: false }),
       makeAnnouncement({ id: 'research', category: 'Research' }),
     ];
 
-    const pinnedFilters: NewsFilterState = { primaryTab: 'Pinned', category: null, savedOnly: false, sortMode: 'priority_newest' };
-    const importantFilters: NewsFilterState = { primaryTab: 'Important', category: null, savedOnly: false, sortMode: 'priority_newest' };
-    const researchFilters: NewsFilterState = { primaryTab: 'All', category: 'Research', savedOnly: false, sortMode: 'priority_newest' };
-    const savedFilters: NewsFilterState = { primaryTab: 'All', category: null, savedOnly: true, sortMode: 'priority_newest' };
+    const pinnedFilters: NewsFilterState = { primaryTab: 'Pinned', category: null, savedOnly: false, importantOnly: false, sortMode: 'priority_newest' };
+    const importantFilters: NewsFilterState = { primaryTab: 'All', category: null, savedOnly: false, importantOnly: true, sortMode: 'priority_newest' };
+    const researchFilters: NewsFilterState = { primaryTab: 'All', category: 'Research', savedOnly: false, importantOnly: false, sortMode: 'priority_newest' };
+    const savedFilters: NewsFilterState = { primaryTab: 'All', category: null, savedOnly: true, importantOnly: false, sortMode: 'priority_newest' };
 
     expect(applyNewsFilters(items, pinnedFilters).map((item) => item.id)).toEqual(['pinned']);
     expect(applyNewsFilters(items, importantFilters).map((item) => item.id)).toEqual(['important']);
@@ -54,21 +57,41 @@ describe('newsFeedUtils', () => {
     expect(applyNewsFilters(items, savedFilters).map((item) => item.id)).toEqual(['pinned']);
   });
 
-  it('selects digest cards deterministically', () => {
-    const items = [
-      makeAnnouncement({ id: 'n1', createdAt: '2026-02-20T00:00:00.000Z' }),
-      makeAnnouncement({ id: 'n2', is_pinned: true, createdAt: '2026-02-21T00:00:00.000Z' }),
-      makeAnnouncement({ id: 'n3', is_important: true, createdAt: '2026-02-22T00:00:00.000Z' }),
-    ];
-
-    const digest = selectDigest(items);
-    expect(digest.headline?.id).toBe('n2');
-    expect(digest.topPinned?.id).toBe('n2');
-    expect(digest.criticalUpdate?.id).toBe('n3');
-  });
-
   it('computes reading time with sensible minimum', () => {
     expect(estimateReadingMinutes('')).toBe(0);
     expect(estimateReadingMinutes('short post')).toBe(1);
+  });
+
+  it('maps quick filter modes consistently', () => {
+    const base: NewsFilterState = {
+      primaryTab: 'All',
+      category: 'Research',
+      savedOnly: false,
+      importantOnly: true,
+      sortMode: 'priority_newest',
+      quickMode: 'all',
+    };
+    expect(nextFiltersForQuickMode(base, 'all')).toMatchObject({ primaryTab: 'All', savedOnly: false, importantOnly: true, quickMode: 'all' });
+    expect(nextFiltersForQuickMode(base, 'saved')).toMatchObject({ primaryTab: 'All', savedOnly: true, quickMode: 'saved' });
+    expect(nextFiltersForQuickMode(base, 'pinned')).toMatchObject({ primaryTab: 'Pinned', savedOnly: false, importantOnly: false, quickMode: 'pinned' });
+  });
+
+  it('builds human-readable filter summary', () => {
+    const filters: NewsFilterState = {
+      primaryTab: 'All',
+      category: 'Event',
+      savedOnly: true,
+      importantOnly: true,
+      sortMode: 'priority_newest',
+      quickMode: 'saved',
+    };
+    expect(getActiveFilterSummary(filters)).toBe('Saved · Important · Event · Priority+Newest');
+  });
+
+  it('maps legacy Important tab storage to importantOnly', () => {
+    expect(toCurrentPrimaryTab('Important')).toBe('All');
+    expect(toLegacyImportantOnly('Important')).toBe(true);
+    expect(toCurrentPrimaryTab('Pinned')).toBe('Pinned');
+    expect(toLegacyImportantOnly('All')).toBe(false);
   });
 });

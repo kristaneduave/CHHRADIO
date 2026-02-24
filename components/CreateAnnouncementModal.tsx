@@ -9,16 +9,14 @@ import { sanitizeNewsContent, sanitizeNewsTitle } from '../utils/newsTextSanitiz
 import { toastInfo } from '../utils/toast';
 import {
     NEWS_CATEGORY_OPTIONS,
-    getNewsSymbolAssetPath,
-    getNewsSymbolOptions,
     formatCategoryLabel,
-    getNewsCategoryLabelClass,
-    getNewsCategoryWatermarkClass,
     getNewsCategoryDefaultSymbolKey,
+    getNewsSymbolAssetPath,
     normalizeCategoryForStorage,
     normalizeCategoryForUi,
-    resolveNewsWatermarkSymbol,
 } from '../utils/newsPresentation';
+import { getNewsCategoryStyleTokens, NEWS_SURFACE_BASE_CLASS } from '../utils/newsStyleTokens';
+import NewsActionChip from './news/NewsActionChip';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
@@ -52,28 +50,22 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showSymbolPicker, setShowSymbolPicker] = useState(false);
     const [canSetPriorityFlags, setCanSetPriorityFlags] = useState(false);
+    const [priorityColumnsSupported, setPriorityColumnsSupported] = useState(true);
     const [isPinned, setIsPinned] = useState<boolean>(Boolean(editingAnnouncement?.is_pinned));
-    const [isImportant, setIsImportant] = useState<boolean>(Boolean(editingAnnouncement?.is_important));
 
     // New Feature State
-    const [icon, setIcon] = useState(editingAnnouncement?.icon || '');
+    const icon = editingAnnouncement?.icon || '';
     const [links, setLinks] = useState<{ url: string; title: string }[]>(editingAnnouncement?.links || []);
     const [showLinkInput, setShowLinkInput] = useState(false);
     const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
-    const [symbolSearch, setSymbolSearch] = useState('');
 
     // Temp state for adding a new link
     const [newLinkUrl, setNewLinkUrl] = useState('');
 
     const categories = [...NEWS_CATEGORY_OPTIONS];
-    const symbolOptions = getNewsSymbolOptions();
-    const filteredSymbols = symbolOptions.filter((symbol) => {
-        const query = symbolSearch.trim().toLowerCase();
-        if (!query) return true;
-        return symbol.label.toLowerCase().includes(query) || symbol.key.includes(query);
-    });
+    const categoryStyles = getNewsCategoryStyleTokens(category);
+    const modalSymbol = icon || getNewsCategoryDefaultSymbolKey(category);
 
     useEffect(() => {
         const loadRole = async () => {
@@ -85,6 +77,11 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
         };
         loadRole();
     }, []);
+
+    const isMissingPriorityColumnError = (error: any) => {
+        const message = String(error?.message || '').toLowerCase();
+        return message.includes('is_pinned') || message.includes('pinned_at');
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
@@ -202,22 +199,34 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     icon: icon || null,
                     created_at: new Date().toISOString(), // Bump
                 };
-                if (canSetPriorityFlags) {
+                if (canSetPriorityFlags && priorityColumnsSupported) {
                     updatePayload.is_pinned = isPinned;
-                    updatePayload.is_important = isImportant;
                     updatePayload.pinned_at = isPinned ? (editingAnnouncement?.pinned_at || new Date().toISOString()) : null;
                 }
 
                 // Update
-                const { data: updatedAnnouncement, error: updateError } = await supabase
+                let updateResult = await supabase
                     .from('announcements')
                     .update(updatePayload)
                     .eq('id', editingAnnouncement.id)
                     .select('id')
                     .single();
 
-                if (updateError) throw updateError;
-                announcementId = updatedAnnouncement?.id;
+                if (updateResult.error && isMissingPriorityColumnError(updateResult.error)) {
+                    setPriorityColumnsSupported(false);
+                    const fallbackPayload = { ...updatePayload };
+                    delete fallbackPayload.is_pinned;
+                    delete fallbackPayload.pinned_at;
+                    updateResult = await supabase
+                        .from('announcements')
+                        .update(fallbackPayload)
+                        .eq('id', editingAnnouncement.id)
+                        .select('id')
+                        .single();
+                }
+
+                if (updateResult.error) throw updateResult.error;
+                announcementId = updateResult.data?.id;
             } else {
                 const insertPayload: Record<string, any> = {
                     title: sanitizedTitle,
@@ -230,21 +239,32 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     links: links,
                     icon: icon || null,
                 };
-                if (canSetPriorityFlags) {
+                if (canSetPriorityFlags && priorityColumnsSupported) {
                     insertPayload.is_pinned = isPinned;
-                    insertPayload.is_important = isImportant;
                     insertPayload.pinned_at = isPinned ? new Date().toISOString() : null;
                 }
 
                 // Insert
-                const { data: insertedAnnouncement, error: insertError } = await supabase
+                let insertResult = await supabase
                     .from('announcements')
                     .insert(insertPayload)
                     .select('id')
                     .single();
 
-                if (insertError) throw insertError;
-                announcementId = insertedAnnouncement?.id;
+                if (insertResult.error && isMissingPriorityColumnError(insertResult.error)) {
+                    setPriorityColumnsSupported(false);
+                    const fallbackPayload = { ...insertPayload };
+                    delete fallbackPayload.is_pinned;
+                    delete fallbackPayload.pinned_at;
+                    insertResult = await supabase
+                        .from('announcements')
+                        .insert(fallbackPayload)
+                        .select('id')
+                        .single();
+                }
+
+                if (insertResult.error) throw insertResult.error;
+                announcementId = insertResult.data?.id;
             }
 
             // Emit newsfeed notification to all users.
@@ -305,15 +325,32 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-300 p-4">
-            <div className="w-full max-w-lg bg-surface border border-white/10 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-hidden h-auto max-h-[82vh] flex flex-col">
-                {/* Background Glow */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 blur-[100px] rounded-full pointer-events-none -translate-y-1/2 translate-x-1/2" />
+            <div className={`${NEWS_SURFACE_BASE_CLASS} w-full max-w-lg rounded-b-3xl rounded-t-none shadow-2xl animate-in zoom-in-95 duration-300 h-auto max-h-[82vh] flex flex-col`}>
+                <span className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-b-3xl rounded-t-none">
+                    <span className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
+                    <span className="absolute inset-[1px] rounded-b-[1.45rem] rounded-t-none border border-white/5" />
+                    <span className={`absolute left-0 right-0 top-0 h-[2px] rounded-none ${categoryStyles.railTint} opacity-15 blur-[0.5px]`} />
+                    <span className="absolute left-0 right-0 top-[1px] h-[1px] rounded-none bg-[linear-gradient(90deg,rgba(255,255,255,0.34)_0%,rgba(255,255,255,0.12)_50%,rgba(255,255,255,0.3)_100%)] shadow-[0_0_6px_rgba(255,255,255,0.08)] backdrop-blur-[8px]" />
+                    <span
+                        className={`absolute -left-10 top-1/2 h-[24rem] w-[24rem] -translate-y-1/2 opacity-[0.025] ${categoryStyles.watermark}`}
+                        style={{
+                            WebkitMaskImage: `url(${getNewsSymbolAssetPath(modalSymbol)})`,
+                            maskImage: `url(${getNewsSymbolAssetPath(modalSymbol)})`,
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskPosition: 'left center',
+                            maskPosition: 'left center',
+                            WebkitMaskSize: 'contain',
+                            maskSize: 'contain',
+                        }}
+                    />
+                </span>
 
                 {/* Minimalist Header */}
                 <div className="flex justify-end p-4 absolute top-0 right-0 z-20">
                     <button
                         onClick={onClose}
-                        className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
+                        className="w-8 h-8 flex items-center justify-center rounded-full border border-border-default/70 bg-black/15 hover:bg-white/10 text-slate-400 hover:text-white transition-all"
                     >
                         <span className="material-icons text-lg">close</span>
                     </button>
@@ -330,158 +367,71 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                     <form onSubmit={handleSubmit} id="create-announcement-form" className="space-y-6">
 
-                        {/* Title & Icon Header */}
-                        <div className="flex items-start gap-4">
-                            <div className="relative shrink-0 pt-1">
+                        {/* Top Controls: Type + Pin */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative">
                                 <button
                                     type="button"
-                                    onClick={() => setShowSymbolPicker((prev) => !prev)}
-                                    className={`inline-flex h-12 w-12 items-center justify-center rounded-xl border bg-white/[0.03] ${getNewsCategoryLabelClass(category)} hover:bg-white/[0.08] transition-colors`}
-                                    title="Choose watermark symbol"
+                                    onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                                    className="flex items-center gap-2 rounded-full border border-border-default/70 bg-black/15 px-3 py-1.5 text-sm font-medium text-slate-200 transition-colors hover:bg-white/[0.08]"
                                 >
-                                    <span
-                                        className={`h-6 w-6 ${getNewsCategoryWatermarkClass(category)}`}
-                                        style={{
-                                            WebkitMaskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(icon, category))})`,
-                                            maskImage: `url(${getNewsSymbolAssetPath(resolveNewsWatermarkSymbol(icon, category))})`,
-                                            WebkitMaskRepeat: 'no-repeat',
-                                            maskRepeat: 'no-repeat',
-                                            WebkitMaskPosition: 'center',
-                                            maskPosition: 'center',
-                                            WebkitMaskSize: 'contain',
-                                            maskSize: 'contain',
-                                        }}
-                                    />
+                                    <span className={`w-2 h-2 rounded-full ${category === 'Announcement' ? 'bg-amber-400' :
+                                        category === 'Research' ? 'bg-indigo-400' :
+                                            category === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
+                                        }`} />
+                                    {formatCategoryLabel(category)}
+                                    <span className="material-icons text-sm text-slate-500 ml-1">arrow_drop_down</span>
                                 </button>
-                                {showSymbolPicker && (
-                                    <div className="absolute left-0 top-14 z-30 w-[18rem] rounded-xl border border-white/10 bg-surface p-2 shadow-xl">
-                                        <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Watermark Symbol</p>
-                                        <div className="mb-2 flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2 py-1">
-                                            <span className="material-icons text-[14px] text-slate-500">search</span>
-                                            <input
-                                                value={symbolSearch}
-                                                onChange={(event) => setSymbolSearch(event.target.value)}
-                                                placeholder="Search"
-                                                className="w-full bg-transparent text-xs text-slate-300 placeholder:text-slate-500 focus:outline-none"
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-1.5">
-                                            {filteredSymbols.map((symbol) => (
+
+                                {showCategoryDropdown && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
+                                        <div className={`${NEWS_SURFACE_BASE_CLASS} absolute top-full left-0 z-20 mt-1 w-52 overflow-hidden rounded-xl shadow-xl animate-in fade-in zoom-in-95 duration-100`}>
+                                            {categories.map((cat) => (
                                                 <button
-                                                    key={symbol.key}
+                                                    key={cat}
                                                     type="button"
                                                     onClick={() => {
-                                                        setIcon(symbol.key);
-                                                        setShowSymbolPicker(false);
-                                                        setSymbolSearch('');
+                                                        setCategory(cat);
+                                                        setShowCategoryDropdown(false);
                                                     }}
-                                                    className="flex items-center gap-2 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition-colors"
+                                                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${category === cat
+                                                        ? 'bg-white/[0.06] text-white'
+                                                        : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                                                        }`}
                                                 >
-                                                    <span
-                                                        className={`h-4 w-4 ${getNewsCategoryWatermarkClass(category)}`}
-                                                        style={{
-                                                            WebkitMaskImage: `url(${getNewsSymbolAssetPath(symbol.key)})`,
-                                                            maskImage: `url(${getNewsSymbolAssetPath(symbol.key)})`,
-                                                            WebkitMaskRepeat: 'no-repeat',
-                                                            maskRepeat: 'no-repeat',
-                                                            WebkitMaskPosition: 'center',
-                                                            maskPosition: 'center',
-                                                            WebkitMaskSize: 'contain',
-                                                            maskSize: 'contain',
-                                                        }}
-                                                    />
-                                                    <span className="truncate">{symbol.label}</span>
+                                                    <span className={`w-2 h-2 rounded-full ${cat === 'Announcement' ? 'bg-amber-400' :
+                                                        cat === 'Research' ? 'bg-indigo-400' :
+                                                            cat === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
+                                                        }`} />
+                                                    {formatCategoryLabel(cat)}
                                                 </button>
                                             ))}
                                         </div>
-                                        {filteredSymbols.length === 0 && (
-                                            <p className="px-1 py-2 text-[11px] text-slate-500">No symbol match.</p>
-                                        )}
-                                        <div className="mt-2 flex items-center justify-between gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setIcon('');
-                                                    setShowSymbolPicker(false);
-                                                    setSymbolSearch('');
-                                                }}
-                                                className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5"
-                                            >
-                                                Reset to default
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setShowSymbolPicker(false);
-                                                    setSymbolSearch('');
-                                                }}
-                                                className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-300 hover:bg-white/5"
-                                            >
-                                                Close
-                                            </button>
-                                        </div>
-                                    </div>
+                                    </>
                                 )}
                             </div>
-
-                            {/* Title Input */}
-                            <div className="flex-1 space-y-2">
-                                <input
-                                    type="text"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                    className="w-full bg-transparent border-none p-0 text-2xl sm:text-3xl font-bold text-white placeholder-slate-600 focus:ring-0 focus:outline-none transition-all"
-                                    placeholder="What's happening?"
-                                    required
-                                />
-                            </div>
-                        </div>
-                        <p className="pl-16 -mt-3 text-[11px] text-slate-500">
-                            Watermark symbol: <span className="text-slate-300">{icon || getNewsCategoryDefaultSymbolKey(category)}</span>
-                        </p>
-
-                        {/* Category Dropdown (Compact) */}
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium text-slate-300 transition-all"
-                            >
-                                <span className={`w-2 h-2 rounded-full ${category === 'Announcement' ? 'bg-amber-400' :
-                                    category === 'Research' ? 'bg-indigo-400' :
-                                        category === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
-                                    }`} />
-                                {formatCategoryLabel(category)}
-                                <span className="material-icons text-sm text-slate-500 ml-1">arrow_drop_down</span>
-                            </button>
-
-                            {showCategoryDropdown && (
-                                <>
-                                    <div className="fixed inset-0 z-10" onClick={() => setShowCategoryDropdown(false)} />
-                                    <div className="absolute top-full left-0 mt-1 w-48 bg-surface border border-white/10 rounded-xl shadow-xl overflow-hidden z-20 animate-in fade-in zoom-in-95 duration-100">
-                                        {categories.map((cat) => (
-                                            <button
-                                                key={cat}
-                                                type="button"
-                                                onClick={() => {
-                                                    setCategory(cat);
-                                                    setShowCategoryDropdown(false);
-                                                }}
-                                                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${category === cat
-                                                    ? 'bg-blue-500/10 text-blue-400'
-                                                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
-                                                    }`}
-                                            >
-                                                <span className={`w-2 h-2 rounded-full ${cat === 'Announcement' ? 'bg-amber-400' :
-                                                    cat === 'Research' ? 'bg-indigo-400' :
-                                                        cat === 'Event' ? 'bg-emerald-400' : 'bg-slate-400'
-                                                    }`} />
-                                                {formatCategoryLabel(cat)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </>
+                            {canSetPriorityFlags && priorityColumnsSupported && (
+                                <NewsActionChip
+                                    onClick={() => setIsPinned((prev) => !prev)}
+                                    icon={isPinned ? 'check_circle' : 'push_pin'}
+                                    className={isPinned ? 'border-amber-400/60 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15' : ''}
+                                >
+                                    Pin this post
+                                </NewsActionChip>
                             )}
+                        </div>
+
+                        {/* Title */}
+                        <div className="space-y-2">
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="w-full bg-transparent border-none p-0 text-[22px] sm:text-[24px] font-semibold leading-tight tracking-[0.005em] text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+                                placeholder="What's happening?"
+                                required
+                            />
                         </div>
 
                         {/* Content */}
@@ -489,44 +439,11 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                             <textarea
                                 value={content}
                                 onChange={(e) => setContent(e.target.value)}
-                                className="w-full bg-transparent border-none p-0 text-slate-300 placeholder-slate-600 focus:ring-0 focus:outline-none min-h-[120px] text-base leading-relaxed resize-none"
+                                className="w-full bg-transparent border-none p-0 text-slate-200 placeholder-slate-500 focus:ring-0 focus:outline-none min-h-[120px] text-base leading-relaxed resize-none"
                                 placeholder="Share the details..."
                                 required
                             />
                         </div>
-
-                        {canSetPriorityFlags && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsPinned((prev) => !prev)}
-                                    className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${isPinned
-                                        ? 'border-amber-400/60 bg-amber-500/10 text-amber-200'
-                                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
-                                        }`}
-                                >
-                                    <span className="inline-flex items-center gap-2">
-                                        <span className="material-icons text-sm">push_pin</span>
-                                        Pin this post
-                                    </span>
-                                    <span className="material-icons text-sm">{isPinned ? 'check_circle' : 'radio_button_unchecked'}</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsImportant((prev) => !prev)}
-                                    className={`flex items-center justify-between rounded-xl border px-3 py-2 text-xs font-semibold transition-colors ${isImportant
-                                        ? 'border-rose-400/60 bg-rose-500/10 text-rose-200'
-                                        : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'
-                                        }`}
-                                >
-                                    <span className="inline-flex items-center gap-2">
-                                        <span className="material-icons text-sm">priority_high</span>
-                                        Mark important
-                                    </span>
-                                    <span className="material-icons text-sm">{isImportant ? 'check_circle' : 'radio_button_unchecked'}</span>
-                                </button>
-                            </div>
-                        )}
 
                         {/* Links List */}
                         {links.length > 0 && (
@@ -604,15 +521,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                         <div className="space-y-3">
                             <div className="flex items-center justify-end gap-2 mb-2">
                                 {/* Add Link Button */}
-                                <button
-                                    type="button"
-                                    onClick={() => setShowLinkInput(true)}
-                                    disabled={showLinkInput}
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-blue-400 hover:text-blue-300 transition-all cursor-pointer border border-blue-500/20 hover:border-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <span className="material-icons text-sm">link</span>
-                                    <span className="text-[10px] font-bold uppercase tracking-wide">Add Link</span>
-                                </button>
+                                <NewsActionChip onClick={() => setShowLinkInput(true)} disabled={showLinkInput} icon="link" className="disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Add Link
+                                </NewsActionChip>
 
                                 {/* Add Files Button */}
                                 <div className="relative">
@@ -624,12 +535,11 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                                         id="file-upload"
                                         className="hidden"
                                     />
-                                    <label
-                                        htmlFor="file-upload"
-                                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-primary hover:text-primary-light transition-all cursor-pointer border border-primary/20 hover:border-primary/50"
-                                    >
-                                        <span className="material-icons text-sm">add</span>
-                                        <span className="text-[10px] font-bold uppercase tracking-wide">Add Files</span>
+                                    <label htmlFor="file-upload">
+                                        <span className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border-default/70 bg-black/15 px-3 py-1.5 text-[11px] font-medium text-slate-200 transition-colors hover:bg-white/[0.08]">
+                                            <span className="material-icons text-[14px]">add</span>
+                                            Add Files
+                                        </span>
                                     </label>
                                 </div>
                             </div>
@@ -685,7 +595,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 </div>
 
                 {/* Footer - Fixed */}
-                <div className="flex justify-between items-center p-4 border-t border-white/5 bg-surface relative z-20 shrink-0">
+                <div className="flex justify-between items-center p-4 border-t border-white/10 bg-transparent relative z-20 shrink-0">
                     <div className="flex gap-3">
                         <button
                             type="button"

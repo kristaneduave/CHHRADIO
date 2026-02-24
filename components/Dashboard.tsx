@@ -7,13 +7,14 @@ interface DashboardProps {
   onStartUpload: (submissionType: SubmissionType) => void;
 }
 
-const BUTTON_STYLES: Record<string, { text: string; border: string; badge: string; shadow: string; hover: string }> = {
+const BUTTON_STYLES: Record<string, { text: string; border: string; badge: string; shadow: string; hover: string; indicator: string }> = {
   Announcements: {
     text: 'text-fuchsia-300',
     border: 'hover:border-fuchsia-300/35',
     badge: 'bg-fuchsia-500/10 group-hover:bg-fuchsia-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(217,70,239,0.22)]',
     hover: 'group-hover:text-fuchsia-200',
+    indicator: 'bg-fuchsia-300/35',
   },
   Calendar: {
     text: 'text-teal-300',
@@ -21,6 +22,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-teal-500/10 group-hover:bg-teal-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(45,212,191,0.22)]',
     hover: 'group-hover:text-teal-200',
+    indicator: 'bg-teal-300/35',
   },
   Database: {
     text: 'text-indigo-300',
@@ -28,6 +30,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-indigo-500/10 group-hover:bg-indigo-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.22)]',
     hover: 'group-hover:text-indigo-200',
+    indicator: 'bg-indigo-300/35',
   },
   'Case Library': {
     text: 'text-indigo-300',
@@ -35,6 +38,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-indigo-500/10 group-hover:bg-indigo-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.22)]',
     hover: 'group-hover:text-indigo-200',
+    indicator: 'bg-indigo-300/35',
   },
   'Upload Case': {
     text: 'text-sky-300',
@@ -42,6 +46,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-sky-500/10 group-hover:bg-sky-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(56,189,248,0.22)]',
     hover: 'group-hover:text-sky-200',
+    indicator: 'bg-sky-300/35',
   },
   Quiz: {
     text: 'text-rose-300',
@@ -49,6 +54,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-rose-500/10 group-hover:bg-rose-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(244,63,94,0.22)]',
     hover: 'group-hover:text-rose-200',
+    indicator: 'bg-rose-300/35',
   },
   "Resident's Corner": {
     text: 'text-amber-300',
@@ -56,6 +62,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     badge: 'bg-amber-500/10 group-hover:bg-amber-500/15',
     shadow: 'group-hover:shadow-[0_0_24px_rgba(245,158,11,0.22)]',
     hover: 'group-hover:text-amber-200',
+    indicator: 'bg-amber-300/35',
   },
 };
 
@@ -125,6 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
               badge: '',
               shadow: '',
               hover: '',
+              indicator: 'bg-white/30',
             };
             return (
               <button
@@ -136,11 +144,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
                   }
                   onNavigate(action.target);
                 }}
-                className={`quick-link-card group relative flex h-full min-h-[5.35rem] flex-col items-center justify-center overflow-hidden rounded-xl border border-border-default/75 bg-surface/85 px-2 transition-all duration-200 active:scale-[0.985] active:shadow-[0_6px_14px_rgba(2,6,23,0.45)] hover:-translate-y-0.5 hover:bg-surface-alt/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 shadow-clinical ${style.border} ${style.shadow}`}
+                className={`quick-link-card group relative flex h-full min-h-[5.35rem] flex-col items-center justify-center overflow-hidden rounded-b-xl rounded-t-none border border-border-default/75 bg-surface/85 px-2 transition-all duration-200 active:scale-[0.985] active:shadow-[0_6px_14px_rgba(2,6,23,0.45)] hover:-translate-y-0.5 hover:bg-surface-alt/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 shadow-clinical ${style.border} ${style.shadow}`}
                 style={{ animationDelay: `${index * 60}ms` }}
               >
                 <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.008)_38%,rgba(255,255,255,0)_100%)] opacity-65" />
-                <span className="pointer-events-none absolute left-3 right-3 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
+                <span className={`pointer-events-none absolute left-0 right-0 top-0 h-[1px] ${style.indicator}`} />
+                <span className="pointer-events-none absolute left-0 right-0 top-[1px] h-[1px] bg-[linear-gradient(90deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.06)_50%,rgba(255,255,255,0.14)_100%)]" />
                 <div className={`quick-link-icon mb-1 rounded-xl p-2 transition-colors duration-300 ${style.badge}`}>
                   <span className={`material-icons text-[1.45rem] transition-transform duration-300 group-hover:scale-105 ${style.text}`}>
                     {action.icon}
