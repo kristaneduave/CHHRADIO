@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
@@ -19,6 +19,8 @@ const CalendarScreen: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<EventType | 'all'>('all');
   const [searchResults, setSearchResults] = useState<CalendarEvent[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Form state
   // Form state - Minimalist by default
@@ -37,6 +39,7 @@ const CalendarScreen: React.FC = () => {
   // Complex Coverage State - Now with NAME for manual entry
   const [coverageDetails, setCoverageDetails] = useState<{ user_id: string, name: string, modalities: string[] }[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -112,6 +115,20 @@ const CalendarScreen: React.FC = () => {
     }, 500);
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isFilterMenuOpen) return;
+
+    const handleFilterClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (filterMenuRef.current && !filterMenuRef.current.contains(target)) {
+        setIsFilterMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleFilterClickOutside);
+    return () => document.removeEventListener('mousedown', handleFilterClickOutside);
+  }, [isFilterMenuOpen]);
 
   // Pre-fill dates when opening modal
   useEffect(() => {
@@ -344,15 +361,15 @@ const CalendarScreen: React.FC = () => {
         const recipientUserIds = recipients.length > 0
           ? recipients
           : Array.from(
-              new Set(
-                [
-                  ...(savedEvent.coverage_details || []).map((d) => d.user_id).filter(Boolean),
-                  ...coverageDetails.map((d) => d.user_id).filter(Boolean),
-                  savedEvent.assigned_to || '',
-                  savedEvent.covered_by || '',
-                ].filter(Boolean),
-              ),
-            );
+            new Set(
+              [
+                ...(savedEvent.coverage_details || []).map((d) => d.user_id).filter(Boolean),
+                ...coverageDetails.map((d) => d.user_id).filter(Boolean),
+                savedEvent.assigned_to || '',
+                savedEvent.covered_by || '',
+              ].filter(Boolean),
+            ),
+          );
 
         if (actorUserId && recipientUserIds.length > 0) {
           const severity = newEventType === 'exam' ? 'warning' : 'info';
@@ -401,146 +418,170 @@ const CalendarScreen: React.FC = () => {
 
 
   return (
-    <div className="px-6 pt-8 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
-      {/* Top Header with Search and Filter */}
-      <header className="flex flex-col gap-6 mb-8">
-        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4">
+    <div className="px-6 pt-6 pb-12 flex flex-col lg:h-full min-h-screen animate-in fade-in duration-500 max-w-7xl mx-auto w-full relative">
+      <div className="pb-2">
+        <header className="flex items-center justify-between min-h-[32px]">
+          <h1 className="text-3xl font-bold text-white tracking-tight">Calendar</h1>
+        </header>
+      </div>
 
+      <div className="pt-2 pb-4 w-full">
+        {/* Database-Style Global Search and Filter Bar */}
+        <div className="relative mb-4 z-50 w-full" ref={filterMenuRef}>
+          <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
+            <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors pointer-events-none">
+              search
+            </span>
 
-          {/* Title Row */}
-          <div className="w-full xl:w-auto mb-2 xl:mb-0">
-            <h1 className="text-3xl font-bold text-white tracking-tight whitespace-nowrap">{monthNames[month]} <span className="text-slate-500 font-light">{year}</span></h1>
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-[6rem] text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+            />
+
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-[3rem] top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                aria-label="Clear search"
+              >
+                <span className="material-icons text-sm">close</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsFilterMenuOpen((prev) => !prev)}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${activeFilter !== 'all' ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                }`}
+              aria-label="Filter events"
+              aria-expanded={isFilterMenuOpen}
+              aria-controls="calendar-filter-menu"
+            >
+              <span className="material-icons text-[19px]">tune</span>
+              {activeFilter !== 'all' && (
+                <div className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full border border-primary"></div>
+              )}
+            </button>
           </div>
 
-          {/* Controls Container */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 w-full xl:w-auto">
-
-            {/* Row 1 (Mobile): Nav + Add Event */}
-            <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
-              {/* Navigation - Takes more space now to balance */}
-              <div className="flex bg-white/5 rounded-xl p-1 border border-white/10 flex-1 md:flex-initial justify-between md:justify-start">
-                <button onClick={prevMonth} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-                  <span className="material-icons text-xl">chevron_left</span>
-                </button>
-                <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-all uppercase tracking-wide flex-1 md:flex-none text-center">
-                  Today
-                </button>
-                <button onClick={nextMonth} className="px-4 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all">
-                  <span className="material-icons text-xl">chevron_right</span>
-                </button>
+          <div
+            id="calendar-filter-menu"
+            className={`absolute right-0 top-full mt-2 w-56 bg-[#1a2332] border border-white/5 rounded-2xl overflow-hidden transition-all duration-200 transform origin-top-right z-50 ${isFilterMenuOpen ? 'opacity-100 visible scale-100' : 'opacity-0 invisible scale-95'}`}
+          >
+            <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
+              <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                Event Type
               </div>
-
-              {/* Add Event - Natural width, not overpowering */}
-              <button
-                onClick={() => setShowAddEvent(true)}
-                className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg shadow-primary/25 transition-all flex items-center justify-center gap-2 active:scale-95 whitespace-nowrap"
-                title="Add Event"
-              >
-                <span className="material-icons text-lg">add</span>
-                <span className="hidden sm:inline">Add Event</span>
-              </button>
+              {([
+                { id: 'all', label: 'All Events' },
+                { id: 'leave', label: 'Leaves' },
+                { id: 'exam', label: 'Exams' },
+                { id: 'lecture', label: 'Lectures' },
+                { id: 'meeting', label: 'Meetings' },
+                { id: 'pcr', label: 'PCR' },
+                { id: 'pickleball', label: 'Pickleball' },
+              ] as { id: EventType | 'all', label: string }[]).map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => {
+                    setActiveFilter(f.id);
+                    setIsFilterMenuOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl transition-all flex items-center justify-between ${activeFilter === f.id
+                    ? 'bg-primary/20 text-primary border border-primary/20'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                    }`}
+                >
+                  {f.label}
+                  {activeFilter === f.id && <span className="material-icons text-sm">check</span>}
+                </button>
+              ))}
             </div>
-
-            {/* Row 2 (Mobile): Filter + Search */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              {/* Filter Dropdown */}
-              <div className="relative group z-50 shrink-0">
-                <div className="flex items-center bg-surface-alt border border-white/5 rounded-xl transition-all hover:border-white/10">
-                  <button className="flex items-center gap-2 text-slate-300 hover:text-white px-4 py-3 text-sm font-medium min-w-[120px] justify-between">
-                    <span className="truncate max-w-[100px]">{activeFilter === 'all' ? 'All Events' : (activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1))}</span>
-                    <span className="material-icons text-lg text-slate-500 group-hover:text-white transition-colors">filter_list</span>
-                  </button>
-
-                  {/* Reset Filter Button */}
-                  {activeFilter !== 'all' && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setActiveFilter('all'); }}
-                      className="pr-3 pl-1 text-slate-500 hover:text-white transition-colors"
-                      title="Reset Filter"
-                    >
-                      <span className="material-icons text-sm">close</span>
-                    </button>
-                  )}
-                </div>
-
-                {/* Dropdown Menu */}
-                <div className="absolute left-0 md:left-auto md:right-0 top-full mt-2 w-48 md:w-56 bg-surface border border-white/10 rounded-xl shadow-2xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-left md:origin-top-right scale-95 group-hover:scale-100">
-                  <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-                    {([
-                      { id: 'all', label: 'All Events' },
-                      { id: 'leave', label: 'Leaves' },
-                      { id: 'exam', label: 'Exams' },
-                      { id: 'lecture', label: 'Lectures' },
-                      { id: 'meeting', label: 'Meetings' },
-                      { id: 'pcr', label: 'PCR' },
-                      { id: 'pickleball', label: 'Pickleball' }
-                    ] as { id: EventType | 'all', label: string }[]).map(filter => (
-                      <button
-                        key={filter.id}
-                        onClick={() => setActiveFilter(filter.id)}
-                        className={`w-full text-left px-4 py-3 text-sm font-medium transition-all border-b border-white/5 last:border-0 hover:bg-white/5 flex items-center justify-between
-                              ${activeFilter === filter.id
-                            ? 'text-primary bg-primary/5'
-                            : 'text-slate-400'
-                          }`}
-                      >
-                        {filter.label}
-                        {activeFilter === filter.id && <span className="material-icons text-sm">check</span>}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Search Bar */}
-              <div className="flex-1 relative group">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 group-focus-within:text-white transition-colors text-lg">search</span>
-                <input
-                  type="text"
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-surface-alt border border-white/5 rounded-xl pl-10 pr-3 py-3 text-base text-white focus:bg-surface focus:border-white/10 focus:ring-1 focus:ring-white/10 outline-none transition-all placeholder:text-slate-600 shadow-inner"
-                />
-              </div>
-            </div>
-
           </div>
         </div>
-      </header>
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative z-0">
         {/* Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 h-full flex flex-col">
+          <div className="bg-[#0b0f19] rounded-[2rem] p-6 h-full flex flex-col">
+            {/* Integrated Navigation and Title */}
+            <div className="flex items-center justify-between w-full mb-6 relative">
+
+              <div className="w-10"></div> {/* Spacer for perfect centering */}
+
+              {/* Centered Month Navigation Pill */}
+              <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-between bg-black/20 rounded-2xl p-1 w-[280px]">
+                <button
+                  onClick={prevMonth}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-xl active:scale-95"
+                >
+                  <span className="material-icons text-[20px]">chevron_left</span>
+                </button>
+
+                <button
+                  onClick={() => setCurrentDate(new Date())}
+                  className="flex flex-col items-center justify-center hover:bg-white/5 px-4 h-8 rounded-xl transition-all active:scale-95 group relative overflow-hidden min-w-[140px]"
+                  title="Return to Today"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 group-hover:-translate-y-full">
+                    <span className="text-[15px] font-bold text-white tracking-tight">
+                      {monthNames[month]} <span className="text-slate-500 font-medium">{year}</span>
+                    </span>
+                  </div>
+                  <div className="absolute inset-0 flex items-center justify-center transition-transform duration-300 translate-y-full group-hover:translate-y-0">
+                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mt-0.5">Return to Today</span>
+                  </div>
+                </button>
+
+                <button
+                  onClick={nextMonth}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-xl active:scale-95"
+                >
+                  <span className="material-icons text-[20px]">chevron_right</span>
+                </button>
+              </div>
+
+              <div className="w-10"></div> {/* Spacer for perfect centering */}
+            </div>
+
             <div className="grid grid-cols-7 mb-4">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
-                <div key={d} className="text-center text-xs font-bold text-slate-500 uppercase tracking-widest py-2">{d}</div>
+              {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(d => (
+                <div key={d} className="text-center text-[11px] font-bold text-[#828b9c] tracking-widest py-2">{d}</div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1 flex-1 content-start">
+            <div className="grid grid-cols-7 gap-y-2 gap-x-1 flex-1 content-start">
               {padding.map((_, i) => <div key={`p-${i}`} className="aspect-square"></div>)}
               {days.map(day => {
                 const dotTypes = getEventTypesForDay(day);
+                const isActive = isSelected(day);
                 return (
                   <button
                     key={day}
                     onClick={() => setSelectedDate(new Date(year, month, day))}
-                    className={`relative aspect-square rounded-xl flex flex-col items-center justify-center transition-all hover:bg-white/5 group ${isSelected(day) ? 'bg-primary text-white shadow-[0_0_20px_rgba(13,162,231,0.4)] z-10 scale-105' :
-                      isToday(day) ? 'text-primary border border-primary/30 bg-primary/5' : 'text-slate-300'
+                    className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all group ${isActive
+                      ? 'bg-[#5b8cff] z-10'
+                      : isToday(day)
+                        ? 'text-[#5b8cff] font-bold hover:bg-white/[0.04]'
+                        : 'text-white hover:bg-white/[0.04]'
                       }`}
                   >
-                    <span className={`text-sm font-medium ${isToday(day) && !isSelected(day) ? 'font-bold' : ''}`}>{day}</span>
+                    <span className={`text-[15px] leading-none mb-1 ${isActive ? 'text-white font-bold' : 'font-medium opacity-90'}`}>{day}</span>
 
                     {/* Colored Event Dots */}
-                    <div className="absolute bottom-2 flex gap-1 justify-center px-1 w-full">
-                      {dotTypes.map(type => (
-                        <span
-                          key={type}
-                          className={`w-1.5 h-1.5 rounded-full ${isSelected(day) ? 'bg-white' : eventDotColors[type] || 'bg-slate-400'}`}
-                        ></span>
-                      ))}
-                    </div>
+                    {dotTypes.length > 0 && (
+                      <div className="flex gap-[3px] justify-center px-1 mt-1">
+                        {dotTypes.map(type => (
+                          <span
+                            key={type}
+                            className={`w-[4px] h-[4px] rounded-full ${isActive ? 'bg-white' : eventDotColors[type] || 'bg-slate-400'}`}
+                          ></span>
+                        ))}
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -551,73 +592,91 @@ const CalendarScreen: React.FC = () => {
         </div>
 
         {/* Agenda */}
-        <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-6 flex-1 lg:overflow-hidden flex flex-col relative">
+        <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative z-10">
+
+          <div className="bg-[#0b0f19] rounded-[2rem] p-6 flex-1 lg:overflow-hidden flex flex-col relative">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <span className="material-icons text-sm">view_agenda</span> Agenda
-              </h3>
-              <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-slate-400 border border-white/5">
-                {searchQuery ? `Searching "${searchQuery}"` : isSelectedDateToday() ? 'Upcoming' : `For ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
-              </span>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-black/30 rounded-2xl flex items-center justify-center">
+                  <span className="material-icons text-white">grid_view</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white tracking-tight leading-tight">AGENDA</h3>
+                  <span className="text-[11px] text-slate-400 font-medium">
+                    {searchQuery ? `Searching "${searchQuery}"` : isSelectedDateToday() ? 'Upcoming' : `For ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Embedded Add Event Button in Agenda Header */}
+                <button
+                  onClick={() => setShowAddEvent(true)}
+                  className="bg-white/5 hover:bg-white/10 text-white w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center transition-all active:scale-95"
+                  title="Add Event"
+                >
+                  <span className="material-icons text-[18px]">add</span>
+                </button>
+              </div>
             </div>
 
             {/* PADDED CONTAINER to fix Agenda overlap - Increased to pb-40 */}
-            <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
+            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
                   <div
                     key={event.id}
                     onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
-                    className={`flex flex-col p-4 rounded-2xl bg-surface-alt border border-white/5 hover:border-white/10 transition-all cursor-pointer event-card group bg-gradient-to-br from-[#09101d] to-[#09101d] ${expandedEventId === event.id ? 'from-white/5 to-[#09101d] border-white/10 shadow-lg shadow-black/20' : ''}`}
+                    className={`relative group rounded-[1.25rem] transition-all cursor-pointer p-5 py-6 mb-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${expandedEventId === event.id
+                      ? 'bg-white/[0.06]'
+                      : 'bg-white/[0.03] hover:bg-white/[0.05]'
+                      }`}
                   >
+                    <div className="flex flex-col gap-3 w-full z-10 relative">
 
-                    <div className="flex gap-4 items-center">
-                      {/* Boxed Date Style */}
-                      <div className="flex flex-col items-center justify-center w-12 h-12 bg-slate-800/50 rounded-xl border border-white/10 shrink-0">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{new Date(event.start_time).toLocaleString('default', { month: 'short' }).toUpperCase()}</span>
-                        <span className="text-lg font-black text-white leading-none">{new Date(event.start_time).getDate()}</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="bg-black/30 text-slate-300 text-[10px] font-bold px-2.5 py-1 rounded-md tracking-widest flex items-center gap-1.5">
+                            {event.is_all_day ? (
+                              <span>ALL DAY</span>
+                            ) : (
+                              <span>
+                                {new Date(event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} - {new Date(event.end_time || event.start_time).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </span>
+
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded opacity-70 ${eventTypeStyles[event.event_type] || eventTypeStyles.leave}`}>
+                            {event.event_type}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                          className="w-8 h-8 rounded-full bg-black/20 hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+                        >
+                          <span className="material-icons text-[14px]">edit</span>
+                        </button>
                       </div>
 
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <h4 className="text-sm font-bold text-white truncate leading-tight mb-1">
+                      <div className="flex flex-col gap-1 mt-1">
+                        <h4 className="text-[18px] font-bold text-white tracking-tight">
                           {event.event_type === 'leave' ? event.title.replace(' - Leave', '') : event.title}
                         </h4>
-                        <p className="text-[11px] text-slate-500 font-medium">
-                          {event.is_all_day ? 'All Day' : new Date(event.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
 
-                        {/* Creator Indicator */}
-                        {event.creator && (
-                          <div className="flex items-center gap-1 mt-1.5 opacity-60">
-                            <span className="text-[10px] text-slate-500">Added by</span>
-                            {event.creator.avatar_url ? (
-                              <img src={event.creator.avatar_url} alt={event.creator.full_name || ''} className="w-3 h-3 rounded-full" />
-                            ) : (
-                              <span className="material-icons text-[10px] text-slate-500">account_circle</span>
+                        {(event.creator || (event.coverage_details && event.coverage_details.length > 0)) && (
+                          <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 font-medium">
+                            {event.creator && (
+                              <span>by {event.creator.nickname || event.creator.full_name?.split(' ')[0]}</span>
                             )}
-                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[100px]">
-                              {event.creator.nickname || event.creator.full_name}
-                            </span>
-                          </div>
-                        )}
 
-                        {/* Coverage Pills if any */}
-                        {event.coverage_details && event.coverage_details.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {event.coverage_details.map((d: any, idx) => (
-                              <span key={idx} className="text-[9px] text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded flex items-center gap-1 border border-purple-500/10">
-                                <span className="material-icons text-[9px] rotate-180">reply</span>
-                                {d.name || d.user?.full_name?.split(' ')[0]}
+                            {event.coverage_details && event.coverage_details.length > 0 && (
+                              <span className="text-purple-400/80">
+                                w/ {event.coverage_details.map((d: any) => d.name || d.user?.full_name?.split(' ')[0]).join(', ')}
                               </span>
-                            ))}
+                            )}
                           </div>
                         )}
-                      </div>
-
-                      {/* Badge Style */}
-                      <div className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border self-start ${eventTypeStyles[event.event_type]}`}>
-                        {event.event_type}
                       </div>
                     </div>
 
@@ -625,20 +684,13 @@ const CalendarScreen: React.FC = () => {
                     {expandedEventId === event.id && (
                       <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 fade-in duration-200">
                         <button
-                          onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-bold transition-all border border-transparent hover:border-white/5"
-                        >
-                          <span className="material-icons text-sm">edit</span> Edit
-                        </button>
-                        <button
                           onClick={(e) => handleDeleteEvent(event.id, e)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold transition-all border border-transparent hover:border-rose-500/10"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-[11px] font-bold transition-all border border-transparent hover:border-rose-500/10 uppercase tracking-wide"
                         >
-                          <span className="material-icons text-sm">delete</span> Delete
+                          <span className="material-icons text-[16px]">delete</span> Delete Event
                         </button>
                       </div>
                     )}
-
                   </div>
                 ))
               ) : (
@@ -654,215 +706,256 @@ const CalendarScreen: React.FC = () => {
 
 
       {/* Render Portal Modal directly without nested component */}
-      {showAddEvent && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-6 bg-app animate-in fade-in duration-300">
-          <div className="bg-surface border border-white/10 w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-in zoom-in-95 duration-300 relative overflow-visible flex flex-col h-auto max-h-full">
+      {/* Add Event Overlay / Modal */}
+      {
+        showAddEvent && ReactDOM.createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 bg-app/90 backdrop-blur-md transition-opacity"
+              onClick={() => setShowAddEvent(false)}
+            ></div>
 
-            <div className="absolute top-4 right-4 z-50">
-              <button onClick={() => setShowAddEvent(false)} className="bg-white/5 hover:bg-white/10 rounded-full p-2 text-slate-400 hover:text-white transition-colors">
-                <span className="material-icons">close</span>
-              </button>
-            </div>
+            {/* Modal Container */}
+            <div className="w-full max-w-md bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden relative z-10 animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 flex flex-col max-h-[85vh] sm:max-h-[90vh]">
 
-            <div className="space-y-6 overflow-y-auto custom-scrollbar flex-1 pr-1 pb-4">
-
-              {/* Type Selection */}
-              <div className="pt-2">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-2 block">Select Event Type</label>
-                <div className="flex flex-wrap gap-2">
-                  {allowedTypes.map(type => (
-                    <button
-                      key={type}
-                      onClick={() => setNewEventType(type as EventType)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all capitalize shadow-sm flex-1 outline-none ring-offset-2 ring-offset-[#0f172a] focus:ring-2
-                                            ${newEventType === type ? eventTypeColors[type] + ' ring-primary/50' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'}
-                                        `}
-                    >
-                      {type === 'pcr' ? 'PCR' : type}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date & Time */}
-              <div className="bg-slate-900/50 rounded-2xl p-4 border border-white/5">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
-                    <span className="material-icons text-base text-primary">event_note</span> Date & Time
-                  </span>
-
+              {/* Header */}
+              <div className="p-5 bg-black/40 border-b border-white/5 relative overflow-hidden shrink-0">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-sky-500/10 blur-[60px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
+                <div className="flex items-center justify-between relative z-10">
+                  <h2 className="text-xl font-bold text-white tracking-tight flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
+                      <span className="material-icons text-sky-400 text-sm">event</span>
+                    </div>
+                    Create Event
+                  </h2>
                   <button
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border ${isAllDay ? 'bg-primary/20 border-primary/50 text-white' : 'bg-slate-800 border-white/5 text-slate-500'}`}
-                    onClick={() => setIsAllDay(!isAllDay)}
+                    onClick={() => setShowAddEvent(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
                   >
-                    <div className={`w-2 h-2 rounded-full ${isAllDay ? 'bg-primary' : 'bg-slate-500'}`}></div>
-                    <span className="text-[10px] font-bold uppercase tracking-wide">All Day</span>
+                    <span className="material-icons text-xl">close</span>
                   </button>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Starts</label>
-                    <input
-                      type="date"
-                      value={newEventStartDate}
-                      onChange={(e) => setNewEventStartDate(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
-                    />
-                    {!isAllDay && (
-                      <input
-                        type="time"
-                        value={newEventTime}
-                        onChange={(e) => setNewEventTime(e.target.value)}
-                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
-                      />
-                    )}
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] text-slate-500 uppercase font-bold pl-1">Ends</label>
-                    <input
-                      type="date"
-                      value={newEventEndDate}
-                      onChange={(e) => setNewEventEndDate(e.target.value)}
-                      className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all shadow-inner"
-                    />
-                    {!isAllDay && (
-                      <input
-                        type="time"
-                        value={newEventEndTime}
-                        onChange={(e) => setNewEventEndTime(e.target.value)}
-                        className="w-full bg-[#050b14] rounded-xl px-3 py-3 text-base md:text-xs text-white border border-white/10 focus:border-primary/50 outline-none transition-all shadow-inner"
-                      />
-                    )}
-                  </div>
-                </div>
               </div>
 
-              {/* Basic Who/Title Input always visible */}
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2 block pl-1">
-                  {newEventType === 'leave' ? 'Who is on Leave?' : 'Title'}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-sm">
-                    {newEventType === 'leave' ? 'person' : 'title'}
-                  </span>
-                  <input
-                    type="text"
-                    value={assignedToName}
-                    onChange={(e) => setAssignedToName(e.target.value)}
-                    placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
-                    className="w-full bg-slate-900 border border-white/5 rounded-xl pl-9 pr-3 py-3 text-base md:text-sm text-white placeholder:text-slate-600 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
-                    autoFocus // Add autoFocus to help focus
-                  />
-                </div>
-              </div>
+              <div className="p-5 space-y-6 overflow-y-auto custom-scrollbar flex-1">
 
-
-              {/* Toggle More Options */}
-              <button
-                onClick={() => setShowMoreOptions(!showMoreOptions)}
-                className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-colors"
-              >
-                <span className="material-icons text-sm">{showMoreOptions ? 'expand_less' : 'expand_more'}</span>
-                {showMoreOptions ? 'Hide Details' : 'More Options (Coverage, Notes)'}
-              </button>
-
-              {/* Collapsible Advanced Options */}
-              {showMoreOptions && (
-                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                  {/* Coverage Logic - Only for leave */}
-                  {(newEventType === 'leave') && (
-                    <div className="bg-slate-900/30 rounded-2xl border border-white/5 p-4">
-                      <div
-                        className="flex justify-between items-center cursor-pointer mb-3"
+                {/* Type Selection */}
+                <div className="pt-2">
+                  <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">Select Event Type</label>
+                  <div className="flex flex-wrap gap-2">
+                    {allowedTypes.map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setNewEventType(type as EventType)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all capitalize shadow-sm flex-1 outline-none ring-offset-2 ring-offset-[#0B101A] focus:ring-2
+                                            ${newEventType === type ? eventTypeColors[type] + ' ring-primary/50' : 'bg-black/40 border border-white/5 text-slate-400 hover:bg-white/10 hover:text-white'}
+                                        `}
                       >
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
-                        </span>
-                      </div>
+                        {type === 'pcr' ? 'PCR' : type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-                      <div className="space-y-3">
-                        {coverageDetails.map((detail, idx) => (
-                          <div key={idx} className="bg-[#050b14] p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
-                            <div className="flex gap-2 mb-2">
-                              <input
-                                type="text"
-                                value={detail.name}
-                                onChange={(e) => updateCoverageName(idx, e.target.value)}
-                                placeholder="Who is covering?"
-                                className="flex-1 bg-slate-800 rounded-lg px-3 py-2 text-base md:text-xs text-white outline-none border border-white/5 placeholder:text-slate-600 focus:border-purple-500/50"
-                              />
+                {/* Date & Time */}
+                <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-2">
+                      <span className="material-icons text-base text-sky-400">event_note</span> Date & Time
+                    </span>
 
-                              <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
-                                <span className="material-icons text-base">remove</span>
-                              </button>
-                            </div>
+                    <button
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border ${isAllDay ? 'bg-sky-500/20 border-sky-500/50 text-sky-400' : 'bg-black/40 border-white/5 text-slate-500 hover:bg-white/5'}`}
+                      onClick={() => setIsAllDay(!isAllDay)}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${isAllDay ? 'bg-sky-500' : 'bg-slate-500'}`}></div>
+                      <span className="text-[10px] font-bold uppercase tracking-wide">All Day</span>
+                    </button>
+                  </div>
 
-                            <div className="flex flex-wrap gap-1.5">
-                              {availableModalities.map(modality => {
-                                const isActive = detail.modalities?.includes(modality);
-                                return (
-                                  <button
-                                    key={modality}
-                                    onClick={() => toggleCoverageModality(idx, modality)}
-                                    className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
-                                                                            ${isActive
-                                        ? 'bg-purple-500 text-white border-purple-500'
-                                        : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
-                                      }`}
-                                  >
-                                    {modality}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        ))}
-
-                        {coverageDetails.length < 5 && (
-                          <button
-                            onClick={addCoverage}
-                            className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 text-xs font-bold hover:text-primary hover:border-primary/30 hover:bg-primary/5 transition-all flex items-center justify-center gap-2"
-                          >
-                            <span className="material-icons text-sm">add</span> Add Coverage
-                          </button>
-                        )}
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">Starts</label>
+                      <input
+                        type="date"
+                        value={newEventStartDate}
+                        onChange={(e) => setNewEventStartDate(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
+                      />
+                      {!isAllDay && (
+                        <input
+                          type="time"
+                          value={newEventTime}
+                          onChange={(e) => setNewEventTime(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner mt-2"
+                        />
+                      )}
                     </div>
-                  )}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">Ends</label>
+                      <input
+                        type="date"
+                        value={newEventEndDate}
+                        onChange={(e) => setNewEventEndDate(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
+                      />
+                      {!isAllDay && (
+                        <input
+                          type="time"
+                          value={newEventEndTime}
+                          onChange={(e) => setNewEventEndTime(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner mt-2"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                  <div>
-                    <textarea
-                      value={newEventDescription}
-                      onChange={(e) => setNewEventDescription(e.target.value)}
-                      rows={3}
-                      placeholder="Add notes..."
-                      className="w-full bg-slate-900 border border-white/5 rounded-xl px-4 py-3 text-base md:text-sm text-white focus:border-primary outline-none resize-none placeholder:text-slate-600"
+                {/* Basic Who/Title Input always visible */}
+                <div>
+                  <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">
+                    {newEventType === 'leave' ? 'Who is on Leave?' : 'Title'}
+                  </label>
+                  <div className="relative group">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 material-icons text-slate-500 text-[18px] group-focus-within:text-sky-400 transition-colors">
+                      {newEventType === 'leave' ? 'person' : 'title'}
+                    </span>
+                    <input
+                      type="text"
+                      value={assignedToName}
+                      onChange={(e) => setAssignedToName(e.target.value)}
+                      placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
+                      autoFocus
                     />
                   </div>
                 </div>
-              )}
-            </div>
 
-            <div className="pt-6 mt-2 border-t border-white/5">
-              <button
-                onClick={handleSaveEvent}
-                className="w-full py-4 text-sm font-bold bg-primary hover:bg-primary-dark text-white rounded-xl shadow-lg shadow-primary/20 transition-all flex items-center justify-center gap-2"
-              >
-                <span className="material-icons">check</span>
-                {editingEventId ? 'Update Event' : 'Save Event'}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
-    </div>
+                {/* Toggle More Options */}
+                <button
+                  onClick={() => setShowMoreOptions(!showMoreOptions)}
+                  className="flex items-center gap-2 text-xs font-bold text-slate-500 hover:text-white transition-colors"
+                >
+                  <span className="material-icons text-sm">{showMoreOptions ? 'expand_less' : 'expand_more'}</span>
+                  {showMoreOptions ? 'Hide Details' : 'More Options (Coverage, Notes)'}
+                </button>
+
+                {/* Collapsible Advanced Options */}
+                {showMoreOptions && (
+                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                    {/* Coverage Logic - Only for leave */}
+                    {(newEventType === 'leave') && (
+                      <div className="bg-white/[0.03] rounded-2xl border border-white/5 p-4">
+                        <div
+                          className="flex justify-between items-center cursor-pointer mb-3"
+                        >
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <span className="material-icons text-xs text-purple-400">group_add</span> Coverage
+                          </span>
+                        </div>
+
+                        <div className="space-y-3">
+                          {coverageDetails.map((detail, idx) => (
+                            <div key={idx} className="bg-black/40 p-3 rounded-xl border border-white/5 animate-in slide-in-from-right-2">
+                              <div className="flex gap-2 mb-2">
+                                <input
+                                  type="text"
+                                  value={detail.name}
+                                  onChange={(e) => updateCoverageName(idx, e.target.value)}
+                                  placeholder="Who is covering?"
+                                  className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/30 transition-all placeholder:text-slate-600 shadow-inner"
+                                />
+
+                                <button onClick={() => removeCoverage(idx)} className="text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 rounded-lg w-8 flex items-center justify-center transition-colors">
+                                  <span className="material-icons text-base">remove</span>
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-1.5">
+                                {availableModalities.map(modality => {
+                                  const isActive = detail.modalities?.includes(modality);
+                                  return (
+                                    <button
+                                      key={modality}
+                                      onClick={() => toggleCoverageModality(idx, modality)}
+                                      className={`px-2 py-1 rounded text-[9px] font-bold border transition-all
+                                                                            ${isActive
+                                          ? 'bg-purple-500 text-white border-purple-500'
+                                          : 'bg-slate-800 text-slate-500 border-slate-700 hover:border-slate-500'
+                                        }`}
+                                    >
+                                      {modality}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          ))}
+
+                          {coverageDetails.length < 5 && (
+                            <button
+                              onClick={addCoverage}
+                              className="w-full py-3 bg-sky-500/10 hover:bg-sky-500/20 shadow-none border border-sky-500/30 text-sky-400 rounded-xl flex items-center justify-center gap-2 transition-all"
+                            >
+                              <span className="material-icons text-[20px]">add</span>
+                              <span className="text-[13px] font-bold tracking-wide">Add Coverage</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <textarea
+                        value={newEventDescription}
+                        onChange={(e) => setNewEventDescription(e.target.value)}
+                        rows={3}
+                        placeholder="Add notes..."
+                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner resize-none mb-4"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-5 bg-black/40 border-t border-white/5 flex gap-3 mt-auto shrink-0">
+                <button
+                  onClick={() => setShowAddEvent(false)}
+                  className="px-6 flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-white/10 transition-all border border-transparent"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEvent}
+                  disabled={isSubmitting || !assignedToName.trim()}
+                  className="px-6 flex-[2] py-2.5 rounded-xl text-sm font-bold bg-sky-500 hover:bg-sky-400 text-white transition-all shadow-[0_4px_20px_-4px_rgba(14,165,233,0.5)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <span className="material-icons animate-spin text-[16px]">autorenew</span>
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      {editingEventId ? 'Update Event' : 'Save Event'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+    </div >
   );
 };
 
 export default CalendarScreen;
+
 
 
