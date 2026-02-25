@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
 export type ReadStatus = 'none' | 'partial' | 'complete';
+const SCOPE_ALL = 'All';
+const SCOPE_REMAINING = 'Remaining studies';
+const SCOPE_CUSTOM = '__custom__';
 
 export type LogEntry = {
     id: string;
@@ -41,13 +44,15 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
 }) => {
     const [covers, setCovers] = useState<CoverEntry[]>([]);
     const [newDoctorName, setNewDoctorName] = useState('');
-    const [newScope, setNewScope] = useState('All');
+    const [newScopePreset, setNewScopePreset] = useState<string>(SCOPE_ALL);
+    const [newCustomScope, setNewCustomScope] = useState('');
 
     useEffect(() => {
         if (isOpen) {
             setCovers(initialCovers);
             setNewDoctorName('');
-            setNewScope('All');
+            setNewScopePreset(SCOPE_ALL);
+            setNewCustomScope('');
         }
     }, [isOpen, initialCovers]);
 
@@ -55,18 +60,22 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
 
     const handleAddCover = () => {
         if (!newDoctorName.trim()) return;
+        const resolvedScope = newScopePreset === SCOPE_CUSTOM
+            ? (newCustomScope.trim() || SCOPE_ALL)
+            : newScopePreset;
 
         const newEntry: CoverEntry = {
             id: Date.now().toString(),
             doctorName: newDoctorName.trim(),
-            scope: newScope.trim() || 'All',
+            scope: resolvedScope,
             informed: false,
             readStatus: 'none'
         };
 
         setCovers([...covers, newEntry]);
         setNewDoctorName('');
-        setNewScope('All');
+        setNewScopePreset(SCOPE_ALL);
+        setNewCustomScope('');
     };
 
     const handleRemoveCover = (id: string) => {
@@ -78,42 +87,72 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
     };
 
     const handleSave = () => {
-        onSave(covers);
+        const draftName = newDoctorName.trim();
+        const draftScope = newScopePreset === SCOPE_CUSTOM
+            ? (newCustomScope.trim() || SCOPE_ALL)
+            : newScopePreset;
+        const coversToSave = draftName
+            ? [
+                ...covers,
+                {
+                    id: Date.now().toString(),
+                    doctorName: draftName,
+                    scope: draftScope,
+                    informed: false,
+                    readStatus: 'none' as const
+                }
+            ]
+            : covers;
+
+        onSave(coversToSave);
         onClose();
     };
 
     return ReactDOM.createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 p-4" onClick={onClose}>
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-app/90 backdrop-blur-md animate-in fade-in duration-300 p-4 sm:p-6 pb-[max(1rem,env(safe-area-inset-bottom))] overflow-hidden" onClick={onClose}>
             <div
-                className="w-full max-w-md bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+                className="w-full max-w-md bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 duration-300 flex flex-col max-h-[85vh] sm:max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="p-4 border-b border-white/5 bg-white/5">
-                    <h2 className="text-lg font-bold text-white">Manage Cover</h2>
-                    <div className="text-xs text-slate-400 mt-1">
-                        For: <span className="text-rose-400 font-medium">{originalDoctor}</span> â€?<span className="text-slate-500">{timeSlot}</span>
+                <div className="p-5 bg-black/40 border-b border-white/5 relative overflow-hidden shrink-0">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-sky-500/10 blur-[60px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
+                    <h2 className="text-xl font-bold text-white relative z-10">Manage Cover</h2>
+                    <div className="text-[13px] text-slate-400 mt-1.5 relative z-10 font-medium">
+                        For <span className="text-sky-400 font-bold">{originalDoctor}</span> <span className="mx-1.5 opacity-40">â€¢</span> <span className="text-slate-500">{timeSlot}</span>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div className="p-4 space-y-6">
+                <div className="p-5 space-y-6 overflow-y-auto">
                     {/* List of Covers */}
                     <div className="space-y-3">
                         {covers.map((cover) => (
-                            <div key={cover.id} className="bg-black/40 rounded-lg p-3 border border-white/5 relative group">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <div className="text-sm font-bold text-emerald-400">{cover.doctorName}</div>
-                                        <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-0.5">
-                                            Scope: <span className="text-slate-300">{cover.scope}</span>
+                            <div key={cover.id} className="bg-black/40 rounded-2xl p-4 border border-white/5 transition-all hover:bg-white/[0.03] relative group">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex items-center gap-3.5">
+                                        <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-inner flex items-center justify-center">
+                                            <span className="material-icons text-[20px]">person</span>
+                                        </div>
+                                        <div>
+                                            <div className="text-[14px] font-bold text-white tracking-wide">{cover.doctorName}</div>
+                                            <div className="mt-1">
+                                                <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${cover.scope === SCOPE_REMAINING
+                                                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                                    : cover.scope === SCOPE_ALL
+                                                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                                                        : 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                                                    }`}>
+                                                    {cover.scope}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                     <button
                                         onClick={() => handleRemoveCover(cover.id)}
-                                        className="text-slate-600 hover:text-rose-500 transition-colors"
+                                        className="w-8 h-8 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-colors"
                                     >
-                                        <span className="material-icons text-sm">delete</span>
+                                        <span className="material-icons text-[18px]">delete_outline</span>
                                     </button>
                                 </div>
 
@@ -163,35 +202,51 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                     </div>
 
                     {/* Add New Section */}
-                    <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Add Covering Doctor</h3>
-                        <div className="space-y-3">
+                    <div className="bg-white/[0.03] rounded-2xl p-4 border border-white/5">
+                        <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <span className="w-4 h-[1px] bg-slate-700"></span> Add Covering Doctor <span className="flex-1 h-[1px] bg-slate-700/50"></span>
+                        </h3>
+                        <div className="space-y-4">
                             <div>
-                                <label className="text-[10px] text-slate-500 block mb-1 ml-1">Doctor Name</label>
+                                <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">Doctor Name</label>
                                 <input
                                     type="text"
                                     value={newDoctorName}
                                     onChange={(e) => setNewDoctorName(e.target.value)}
                                     placeholder="e.g. Dr. Smith"
-                                    className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50 transition-colors"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] text-slate-500 block mb-1 ml-1">Scope / Remarks</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newScope}
-                                        onChange={(e) => setNewScope(e.target.value)}
-                                        placeholder="e.g. All, Cardiac, Neuro..."
-                                        className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500/50 transition-colors"
-                                    />
+                                <label className="text-[11px] text-slate-400 font-medium block mb-1.5 ml-1">Scope / Remarks</label>
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-2">
+                                        <select
+                                            value={newScopePreset}
+                                            onChange={(e) => setNewScopePreset(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all shadow-inner"
+                                        >
+                                            <option value={SCOPE_ALL} className="bg-surface">{SCOPE_ALL}</option>
+                                            <option value={SCOPE_REMAINING} className="bg-surface">{SCOPE_REMAINING}</option>
+                                            <option value={SCOPE_CUSTOM} className="bg-surface">Custom...</option>
+                                        </select>
+                                        {newScopePreset === SCOPE_CUSTOM && (
+                                            <input
+                                                type="text"
+                                                value={newCustomScope}
+                                                onChange={(e) => setNewCustomScope(e.target.value)}
+                                                placeholder="e.g. Cardiac only"
+                                                className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
+                                            />
+                                        )}
+                                    </div>
                                     <button
                                         onClick={handleAddCover}
                                         disabled={!newDoctorName.trim()}
-                                        className="px-4 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg flex items-center justify-center transition-colors shadow-lg shadow-rose-500/20"
+                                        className="w-full py-3 bg-sky-500/10 hover:bg-sky-500/20 disabled:opacity-50 disabled:bg-white/5 border border-sky-500/30 disabled:border-white/5 text-sky-400 disabled:text-slate-500 rounded-xl flex items-center justify-center gap-2 transition-all"
                                     >
-                                        <span className="material-icons text-lg">add</span>
+                                        <span className="material-icons text-[20px]">add</span>
+                                        <span className="text-[13px] font-bold tracking-wide">Add Covering Doctor</span>
                                     </button>
                                 </div>
                             </div>
@@ -200,7 +255,7 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/5 flex gap-3">
+                <div className="p-5 bg-black/40 border-t border-white/5 flex gap-3">
                     <button
                         onClick={() => {
                             if (window.confirm('Are you sure you want to reset to default? This will remove all covers.')) {
@@ -221,9 +276,9 @@ const ManageCoversModal: React.FC<ManageCoversModalProps> = ({
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex-[2] py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition-colors"
+                        className="flex-[2] py-3 rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-bold text-[13px] tracking-wide shadow-[0_4px_20px_-4px_rgba(14,165,233,0.5)] transition-all flex items-center justify-center gap-2"
                     >
-                        Save
+                        Save Covers
                     </button>
                 </div>
             </div>

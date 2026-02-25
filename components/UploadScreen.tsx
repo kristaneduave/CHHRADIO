@@ -457,8 +457,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           </button>
 
           <div className="w-full max-w-md space-y-6 my-auto">
-            <header className="text-center flex flex-row items-center justify-center gap-3">
-              <h1 className="text-3xl font-bold text-white tracking-tight leading-none pt-1">{customTitle || 'Case Report'}</h1>
+            <header className="text-center flex flex-row items-center justify-center gap-3 mb-4">
+              <h1 className="text-3xl font-bold text-white">{customTitle || 'Case Report'}</h1>
             </header>
 
             {/* Grid of Images */}
@@ -523,7 +523,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
       {/* Modern Stepper (Hidden in Screenshot Mode) */}
       {!isScreenshotMode && (
-        <div className="px-6 pt-12 flex justify-between items-center mb-4 shrink-0">
+        <div className="px-6 pt-6 flex justify-between items-center mb-4 shrink-0">
           <div className="flex gap-2">
             {[1, 2].map(i => (
               <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'w-8 bg-primary shadow-[0_0_10px_rgba(13,162,231,0.5)]' : 'w-4 bg-white/10'}`} />
@@ -540,33 +540,30 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'interesting_case' }))}
-                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
-                    formData.submissionType === 'interesting_case'
-                      ? 'bg-primary text-white'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${formData.submissionType === 'interesting_case'
+                    ? 'bg-primary text-white'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
                 >
                   Interesting Case
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'rare_pathology' }))}
-                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
-                    formData.submissionType === 'rare_pathology'
-                      ? 'bg-rose-600 text-white'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${formData.submissionType === 'rare_pathology'
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
                 >
                   Rare Pathology
                 </button>
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'aunt_minnie' }))}
-                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${
-                    formData.submissionType === 'aunt_minnie'
-                      ? 'bg-amber-500 text-slate-950'
-                      : 'bg-white/5 text-slate-400 hover:bg-white/10'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition ${formData.submissionType === 'aunt_minnie'
+                    ? 'bg-amber-500 text-slate-950'
+                    : 'bg-white/5 text-slate-400 hover:bg-white/10'
+                    }`}
                 >
                   Aunt Minnie
                 </button>
@@ -671,72 +668,72 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             <div className="glass-card-enhanced p-5 rounded-2xl space-y-4">
               {/* Row 1: Initials, Age, Sex */}
               {formData.submissionType === 'interesting_case' && (
-              <div className="grid grid-cols-12 gap-3">
-                <div className="col-span-5 space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
-                  <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
-                  {fieldErrors.initials && <p className="text-[10px] text-rose-400">{fieldErrors.initials}</p>}
-                </div>
-                <div className="col-span-3 space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
-                  <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
-                </div>
-                <div className="col-span-4 space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1 text-center block">Sex</label>
-                  <div className="flex justify-center gap-2">
-                    {['M', 'F'].map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setFormData(prev => ({ ...prev, sex: s }))}
-                        className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${formData.sex === s ? 'bg-primary text-white shadow-lg scale-110' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
-                      >
-                        {s}
-                      </button>
-                    ))}
+                <div className="grid grid-cols-12 gap-3">
+                  <div className="col-span-5 space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Initials</label>
+                    <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
+                    {fieldErrors.initials && <p className="text-[10px] text-rose-400">{fieldErrors.initials}</p>}
+                  </div>
+                  <div className="col-span-3 space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Age</label>
+                    <input type="number" name="age" value={formData.age} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
+                  </div>
+                  <div className="col-span-4 space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1 text-center block">Sex</label>
+                    <div className="flex justify-center gap-2">
+                      {['M', 'F'].map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setFormData(prev => ({ ...prev, sex: s }))}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all ${formData.sex === s ? 'bg-primary text-white shadow-lg scale-110' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {/* Row 2: Modality, Organ System */}
               {formData.submissionType === 'interesting_case' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
-                  <div className="relative">
-                    <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
-                      {MODALITIES.map(m => (
-                        <option key={m} value={m} className="bg-surface text-white">{m}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                      <span className="material-icons text-sm">expand_more</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Modality</label>
+                    <div className="relative">
+                      <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
+                        {MODALITIES.map(m => (
+                          <option key={m} value={m} className="bg-surface text-white">{m}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <span className="material-icons text-sm">expand_more</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ System</label>
+                    <div className="relative">
+                      <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
+                        {ORGAN_SYSTEMS.map(os => (
+                          <option key={os} value={os} className="bg-surface text-white">{os}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <span className="material-icons text-sm">expand_more</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Organ System</label>
-                  <div className="relative">
-                    <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary appearance-none">
-                      {ORGAN_SYSTEMS.map(os => (
-                        <option key={os} value={os} className="bg-surface text-white">{os}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                      <span className="material-icons text-sm">expand_more</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
               )}
 
               {/* New Row: Clinical Data */}
               {formData.submissionType !== 'aunt_minnie' && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Data</label>
-                <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
-                {fieldErrors.clinicalData && <p className="text-[10px] text-rose-400">{fieldErrors.clinicalData}</p>}
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Clinical Data</label>
+                  <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                  {fieldErrors.clinicalData && <p className="text-[10px] text-rose-400">{fieldErrors.clinicalData}</p>}
+                </div>
               )}
 
               {/* Row 3: Findings */}
@@ -763,25 +760,25 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
               {/* Row 4: Impression */}
               {formData.submissionType === 'interesting_case' && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Impression</label>
-                <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Impression</label>
+                  <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all" />
+                </div>
               )}
 
               {/* Row 5: Notes / Remarks */}
               {formData.submissionType === 'interesting_case' && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
-                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
+                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                </div>
               )}
 
               {formData.submissionType === 'aunt_minnie' && (
-              <div className="space-y-1">
-                <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
-                <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Additional notes..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">Notes / Remarks</label>
+                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Additional notes..." className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-sm text-white focus:border-primary transition-all resize-none" />
+                </div>
               )}
             </div>
 
@@ -794,9 +791,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
         {step === 2 && !isScreenshotMode && (
           <div className="space-y-8 animate-in zoom-in-95 duration-500 pb-12">
-            <header className="flex justify-between items-center">
+            <header className="flex justify-between items-center mb-4">
               <div>
-                <h1 className="text-2xl font-bold text-white mb-0.5">{customTitle || 'New Case'}</h1>
+                <h1 className="text-3xl font-bold text-white">{customTitle || 'New Case'}</h1>
                 <div className="flex items-center gap-2 text-xs">
                   <span className="text-slate-500">{formData.date}</span>
                   {formData.submissionType === 'rare_pathology' && (

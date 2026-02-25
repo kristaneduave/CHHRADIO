@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
@@ -78,9 +78,9 @@ const parseStoredViewPrefs = (): NewsViewPrefs => {
     const legacyType = parsed?.category ? normalizeCategoryForUi(String(parsed.category)) : 'all';
     const typeFilter: TypeFilter =
       parsed?.typeFilter === 'Announcement' ||
-      parsed?.typeFilter === 'Research' ||
-      parsed?.typeFilter === 'Event' ||
-      parsed?.typeFilter === 'Miscellaneous'
+        parsed?.typeFilter === 'Research' ||
+        parsed?.typeFilter === 'Event' ||
+        parsed?.typeFilter === 'Miscellaneous'
         ? parsed.typeFilter
         : legacyType === 'Announcement' || legacyType === 'Research' || legacyType === 'Event' || legacyType === 'Miscellaneous'
           ? legacyType
@@ -511,14 +511,14 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   return (
     <div className="min-h-full pb-24">
-      <div className="sticky top-0 z-20 px-4 pb-2 pt-3">
-        <div className="mx-auto w-full max-w-md">
-          <h1 className="mb-2 text-2xl font-semibold text-white">News</h1>
-          <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-20 px-6 pb-4 pt-6 bg-app/95 backdrop-blur-xl">
+        <div className="mx-auto w-full max-w-md flex flex-col gap-4">
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl font-bold text-white">News</h1>
             {canCreateAnnouncement && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="h-10 shrink-0 rounded-xl bg-primary px-3.5 text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
+                className="h-10 shrink-0 rounded-xl bg-primary px-3.5 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
                 title="Add Post"
               >
                 <span className="inline-flex items-center gap-1.5">
@@ -527,44 +527,42 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
                 </span>
               </button>
             )}
-            <div className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.05]">
-              <div className="flex h-10 items-center overflow-hidden rounded-xl">
-                <div className="relative flex-1">
-                  <span className="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[19px] text-slate-500">search</span>
-                  <input
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search..."
-                    className="h-10 w-full border-0 bg-transparent pl-10 pr-3 text-base text-white placeholder:text-slate-500 focus:outline-none"
-                  />
-                </div>
-                <span className="h-5 w-px bg-white/10" />
-                <div className="relative w-[132px] shrink-0">
-                  <select
-                    value={viewPrefs.typeFilter}
-                    onChange={(event) =>
-                      setViewPrefs((prev) => ({
-                        ...prev,
-                        typeFilter: event.target.value as TypeFilter,
-                      }))
-                    }
-                    className="h-10 w-full appearance-none border-0 bg-transparent px-3 pr-9 text-sm font-semibold text-slate-200 focus:outline-none"
-                  >
-                    <option value="all">All Types</option>
-                    <option value="Announcement">Announcement</option>
-                    <option value="Research">Research</option>
-                    <option value="Event">Event</option>
-                    <option value="Miscellaneous">Miscellaneous</option>
-                  </select>
-                  <span className="material-icons pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-base text-slate-500">filter_list</span>
-                </div>
-              </div>
+          </div>
+          <div className="w-full relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+            <div className="relative flex-1">
+              <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">search</span>
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search..."
+                className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-3 text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+              />
+            </div>
+            <span className="h-6 w-px bg-white/10 my-auto mx-2" />
+            <div className="relative h-10 w-[140px] shrink-0">
+              <select
+                value={viewPrefs.typeFilter}
+                onChange={(event) =>
+                  setViewPrefs((prev) => ({
+                    ...prev,
+                    typeFilter: event.target.value as TypeFilter,
+                  }))
+                }
+                className="h-full w-full appearance-none border-0 bg-transparent pl-4 pr-10 text-[13px] font-bold text-slate-300 focus:outline-none cursor-pointer hover:bg-white/5 rounded-xl transition-colors"
+              >
+                <option value="all">All Types</option>
+                <option value="Announcement">Announcement</option>
+                <option value="Research">Research</option>
+                <option value="Event">Event</option>
+                <option value="Miscellaneous">Miscellaneous</option>
+              </select>
+              <span className="material-icons pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">tune</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-md space-y-4 px-4 pt-1.5">
+      <div className="mx-auto w-full max-w-md space-y-4 px-4 pt-2">
         {pinnedItems.length > 0 && (
           <section className="space-y-3">
             <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-200/90">Pinned</h2>
@@ -625,36 +623,41 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         </div>
       </div>
 
-      {showCreateModal && (
-        <CreateAnnouncementModal
-          onClose={() => {
-            setShowCreateModal(false);
-            setEditingAnnouncement(null);
-          }}
-          onSuccess={() => {
-            setPage(0);
-            fetchAnnouncements(0, true);
-            setShowCreateModal(false);
-            setEditingAnnouncement(null);
-          }}
-          editingAnnouncement={editingAnnouncement}
-        />
-      )}
+      {
+        showCreateModal && (
+          <CreateAnnouncementModal
+            onClose={() => {
+              setShowCreateModal(false);
+              setEditingAnnouncement(null);
+            }}
+            onSuccess={() => {
+              setPage(0);
+              fetchAnnouncements(0, true);
+              setShowCreateModal(false);
+              setEditingAnnouncement(null);
+            }}
+            editingAnnouncement={editingAnnouncement}
+          />
+        )
+      }
 
-      {selectedAnnouncement && (
-        <AnnouncementDetailModal
-          announcement={selectedAnnouncement}
-          onClose={() => setSelectedAnnouncement(null)}
-          onHide={handleHideAnnouncement}
-          onEdit={handleEditAnnouncement}
-          onDelete={handleDeleteAnnouncement}
-          canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
-          supportsSaved={false}
-        />
-      )}
-    </div>
+      {
+        selectedAnnouncement && (
+          <AnnouncementDetailModal
+            announcement={selectedAnnouncement}
+            onClose={() => setSelectedAnnouncement(null)}
+            onHide={handleHideAnnouncement}
+            onEdit={handleEditAnnouncement}
+            onDelete={handleDeleteAnnouncement}
+            canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
+            supportsSaved={false}
+          />
+        )
+      }
+    </div >
   );
 };
 
 export default AnnouncementsScreen;
+
 

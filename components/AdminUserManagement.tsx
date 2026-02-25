@@ -78,14 +78,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
 
                 {/* Search */}
                 <div className="p-4 border-b border-white/5 bg-black/20">
-                    <div className="relative">
-                        <span className="material-icons absolute left-3 top-2.5 text-slate-500 text-lg">search</span>
+                    <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+                        <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">search</span>
                         <input
                             type="text"
                             placeholder="Search users by name..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-app border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white placeholder:text-slate-600 focus:border-primary/50 outline-none transition-colors"
+                            className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-3 text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
                         />
                     </div>
                 </div>
@@ -116,7 +116,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                     </div>
                                     <div>
                                         <h3 className="text-sm font-bold text-slate-200">{user.full_name || 'Unnamed User'}</h3>
-                                        <p className="text-[10px] text-slate-500">@{user.username || 'unknown'} â€?{user.year_level || 'N/A'}</p>
+                                        <p className="text-[10px] text-slate-500">@{user.username || 'unknown'} ?{user.year_level || 'N/A'}</p>
                                     </div>
                                 </div>
 

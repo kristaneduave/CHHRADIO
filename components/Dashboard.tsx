@@ -56,7 +56,7 @@ const BUTTON_STYLES: Record<string, { text: string; border: string; badge: strin
     hover: 'group-hover:text-rose-200',
     indicator: 'bg-rose-300/35',
   },
-  "Resident's Corner": {
+  "Resident Hub": {
     text: 'text-amber-300',
     border: 'hover:border-amber-300/35',
     badge: 'bg-amber-500/10 group-hover:bg-amber-500/15',
@@ -73,7 +73,7 @@ const BUTTON_LABELS: Record<string, string> = {
   Announcements: 'News',
   Calendar: 'Calendar',
   Quiz: 'Quiz',
-  "Resident's Corner": 'Resi Hub',
+  "Resident Hub": 'Resident Hub',
 };
 
 const BUTTON_SUBTITLES: Record<string, string> = {
@@ -83,13 +83,13 @@ const BUTTON_SUBTITLES: Record<string, string> = {
   Announcements: 'Stay Informed',
   Calendar: 'Leaves, Meetings & Events',
   Quiz: 'Take exam',
-  "Resident's Corner": 'Other resources',
+  "Resident Hub": 'Other resources',
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   const [isUploadTypePickerOpen, setIsUploadTypePickerOpen] = useState(false);
 
-  const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "Resident's Corner"];
+  const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "Resident Hub"];
   const orderedActions = [...QUICK_ACTIONS].sort((a, b) => buttonOrder.indexOf(a.label) - buttonOrder.indexOf(b.label));
 
   useEffect(() => {
@@ -125,47 +125,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
       <main className="relative z-10 flex-1 px-4 max-w-md mx-auto w-full pb-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))]">
         <div className="h-full flex flex-col pt-2.5 pb-1">
           <div className="quick-link-grid grid h-full grid-cols-2 grid-rows-3 gap-2">
-          {orderedActions.map((action, index) => {
-            const style = BUTTON_STYLES[action.label] || {
-              text: 'text-text-secondary',
-              border: '',
-              badge: '',
-              shadow: '',
-              hover: '',
-              indicator: 'bg-white/30',
-            };
-            return (
-              <button
-                key={action.label}
-                onClick={() => {
-                  if (action.target === 'upload') {
-                    setIsUploadTypePickerOpen(true);
-                    return;
-                  }
-                  onNavigate(action.target);
-                }}
-                className={`quick-link-card group relative flex h-full min-h-[5.35rem] flex-col items-center justify-center overflow-hidden rounded-b-xl rounded-t-none border border-border-default/75 bg-surface/85 px-2 transition-all duration-200 active:scale-[0.985] active:shadow-[0_6px_14px_rgba(2,6,23,0.45)] hover:-translate-y-0.5 hover:bg-surface-alt/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 shadow-clinical ${style.border} ${style.shadow}`}
-                style={{ animationDelay: `${index * 60}ms` }}
-              >
-                <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.008)_38%,rgba(255,255,255,0)_100%)] opacity-65" />
-                <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
-                <span className={`pointer-events-none absolute left-0 right-0 top-0 h-[1px] ${style.indicator}`} />
-                <span className="pointer-events-none absolute left-0 right-0 top-[1px] h-[1px] bg-[linear-gradient(90deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.06)_50%,rgba(255,255,255,0.14)_100%)]" />
-                <div className={`quick-link-icon mb-1 rounded-xl p-2 transition-colors duration-300 ${style.badge}`}>
-                  <span className={`material-icons text-[1.45rem] transition-transform duration-300 group-hover:scale-105 ${style.text}`}>
-                    {action.icon}
-                  </span>
-                </div>
+            {orderedActions.map((action, index) => {
+              const style = BUTTON_STYLES[action.label] || {
+                text: 'text-text-secondary',
+                border: '',
+                badge: '',
+                shadow: '',
+                hover: '',
+                indicator: 'bg-white/30',
+              };
+              return (
+                <button
+                  key={action.label}
+                  onClick={() => {
+                    if (action.target === 'upload') {
+                      setIsUploadTypePickerOpen(true);
+                      return;
+                    }
+                    onNavigate(action.target);
+                  }}
+                  className={`quick-link-card group relative flex h-full min-h-[5.35rem] flex-col items-center justify-center overflow-hidden rounded-b-xl rounded-t-none border border-border-default/75 bg-surface/85 px-2 transition-all duration-200 active:scale-[0.985] active:shadow-[0_6px_14px_rgba(2,6,23,0.45)] hover:-translate-y-0.5 hover:bg-surface-alt/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 shadow-clinical ${style.border} ${style.shadow}`}
+                  style={{ animationDelay: `${index * 60}ms` }}
+                >
+                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.008)_38%,rgba(255,255,255,0)_100%)] opacity-65" />
+                  <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
+                  <span className={`pointer-events-none absolute left-0 right-0 top-0 h-[1px] ${style.indicator}`} />
+                  <span className="pointer-events-none absolute left-0 right-0 top-[1px] h-[1px] bg-[linear-gradient(90deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.06)_50%,rgba(255,255,255,0.14)_100%)]" />
+                  <div className={`quick-link-icon mb-1 rounded-xl p-2 transition-colors duration-300 ${style.badge}`}>
+                    <span className={`material-icons text-[1.45rem] transition-transform duration-300 group-hover:scale-105 ${style.text}`}>
+                      {action.icon}
+                    </span>
+                  </div>
 
-                <span className={`quick-link-label text-[0.71rem] font-semibold uppercase tracking-[0.08em] text-slate-300 transition-colors ${style.hover}`}>
-                  {BUTTON_LABELS[action.label] || action.label}
-                </span>
-                <span className="quick-link-subtitle mt-0.5 text-center text-[8.6px] leading-[1.18] font-normal text-slate-400 group-hover:text-slate-300 transition-colors">
-                  {BUTTON_SUBTITLES[action.label] || 'Open'}
-                </span>
-              </button>
-            );
-          })}
+                  <span className={`quick-link-label text-[0.71rem] font-semibold uppercase tracking-[0.08em] text-slate-300 transition-colors ${style.hover}`}>
+                    {BUTTON_LABELS[action.label] || action.label}
+                  </span>
+                  <span className="quick-link-subtitle mt-0.5 text-center text-[8.6px] leading-[1.18] font-normal text-slate-400 group-hover:text-slate-300 transition-colors">
+                    {BUTTON_SUBTITLES[action.label] || 'Open'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </main>

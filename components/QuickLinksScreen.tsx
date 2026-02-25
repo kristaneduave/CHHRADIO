@@ -12,9 +12,9 @@ const QuickLinksScreen: React.FC = () => {
     ];
 
     return (
-        <div className="px-6 pt-12 pb-12 flex flex-col min-h-full animate-in fade-in duration-700">
-            <header className="mb-8">
-                <h1 className="text-xl font-medium text-white tracking-tight">Quick Links</h1>
+        <div className="px-6 pt-6 pb-12 flex flex-col min-h-full animate-in fade-in duration-700">
+            <header className="mb-4">
+                <h1 className="text-3xl font-bold text-white">Quick Links</h1>
                 <p className="text-slate-500 text-[11px] uppercase tracking-[0.2em] mt-1">External Resources</p>
             </header>
 

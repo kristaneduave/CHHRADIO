@@ -6,6 +6,7 @@ import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+const SCOPE_REMAINING = 'Remaining studies';
 
 // Generate a unique ID for each slot to track overrides
 const getSlotId = (hospitalId: string, modalityId: string, day: string, index: number) => {
@@ -322,51 +323,47 @@ const ResidentsCornerScreen: React.FC = () => {
 
 
     return (
-        <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
+        <div className="px-6 pt-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
             <div className="max-w-md mx-auto space-y-6">
                 {/* Header Section */}
-                <div className="text-center mb-6">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-orange-500/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_-10px_rgba(244,63,94,0.3)] border border-rose-500/20">
-                        <span className="material-icons text-3xl text-rose-400">calendar_month</span>
-                    </div>
-                    <h1 className="text-xl font-bold text-white mb-1">Consultant Schedule</h1>
-                    <p className="text-rose-500 text-[10px] font-bold uppercase tracking-[0.2em]">
-                        Residents Corner
-                    </p>
+                <div className="mb-4">
+                    <h1 className="text-3xl font-bold text-white mb-2">Resident Hub</h1>
                 </div>
 
                 {/* Patient List - Prominent Action */}
-                <div className="relative group">
-                    <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
+                <div className="relative group mt-2 mb-4">
                     <a
                         href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="relative w-full py-3 bg-surface border border-cyan-500/30 rounded-2xl flex items-center justify-between px-4 gap-3 group-hover:border-cyan-400/50 transition-all shadow-lg active:scale-[0.99]"
+                        className="w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative overflow-hidden flex items-center justify-between gap-3 bg-black/40 border-white/5 opacity-90 hover:bg-white/[0.05] cursor-pointer shadow-lg"
                     >
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-cyan-500/10 flex items-center justify-center">
-                                <span className="material-icons text-cyan-400">description</span>
+                        {/* Subtle glow effect */}
+                        <div className={`absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2`} />
+
+                        <div className="flex items-center gap-4 z-10 w-full">
+                            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 border bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.2)]">
+                                <span className="material-icons text-2xl text-sky-400">description</span>
                             </div>
-                            <div className="text-left">
-                                <span className="block text-xs font-bold text-white tracking-wide">VIEW PATIENT DECKING LIST</span>
-                                <span className="block text-[9px] text-cyan-400 font-medium">Google Docs â€?Live Updates</span>
+                            <div className="text-left flex-1 min-w-0">
+                                <span className="block text-[15px] sm:text-[16px] truncate tracking-tight font-bold text-sky-400">VIEW PATIENT DECKING LIST</span>
+                                <span className="block text-[10px] sm:text-[11px] truncate uppercase tracking-wider font-semibold text-slate-400">Google Docs â€¢ Live Updates</span>
                             </div>
                         </div>
-                        <span className="material-icons text-cyan-500/50 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                        <span className="material-icons text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all">arrow_forward</span>
                     </a>
                 </div>
 
                 {/* Hospital Selector - Segmented Control Style */}
-                <div className="glass-card-enhanced p-1 rounded-xl border border-white/5 flex relative">
+                <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
                     {/* Sliding Indicator (simplified) */}
                     {CONSULTANT_SCHEDULE.map((hospital) => (
                         <button
                             key={hospital.id}
                             onClick={() => setSelectedHospitalId(hospital.id)}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
-                                ? 'bg-rose-600 text-white shadow-lg shadow-rose-900/20'
-                                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                            className={`flex-1 py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
+                                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
+                                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                                 }`}
                         >
                             {hospital.name}
@@ -397,18 +394,19 @@ const ResidentsCornerScreen: React.FC = () => {
                             return (
                                 <div
                                     key={modality.id}
-                                    className={`glass-card-enhanced rounded-xl border border-white/5 overflow-hidden transition-all duration-500 ${isExpanded ? 'ring-1 ring-rose-500/20 bg-[#0F1621]' : 'hover:bg-white/5'
+                                    className={`w-full text-left rounded-2xl backdrop-blur-md border overflow-hidden transition-all duration-500 opacity-95 ${isExpanded ? 'ring-1 ring-sky-500/30 bg-black/60 border-white/10 shadow-lg' : 'bg-black/40 border-white/5 hover:bg-white/[0.03]'
                                         }`}
                                 >
                                     {/* Accordion Header */}
                                     <button
                                         onClick={() => toggleModality(modality.id)}
-                                        className="w-full p-3 flex items-center justify-between"
+                                        onTouchEnd={(e) => e.currentTarget.blur()}
+                                        className="w-full p-4 flex items-center justify-between select-none touch-manipulation [-webkit-tap-highlight-color:transparent] focus:outline-none focus-visible:outline-none"
                                     >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-rose-500/10 text-rose-500' : 'bg-white/5 text-slate-400'
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all shadow-inner mt-0.5 border ${isExpanded ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.2)]' : 'bg-black/40 text-slate-400 border-white/5'
                                                 }`}>
-                                                <span className="material-icons text-lg">{modality.icon}</span>
+                                                <span className="material-icons text-2xl">{modality.icon}</span>
                                             </div>
                                             <div className="text-left">
                                                 <h3 className={`text-sm font-bold transition-colors ${isExpanded ? 'text-white' : 'text-slate-300'}`}>
@@ -441,18 +439,21 @@ const ResidentsCornerScreen: React.FC = () => {
                                                         const slotId = getSlotId(selectedHospital.id, modality.id, currentDayName, idx);
                                                         const activeCovers = coverOverrides[slotId] || [];
                                                         const hasCovers = activeCovers.length > 0;
+                                                        const uniqueScopes = Array.from(
+                                                            new Set(activeCovers.map((cover) => (cover.scope || 'All').trim() || 'All'))
+                                                        );
 
                                                         return (
                                                             <div
                                                                 key={idx}
                                                                 onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
-                                                                className={`relative group rounded-lg border transition-all cursor-pointer mb-2 last:mb-0 ${hasCovers
-                                                                    ? 'bg-rose-500/5 border-rose-500/20 shadow-[0_0_15px_-5px_rgba(244,63,94,0.1)]'
-                                                                    : 'bg-black/20 border-white/5 hover:border-white/10 hover:bg-white/5'
+                                                                className={`relative group rounded-xl border transition-all cursor-pointer mb-2 last:mb-0 p-3 pt-4 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${hasCovers
+                                                                    ? 'bg-sky-500/[0.08] border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)]'
+                                                                    : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
                                                                     }`}
                                                             >
                                                                 {/* Interactive Shine Effect */}
-                                                                <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
+                                                                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 
                                                                 <div className="p-3">
                                                                     <div className="flex items-center justify-between mb-2">
@@ -473,37 +474,44 @@ const ResidentsCornerScreen: React.FC = () => {
                                                                         </button>
                                                                     </div>
 
-                                                                    <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center justify-between relative min-h-[24px]">
                                                                         {!hasCovers ? (
                                                                             <div className="text-sm font-bold text-slate-200">
                                                                                 {item.doctor}
                                                                             </div>
                                                                         ) : (
-                                                                            <div className="flex flex-wrap items-center gap-1">
-                                                                                {activeCovers.map((cover, cIdx) => (
-                                                                                    <React.Fragment key={cover.id}>
-                                                                                        <span className={`text-sm font-bold ${cover.readStatus === 'complete' ? 'text-emerald-400' :
+                                                                            <div className="flex flex-col gap-2 w-full pr-14">
+                                                                                {activeCovers.map((cover) => (
+                                                                                    <div key={cover.id} className="flex items-center flex-wrap gap-2">
+                                                                                        <span className={`text-sm font-bold whitespace-nowrap ${cover.readStatus === 'complete' ? 'text-emerald-400' :
                                                                                             cover.readStatus === 'partial' ? 'text-amber-400' : 'text-rose-400'
                                                                                             }`}>
                                                                                             {cover.doctorName}
                                                                                         </span>
-                                                                                        {cIdx < activeCovers.length - 1 && (
-                                                                                            <span className="text-slate-500 mr-1">, </span>
-                                                                                        )}
-                                                                                        {cIdx === activeCovers.length - 2 && (
-                                                                                            <span className="text-slate-500 mr-1">and </span>
-                                                                                        )}
-                                                                                    </React.Fragment>
+                                                                                        <span
+                                                                                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider shrink-0 mt-0.5 ${cover.scope === SCOPE_REMAINING
+                                                                                                ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+                                                                                                : (!cover.scope || cover.scope === 'All')
+                                                                                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                                                                                                    : 'border-sky-500/30 bg-sky-500/10 text-sky-300'
+                                                                                                }`}
+                                                                                            title={cover.scope || 'All'}
+                                                                                        >
+                                                                                            {cover.scope || 'All'}
+                                                                                        </span>
+                                                                                    </div>
                                                                                 ))}
                                                                             </div>
                                                                         )}
 
-                                                                        {hasCovers && (
-                                                                            <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                                                                                Details
-                                                                                <span className="material-icons text-[10px]">chevron_right</span>
-                                                                            </span>
-                                                                        )}
+                                                                        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                                                                            {hasCovers && (
+                                                                                <span className="text-[9px] text-slate-400 flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity pr-3">
+                                                                                    Details
+                                                                                    <span className="material-icons text-[12px]">chevron_right</span>
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -686,4 +694,5 @@ const ResidentsCornerScreen: React.FC = () => {
 };
 
 export default ResidentsCornerScreen;
+
 

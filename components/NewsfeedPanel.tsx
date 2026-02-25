@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Activity, DashboardSnapshotData, NewsfeedNotification, NewsfeedOnlineUser, Screen } from '../types';
 import { fetchRecentActivity } from '../services/activityService';
@@ -108,7 +108,9 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const formatNotificationDate = (iso: string): string => {
     const parsed = new Date(iso);
     if (Number.isNaN(parsed.getTime())) return '--';
-    return parsed.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' });
+    const dateStr = parsed.toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' });
+    const timeStr = parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `${dateStr} \u2022 ${timeStr}`;
   };
 
   const getActivityTypeLabel = (activity: Activity): string => {
@@ -152,7 +154,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   }, [activities]);
 
   useEffect(() => {
-    let cleanup = () => {};
+    let cleanup = () => { };
     const init = async () => {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id || '';
@@ -442,187 +444,62 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
 
   return (
     <>
-      <div className={`${isModal ? 'p-4 border-b border-white/5 bg-surface' : 'px-6 pt-12 pb-6 bg-app/80 backdrop-blur-md sticky top-0 z-20'}`}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className={`${isModal ? 'text-lg' : 'text-2xl'} font-black text-transparent bg-clip-text bg-gradient-to-r from-white via-slate-200 to-slate-400`}>
-              {isModal ? 'Notification Center' : 'Newsfeed'}
-            </h1>
-          </div>
+      <div className={`${isModal ? 'p-4 border-b border-white/5 bg-surface' : 'px-6 pt-6 pb-2 bg-app/80 backdrop-blur-md'}`}>
+        <div className="flex items-center justify-between min-h-[32px]">
+          <h1 className={`${isModal ? 'text-xl' : 'text-3xl'} font-bold text-white`}>
+            {isModal ? 'Notification Center' : 'Newsfeed'}
+          </h1>
           {isModal && onClose && (
             <button onClick={onClose} className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-slate-400 transition-colors">
               <span className="material-icons text-sm">close</span>
             </button>
           )}
         </div>
-
-        {(onlineCount > 0 || loadingOnline || Boolean(onlineError)) && (
-          <div className="mt-2">
-            <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-400">
-              <span className="uppercase tracking-[0.1em]">Online now</span>
-              <span>|</span>
-              <span>{onlineCount}</span>
-            </div>
-
-            {onlineCount > 0 && (
-              <div className="mt-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {visibleOnlineUsers.map((user) => {
-                    const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
-                    return (
-                      <div
-                        key={user.id}
-                        className="inline-flex max-w-[8.5rem] items-center gap-1.5 rounded-full border border-border-default/70 bg-black/20 px-2 py-1"
-                        aria-label={`${user.displayName} online`}
-                      >
-                        {user.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt={user.displayName}
-                            className="h-5 w-5 rounded-full border border-border-default/70 object-cover"
-                          />
-                        ) : (
-                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-border-default/70 bg-slate-700/60 text-[9px] font-semibold text-slate-200">
-                            {initial}
-                          </span>
-                        )}
-                        <span className="truncate text-[11px] text-slate-300">{user.displayName}</span>
-                      </div>
-                    );
-                  })}
-                  {hiddenOnlineUsers > 0 && (
-                    <span className="inline-flex items-center rounded-full border border-border-default/70 bg-black/20 px-2 py-1 text-[11px] text-slate-400">
-                      +{hiddenOnlineUsers}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      <div className={isModal ? 'p-4 border-b border-white/5' : 'px-6 py-4'}>
-        {activeTab === 'notifications' && (snapshotLoading || snapshotHasCards) && (
-          <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">Today Snapshot</h3>
-              <button
-                onClick={() => refreshSnapshot(userId)}
-                className="rounded-md p-1.5 text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
-                aria-label="Refresh today snapshot"
-              >
-                <span className="material-icons text-sm">refresh</span>
-              </button>
-            </div>
-
-            {snapshotLoading ? (
-              <LoadingState title="Loading updates..." compact />
-            ) : (
-              <div className="space-y-1.5">
-                {todayEventCount > 0 && (
-                  <button
-                    onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                    disabled={!onNavigateToTarget}
-                    className="w-full text-left rounded-lg border border-white/8 bg-black/10 px-3 py-2 transition hover:bg-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    <p className="text-[11px] text-slate-200">Events Today: {todayEventCount}</p>
-                  </button>
-                )}
-
-                {todayExamCount > 0 && (
-                  <button
-                    onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                    disabled={!onNavigateToTarget}
-                    className="w-full text-left rounded-lg border border-white/8 bg-black/10 px-3 py-2 transition hover:bg-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    <p className="text-[11px] text-slate-200">Exams Today: {todayExamCount}</p>
-                  </button>
-                )}
-
-                {snapshotHasLeave && (
-                  <button
-                    onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                    disabled={!onNavigateToTarget}
-                    className="w-full text-left rounded-lg border border-white/8 bg-black/10 px-3 py-2 transition hover:bg-white/5 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                    <p className="text-[11px] text-slate-200">
-                      On Leave Today: {snapshotData?.leaveToday.map((entry) => entry.name).join(', ')}
-                    </p>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex bg-white/5 p-1 rounded-xl">
+      <div className={isModal ? 'p-4 border-b border-white/5' : 'px-6 pt-2 pb-4'}>
+        <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner -mx-1.5">
           <button
             onClick={() => setActiveTab('notifications')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
-              activeTab === 'notifications' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-500 hover:text-slate-300'
-            }`}
+            className={`flex-1 py-3 text-[13px] font-bold rounded-xl transition-all duration-300 ${activeTab === 'notifications' ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
           >
-            Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}
+            Notifications {unreadCount > 0 ? <span className="ml-1.5 px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] leading-none text-white">{unreadCount}</span> : ''}
           </button>
           <button
             onClick={() => setActiveTab('activity')}
-            className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
-              activeTab === 'activity' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-slate-500 hover:text-slate-300'
-            }`}
+            className={`flex-1 py-3 text-[13px] font-bold rounded-xl transition-all duration-300 ${activeTab === 'activity' ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
           >
             Activity Log
           </button>
         </div>
 
         {activeTab === 'notifications' && (
-          <div className="mt-3 flex items-center gap-2">
+          <div className="grid grid-cols-3 gap-2 mt-4 mb-2">
             <button
               onClick={() => setIsFilterSheetOpen(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-border-default/70 bg-black/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition-colors hover:text-white"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-all shadow-sm"
             >
-              <span className="material-icons text-[13px]">tune</span>
-              Filter: {notificationFilter}
+              <span className="material-icons text-[14px]">tune</span>
+              <span className="truncate">Filter: {notificationFilter === 'all' ? 'All' : notificationFilter}</span>
             </button>
-            <div className="relative">
-              <button
-                onClick={() => setBulkMenuOpen((prev) => !prev)}
-                disabled={notifications.length === 0 || bulkActionLoading !== null}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border-default/70 bg-black/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
-                aria-label="Open notification bulk actions"
-              >
-                <span className="material-icons text-[13px]">done_all</span>
-                Actions
-                <span className="material-icons text-[12px]">{bulkMenuOpen ? 'expand_less' : 'expand_more'}</span>
-              </button>
-
-              {bulkMenuOpen && (
-                <div className="absolute right-0 top-full z-20 mt-1.5 w-44 rounded-lg border border-border-default/70 bg-surface p-1.5 shadow-xl">
-                  <button
-                    onClick={() => {
-                      setBulkMenuOpen(false);
-                      handleMarkAllRead();
-                    }}
-                    disabled={unreadCount === 0 || bulkActionLoading !== null}
-                    className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-[11px] text-slate-300 transition-colors hover:bg-white/5 disabled:opacity-50"
-                  >
-                    <span>Read all</span>
-                    <span className="material-icons text-[13px]">drafts</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setBulkMenuOpen(false);
-                      handleHideAllNotifications();
-                    }}
-                    disabled={notifications.length === 0 || bulkActionLoading !== null}
-                    className="flex w-full items-center justify-between rounded-md px-2.5 py-2 text-[11px] text-slate-300 transition-colors hover:bg-white/5 disabled:opacity-50"
-                  >
-                    <span>Hide all</span>
-                    <span className="material-icons text-[13px]">visibility_off</span>
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              onClick={handleMarkAllRead}
+              disabled={unreadCount === 0 || bulkActionLoading !== null}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-all shadow-sm disabled:opacity-50"
+            >
+              <span className="material-icons text-[14px]">drafts</span>
+              <span className="truncate">Read All</span>
+            </button>
+            <button
+              onClick={handleHideAllNotifications}
+              disabled={notifications.length === 0 || bulkActionLoading !== null}
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-all shadow-sm disabled:opacity-50"
+            >
+              <span className="material-icons text-[14px]">visibility_off</span>
+              <span className="truncate">Hide All</span>
+            </button>
           </div>
         )}
       </div>
@@ -643,35 +520,52 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                   <button
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`w-full text-left p-3.5 rounded-xl border border-border-default/65 backdrop-blur-sm transition-all ${
-                      notif.read
-                        ? 'bg-surface/70 opacity-75'
-                        : 'bg-primary/[0.10] border-primary/35 shadow-[0_0_0_1px_rgba(13,162,231,0.12)]'
-                    }`}
+                    className={`w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden ${notif.read
+                      ? 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
+                      : 'bg-primary/[0.08] border border-primary/30 shadow-[0_4px_24px_-8px_rgba(13,162,231,0.25)] hover:bg-primary/[0.12]'
+                      }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {!notif.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(13,162,231,0.65)] shrink-0" />}
-                        <h4 className={`text-sm truncate ${notif.read ? 'font-medium text-slate-100' : 'font-semibold text-white'}`}>
-                          {formatNotificationType(notif.type)} by {notif.actorName || 'Hospital Staff'}
-                        </h4>
-                        {!notif.read && (
-                          <span className="px-1.5 py-0.5 rounded-md text-[9px] leading-none font-semibold tracking-wide uppercase bg-primary/20 text-primary border border-primary/35 shrink-0">
-                            New
-                          </span>
-                        )}
+                    {/* Subtle glow effect for unread */}
+                    {!notif.read && (
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
+                    )}
+                    <div className="flex items-start gap-3 w-full z-10 relative">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 ${notif.read ? 'bg-black/40 border border-white/5 text-primary-light opacity-80' : 'bg-primary/20 border border-primary/40 text-primary-light shadow-[0_0_15px_rgba(13,162,231,0.3)]'}`}>
+                        <span className="material-icons text-xl">
+                          {notif.type.toLowerCase().includes('calendar') || notif.type.toLowerCase().includes('leave') ? 'event' :
+                            notif.type.toLowerCase().includes('case') ? 'folder_special' :
+                              notif.type.toLowerCase().includes('announcement') ? 'campaign' :
+                                'medical_information'}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-[10px] text-slate-500">{formatNotificationDate(notif.createdAt)}</span>
-                        <button
-                          onClick={(event) => handleHideNotification(event, notif.id)}
-                          disabled={hidingNotificationId === notif.id}
-                          className="inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300 disabled:opacity-50"
-                          aria-label="Hide notification"
-                          title="Hide notification"
-                        >
-                          <span className="material-icons text-[13px]">visibility_off</span>
-                        </button>
+
+                      <div className="flex-1 min-w-0 flex flex-col gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center flex-wrap gap-2 min-w-0">
+                            <h4 className={`text-[14px] sm:text-[15px] truncate tracking-tight ${notif.read ? 'font-medium text-slate-200' : 'font-bold text-white'}`}>
+                              {formatNotificationType(notif.type)}
+                            </h4>
+                            {!notif.read && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] leading-none font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/35 shrink-0 mt-0.5">
+                                New
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={(event) => handleHideNotification(event, notif.id)}
+                            disabled={hidingNotificationId === notif.id}
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 -mt-1 -mr-1"
+                            aria-label="Hide notification"
+                            title="Hide notification"
+                          >
+                            <span className="material-icons text-[14px]">visibility_off</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] sm:text-[12px] text-slate-400 truncate">by <span className="text-slate-300">{notif.actorName || 'Hospital Staff'}</span></span>
+                          <span className={`text-[10px] sm:text-[11px] whitespace-nowrap font-medium uppercase tracking-wider ${notif.read ? 'text-slate-500' : 'text-primary-light/80'}`}>{formatNotificationDate(notif.createdAt)}</span>
+                        </div>
                       </div>
                     </div>
                   </button>
@@ -693,7 +587,114 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
             )}
           </div>
         ) : (
-          <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {/* Consolidated Online Users Section */}
+            {(onlineCount > 0 || loadingOnline || Boolean(onlineError)) && (
+              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Online Now</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">{onlineCount}</span>
+                </div>
+
+                {onlineCount > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {visibleOnlineUsers.map((user) => {
+                      const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
+                      return (
+                        <div
+                          key={user.id}
+                          className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-2 py-1 shadow-inner"
+                          aria-label={`${user.displayName} online`}
+                        >
+                          <div className="relative">
+                            {user.avatarUrl ? (
+                              <img src={user.avatarUrl} alt={user.displayName} className="h-6 w-6 rounded-full object-cover" />
+                            ) : (
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700/60 text-[10px] font-bold text-slate-200">
+                                {initial}
+                              </span>
+                            )}
+                            <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-400 border border-black" />
+                          </div>
+                          <span className="text-[12px] font-medium text-slate-300 pr-1">{user.displayName}</span>
+                        </div>
+                      );
+                    })}
+                    {hiddenOnlineUsers > 0 && (
+                      <span className="flex items-center rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[11px] font-bold text-slate-400 shadow-inner">
+                        +{hiddenOnlineUsers}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Consolidated Snapshot Section */}
+            {(snapshotLoading || snapshotHasCards) && (
+              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Today Snapshot</h3>
+                  <button
+                    onClick={() => refreshSnapshot(userId)}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <span className="material-icons text-sm">refresh</span>
+                  </button>
+                </div>
+
+                {snapshotLoading ? (
+                  <LoadingState title="Loading snapshot..." compact />
+                ) : (
+                  <div className="space-y-2">
+                    {todayEventCount > 0 && (
+                      <button
+                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
+                        disabled={!onNavigateToTarget}
+                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-icons text-[18px] text-primary-light">event</span>
+                          <span className="text-[13px] font-medium text-slate-200">Events Today</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-white/10 text-[11px] font-bold text-white group-hover:bg-primary group-hover:text-black transition-colors">{todayEventCount}</span>
+                      </button>
+                    )}
+
+                    {todayExamCount > 0 && (
+                      <button
+                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
+                        disabled={!onNavigateToTarget}
+                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-icons text-[18px] text-emerald-400">assignment</span>
+                          <span className="text-[13px] font-medium text-slate-200">Exams Today</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-white/10 text-[11px] font-bold text-white group-hover:bg-emerald-400 group-hover:text-black transition-colors">{todayExamCount}</span>
+                      </button>
+                    )}
+
+                    {snapshotHasLeave && (
+                      <button
+                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
+                        disabled={!onNavigateToTarget}
+                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-icons text-[18px] text-amber-400">flight_takeoff</span>
+                          <span className="text-[13px] font-medium text-slate-200">On Leave Today</span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 group-hover:text-amber-400 transition-colors">
+                          {snapshotData?.leaveToday.map(e => e.name.split(' ')[0]).join(', ')}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {loadingActivity ? (
               <LoadingState title="Loading history..." compact />
             ) : activities.length === 0 ? (
@@ -706,19 +707,28 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                 <div key={group.key} className="space-y-2">
                   <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{group.label}</p>
                   {group.items.map((activity, index) => (
-                    <div key={`${activity.id}-${index}`} className="glass-card-enhanced p-4 rounded-xl flex items-start gap-4 border border-white/5 hover:bg-white/5 transition-all">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center border border-white/10 shrink-0 ${activity.colorClass}`}>
-                        <span className="material-icons text-lg">{activity.icon}</span>
+                    <div key={`${activity.id}-${index}`} className="group relative overflow-hidden backdrop-blur-md bg-white/[0.02] hover:bg-white/[0.04] p-4 rounded-2xl flex items-start gap-4 border border-white/5 transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.01] to-transparent -translate-x-full group-hover:translate-x-full duration-1000 ease-in-out pointer-events-none" />
+
+                      <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 shadow-inner ${activity.colorClass?.includes('primary') || activity.colorClass?.includes('blue')
+                        ? 'bg-primary/10 border-primary/30 text-primary-light shadow-[0_0_15px_rgba(13,162,231,0.15)]'
+                        : activity.colorClass?.includes('green') || activity.colorClass?.includes('emerald')
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                          : activity.colorClass?.includes('amber') || activity.colorClass?.includes('yellow') || activity.colorClass?.includes('orange')
+                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                            : 'bg-white/5 border-white/10 text-slate-300'
+                        }`}>
+                        <span className="material-icons text-[22px]">{activity.icon}</span>
                       </div>
-                      <div className="flex-1 min-w-0 pt-0.5">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+                      <div className="flex-1 min-w-0 pt-0.5 relative z-10">
+                        <div className="mb-1.5 flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center rounded-md bg-white/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 border border-white/5">
                             {getActivityTypeLabel(activity)}
                           </span>
-                          <span className="text-[10px] text-slate-500 whitespace-nowrap">{activity.time}</span>
+                          <span className="text-[11px] font-medium tracking-wide uppercase text-slate-500 whitespace-nowrap">{activity.time}</span>
                         </div>
-                        <h4 className="text-sm font-bold text-white leading-tight">{activity.title}</h4>
-                        <p className="text-xs text-slate-400 mt-1 line-clamp-2">{activity.subtitle}</p>
+                        <h4 className="text-[15px] font-bold text-slate-100 leading-tight tracking-tight">{activity.title}</h4>
+                        <p className="text-[13px] text-slate-400 mt-1.5 leading-relaxed line-clamp-2">{activity.subtitle}</p>
                       </div>
                     </div>
                   ))}
@@ -766,11 +776,10 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                     setNotificationFilter(item.key as typeof notificationFilter);
                     setIsFilterSheetOpen(false);
                   }}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                    notificationFilter === item.key
-                      ? 'border-primary/45 bg-primary/15 text-primary-light'
-                      : 'border-border-default/70 bg-black/15 text-slate-300'
-                  }`}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${notificationFilter === item.key
+                    ? 'border-primary/45 bg-primary/15 text-primary-light'
+                    : 'border-border-default/70 bg-black/15 text-slate-300'
+                    }`}
                 >
                   {item.label}
                 </button>

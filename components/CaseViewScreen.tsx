@@ -97,7 +97,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     return (
         <div className="flex flex-col h-full bg-app relative overflow-hidden">
             {/* Top Navigation Bar */}
-            <header className="px-6 pt-12 pb-4 flex items-center justify-between z-10 bg-app/80 backdrop-blur-md sticky top-0">
+            <header className="px-6 pt-6 pb-2 flex items-center justify-between z-10 bg-app/80 backdrop-blur-md sticky top-0">
                 <button
                     onClick={onBack}
                     className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition-all"
@@ -163,7 +163,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                             {/* Image Description Overlay */}
                             {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
-                                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-6 pt-12">
+                                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 to-transparent p-6 pt-8">
                                     <p className="text-sm text-white font-medium text-center">
                                         {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
                                     </p>
@@ -241,15 +241,15 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                         {/* Clinical Data */}
                         {submissionType !== 'aunt_minnie' && !isInterestingCase && (
-                        <div className="space-y-2">
-                            <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
-                                <span className="material-icons text-base text-primary">medical_information</span>
-                                Clinical Data
-                            </h3>
-                            <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
-                                {caseData.clinical_history || "No clinical data recorded."}
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                                    <span className="material-icons text-base text-primary">medical_information</span>
+                                    Clinical Data
+                                </h3>
+                                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
+                                    {caseData.clinical_history || "No clinical data recorded."}
+                                </div>
                             </div>
-                        </div>
                         )}
 
                         {/* Findings */}
@@ -272,8 +272,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-base text-white leading-relaxed whitespace-pre-line text-justify">
                                     {(() => {
                                         const descriptions = (caseData.analysis_result?.imagesMetadata || [])
-                                          .map((item: any) => item?.description?.trim())
-                                          .filter((value: string) => Boolean(value));
+                                            .map((item: any) => item?.description?.trim())
+                                            .filter((value: string) => Boolean(value));
                                         if (descriptions.length > 0) return descriptions.join('\n');
                                         return caseData.findings || "No description recorded.";
                                     })()}

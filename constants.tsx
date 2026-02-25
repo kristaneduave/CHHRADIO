@@ -78,7 +78,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     gradient: 'from-slate-800/40 to-slate-900/40'
   },
   {
-    label: 'Resident\'s Corner',
+    label: 'Resident Hub',
     icon: 'school',
     target: 'residents-corner',
     subtitle: '',

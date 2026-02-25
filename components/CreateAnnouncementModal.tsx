@@ -357,7 +357,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 </div>
 
                 {/* Scrollable Content */}
-                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative z-10 pt-12">
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar relative z-10 pt-8">
                     {error && (
                         <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3">
                             <span className="material-icons text-lg">error_outline</span>

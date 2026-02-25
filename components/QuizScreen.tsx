@@ -442,12 +442,12 @@ const QuizScreen: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (boot) return <div className="px-6 pt-12 text-slate-300">Initializing quiz module...</div>;
+  if (boot) return <div className="px-6 pt-6 text-slate-300">Initializing quiz module...</div>;
 
   return (
-    <div className="px-6 pt-12 pb-6 h-full flex flex-col">
+    <div className="px-6 pt-6 pb-6 h-full flex flex-col">
       <header className="mb-4">
-        <h1 className="text-2xl font-bold text-white">Medical Quiz</h1>
+        <h1 className="text-3xl font-bold text-white">Medical Quiz</h1>
       </header>
 
       <div className="flex gap-2 mb-4">
@@ -461,11 +461,17 @@ const QuizScreen: React.FC = () => {
           {!activeExam ? (
             <>
               <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 mb-3 grid grid-cols-1 md:grid-cols-2 gap-2">
-                <input value={search} onChange={(x) => setSearch(x.target.value)} placeholder="Search exams..." className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200" />
-                <select value={spec} onChange={(x) => setSpec(x.target.value)} className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-slate-200">
-                  <option value="All">All specialties</option>
-                  {[...new Set([...SPECIALTIES, ...exams.map((x) => x.specialty)])].map((x) => <option key={x} value={x}>{x}</option>)}
-                </select>
+                <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+                  <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">search</span>
+                  <input value={search} onChange={(x) => setSearch(x.target.value)} placeholder="Search exams..." className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-3 text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all" />
+                </div>
+                <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
+                  <select value={spec} onChange={(x) => setSpec(x.target.value)} className="w-full h-10 appearance-none bg-transparent border-0 rounded-xl px-4 text-[13px] font-bold text-slate-300 focus:outline-none cursor-pointer hover:bg-white/5 transition-colors">
+                    <option value="All">All specialties</option>
+                    {[...new Set([...SPECIALTIES, ...exams.map((x) => x.specialty)])].map((x) => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                  <span className="material-icons pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 transition-colors">expand_more</span>
+                </div>
               </div>
 
               {examsLoading ? <div className="text-sm text-slate-400">Loading exams...</div> : filteredExams.length === 0 ? <div className="text-sm text-slate-400">No published exams yet.</div> : (

@@ -90,6 +90,7 @@ export interface PatientRecord {
   status: 'Completed' | 'Pending' | 'Draft' | 'Published';
   submission_type?: SubmissionType;
   radiologic_clinchers?: string;
+  author?: string;
 }
 
 export interface SearchFilters {

@@ -28,20 +28,29 @@ const getSubmissionTypeMeta = (submissionType?: string) => {
     case 'rare_pathology':
       return {
         icon: 'biotech',
-        tintClass: 'text-rose-300',
-        boxClass: 'bg-gradient-to-br from-rose-500/15 to-rose-900/20 border-rose-500/25',
+        tintClass: 'text-rose-400',
+        boxClass: 'bg-rose-500/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
+        glowClass: 'bg-rose-500/20',
+        unreadCardClass: 'bg-rose-500/[0.08] border border-rose-500/30 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)] hover:bg-rose-500/[0.12]',
+        unreadBadgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/35',
       };
     case 'aunt_minnie':
       return {
         icon: 'psychology',
-        tintClass: 'text-amber-300',
-        boxClass: 'bg-gradient-to-br from-amber-500/15 to-amber-900/20 border-amber-500/25',
+        tintClass: 'text-amber-400',
+        boxClass: 'bg-amber-500/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
+        glowClass: 'bg-amber-500/20',
+        unreadCardClass: 'bg-amber-500/[0.08] border border-amber-500/30 shadow-[0_4px_24px_-8px_rgba(217,119,6,0.25)] hover:bg-amber-500/[0.12]',
+        unreadBadgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/35',
       };
     default:
       return {
         icon: 'library_books',
-        tintClass: 'text-primary',
-        boxClass: 'bg-gradient-to-br from-primary/20 to-blue-900/20 border-primary/30',
+        tintClass: 'text-sky-400',
+        boxClass: 'bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.3)]',
+        glowClass: 'bg-sky-500/20',
+        unreadCardClass: 'bg-sky-500/[0.08] border border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)] hover:bg-sky-500/[0.12]',
+        unreadBadgeClass: 'bg-sky-500/20 text-sky-400 border-sky-500/35',
       };
   }
 };
@@ -348,7 +357,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   };
 
   return (
-    <div className="px-6 pt-12 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="px-6 pt-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Resident Identity Header */}
       <div className="flex flex-col items-center text-center mb-8">
         <div className="relative mb-4 group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
@@ -379,8 +388,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
         {/* View Mode Header */}
         {!isEditing && (
-          <div className="mb-6">
-            <h1 className="text-xl font-bold text-white mb-0.5">{profile.full_name || 'Doctor'}</h1>
+          <div className="mb-4">
+            <h1 className="text-3xl font-bold text-white">{profile.full_name || 'Doctor'}</h1>
             <p className="text-primary text-[10px] font-bold uppercase tracking-[0.2em] mb-2">
               {profile.year_level || 'Resident'} • {profile.specialty}
             </p>
@@ -539,40 +548,49 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
               const displayTitle = getDisplayTitle(c);
               const primaryMeta = getPrimaryMeta(c);
               return (
-              <div
-                key={c.id}
-                onClick={() => onViewCase && onViewCase(c)}
-                className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:bg-white/5 transition-all group cursor-pointer relative"
-              >
-                <div className={`w-16 h-16 rounded-lg border flex items-center justify-center shrink-0 shadow-[inset_0_0_15px_rgba(13,162,231,0.1)] ${typeMeta.boxClass}`}>
-                  <span className={`material-icons text-xl ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-white truncate pr-2 mb-1">{displayTitle}</h4>
-                  <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-tighter">
-                    <span>{primaryMeta}</span>
-                    <span className="text-slate-700">|</span>
-                    <span>{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span>
+                <div
+                  key={c.id}
+                  onClick={() => onViewCase && onViewCase(c)}
+                  className="w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden cursor-pointer bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]"
+                >
+                  <div className="flex items-center gap-4 w-full z-10 relative">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 border bg-black/40 border-white/5">
+                      <span className={`material-icons text-2xl ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2 min-w-0 mb-1">
+                        <h4 className={`text-[15px] sm:text-[16px] truncate tracking-tight font-bold ${typeMeta.tintClass}`}>
+                          {displayTitle}
+                        </h4>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-[10px] sm:text-[11px] truncate uppercase tracking-wider font-semibold">
+                          <span className="text-white opacity-90">{primaryMeta}</span>
+                          <span className="text-slate-600">|</span>
+                          <span className="text-slate-400">{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditCase && onEditCase(c); }}
+                        className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
+                        title="Edit Case"
+                      >
+                        <span className="material-icons text-sm">edit</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); confirmDelete(c.id); }}
+                        className="w-8 h-8 rounded-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center text-rose-500 transition-colors"
+                        title="Delete Case"
+                      >
+                        <span className="material-icons text-sm">delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onEditCase && onEditCase(c); }}
-                    className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
-                    title="Edit Case"
-                  >
-                    <span className="material-icons text-base">edit</span>
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); confirmDelete(c.id); }}
-                    className="w-8 h-8 rounded-full bg-rose-500/10 hover:bg-rose-500/20 flex items-center justify-center text-rose-500 transition-colors"
-                    title="Delete Case"
-                  >
-                    <span className="material-icons text-base">delete</span>
-                  </button>
-                </div>
-              </div>
               );
             })}
           </div>
