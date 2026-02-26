@@ -1,6 +1,7 @@
 import { CalendarService } from './CalendarService';
 import { supabase } from './supabase';
 import { DashboardSnapshotData, Screen } from '../types';
+import { fetchDutyRosterByDate } from './dutyRosterService';
 
 export const APP_OPEN_STORAGE_KEY = 'chh_last_app_open_at';
 export const SNAPSHOT_BASELINE_STORAGE_KEY = 'chh_snapshot_baseline_open_at';
@@ -8,7 +9,7 @@ export const SNAPSHOT_SEEN_ANNOUNCEMENTS_KEY = 'chh_snapshot_seen_announcements_
 export const SNAPSHOT_SEEN_CASES_KEY = 'chh_snapshot_seen_cases_at';
 export const SNAPSHOT_SEEN_CALENDAR_KEY = 'chh_snapshot_seen_calendar_at';
 
-type SnapshotSection = 'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'auth';
+type SnapshotSection = 'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'onDuty' | 'auth';
 
 export interface DashboardSnapshotResult {
   data: DashboardSnapshotData | null;
@@ -74,7 +75,7 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
   const casesBaseline = getEffectiveBaseline(SNAPSHOT_SEEN_CASES_KEY);
   const calendarBaseline = getEffectiveBaseline(SNAPSHOT_SEEN_CALENDAR_KEY);
 
-  const [announcementsResult, casesResult, calendarResult, leaveResult] = await Promise.allSettled([
+  const [announcementsResult, casesResult, calendarResult, leaveResult, onDutyResult] = await Promise.allSettled([
     announcementsBaseline
       ? supabase
           .from('announcements')
@@ -100,6 +101,7 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
           .order('created_at', { ascending: false })
       : Promise.resolve({ data: [], error: null } as any),
     CalendarService.getLeaveEvents(new Date()),
+    fetchDutyRosterByDate(new Date()),
   ]);
 
   let newAnnouncementsCount = 0;
@@ -179,6 +181,13 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
     sectionErrors.leaveToday = 'Unable to load leave coverage.';
   }
 
+  let onDutyToday: DashboardSnapshotData['onDutyToday'] = [];
+  if (onDutyResult.status === 'fulfilled') {
+    onDutyToday = onDutyResult.value;
+  } else {
+    sectionErrors.onDuty = 'Unable to load on-duty roster.';
+  }
+
   const data: DashboardSnapshotData = {
     newAnnouncementsCount,
     latestAnnouncementTitle,
@@ -187,6 +196,7 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
     newCalendarCount,
     latestCalendarTitle,
     leaveToday,
+    onDutyToday,
   };
 
   return { data, sectionErrors };

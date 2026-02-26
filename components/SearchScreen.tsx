@@ -66,7 +66,7 @@ const getSubmissionTypeMeta = (submissionType?: string) => {
         boxClass: 'bg-rose-500/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
         glowClass: 'bg-rose-500/20',
         unreadCardClass: 'bg-rose-500/[0.08] border border-rose-500/30 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)] hover:bg-rose-500/[0.12]',
-        unreadBadgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/35',
+        unreadBadgeClass: 'bg-slate-900 text-rose-400 border border-rose-500/30 shadow-[0_2px_8px_rgba(225,29,72,0.2)]',
       };
     case 'aunt_minnie':
       return {
@@ -75,7 +75,7 @@ const getSubmissionTypeMeta = (submissionType?: string) => {
         boxClass: 'bg-amber-500/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
         glowClass: 'bg-amber-500/20',
         unreadCardClass: 'bg-amber-500/[0.08] border border-amber-500/30 shadow-[0_4px_24px_-8px_rgba(217,119,6,0.25)] hover:bg-amber-500/[0.12]',
-        unreadBadgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/35',
+        unreadBadgeClass: 'bg-slate-900 text-amber-400 border border-amber-500/30 shadow-[0_2px_8px_rgba(217,119,6,0.2)]',
       };
     default:
       return {
@@ -84,7 +84,7 @@ const getSubmissionTypeMeta = (submissionType?: string) => {
         boxClass: 'bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.3)]',
         glowClass: 'bg-sky-500/20',
         unreadCardClass: 'bg-sky-500/[0.08] border border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)] hover:bg-sky-500/[0.12]',
-        unreadBadgeClass: 'bg-sky-500/20 text-sky-400 border-sky-500/35',
+        unreadBadgeClass: 'bg-slate-900 text-sky-400 border border-sky-500/30 shadow-[0_2px_8px_rgba(14,165,233,0.2)]',
       };
   }
 };
@@ -617,18 +617,26 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                     markCaseAsOpened(p.id);
                     if (raw && onCaseSelect) onCaseSelect(raw);
                   }}
-                  className={`w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden ${isRecent
+                  className={`w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group ${isRecent
                     ? typeMeta.unreadCardClass
                     : 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
                     }`}
                 >
                   {/* Subtle glow effect for recent */}
                   {isRecent && (
-                    <div className={`absolute top-0 right-0 w-32 h-32 ${typeMeta.glowClass} blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2`} />
+                    <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                      <div className={`absolute top-0 right-0 w-32 h-32 ${typeMeta.glowClass} blur-[50px] rounded-full transform -translate-y-1/2 translate-x-1/2`} />
+                    </div>
                   )}
 
-                  <div className="flex items-start gap-3 w-full z-10 relative">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 border ${isRecent ? typeMeta.boxClass : 'bg-black/40 border-white/5'}`}>
+                  {isRecent && (
+                    <span className={`absolute top-[-3px] -left-2 px-2 py-0.5 rounded-[4px] text-[9px] leading-none font-bold tracking-wider uppercase z-20 ${typeMeta.unreadBadgeClass}`}>
+                      New
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-3 w-full z-10 relative">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner border ${isRecent ? typeMeta.boxClass : 'bg-black/40 border-white/5'}`}>
                       <span className={`material-icons text-xl ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
                     </div>
 
@@ -638,11 +646,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                           <h4 className={`text-[14px] sm:text-[15px] truncate tracking-tight font-bold ${typeMeta.tintClass}`}>
                             {p.name}
                           </h4>
-                          {isRecent && (
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] leading-none font-bold tracking-wider uppercase shrink-0 mt-0.5 border ${typeMeta.unreadBadgeClass}`}>
-                              New
-                            </span>
-                          )}
                         </div>
                         <span className="material-icons text-slate-500 group-hover:text-primary transition-colors hover:bg-white/10 hover:text-slate-300 rounded-full h-6 w-6 inline-flex items-center justify-center -mt-1 -mr-1">
                           chevron_right

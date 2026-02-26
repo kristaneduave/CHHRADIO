@@ -30,9 +30,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unre
     <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary">
       <main
         ref={mainRef}
-        className={`relative z-10 mx-auto w-full flex-1 flex flex-col pb-20 ${
-          isDesktopWideScreen ? 'max-w-md lg:max-w-7xl' : 'max-w-md'
-        } ${activeScreen === 'dashboard' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        className={`relative z-10 mx-auto w-full flex-[1_1_0%] flex flex-col pb-20 overflow-y-auto ${isDesktopWideScreen ? 'max-w-md lg:max-w-7xl' : 'max-w-md'
+          }`}
       >
         {children}
       </main>
@@ -53,9 +52,8 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unre
               </span>
               {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
                 <span
-                  className={`absolute top-[5px] right-[24%] h-[18px] text-[10px] leading-[18px] text-white font-bold text-center bg-[#ff3040] shadow-[0_3px_8px_rgba(255,48,64,0.45)] ${
-                    unreadNotificationsCount > 9 ? 'min-w-[22px] px-1.5 rounded-full' : 'w-[18px] rounded-full'
-                  }`}
+                  className={`absolute top-[5px] right-[24%] h-[18px] text-[10px] leading-[18px] text-white font-bold text-center bg-[#ff3040] shadow-[0_3px_8px_rgba(255,48,64,0.45)] ${unreadNotificationsCount > 9 ? 'min-w-[22px] px-1.5 rounded-full' : 'w-[18px] rounded-full'
+                    }`}
                 >
                   {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
                 </span>

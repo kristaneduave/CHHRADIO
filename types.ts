@@ -27,6 +27,26 @@ export interface Activity {
   colorClass: string;
 }
 
+export interface ErrorResponse {
+  message: string;
+  code?: string;
+  details?: unknown;
+}
+
+export interface WorkspacePlayer {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role?: UserRole;
+  floorId: string | null;
+  x: number;
+  y: number;
+  targetX?: number;
+  targetY?: number;
+  isWalking: boolean;
+  statusMessage: string | null;
+}
+
 export interface QuickAction {
   label: string;
   icon: string;
@@ -64,6 +84,27 @@ export interface Differential {
   condition: string;
   confidence: number;
   rationale: string;
+}
+
+export interface CaseComment {
+  id: string;
+  case_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  user?: {
+    full_name: string | null;
+    avatar_url: string | null;
+    nickname?: string | null;
+  };
+}
+
+export interface CaseRating {
+  id: string;
+  case_id: string;
+  user_id: string;
+  rating: number;
+  created_at: string;
 }
 
 export interface AnalysisResult {
@@ -221,6 +262,17 @@ export interface NewsfeedOnlineUser {
   role?: UserRole;
 }
 
+export interface DutyRosterEntry {
+  id: string;
+  dutyDate: string;
+  userId: string | null;
+  displayName: string;
+  role: string | null;
+  createdBy: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface DashboardSnapshotData {
   newAnnouncementsCount: number;
   latestAnnouncementTitle?: string;
@@ -229,6 +281,75 @@ export interface DashboardSnapshotData {
   newCalendarCount: number;
   latestCalendarTitle?: string;
   leaveToday: Array<{ id: string; name: string; coverageNames: string[] }>;
+  onDutyToday: DutyRosterEntry[];
+}
+
+export interface Floor {
+  id: string;
+  name: string;
+  image_url: string;
+  width: number;
+  height: number;
+  bounds?: any;
+}
+
+export interface Workstation {
+  id: string;
+  floor_id: string;
+  label: string;
+  x: number;
+  y: number;
+  section?: string | null;
+  status_override?: string | null;
+  notes?: string | null;
+}
+
+export interface OccupancySession {
+  id: string;
+  workstation_id: string;
+  user_id: string;
+  started_at: string;
+  last_seen_at: string;
+  ended_at?: string | null;
+  display_name_snapshot?: string | null;
+  client_type?: 'qr' | 'kiosk' | 'mobile' | 'web';
+  metadata_json?: any;
+  status_message?: string | null;
+}
+
+export interface CurrentWorkstationStatus {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  floor_id: string;
+  section?: string | null;
+  status: 'AVAILABLE' | 'IN_USE' | string;
+  occupant_name?: string | null;
+  occupant_id?: string | null;
+  started_at?: string | null;
+  last_seen_at?: string | null;
+  status_message?: string | null;
+  occupancy_mode?: 'self' | 'assigned_user' | 'assigned_external';
+  assigned_by_user_id?: string | null;
+  expires_at?: string | null;
+  occupant_avatar_url?: string | null;
+  occupant_role?: UserRole | null;
+  occupant_nickname?: string | null;
+}
+
+export interface AssignOccupancyPayload {
+  mode: 'assigned_user' | 'assigned_external';
+  occupantUserId?: string;
+  occupantDisplayName?: string;
+  statusMessage?: string | null;
+}
+
+export interface AssignableOccupant {
+  id: string;
+  displayName: string;
+  role?: UserRole;
+  avatarUrl: string | null;
 }
 
 export interface QuizExam {

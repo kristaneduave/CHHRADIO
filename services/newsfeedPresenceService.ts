@@ -11,6 +11,7 @@ interface SubscribeToOnlineUsersParams {
   onUsersChange: (userIds: string[]) => void;
   onError?: (message: string) => void;
   trackCurrentUser?: boolean;
+  includeCurrentUser?: boolean;
 }
 
 const buildFallbackName = (id: string): string => `User ${id.slice(0, 6)}`;
@@ -94,6 +95,7 @@ export const subscribeToOnlineUsers = ({
   onUsersChange,
   onError,
   trackCurrentUser = true,
+  includeCurrentUser = false,
 }: SubscribeToOnlineUsersParams): (() => void) => {
   const channel = supabase.channel('newsfeed-online-presence', {
     config: {
@@ -108,7 +110,7 @@ export const subscribeToOnlineUsers = ({
         Object.values(presenceState)
           .flat()
           .map((entry) => entry.user_id)
-          .filter((id) => Boolean(id) && id !== currentUserId),
+          .filter((id) => Boolean(id) && (includeCurrentUser || id !== currentUserId)),
       ),
     );
     onUsersChange(nextIds);

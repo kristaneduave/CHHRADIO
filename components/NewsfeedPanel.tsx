@@ -1,7 +1,8 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
-import { Activity, DashboardSnapshotData, NewsfeedNotification, NewsfeedOnlineUser, Screen } from '../types';
+import { Activity, NewsfeedNotification, NewsfeedOnlineUser, Screen } from '../types';
 import { fetchRecentActivity } from '../services/activityService';
+import { fetchOnlineProfiles, subscribeToOnlineUsers } from '../services/newsfeedPresenceService';
 import {
   fetchNotificationsPage,
   hideAllNotificationsForUser,
@@ -10,11 +11,6 @@ import {
   markNotificationRead,
   subscribeToNotifications,
 } from '../services/newsfeedService';
-import { fetchOnlineProfiles, subscribeToOnlineUsers } from '../services/newsfeedPresenceService';
-import {
-  fetchDashboardSnapshot,
-  markSnapshotSectionSeen,
-} from '../services/dashboardSnapshotService';
 import { isAnnouncementHiddenForUser } from '../services/announcementVisibilityService';
 import { toastInfo } from '../utils/toast';
 import LoadingButton from './LoadingButton';
@@ -41,19 +37,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const [userId, setUserId] = useState('');
   const [notifications, setNotifications] = useState<NewsfeedNotification[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<NewsfeedOnlineUser[]>([]);
-  const [loadingOnline, setLoadingOnline] = useState(false);
-  const [onlineError, setOnlineError] = useState<string | null>(null);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
-  const [snapshotData, setSnapshotData] = useState<DashboardSnapshotData | null>(null);
-  const [snapshotErrors, setSnapshotErrors] = useState<
-    Partial<Record<'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'auth', string>>
-  >({});
-  const [snapshotLoading, setSnapshotLoading] = useState(false);
-  const [snapshotLastFetchedAt, setSnapshotLastFetchedAt] = useState(0);
-  const [todayEventCount, setTodayEventCount] = useState(0);
-  const [todayExamCount, setTodayExamCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
   const [hidingNotificationId, setHidingNotificationId] = useState<string | null>(null);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -62,20 +46,19 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreNotifications, setHasMoreNotifications] = useState(false);
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+  const [onlineUsers, setOnlineUsers] = useState<NewsfeedOnlineUser[]>([]);
+  const [loadingOnline, setLoadingOnline] = useState(false);
+  const [onlineError, setOnlineError] = useState<string | null>(null);
 
   const isModal = variant === 'modal';
   const listPadding = isModal ? 'p-4' : 'px-6';
-
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-  const snapshotHasLeave = (snapshotData?.leaveToday.length || 0) > 0;
-  const snapshotHasEvents = todayEventCount > 0;
-  const snapshotHasExams = todayExamCount > 0;
-  const snapshotHasCards = snapshotHasLeave || snapshotHasEvents || snapshotHasExams;
-  const snapshotHasAnySectionError = Boolean(snapshotErrors.calendar || snapshotErrors.leaveToday || snapshotErrors.auth);
-  const onlineCount = onlineUserIds.length;
   const onlineDisplayLimit = 12;
   const visibleOnlineUsers = onlineUsers.slice(0, onlineDisplayLimit);
   const hiddenOnlineUsers = Math.max(onlineUsers.length - onlineDisplayLimit, 0);
+  const onlineCount = onlineUserIds.length;
+
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
   const filteredSortedNotifications = useMemo(() => {
     const matchesFilter = (notif: NewsfeedNotification): boolean => {
       if (notificationFilter === 'all') return true;
@@ -161,7 +144,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
       setUserId(uid);
       if (!uid) return;
 
-      await Promise.all([refreshNotifications(uid), refreshSnapshot(uid)]);
+      await Promise.all([refreshNotifications(uid)]);
       cleanup = subscribeToNotifications(uid, () => {
         refreshNotifications(uid).catch((err) => console.error('Realtime refresh failed:', err));
       });
@@ -177,9 +160,6 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     if (!userId) return;
     const poll = setInterval(() => {
       refreshNotifications(userId).catch((err) => console.error('Polling refresh failed:', err));
-      if (activeTab === 'notifications') {
-        refreshSnapshot(userId).catch((err) => console.error('Snapshot refresh failed:', err));
-      }
     }, 60000);
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,20 +169,6 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     if (activeTab === 'activity' && userId) {
       loadActivity(userId);
     }
-  }, [activeTab, userId]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(FEED_FILTER_KEY, notificationFilter);
-  }, [notificationFilter]);
-
-  useEffect(() => {
-    if (activeTab !== 'notifications' || !userId) return;
-    const isStale = !snapshotLastFetchedAt || Date.now() - snapshotLastFetchedAt > SNAPSHOT_STALE_MS;
-    if (isStale) {
-      refreshSnapshot(userId).catch((err) => console.error('Snapshot refresh failed:', err));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, userId]);
 
   useEffect(() => {
@@ -262,6 +228,11 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     };
   }, [userId]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(FEED_FILTER_KEY, notificationFilter);
+  }, [notificationFilter]);
+
   const refreshNotifications = async (uid: string) => {
     try {
       setLoadingNotifications(true);
@@ -306,61 +277,6 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     } finally {
       setLoadingActivity(false);
     }
-  };
-
-  const refreshSnapshot = async (uid: string) => {
-    if (!uid) return;
-    try {
-      setSnapshotLoading(true);
-      const [{ data, sectionErrors }, todayEventsResult] = await Promise.all([
-        fetchDashboardSnapshot(),
-        (() => {
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-          const end = new Date();
-          end.setHours(23, 59, 59, 999);
-          return supabase
-            .from('events')
-            .select('id,event_type,start_time,end_time')
-            .lte('start_time', end.toISOString())
-            .gte('end_time', start.toISOString());
-        })(),
-      ]);
-      setSnapshotData(data);
-      const mergedErrors: Partial<Record<'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'auth', string>> = {
-        auth: sectionErrors.auth,
-        leaveToday: sectionErrors.leaveToday,
-      };
-      if (todayEventsResult.error) {
-        mergedErrors.calendar = mergedErrors.calendar || 'Unable to load today events.';
-        setTodayEventCount(0);
-        setTodayExamCount(0);
-      } else {
-        const rows = todayEventsResult.data || [];
-        const exams = rows.filter((row: any) => String(row.event_type || '').toLowerCase() === 'exam').length;
-        const nonLeaveNonExam = rows.filter((row: any) => {
-          const type = String(row.event_type || '').toLowerCase();
-          return type !== 'leave' && type !== 'exam';
-        }).length;
-        setTodayExamCount(exams);
-        setTodayEventCount(nonLeaveNonExam);
-      }
-      setSnapshotErrors(mergedErrors);
-      setSnapshotLastFetchedAt(Date.now());
-    } catch (error) {
-      console.error('Error loading today snapshot:', error);
-      setSnapshotErrors((prev) => ({ ...prev, auth: 'Unable to load snapshot.' }));
-    } finally {
-      setSnapshotLoading(false);
-    }
-  };
-
-  const navigateFromSnapshot = (screen: Screen, section: 'announcements' | 'cases' | 'calendar') => {
-    markSnapshotSectionSeen(section);
-    refreshSnapshot(userId).catch((err) => console.error('Snapshot refresh failed:', err));
-    if (!onNavigateToTarget) return;
-    onNavigateToTarget(screen, null);
-    if (isModal) onClose?.();
   };
 
   const handleNotificationClick = async (notif: NewsfeedNotification) => {
@@ -588,112 +504,57 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
           </div>
         ) : (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* Consolidated Online Users Section */}
-            {(onlineCount > 0 || loadingOnline || Boolean(onlineError)) && (
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Online Now</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">{onlineCount}</span>
-                </div>
-
-                {onlineCount > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {visibleOnlineUsers.map((user) => {
-                      const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
-                      return (
-                        <div
-                          key={user.id}
-                          className="flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-2 py-1 shadow-inner"
-                          aria-label={`${user.displayName} online`}
-                        >
-                          <div className="relative">
-                            {user.avatarUrl ? (
-                              <img src={user.avatarUrl} alt={user.displayName} className="h-6 w-6 rounded-full object-cover" />
-                            ) : (
-                              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-700/60 text-[10px] font-bold text-slate-200">
-                                {initial}
-                              </span>
-                            )}
-                            <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-400 border border-black" />
-                          </div>
-                          <span className="text-[12px] font-medium text-slate-300 pr-1">{user.displayName}</span>
-                        </div>
-                      );
-                    })}
-                    {hiddenOnlineUsers > 0 && (
-                      <span className="flex items-center rounded-full border border-white/10 bg-black/40 px-3 py-1 text-[11px] font-bold text-slate-400 shadow-inner">
-                        +{hiddenOnlineUsers}
-                      </span>
-                    )}
-                  </div>
-                )}
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 backdrop-blur-md">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  Who's Online
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-bold text-emerald-400 border border-emerald-500/20">
+                  {onlineCount}
+                </span>
               </div>
-            )}
 
-            {/* Consolidated Snapshot Section */}
-            {(snapshotLoading || snapshotHasCards) && (
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-md">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Today Snapshot</h3>
-                  <button
-                    onClick={() => refreshSnapshot(userId)}
-                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-                  >
-                    <span className="material-icons text-sm">refresh</span>
-                  </button>
+              {loadingOnline ? (
+                <p className="text-xs text-slate-400">Checking online status...</p>
+              ) : onlineCount > 0 ? (
+                <div className="flex flex-wrap gap-2.5">
+                  {visibleOnlineUsers.map((user) => {
+                    const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
+                    return (
+                      <div
+                        key={user.id}
+                        className="flex items-center gap-2.5 rounded-full border border-white/10 bg-white/5 pr-3 pl-1 py-1 shadow-sm"
+                        aria-label={`${user.displayName} online`}
+                      >
+                        <div className="relative">
+                          {user.avatarUrl ? (
+                            <img src={user.avatarUrl} alt={user.displayName} className="h-7 w-7 rounded-full object-cover border border-white/20" />
+                          ) : (
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-700/80 text-[11px] font-bold text-slate-200 border border-white/20">
+                              {initial}
+                            </span>
+                          )}
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-[#1c1c1e]" />
+                        </div>
+                        <span className="text-[13px] font-medium text-slate-200">{user.displayName.split(' ')[0]}</span>
+                      </div>
+                    );
+                  })}
+                  {hiddenOnlineUsers > 0 && (
+                    <span className="flex items-center rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[12px] font-bold text-slate-400 shadow-sm">
+                      +{hiddenOnlineUsers}
+                    </span>
+                  )}
                 </div>
+              ) : (
+                <p className="text-xs text-slate-400">No one is online right now.</p>
+              )}
 
-                {snapshotLoading ? (
-                  <LoadingState title="Loading snapshot..." compact />
-                ) : (
-                  <div className="space-y-2">
-                    {todayEventCount > 0 && (
-                      <button
-                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                        disabled={!onNavigateToTarget}
-                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="material-icons text-[18px] text-primary-light">event</span>
-                          <span className="text-[13px] font-medium text-slate-200">Events Today</span>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-md bg-white/10 text-[11px] font-bold text-white group-hover:bg-primary group-hover:text-black transition-colors">{todayEventCount}</span>
-                      </button>
-                    )}
-
-                    {todayExamCount > 0 && (
-                      <button
-                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                        disabled={!onNavigateToTarget}
-                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="material-icons text-[18px] text-emerald-400">assignment</span>
-                          <span className="text-[13px] font-medium text-slate-200">Exams Today</span>
-                        </div>
-                        <span className="px-2 py-0.5 rounded-md bg-white/10 text-[11px] font-bold text-white group-hover:bg-emerald-400 group-hover:text-black transition-colors">{todayExamCount}</span>
-                      </button>
-                    )}
-
-                    {snapshotHasLeave && (
-                      <button
-                        onClick={() => navigateFromSnapshot('calendar', 'calendar')}
-                        disabled={!onNavigateToTarget}
-                        className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-black/20 hover:bg-white/5 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="material-icons text-[18px] text-amber-400">flight_takeoff</span>
-                          <span className="text-[13px] font-medium text-slate-200">On Leave Today</span>
-                        </div>
-                        <span className="text-[11px] text-slate-400 group-hover:text-amber-400 transition-colors">
-                          {snapshotData?.leaveToday.map(e => e.name.split(' ')[0]).join(', ')}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+              {onlineError && (
+                <p className="mt-2 text-xs text-rose-300">{onlineError}</p>
+              )}
+            </div>
 
             {loadingActivity ? (
               <LoadingState title="Loading history..." compact />

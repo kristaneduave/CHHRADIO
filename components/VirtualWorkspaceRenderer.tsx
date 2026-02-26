@@ -1,0 +1,297 @@
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { CurrentWorkstationStatus, Floor, WorkspacePlayer } from '../types';
+import { workspacePresenceService } from '../services/virtualWorkspacePresence';
+
+interface VirtualWorkspaceRendererProps {
+    floor: Floor;
+    workstations: CurrentWorkstationStatus[];
+    currentUserId: string;
+    onPinClick: (ws: CurrentWorkstationStatus) => void;
+    occupiedWorkstation: CurrentWorkstationStatus | null;
+    onCheckCurrentUserOccupancy: (workstationId: string) => Promise<boolean>;
+    onRequestReleaseAndMove?: (intent: ReleaseAndMoveIntent) => void;
+}
+
+export interface ReleaseAndMoveIntent {
+    workstationId: string;
+    workstationLabel: string;
+    targetFloorId: string;
+    targetX: number;
+    targetY: number;
+}
+
+const getInitial = (name?: string | null): string => {
+    const trimmed = (name || '').trim();
+    return trimmed ? trimmed.charAt(0).toUpperCase() : 'U';
+};
+
+// Distance in coordinate space (0-100%) to trigger interaction
+const INTERACTION_RADIUS = 3.5;
+
+const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
+    floor,
+    workstations,
+    currentUserId,
+    onPinClick,
+    occupiedWorkstation,
+    onCheckCurrentUserOccupancy,
+    onRequestReleaseAndMove,
+}) => {
+    const [players, setPlayers] = useState<WorkspacePlayer[]>([]);
+    const [renderPlayers, setRenderPlayers] = useState<WorkspacePlayer[]>([]);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+
+    useEffect(() => {
+        const unsubscribe = workspacePresenceService.subscribe({
+            currentUserId,
+            onPlayersChange: (updatedPlayers) => {
+                setPlayers(updatedPlayers);
+            },
+            onError: (err) => console.error(err)
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [currentUserId]);
+
+    useEffect(() => {
+        const myStation = occupiedWorkstation;
+        if (myStation) {
+            workspacePresenceService.seedFromWorkstation({
+                statusMessage: myStation.status_message || null,
+                floorId: myStation.floor_id,
+                x: myStation.x,
+                y: myStation.y
+            });
+        }
+    }, [
+        occupiedWorkstation?.id,
+        occupiedWorkstation?.status_message,
+        occupiedWorkstation?.floor_id,
+        occupiedWorkstation?.x,
+        occupiedWorkstation?.y,
+    ]);
+
+    useEffect(() => {
+        setRenderPlayers((prev) => {
+            const prevById = new Map<string, WorkspacePlayer>(prev.map((p) => [p.id, p]));
+            return players.map((target) => {
+                if (target.id === currentUserId) return target;
+                const existing = prevById.get(target.id);
+                if (!existing || existing.floorId !== target.floorId) return target;
+                return {
+                    ...target,
+                    x: existing.x,
+                    y: existing.y,
+                };
+            });
+        });
+    }, [players, currentUserId]);
+
+    useEffect(() => {
+        let frameId: number;
+        const step = () => {
+            setRenderPlayers((prev) => {
+                const targetById = new Map<string, WorkspacePlayer>(players.map((p) => [p.id, p]));
+                let changed = false;
+
+                const next = prev.map((rp: WorkspacePlayer) => {
+                    const target = targetById.get(rp.id);
+                    if (!target) return rp;
+                    if (rp.id === currentUserId) return target;
+                    if (target.floorId !== rp.floorId) return target;
+
+                    const dx = target.x - rp.x;
+                    const dy = target.y - rp.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 0.08) return target;
+
+                    changed = true;
+                    const factor = 0.35;
+                    return {
+                        ...target,
+                        x: rp.x + dx * factor,
+                        y: rp.y + dy * factor,
+                    };
+                });
+
+                const nextIds = new Set(next.map((p) => p.id));
+                for (const target of players) {
+                    if (!nextIds.has(target.id)) {
+                        next.push(target);
+                        changed = true;
+                    }
+                }
+
+                return changed ? next : prev;
+            });
+            frameId = window.requestAnimationFrame(step);
+        };
+
+        frameId = window.requestAnimationFrame(step);
+        return () => window.cancelAnimationFrame(frameId);
+    }, [players, currentUserId]);
+
+    const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!containerRef.current) return;
+        const tapStart = performance.now();
+
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        await workspacePresenceService.setExactLocation(x, y, floor.id);
+
+        if (DEBUG_WORKSPACE) {
+            console.debug('[workspace] tap->move local ms', Math.round(performance.now() - tapStart));
+        }
+
+        if (occupiedWorkstation?.id) {
+            const verifyStart = performance.now();
+            const stillOccupying = await onCheckCurrentUserOccupancy(occupiedWorkstation.id);
+            if (DEBUG_WORKSPACE) {
+                console.debug('[workspace] occupancy verify ms', Math.round(performance.now() - verifyStart));
+            }
+            if (stillOccupying) {
+                const dx = x - occupiedWorkstation.x;
+                const dy = y - occupiedWorkstation.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance > INTERACTION_RADIUS) {
+                    onRequestReleaseAndMove?.({
+                        workstationId: occupiedWorkstation.id,
+                        workstationLabel: occupiedWorkstation.label,
+                        targetFloorId: floor.id,
+                        targetX: x,
+                        targetY: y,
+                    });
+                }
+            }
+        }
+    };
+
+    const handleWorkstationClick = (e: React.MouseEvent, ws: CurrentWorkstationStatus) => {
+        e.stopPropagation();
+
+        // Move to the workstation first
+        workspacePresenceService.walkTo(ws.x, ws.y, floor.id);
+
+        // Wait a tiny bit then trigger the action modal
+        setTimeout(() => {
+            onPinClick(ws);
+        }, 100);
+    };
+
+    const hasValidDimensions = floor.width > 0 && floor.height > 0;
+    if (!hasValidDimensions) {
+        return <div className="text-rose-400">Invalid Map Dimensions</div>;
+    }
+
+    const aspectRatio = `${floor.width} / ${floor.height}`;
+    const floorPlayers = useMemo(
+        () => renderPlayers.filter((p) => p.floorId === floor.id),
+        [renderPlayers, floor.id],
+    );
+
+    return (
+        <div className="relative w-full h-full bg-[#0a1018] rounded-xl overflow-hidden border border-white/10 shadow-inner group">
+            <div
+                ref={containerRef}
+                className="relative w-full h-full cursor-crosshair overflow-hidden touch-none"
+                style={{ aspectRatio }}
+                onClick={handleMapClick}
+            >
+                {/* The Base Map Image */}
+                <img
+                    src={floor.image_url}
+                    alt={`${floor.name} workspace`}
+                    className="absolute inset-0 h-full w-full object-contain pointer-events-none select-none opacity-80 mix-blend-screen"
+                    draggable={false}
+                />
+
+                {/* Scanline CRT overlay */}
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.08)_50%)] bg-[length:100%_5px] pointer-events-none z-0" />
+
+                {/* Workstation Fixed Nodes */}
+                {workstations.map(ws => {
+                    const isAvailable = ws.status === 'AVAILABLE';
+                    const isMine = ws.status === 'IN_USE' && ws.occupant_id === currentUserId;
+                    const isOffline = ws.status === 'OFFLINE' || ws.status === 'OUT_OF_SERVICE';
+
+                    let dotClass = 'bg-slate-500';
+                    if (isAvailable) dotClass = 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.55)]';
+                    if (isMine) dotClass = 'bg-primary shadow-[0_0_10px_rgba(13,162,231,0.8)]';
+                    if (ws.status === 'IN_USE' && !isMine) dotClass = 'bg-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.8)]';
+
+                    return (
+                        <button
+                            key={ws.id}
+                            onClick={(e) => handleWorkstationClick(e, ws)}
+                            className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 z-10 hover:scale-125 transition-transform duration-200"
+                            style={{ left: `${ws.x}%`, top: `${ws.y}%` }}
+                            title={ws.label}
+                        >
+                            <div className={`w-3 h-3 rounded-full mx-auto ${dotClass} border border-[#0a1018]`}></div>
+                            {/* Floating Label */}
+                            <span className="absolute top-10 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-bold border border-white/20 whitespace-nowrap backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                {ws.label}
+                            </span>
+                        </button>
+                    )
+                })}
+
+                {/* Players (Avatars) */}
+                {floorPlayers.map(player => {
+                    const isMe = player.id === currentUserId;
+
+                    // Calculate distance to nearest target to show "walking" bounce
+                    const isMoving = player.isWalking;
+
+                    return (
+                        <div
+                            key={player.id}
+                            className="absolute z-20 transition-all duration-75 ease-linear pointer-events-none"
+                            style={{
+                                left: `${player.x}%`,
+                                top: `${player.y}%`,
+                                transform: `translate(-50%, -100%) ${isMoving ? 'scaleY(0.97) scaleX(1.02)' : ''}`,
+                                willChange: 'transform',
+                            }}
+                        >
+                            {/* Avatar Bubble */}
+                            <div className={`relative flex items-center justify-center w-8 h-8 rounded-full shadow-[0_4px_10px_rgba(0,0,0,0.5)] border-2 ${isMe ? 'border-primary' : 'border-white/50'} bg-[#1c1c1e] overflow-hidden ${isMoving ? 'animate-bounce' : ''}`}>
+                                {player.avatarUrl ? (
+                                    <img src={player.avatarUrl} alt={player.displayName} className="w-full h-full object-cover" />
+                                ) : (
+                                    <span className="text-white text-xs font-bold">{getInitial(player.displayName)}</span>
+                                )}
+                            </div>
+
+                            {/* Name Label */}
+                            <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[9px] font-bold text-white bg-black/60 px-1 rounded shadow-sm whitespace-nowrap">
+                                {player.displayName}
+                            </span>
+
+                            {/* Status Mini-Chat */}
+                            {player.statusMessage && (
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-lg shadow-black/40 border border-slate-200 z-30 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 pointer-events-auto cursor-help" style={{ animation: 'float 6s ease-in-out infinite' }}>
+                                    {player.statusMessage}
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
+                                </div>
+                            )}
+                        </div>
+                    )
+                })}
+
+        <style>{`
+            @keyframes float {
+                0%, 100% { transform: translateY(0) translateX(-50%); }
+                50% { transform: translateY(-2px) translateX(-50%); }
+            }
+        `}</style>
+            </div>
+        </div>
+    );
+};
+
+export default VirtualWorkspaceRenderer;

@@ -1,68 +1,55 @@
 import React, { useEffect, useState } from 'react';
 import { QUICK_ACTIONS } from '../constants';
 import { Screen, SubmissionType } from '../types';
+import WorkstationMapWidget from './WorkstationMapWidget';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
   onStartUpload: (submissionType: SubmissionType) => void;
 }
 
-const BUTTON_STYLES: Record<string, { text: string; border: string; badge: string; shadow: string; hover: string; indicator: string }> = {
+const NEW_BUTTON_STYLES: Record<string, { colorClass: string; bgClass: string; borderClass: string; shadowClass: string }> = {
   Announcements: {
-    text: 'text-fuchsia-300',
-    border: 'hover:border-fuchsia-300/35',
-    badge: 'bg-fuchsia-500/10 group-hover:bg-fuchsia-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(217,70,239,0.22)]',
-    hover: 'group-hover:text-fuchsia-200',
-    indicator: 'bg-fuchsia-300/35',
+    colorClass: 'text-cyan-400',
+    bgClass: 'bg-cyan-500/10',
+    borderClass: 'border-cyan-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(6,182,212,0.2)]',
   },
   Calendar: {
-    text: 'text-teal-300',
-    border: 'hover:border-teal-300/35',
-    badge: 'bg-teal-500/10 group-hover:bg-teal-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(45,212,191,0.22)]',
-    hover: 'group-hover:text-teal-200',
-    indicator: 'bg-teal-300/35',
+    colorClass: 'text-rose-400',
+    bgClass: 'bg-rose-500/10',
+    borderClass: 'border-rose-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(244,63,94,0.2)]',
   },
   Database: {
-    text: 'text-indigo-300',
-    border: 'hover:border-indigo-300/35',
-    badge: 'bg-indigo-500/10 group-hover:bg-indigo-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.22)]',
-    hover: 'group-hover:text-indigo-200',
-    indicator: 'bg-indigo-300/35',
+    colorClass: 'text-amber-400',
+    bgClass: 'bg-amber-500/10',
+    borderClass: 'border-amber-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(245,158,11,0.2)]',
   },
   'Case Library': {
-    text: 'text-indigo-300',
-    border: 'hover:border-indigo-300/35',
-    badge: 'bg-indigo-500/10 group-hover:bg-indigo-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(99,102,241,0.22)]',
-    hover: 'group-hover:text-indigo-200',
-    indicator: 'bg-indigo-300/35',
+    colorClass: 'text-amber-400',
+    bgClass: 'bg-amber-500/10',
+    borderClass: 'border-amber-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(245,158,11,0.2)]',
   },
   'Upload Case': {
-    text: 'text-sky-300',
-    border: 'hover:border-sky-300/35',
-    badge: 'bg-sky-500/10 group-hover:bg-sky-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(56,189,248,0.22)]',
-    hover: 'group-hover:text-sky-200',
-    indicator: 'bg-sky-300/35',
+    colorClass: 'text-emerald-400',
+    bgClass: 'bg-emerald-500/10',
+    borderClass: 'border-emerald-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(16,185,129,0.2)]',
   },
   Quiz: {
-    text: 'text-rose-300',
-    border: 'hover:border-rose-300/35',
-    badge: 'bg-rose-500/10 group-hover:bg-rose-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(244,63,94,0.22)]',
-    hover: 'group-hover:text-rose-200',
-    indicator: 'bg-rose-300/35',
+    colorClass: 'text-purple-400',
+    bgClass: 'bg-purple-500/10',
+    borderClass: 'border-purple-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(168,85,247,0.2)]',
   },
   "Resident Hub": {
-    text: 'text-amber-300',
-    border: 'hover:border-amber-300/35',
-    badge: 'bg-amber-500/10 group-hover:bg-amber-500/15',
-    shadow: 'group-hover:shadow-[0_0_24px_rgba(245,158,11,0.22)]',
-    hover: 'group-hover:text-amber-200',
-    indicator: 'bg-amber-300/35',
+    colorClass: 'text-blue-400',
+    bgClass: 'bg-blue-500/10',
+    borderClass: 'border-blue-500/20',
+    shadowClass: 'shadow-[0_0_15px_rgba(59,130,246,0.2)]',
   },
 };
 
@@ -122,17 +109,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
         </div>
       </header>
 
-      <main className="relative z-10 flex-1 px-4 max-w-md mx-auto w-full pb-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))]">
-        <div className="h-full flex flex-col pt-2.5 pb-1">
-          <div className="quick-link-grid grid h-full grid-cols-2 grid-rows-3 gap-2">
+      <main className="relative z-10 flex-1 px-4 max-w-md mx-auto w-full pb-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] overflow-y-auto">
+        <div className="flex flex-col pt-4 pb-6 gap-2">
+          <div className="grid grid-cols-3 gap-3">
             {orderedActions.map((action, index) => {
-              const style = BUTTON_STYLES[action.label] || {
-                text: 'text-text-secondary',
-                border: '',
-                badge: '',
-                shadow: '',
-                hover: '',
-                indicator: 'bg-white/30',
+              const style = NEW_BUTTON_STYLES[action.label] || {
+                colorClass: 'text-slate-300',
+                bgClass: 'bg-white/10',
+                borderClass: 'border-white/10',
+                shadowClass: '',
               };
               return (
                 <button
@@ -144,86 +129,103 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
                     }
                     onNavigate(action.target);
                   }}
-                  className={`quick-link-card group relative flex h-full min-h-[5.35rem] flex-col items-center justify-center overflow-hidden rounded-b-xl rounded-t-none border border-border-default/75 bg-surface/85 px-2 transition-all duration-200 active:scale-[0.985] active:shadow-[0_6px_14px_rgba(2,6,23,0.45)] hover:-translate-y-0.5 hover:bg-surface-alt/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 shadow-clinical ${style.border} ${style.shadow}`}
+                  className={`bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center hover:bg-white/[0.06]`}
                   style={{ animationDelay: `${index * 60}ms` }}
                 >
-                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.008)_38%,rgba(255,255,255,0)_100%)] opacity-65" />
-                  <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
-                  <span className={`pointer-events-none absolute left-0 right-0 top-0 h-[1px] ${style.indicator}`} />
-                  <span className="pointer-events-none absolute left-0 right-0 top-[1px] h-[1px] bg-[linear-gradient(90deg,rgba(255,255,255,0.18)_0%,rgba(255,255,255,0.06)_50%,rgba(255,255,255,0.14)_100%)]" />
-                  <div className={`quick-link-icon mb-1 rounded-xl p-2 transition-colors duration-300 ${style.badge}`}>
-                    <span className={`material-icons text-[1.45rem] transition-transform duration-300 group-hover:scale-105 ${style.text}`}>
+                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center border ${style.bgClass} ${style.borderClass} ${style.shadowClass}`}>
+                    <span className={`material-icons text-xl ${style.colorClass}`}>
                       {action.icon}
                     </span>
                   </div>
-
-                  <span className={`quick-link-label text-[0.71rem] font-semibold uppercase tracking-[0.08em] text-slate-300 transition-colors ${style.hover}`}>
-                    {BUTTON_LABELS[action.label] || action.label}
-                  </span>
-                  <span className="quick-link-subtitle mt-0.5 text-center text-[8.6px] leading-[1.18] font-normal text-slate-400 group-hover:text-slate-300 transition-colors">
-                    {BUTTON_SUBTITLES[action.label] || 'Open'}
-                  </span>
+                  <div>
+                    <p className="text-white text-xs font-semibold leading-tight">{BUTTON_LABELS[action.label] || action.label}</p>
+                    <p className="text-slate-500 text-[10px] mt-0.5">{BUTTON_SUBTITLES[action.label] || 'Open'}</p>
+                  </div>
                 </button>
               );
             })}
+          </div>
+          <div className="mt-4">
+            <WorkstationMapWidget />
           </div>
         </div>
       </main>
 
       {isUploadTypePickerOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#020617]/48 backdrop-blur-md p-3 sm:p-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
           role="dialog"
           aria-modal="true"
           aria-label="Choose upload type"
-          onClick={() => setIsUploadTypePickerOpen(false)}
         >
+          {/* Backdrop */}
           <div
-            className="relative w-full max-w-sm max-h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-[1.25rem] border border-border-default/65 bg-[#111b2bd1] p-3 shadow-[0_10px_22px_rgba(2,6,23,0.35)] backdrop-blur-xl"
+            className="fixed inset-0 bg-app/90 backdrop-blur-md transition-opacity"
+            onClick={() => setIsUploadTypePickerOpen(false)}
+          ></div>
+          {/* Modal Container */}
+          <div
+            className="w-full max-w-sm bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden relative z-10 animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="pointer-events-none absolute inset-0 rounded-[1.25rem] bg-[linear-gradient(180deg,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.01)_38%,rgba(255,255,255,0)_100%)]" />
-            <span className="pointer-events-none absolute inset-[1px] rounded-[1.17rem] border border-border-default/40" />
-            <span className="pointer-events-none absolute left-6 right-6 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            {/* Content Area */}
+            <div className="p-6 relative overflow-hidden shrink-0">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
+              <div className="relative z-10 space-y-3">
+                <button
+                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  onClick={() => {
+                    setIsUploadTypePickerOpen(false);
+                    onStartUpload('interesting_case');
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-sky-400 flex items-center justify-center border border-sky-400/30 shadow-sm group-hover:border-sky-400/50 transition-colors">
+                      <span className="material-icons text-[22px]">library_books</span>
+                    </div>
+                    <span className="block text-[15px] font-[800] text-sky-400 transition-colors tracking-wide uppercase">INTERESTING CASE</span>
+                  </div>
+                  <div className="flex items-center pr-1">
+                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  </div>
+                </button>
 
-            <button
-              type="button"
-              aria-label="Close upload type picker"
-              className="absolute right-3 top-3 z-10 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-default/70 bg-surface/80 text-slate-300 hover:bg-surface-alt/90 hover:text-white transition-colors"
-              onClick={() => setIsUploadTypePickerOpen(false)}
-            >
-              <span className="material-icons text-[16px]">close</span>
-            </button>
+                <button
+                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  onClick={() => {
+                    setIsUploadTypePickerOpen(false);
+                    onStartUpload('rare_pathology');
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-rose-400 flex items-center justify-center border border-rose-400/30 shadow-sm group-hover:border-rose-400/50 transition-colors">
+                      <span className="material-icons text-[22px]">biotech</span>
+                    </div>
+                    <span className="block text-[15px] font-[800] text-rose-400 transition-colors tracking-wide uppercase">RARE PATHOLOGY</span>
+                  </div>
+                  <div className="flex items-center pr-1">
+                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  </div>
+                </button>
 
-            <h3 className="relative text-[1.2rem] font-medium text-slate-100 text-center mb-2.5">Choose Upload Type</h3>
-            <div className="relative space-y-2">
-              <button
-                className="relative w-full overflow-hidden rounded-[0.85rem] border border-border-default/65 bg-[#152235]/70 px-3 py-3 text-[0.98rem] font-normal text-slate-300 transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-slate-100"
-                onClick={() => {
-                  setIsUploadTypePickerOpen(false);
-                  onStartUpload('interesting_case');
-                }}
-              >
-                <span className="relative">Interesting Case</span>
-              </button>
-              <button
-                className="relative w-full overflow-hidden rounded-[0.85rem] border border-border-default/65 bg-[#152235]/70 px-3 py-3 text-[0.98rem] font-normal text-slate-300 transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-slate-100"
-                onClick={() => {
-                  setIsUploadTypePickerOpen(false);
-                  onStartUpload('rare_pathology');
-                }}
-              >
-                <span className="relative">Rare Pathology</span>
-              </button>
-              <button
-                className="relative w-full overflow-hidden rounded-[0.85rem] border border-border-default/65 bg-[#152235]/70 px-3 py-3 text-[0.98rem] font-normal text-slate-300 transition-colors hover:border-primary/35 hover:bg-primary/10 hover:text-slate-100"
-                onClick={() => {
-                  setIsUploadTypePickerOpen(false);
-                  onStartUpload('aunt_minnie');
-                }}
-              >
-                <span className="relative">Aunt Minnie</span>
-              </button>
+                <button
+                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  onClick={() => {
+                    setIsUploadTypePickerOpen(false);
+                    onStartUpload('aunt_minnie');
+                  }}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-amber-400 flex items-center justify-center border border-amber-400/30 shadow-sm group-hover:border-amber-400/50 transition-colors">
+                      <span className="material-icons text-[22px]">psychology</span>
+                    </div>
+                    <span className="block text-[15px] font-[800] text-amber-400 transition-colors tracking-wide uppercase">AUNT MINNIE</span>
+                  </div>
+                  <div className="flex items-center pr-1">
+                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  </div>
+                </button>
+              </div>
             </div>
           </div>
         </div>

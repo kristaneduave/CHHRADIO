@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>CHH Radiology Homepage Alpha</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2bbdee",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#0B101A",
+                    },
+                    fontFamily: {
+                        "display": ["Space Grotesk"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        body {
+            background-color: #0B101A;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display text-slate-100 antialiased">
+<div class="relative flex h-screen w-full flex-col bg-background-dark overflow-hidden">
+<header class="flex items-center px-6 pt-8 pb-4 justify-between sticky top-0 z-10 bg-background-dark/80 backdrop-blur-md">
+<div class="flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-2xl">grid_view</span>
+</div>
+<h1 class="text-slate-100 text-lg font-bold tracking-[0.2em] flex-1 text-center ml-4">CHH RADIOLOGY</h1>
+<div class="flex items-center justify-end">
+<div class="h-10 w-10 rounded-full border border-primary/30 flex items-center justify-center overflow-hidden bg-primary/10">
+<span class="material-symbols-outlined text-primary">account_circle</span>
+</div>
+</div>
+</header>
+<main class="flex-1 overflow-y-auto px-6 pt-4 pb-24">
+<div class="mb-8">
+<p class="text-slate-400 text-sm font-medium mb-1">Welcome back, Dr. Smith</p>
+<h2 class="text-2xl font-bold text-white">Department Overview</h2>
+</div>
+<div class="grid grid-cols-3 gap-3">
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+<span class="material-symbols-outlined text-cyan-400 text-xl">campaign</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">News</p>
+<p class="text-slate-500 text-[10px] mt-0.5">3 Updates</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-rose-500/10 flex items-center justify-center border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
+<span class="material-symbols-outlined text-rose-400 text-xl">calendar_today</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">Schedule</p>
+<p class="text-slate-500 text-[10px] mt-0.5">08:00 AM</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+<span class="material-symbols-outlined text-amber-400 text-xl">database</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">Database</p>
+<p class="text-slate-500 text-[10px] mt-0.5">Archives</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+<span class="material-symbols-outlined text-emerald-400 text-xl">cloud_upload</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">Upload</p>
+<p class="text-slate-500 text-[10px] mt-0.5">Transfer</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center border border-purple-500/20 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+<span class="material-symbols-outlined text-purple-400 text-xl">quiz</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">Quiz</p>
+<p class="text-slate-500 text-[10px] mt-0.5">Prep</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center">
+<div class="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+<span class="material-symbols-outlined text-blue-400 text-xl">school</span>
+</div>
+<div>
+<p class="text-white text-xs font-semibold leading-tight">Residents</p>
+<p class="text-slate-500 text-[10px] mt-0.5">Training</p>
+</div>
+</div>
+</div>
+<div class="mt-10">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-white text-lg font-bold tracking-tight">Recent Activity</h3>
+<button class="text-primary text-sm font-medium">View All</button>
+</div>
+<div class="space-y-3">
+<div class="glass-card flex items-center gap-4 p-4 rounded-xl">
+<div class="h-10 w-10 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary text-xl">description</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-white text-sm font-medium truncate">New Chest X-Ray Protocol</p>
+<p class="text-slate-500 text-xs">Updated by Chief Resident • 2h ago</p>
+</div>
+<span class="material-symbols-outlined text-slate-600">chevron_right</span>
+</div>
+<div class="glass-card flex items-center gap-4 p-4 rounded-xl">
+<div class="h-10 w-10 rounded-lg bg-emerald-500/20 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-emerald-400 text-xl">check_circle</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-white text-sm font-medium truncate">Neuro Quiz Completed</p>
+<p class="text-slate-500 text-xs">Score: 92% • 5h ago</p>
+</div>
+<span class="material-symbols-outlined text-slate-600">chevron_right</span>
+</div>
+</div>
+</div>
+</main>
+<nav class="fixed bottom-0 left-0 right-0 glass-card border-t border-white/5 bg-background-dark/90 backdrop-blur-xl px-4 pb-6 pt-3 flex justify-around items-center z-50">
+<a class="flex flex-col items-center gap-1 group" href="#">
+<span class="material-symbols-outlined text-primary fill-1">home</span>
+<span class="text-[10px] font-medium text-primary uppercase tracking-wider">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1 group text-slate-500" href="#">
+<span class="material-symbols-outlined">menu_book</span>
+<span class="text-[10px] font-medium uppercase tracking-wider">Education</span>
+</a>
+<a class="flex flex-col items-center gap-1 group text-slate-500" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-[10px] font-medium uppercase tracking-wider">Analytics</span>
+</a>
+<a class="flex flex-col items-center gap-1 group text-slate-500" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-medium uppercase tracking-wider">Settings</span>
+</a>
+</nav>
+</div>
+</body></html>

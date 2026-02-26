@@ -2,6 +2,8 @@
 import { loadGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
 import { supabase } from '../services/supabase';
+import { fetchCaseComments, submitCaseComment, fetchCaseRatings, submitCaseRating } from '../services/caseInteractionService';
+import { CaseComment } from '../types';
 
 interface CaseViewScreenProps {
     caseData: any;
@@ -17,9 +19,50 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
 
+    const [comments, setComments] = useState<CaseComment[]>([]);
+    const [newComment, setNewComment] = useState('');
+    const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+
+    const [averageRating, setAverageRating] = useState<number>(0);
+    const [userRating, setUserRating] = useState<number | null>(null);
+    const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
     useEffect(() => {
         checkOwnership();
+        loadInteractions();
     }, [caseData]);
+
+    const loadInteractions = async () => {
+        const [commentsData, ratingsData] = await Promise.all([
+            fetchCaseComments(caseData.id),
+            fetchCaseRatings(caseData.id)
+        ]);
+        setComments(commentsData);
+        setAverageRating(ratingsData.average);
+        setUserRating(ratingsData.userRating);
+    };
+
+    const handleRate = async (rating: number) => {
+        setIsSubmittingRating(true);
+        const success = await submitCaseRating(caseData.id, rating);
+        if (success) {
+            setUserRating(rating);
+            const { average } = await fetchCaseRatings(caseData.id);
+            setAverageRating(average);
+        }
+        setIsSubmittingRating(false);
+    };
+
+    const handlePostComment = async () => {
+        if (!newComment.trim()) return;
+        setIsSubmittingComment(true);
+        const comment = await submitCaseComment(caseData.id, newComment.trim());
+        if (comment) {
+            setComments(prev => [...prev, comment]);
+            setNewComment('');
+        }
+        setIsSubmittingComment(false);
+    };
 
     const checkOwnership = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -223,6 +266,28 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                     </div>
 
+                    {/* Ratings Section */}
+                    <div className="flex items-center gap-2 mt-4 bg-white/5 border border-white/10 rounded-xl p-3 w-max">
+                        <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                    key={star}
+                                    onClick={() => handleRate(star)}
+                                    disabled={isSubmittingRating}
+                                    className={`material-icons text-xl focus:outline-none transition-colors ${(userRating && star <= userRating) || (!userRating && star <= averageRating)
+                                            ? 'text-yellow-400'
+                                            : 'text-slate-600 hover:text-yellow-400/50'
+                                        }`}
+                                >
+                                    {(userRating && star <= userRating) || (!userRating && star <= averageRating) ? 'star' : 'star_border'}
+                                </button>
+                            ))}
+                        </div>
+                        <span className="text-sm font-bold text-white ml-2">
+                            {averageRating > 0 ? averageRating.toFixed(1) : 'No Ratings'}
+                        </span>
+                    </div>
+
                     {/* Main Content */}
                     <div className="space-y-6">
                         {isInterestingCase && (
@@ -350,6 +415,68 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                             <span className="material-icons group-hover:scale-110 transition-transform">picture_as_pdf</span>
                             {isExportingPdf ? 'Exporting PDF...' : 'Export PDF'}
                         </button>
+                    </div>
+
+                    {/* Discussion Section */}
+                    <div className="mt-8 pt-8 border-t border-white/10">
+                        <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2 mb-6">
+                            <span className="material-icons text-base text-primary">forum</span>
+                            Discussion Thread
+                        </h3>
+
+                        <div className="space-y-4 mb-6">
+                            {comments.length === 0 ? (
+                                <p className="text-xs text-slate-500 italic text-center py-4 bg-white/5 rounded-xl border border-dashed border-white/10">
+                                    No comments yet. Be the first to discuss!
+                                </p>
+                            ) : (
+                                comments.map(comment => (
+                                    <div key={comment.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex gap-3 shadow-sm">
+                                        <img
+                                            src={comment.user?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'}
+                                            alt="avatar"
+                                            className="w-8 h-8 rounded-full object-cover shrink-0 border border-white/20"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center justify-between gap-2 mb-1">
+                                                <span className="text-xs font-bold text-white truncate">
+                                                    {comment.user?.nickname || comment.user?.full_name || 'Anonymous User'}
+                                                </span>
+                                                <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                                                    {new Date(comment.created_at).toLocaleDateString()}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-slate-300 whitespace-pre-line leading-relaxed">
+                                                {comment.content}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Add Comment */}
+                        <div className="flex items-end gap-3 bg-black/20 p-2 rounded-2xl border border-white/10 focus-within:border-primary/50 transition-colors">
+                            <textarea
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="Add to the discussion..."
+                                rows={1}
+                                className="flex-1 bg-transparent border-none text-sm text-white focus:ring-0 resize-none px-3 py-2 custom-scrollbar min-h-[40px] max-h-[120px] outline-none"
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement;
+                                    target.style.height = 'auto';
+                                    target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                                }}
+                            />
+                            <button
+                                onClick={handlePostComment}
+                                disabled={isSubmittingComment || !newComment.trim()}
+                                className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-dark transition-colors shadow-lg shadow-primary/20"
+                            >
+                                <span className="material-icons text-lg">{isSubmittingComment ? 'hourglass_empty' : 'send'}</span>
+                            </button>
+                        </div>
                     </div>
 
                 </div>
