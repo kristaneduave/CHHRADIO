@@ -5,6 +5,7 @@ import { createSystemNotification, fetchAllRecipientUserIds } from '../services/
 import { QuizAnswerMap, QuizAttemptSummary, QuizExam, QuizQuestion, UserRole } from '../types';
 import { getRoleLabel, normalizeUserRole } from '../utils/roles';
 import { toastError, toastInfo, toastSuccess } from '../utils/toast';
+import LoadingState from './LoadingState';
 
 type Tab = 'take' | 'manage' | 'analytics';
 type ExamRow = QuizExam & { question_count: number; attempt_count: number };
@@ -442,7 +443,13 @@ const QuizScreen: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  if (boot) return <div className="px-6 pt-6 text-slate-300">Initializing quiz module...</div>;
+  if (boot) {
+    return (
+      <div className="h-full flex items-center justify-center px-6">
+        <LoadingState title="Loading quiz..." />
+      </div>
+    );
+  }
 
   return (
     <div className="px-6 pt-6 pb-6 h-full flex flex-col">
@@ -609,6 +616,4 @@ const QuizScreen: React.FC = () => {
 };
 
 export default QuizScreen;
-
-
 

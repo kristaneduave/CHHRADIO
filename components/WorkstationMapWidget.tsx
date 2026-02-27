@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AssignOccupancyPayload, CurrentWorkstationStatus, Floor, NewsfeedOnlineUser } from '../types';
 import { workstationMapService } from '../services/workstationMapService';
 import { supabase } from '../services/supabase';
@@ -30,6 +30,8 @@ const WorkstationMapWidget: React.FC = () => {
   const [loadingOnline, setLoadingOnline] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [currentStatusMessage, setCurrentStatusMessage] = useState<string | null>(null);
+  const fallbackViewerIdRef = useRef(`guest-${Math.random().toString(36).slice(2, 10)}`);
+  const viewerUserId = currentUserId || fallbackViewerIdRef.current;
 
   useEffect(() => {
     if (!isViewerModalOpen) return;
@@ -58,7 +60,10 @@ const WorkstationMapWidget: React.FC = () => {
           setLoading(false);
         }
       } catch (err: any) {
-        if (mounted) setError(err.message);
+        if (mounted) {
+          setError(err.message || 'Failed to load workspace data.');
+          setLoading(false);
+        }
       }
     };
 
@@ -211,7 +216,7 @@ const WorkstationMapWidget: React.FC = () => {
         onClose={() => setIsViewerModalOpen(false)}
         workstations={workstations}
         onlineUsers={onlineUsers}
-        currentUserId={currentUserId}
+        currentUserId={viewerUserId}
         loading={loading}
         onPinClick={handlePinClick}
         onReleaseWorkstation={handleRelease}
@@ -221,6 +226,7 @@ const WorkstationMapWidget: React.FC = () => {
         onSetAvatarStatus={handleSetAvatarStatus}
         currentStatusMessage={currentStatusMessage}
         floors={floors}
+        error={error}
       />
 
       <WorkstationActionModal

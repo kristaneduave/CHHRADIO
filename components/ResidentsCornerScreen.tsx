@@ -4,8 +4,10 @@ import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
 import { Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
+import MonthlyCensusModal from './MonthlyCensusModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
+import { toastError } from '../utils/toast';
 const SCOPE_REMAINING = 'Remaining studies';
 
 // Generate a unique ID for each slot to track overrides
@@ -121,6 +123,7 @@ const ResidentsCornerScreen: React.FC = () => {
         originalDoctor: '',
         timeSlot: ''
     });
+    const [isMonthlyCensusModalOpen, setIsMonthlyCensusModalOpen] = useState(false);
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
 
@@ -320,6 +323,14 @@ const ResidentsCornerScreen: React.FC = () => {
         }
     };
 
+    const handleOpenMonthlyCensus = () => {
+        if (!currentUser?.id) {
+            toastError('Sign in required', 'Please sign in to submit monthly census.');
+            return;
+        }
+        setIsMonthlyCensusModalOpen(true);
+    };
+
 
 
     return (
@@ -328,6 +339,13 @@ const ResidentsCornerScreen: React.FC = () => {
                 {/* Header Section */}
                 <div className="mb-4">
                     <h1 className="text-3xl font-bold text-white mb-2">Resident Hub</h1>
+                    <button
+                        onClick={handleOpenMonthlyCensus}
+                        className="mt-2 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
+                    >
+                        <span className="material-icons text-sm">checklist</span>
+                        Submit Monthly Census
+                    </button>
                 </div>
 
                 {/* Patient List - Prominent Action */}
@@ -688,6 +706,12 @@ const ResidentsCornerScreen: React.FC = () => {
                         timeSlot: detailsModalData.timeSlot
                     });
                 }}
+            />
+
+            <MonthlyCensusModal
+                isOpen={isMonthlyCensusModalOpen}
+                onClose={() => setIsMonthlyCensusModalOpen(false)}
+                residentId={currentUser?.id || null}
             />
         </div>
     );

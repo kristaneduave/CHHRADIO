@@ -11,9 +11,9 @@ const isThemePreference = (value: string | null): value is ThemePreference => {
 };
 
 export const getStoredThemePreference = (): ThemePreference => {
-  if (typeof window === 'undefined') return 'system';
+  if (typeof window === 'undefined') return 'dark';
   const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return isThemePreference(raw) ? raw : 'system';
+  return isThemePreference(raw) ? raw : 'dark';
 };
 
 export const getSystemTheme = (): ResolvedTheme => {
@@ -91,4 +91,3 @@ export const useThemePreference = () => {
     setPreference: updatePreference,
   };
 };
-

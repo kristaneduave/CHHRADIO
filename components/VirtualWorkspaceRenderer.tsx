@@ -43,6 +43,7 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
     useEffect(() => {
+        if (!currentUserId) return;
         const unsubscribe = workspacePresenceService.subscribe({
             currentUserId,
             onPlayersChange: (updatedPlayers) => {
@@ -106,10 +107,12 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
                     const dx = target.x - rp.x;
                     const dy = target.y - rp.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < 0.08) return target;
+                    if (dist < 0.02) return target;
 
                     changed = true;
-                    const factor = 0.35;
+                    // Lower factor means smoother easing but slower movement. 
+                    // 0.15 gives a really nice glide.
+                    const factor = 0.15;
                     return {
                         ...target,
                         x: rp.x + dx * factor,
@@ -182,16 +185,20 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
         }, 100);
     };
 
-    const hasValidDimensions = floor.width > 0 && floor.height > 0;
-    if (!hasValidDimensions) {
-        return <div className="text-rose-400">Invalid Map Dimensions</div>;
-    }
-
-    const aspectRatio = `${floor.width} / ${floor.height}`;
     const floorPlayers = useMemo(
         () => renderPlayers.filter((p) => p.floorId === floor.id),
         [renderPlayers, floor.id],
     );
+    const hasValidDimensions = floor.width > 0 && floor.height > 0;
+    if (!hasValidDimensions) {
+        return (
+            <div className="h-full flex items-center justify-center text-rose-300 text-sm">
+                Invalid map dimensions
+            </div>
+        );
+    }
+
+    const aspectRatio = `${floor.width} / ${floor.height}`;
 
     return (
         <div className="relative w-full h-full bg-[#0a1018] rounded-xl overflow-hidden border border-white/10 shadow-inner group">
@@ -209,8 +216,8 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
                     draggable={false}
                 />
 
-                {/* Scanline CRT overlay */}
-                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.08)_50%)] bg-[length:100%_5px] pointer-events-none z-0" />
+                {/* Scanline CRT overlay - Softened for premium feel */}
+                <div className="absolute inset-0 bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.03)_50%)] bg-[length:100%_4px] pointer-events-none z-0 mix-blend-overlay opacity-60" />
 
                 {/* Workstation Fixed Nodes */}
                 {workstations.map(ws => {
@@ -227,15 +234,20 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
                         <button
                             key={ws.id}
                             onClick={(e) => handleWorkstationClick(e, ws)}
-                            className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 z-10 hover:scale-125 transition-transform duration-200"
+                            className="absolute w-8 h-8 -translate-x-1/2 -translate-y-1/2 z-10 hover:scale-125 transition-transform duration-200 group"
                             style={{ left: `${ws.x}%`, top: `${ws.y}%` }}
-                            title={ws.label}
                         >
                             <div className={`w-3 h-3 rounded-full mx-auto ${dotClass} border border-[#0a1018]`}></div>
-                            {/* Floating Label */}
-                            <span className="absolute top-10 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-black/60 text-white text-[9px] font-bold border border-white/20 whitespace-nowrap backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                {ws.label}
-                            </span>
+                            {/* Floating Custom Tooltip */}
+                            <div className="absolute top-8 left-1/2 -translate-x-1/2 flex flex-col items-center bg-black/80 backdrop-blur-md rounded-lg py-1.5 px-2.5 border border-white/10 shadow-xl opacity-0 group-hover:opacity-100 group-hover:-translate-y-1 transition-all duration-200 pointer-events-none z-50 whitespace-nowrap">
+                                <span className="text-white text-[10px] font-bold">{ws.label}</span>
+                                {ws.status === 'IN_USE' && ws.occupant_name && (
+                                    <span className="text-slate-300 text-[9px] mt-0.5">{ws.occupant_name}</span>
+                                )}
+                                {ws.status === 'AVAILABLE' && (
+                                    <span className="text-emerald-400 text-[9px] mt-0.5">Available</span>
+                                )}
+                            </div>
                         </button>
                     )
                 })}
@@ -272,18 +284,19 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
                                 {player.displayName}
                             </span>
 
-                            {/* Status Mini-Chat */}
+
+                            {/* Status Mini-Chat - Polished */}
                             {player.statusMessage && (
-                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 px-2 py-0.5 rounded-full text-[10px] font-bold shadow-lg shadow-black/40 border border-slate-200 z-30 whitespace-nowrap animate-in fade-in slide-in-from-bottom-1 pointer-events-auto cursor-help" style={{ animation: 'float 6s ease-in-out infinite' }}>
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-sm text-slate-800 px-2 py-0.5 rounded-full text-[10px] font-medium shadow-[0_4px_12px_rgba(0,0,0,0.3)] border border-white/40 z-30 whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 pointer-events-auto cursor-help" style={{ animation: 'float 6s ease-in-out infinite' }}>
                                     {player.statusMessage}
-                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white border-b border-r border-slate-200 transform rotate-45"></div>
+                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-white/95 border-b border-r border-white/40 transform rotate-45"></div>
                                 </div>
                             )}
                         </div>
                     )
                 })}
 
-        <style>{`
+                <style>{`
             @keyframes float {
                 0%, 100% { transform: translateY(0) translateX(-50%); }
                 50% { transform: translateY(-2px) translateX(-50%); }

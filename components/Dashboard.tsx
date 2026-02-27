@@ -63,16 +63,6 @@ const BUTTON_LABELS: Record<string, string> = {
   "Resident Hub": 'Resident Hub',
 };
 
-const BUTTON_SUBTITLES: Record<string, string> = {
-  'Upload Case': 'Submit cases',
-  Database: 'Browse files',
-  'Case Library': 'Browse files',
-  Announcements: 'Stay Informed',
-  Calendar: 'Leaves, Meetings & Events',
-  Quiz: 'Take exam',
-  "Resident Hub": 'Other resources',
-};
-
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   const [isUploadTypePickerOpen, setIsUploadTypePickerOpen] = useState(false);
 
@@ -103,7 +93,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
             />
             <h1 className="flex min-w-0 flex-col items-center justify-center gap-1 leading-none">
               <span className="text-[1.62rem] font-extrabold tracking-[0.045em] text-white">CHH RadCore</span>
-              <span className="text-[0.54rem] uppercase tracking-[0.22em] text-cyan-200/65">For doctors, by doctors</span>
             </h1>
           </div>
         </div>
@@ -139,14 +128,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
                   </div>
                   <div>
                     <p className="text-white text-xs font-semibold leading-tight">{BUTTON_LABELS[action.label] || action.label}</p>
-                    <p className="text-slate-500 text-[10px] mt-0.5">{BUTTON_SUBTITLES[action.label] || 'Open'}</p>
                   </div>
                 </button>
               );
             })}
           </div>
           <div className="mt-4">
-            <WorkstationMapWidget />
+            <SafeWorkstationMapWidget />
           </div>
         </div>
       </main>
@@ -273,15 +261,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
             font-size: 0.64rem;
           }
 
-          .quick-link-subtitle {
-            margin-top: 0.15rem;
-            font-size: 7.6px;
-            line-height: 1.12;
-          }
         }
       `}</style>
     </div>
   );
+};
+
+const SafeWorkstationMapWidget: React.FC = () => {
+  try {
+    return <WorkstationMapWidget />;
+  } catch (error: any) {
+    console.error('Workstation map widget crashed:', error);
+    return (
+      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
+        <p className="text-sm font-semibold">Workspace widget failed to render.</p>
+        <p className="text-xs mt-1 text-rose-100/80">
+          {error?.message || 'Unknown render error.'}
+        </p>
+      </div>
+    );
+  }
 };
 
 export default Dashboard;

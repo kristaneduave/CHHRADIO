@@ -225,23 +225,45 @@ export const workspacePresenceService = {
             if (currentLocalPlayer) {
                 await channel.track({ player: currentLocalPlayer });
             } else {
-                // Auto-fetch profile for initial connection if not provided
-                const { data } = await supabase.from('profiles').select('nickname, full_name, avatar_url, role').eq('id', options.currentUserId).single();
-                if (data) {
-                    const persistedLocation = readPersistedLocation();
-                    currentLocalPlayer = applyPendingSpawn({
-                        id: options.currentUserId,
-                        displayName: data.nickname || data.full_name || 'User',
-                        avatarUrl: data.avatar_url,
-                        role: data.role as UserRole,
-                        floorId: persistedLocation?.floorId || null,
-                        x: persistedLocation?.x ?? Math.random() * 20 + 40,
-                        y: persistedLocation?.y ?? Math.random() * 20 + 40,
-                        isWalking: false,
-                        statusMessage: readPersistedStatus()
-                    });
-                    await channel.track({ player: currentLocalPlayer });
+                const persistedLocation = readPersistedLocation();
+                const fallbackPlayer = applyPendingSpawn({
+                    id: options.currentUserId,
+                    displayName: 'User',
+                    avatarUrl: null,
+                    role: undefined,
+                    floorId: persistedLocation?.floorId || null,
+                    x: persistedLocation?.x ?? Math.random() * 20 + 40,
+                    y: persistedLocation?.y ?? Math.random() * 20 + 40,
+                    isWalking: false,
+                    statusMessage: readPersistedStatus(),
+                });
+
+                // Auto-fetch profile for initial connection. If it fails, still create
+                // a fallback player so movement and avatar bubble continue to work.
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('nickname, full_name, avatar_url, role')
+                    .eq('id', options.currentUserId)
+                    .single();
+
+                if (error && DEBUG_WORKSPACE) {
+                    console.warn('[workspace] profile hydration failed, using fallback player:', error.message);
                 }
+
+                currentLocalPlayer = data
+                    ? {
+                        ...fallbackPlayer,
+                        displayName: data.nickname || data.full_name || fallbackPlayer.displayName,
+                        avatarUrl: data.avatar_url || null,
+                        role: data.role as UserRole,
+                    }
+                    : fallbackPlayer;
+
+                emitPlayers([
+                    ...lastPlayers.filter((p) => p.id !== currentLocalPlayer!.id),
+                    currentLocalPlayer,
+                ]);
+                await channel.track({ player: currentLocalPlayer });
             }
         });
 

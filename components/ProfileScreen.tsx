@@ -17,6 +17,7 @@ import {
   unhideNotificationForUser,
 } from '../services/newsfeedService';
 import { toastError, toastSuccess } from '../utils/toast';
+import ThemeToggle from './ThemeToggle';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
@@ -493,6 +494,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
       {/* Actions */}
       <div className="space-y-3 mt-4">
+        <div className="glass-card-enhanced p-4 rounded-2xl border border-white/10">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Appearance</p>
+          <ThemeToggle showSystem={false} />
+        </div>
+
         {isEditing ? (
           <>
             <LoadingButton

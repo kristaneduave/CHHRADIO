@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { CurrentWorkstationStatus, NewsfeedOnlineUser, Floor } from '../types';
+import { CurrentWorkstationStatus, NewsfeedOnlineUser, Floor, WorkspacePlayer } from '../types';
 import VirtualWorkspaceRenderer, { ReleaseAndMoveIntent } from './VirtualWorkspaceRenderer';
 import { workspacePresenceService } from '../services/virtualWorkspacePresence';
 
@@ -17,6 +17,7 @@ interface WorkstationViewerModalProps {
     onSetAvatarStatus: (message: string | null) => Promise<void>;
     currentStatusMessage?: string | null;
     floors: Floor[];
+    error?: string | null;
 }
 
 const STATUS_PRESETS = [
@@ -40,16 +41,29 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     onSetAvatarStatus,
     currentStatusMessage,
     floors,
+    error,
 }) => {
     const [statusInput, setStatusInput] = useState('');
     const [showMobileStatusSheet, setShowMobileStatusSheet] = useState(false);
     const [pendingReleaseIntent, setPendingReleaseIntent] = useState<ReleaseAndMoveIntent | null>(null);
+    const [expandedFloorId, setExpandedFloorId] = useState<string | null>(null);
+    const [players, setPlayers] = useState<WorkspacePlayer[]>([]);
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
     useEffect(() => {
         if (!isOpen) return;
         setStatusInput(currentStatusMessage || '');
     }, [isOpen, currentStatusMessage]);
+
+    useEffect(() => {
+        if (!isOpen || !currentUserId) return;
+        const unsubscribe = workspacePresenceService.subscribe({
+            currentUserId,
+            onPlayersChange: setPlayers,
+            onError: console.error,
+        });
+        return unsubscribe;
+    }, [isOpen, currentUserId]);
 
     useEffect(() => {
         if (!pendingReleaseIntent) return;
@@ -59,10 +73,38 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
         return () => window.clearTimeout(timer);
     }, [pendingReleaseIntent]);
 
-    if (!isOpen) return null;
-
     const myOccupiedWorkstation =
         workstations.find((ws) => ws.status === 'IN_USE' && ws.occupant_id === currentUserId) || null;
+
+    const groupedUsers = useMemo(() => {
+        type UserWithLoc = typeof onlineUsers[0] & { floorId?: string | null, statusMessage?: string | null };
+        const groups: Record<string, UserWithLoc[]> = {};
+        const UNKNOWN_LOC = 'Elsewhere';
+
+        onlineUsers.forEach(u => {
+            const p = players.find(player => player.id === u.id);
+            const userWithLoc = { ...u, floorId: p?.floorId, statusMessage: p?.statusMessage };
+            const floor = floors.find(f => f.id === p?.floorId);
+            const groupName = floor ? floor.name : UNKNOWN_LOC;
+
+            if (!groups[groupName]) groups[groupName] = [];
+            groups[groupName].push(userWithLoc);
+        });
+
+        const orderedGroups: { name: string, users: UserWithLoc[] }[] = [];
+        floors.forEach(f => {
+            if (groups[f.name]) {
+                orderedGroups.push({ name: f.name, users: groups[f.name] });
+            }
+        });
+        if (groups[UNKNOWN_LOC]) {
+            orderedGroups.push({ name: UNKNOWN_LOC, users: groups[UNKNOWN_LOC] });
+        }
+
+        return orderedGroups;
+    }, [onlineUsers, players, floors]);
+
+    if (!isOpen) return null;
 
     const saveStatus = async (message: string | null, closeMobile = false) => {
         try {
@@ -95,8 +137,8 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     };
 
     const modalContent = (
-        <div className="fixed inset-0 z-[100] bg-app animate-in fade-in duration-200">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.10),transparent_45%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.10),transparent_40%)]" />
+        <div className="fixed inset-0 z-[100] bg-[#0a1018]/90 backdrop-blur-2xl animate-in fade-in duration-200">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.15),transparent_45%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.15),transparent_40%)]" />
 
             <div className="relative z-10 h-full w-full flex flex-col md:flex-row">
                 <div className="flex-1 flex flex-col overflow-hidden md:border-r border-white/5">
@@ -168,21 +210,44 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-[#0a1018]/70 scrollbar-hide">
-                        {loading || floors.length === 0 ? (
+                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-transparent scrollbar-hide">
+                        {error ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center text-slate-300 px-6">
+                                <span className="material-icons text-4xl mb-3 text-rose-400">error_outline</span>
+                                <p className="text-sm font-semibold text-white">Workspace unavailable</p>
+                                <p className="text-xs text-slate-400 mt-1">{error}</p>
+                            </div>
+                        ) : loading ? (
                             <div className="h-full flex flex-col items-center justify-center text-slate-400">
                                 <span className="material-icons animate-spin text-4xl mb-4 text-emerald-400">refresh</span>
                                 <p>Loading Workspace Maps...</p>
                             </div>
+                        ) : floors.length === 0 ? (
+                            <div className="h-full flex flex-col items-center justify-center text-center text-slate-300 px-6">
+                                <span className="material-icons text-4xl mb-3 text-amber-400">map</span>
+                                <p className="text-sm font-semibold text-white">No workspace maps configured</p>
+                                <p className="text-xs text-slate-400 mt-1">Ask admin to add a floor map and workstation points.</p>
+                            </div>
                         ) : (
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 md:gap-6 h-full min-h-[700px] xl:min-h-0">
-                                {floors.map((floor) => (
-                                    <div key={floor.id} className="flex flex-col h-full bg-black/40 rounded-2xl border border-white/5 overflow-hidden">
-                                        <div className="px-4 py-2 bg-black/20 border-b border-white/5 flex items-center justify-between">
+                            <div className={`grid grid-cols-1 ${expandedFloorId ? '' : 'xl:grid-cols-2'} gap-4 md:gap-6 h-full min-h-[700px] xl:min-h-0`}>
+                                {(expandedFloorId ? floors.filter(f => f.id === expandedFloorId) : floors).map((floor) => (
+                                    <div key={floor.id} className="flex flex-col h-full bg-black/40 shadow-2xl backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden transition-all duration-300">
+                                        <div className="px-4 py-2 bg-gradient-to-r from-black/40 to-transparent border-b border-white/5 flex items-center justify-between">
                                             <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                                                 <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
                                                 {floor.name}
                                             </h3>
+                                            {floors.length > 1 && (
+                                                <button
+                                                    onClick={() => setExpandedFloorId(expandedFloorId === floor.id ? null : floor.id)}
+                                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/5"
+                                                    title={expandedFloorId === floor.id ? "Show All Maps" : "Focus Map"}
+                                                >
+                                                    <span className="material-icons text-[18px]">
+                                                        {expandedFloorId === floor.id ? 'fullscreen_exit' : 'fullscreen'}
+                                                    </span>
+                                                </button>
+                                            )}
                                         </div>
                                         <div className="flex-1 relative min-h-[320px]">
                                             <VirtualWorkspaceRenderer
@@ -202,8 +267,8 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                     </div>
                 </div>
 
-                <div className="w-full md:w-80 shrink-0 bg-black/20 flex-col relative z-10 h-64 md:h-auto border-t md:border-t-0 border-white/5 hidden md:flex">
-                    <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between shrink-0">
+                <div className="w-full md:w-80 shrink-0 bg-black/40 backdrop-blur-xl flex-col relative z-10 h-64 md:h-auto border-t md:border-t-0 md:border-l border-white/10 hidden md:flex shadow-2xl">
+                    <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-gradient-to-b from-black/40 to-transparent">
                         <h3 className="text-lg font-bold text-white flex items-center gap-2">
                             <span className="relative flex h-2.5 w-2.5">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -214,25 +279,54 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                         <span className="bg-white/10 text-slate-300 text-xs font-bold px-2 py-1 rounded-full">{onlineUsers.length}</span>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
                         {onlineUsers.length === 0 && !loading && (
                             <p className="text-sm text-slate-500 text-center py-8">No one else is online right now.</p>
                         )}
-                        {onlineUsers.map((user) => (
-                            <div key={user.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors cursor-default">
-                                <div className="relative">
-                                    {user.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt={user.displayName} className="w-10 h-10 rounded-full object-cover border border-white/10" />
-                                    ) : (
-                                        <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold border border-primary/30">
-                                            {user.displayName.charAt(0).toUpperCase()}
+                        {groupedUsers.map(group => (
+                            <div key={group.name} className="space-y-3">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                                    {group.name !== 'Elsewhere' && <span className="w-1.5 h-1.5 rounded-full bg-cyan-500/50"></span>}
+                                    {group.name}
+                                </h4>
+                                <div className="space-y-1">
+                                    {group.users.map((user) => (
+                                        <div key={user.id} className="group flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition-colors cursor-default border border-transparent hover:border-white/5">
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="relative shrink-0">
+                                                    {user.avatarUrl ? (
+                                                        <img src={user.avatarUrl} alt={user.displayName} className="w-9 h-9 rounded-full object-cover border border-white/10" />
+                                                    ) : (
+                                                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold border border-primary/30">
+                                                            {user.displayName.charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#0f1621] rounded-full"></span>
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-bold text-white truncate flex items-center gap-2">
+                                                        {user.displayName}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 truncate">
+                                                        {user.statusMessage ? (
+                                                            <span className="text-cyan-400">{user.statusMessage}</span>
+                                                        ) : (
+                                                            user.role || 'Staff'
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            {user.floorId && (
+                                                <button
+                                                    onClick={() => setExpandedFloorId(user.floorId!)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all focus:opacity-100"
+                                                    title="Focus Map"
+                                                >
+                                                    <span className="material-icons text-[16px]">my_location</span>
+                                                </button>
+                                            )}
                                         </div>
-                                    )}
-                                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0f1621] rounded-full"></span>
-                                </div>
-                                <div className="min-w-0">
-                                    <p className="text-sm font-bold text-white truncate">{user.displayName}</p>
-                                    <p className="text-xs text-slate-400 truncate">{user.role || 'Staff'}</p>
+                                    ))}
                                 </div>
                             </div>
                         ))}

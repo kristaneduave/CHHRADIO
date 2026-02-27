@@ -392,3 +392,32 @@ export interface QuizAttemptSummary {
 }
 
 export type QuizAnswerMap = Record<string, { selected_answer_index: number; response_time_ms: number }>;
+
+export interface ResidentMonthlyCensus {
+  id: string;
+  resident_id: string;
+  report_month: string;
+  interesting_cases_submitted: number;
+  notes_count: number;
+  fuente_ct_census: number;
+  fuente_mri_census: number;
+  fuente_xray_census: number;
+  plates_count: number;
+  has_absence: boolean;
+  absence_days: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ResidentMonthlyCensusInput {
+  resident_id: string;
+  report_month: string;
+  interesting_cases_submitted: number;
+  notes_count: number;
+  fuente_ct_census: number;
+  fuente_mri_census: number;
+  fuente_xray_census: number;
+  plates_count: number;
+  has_absence: boolean;
+  absence_days: number;
+}

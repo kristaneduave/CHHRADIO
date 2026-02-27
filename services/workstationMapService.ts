@@ -34,8 +34,8 @@ const occupancyOwnershipCache = new Map<string, { at: number; value: boolean }>(
 const isMissingColumnError = (message?: string): boolean =>
   Boolean(
     message &&
-      (/column .+ does not exist/i.test(message) ||
-        /could not find the '.+' column of '.+' in the schema cache/i.test(message)),
+    (/column .+ does not exist/i.test(message) ||
+      /could not find the '.+' column of '.+' in the schema cache/i.test(message)),
   );
 
 const getActorProfile = async (userId: string) => {
@@ -120,7 +120,14 @@ export const workstationMapService = {
       console.error('Error fetching floors:', error);
       throw new Error(error.message);
     }
-    return data || [];
+
+    // Override with mock design for now
+    return (data || []).map(f => ({
+      ...f,
+      image_url: '/mock-map.png',
+      width: 735,
+      height: 824
+    }));
   },
 
   async getWorkstationsByFloor(floorId: string): Promise<CurrentWorkstationStatus[]> {
