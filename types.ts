@@ -391,7 +391,52 @@ export interface QuizAttemptSummary {
   completed_at: string;
 }
 
-export type QuizAnswerMap = Record<string, { selected_answer_index: number; response_time_ms: number }>;
+export type QuizAnswerMap = Record<string, { selected_answer_index?: number; response_time_ms: number }>;
+
+export interface QuizClientEvent {
+  event_type: string;
+  question_id: string | null;
+  event_at: string;
+  meta: Record<string, unknown>;
+}
+
+export interface QuizExamAnalyticsRow {
+  exam_id: string;
+  exam_title: string;
+  specialty: string;
+  attempts_count: number;
+  avg_score_percent: number;
+  pass_rate_percent: number;
+}
+
+export interface QuizQuestionAnalyticsRow {
+  question_id: string;
+  exam_id: string;
+  exam_title: string;
+  question_text: string;
+  sort_order: number;
+  correct_rate_percent: number;
+  avg_response_time_ms: number;
+  discrimination_proxy: number;
+}
+
+export interface QuizUserAnalyticsRow {
+  user_id: string;
+  full_name: string | null;
+  username: string | null;
+  role: UserRole | string | null;
+  attempts_count: number;
+  avg_score_percent: number;
+  pass_rate_percent: number;
+}
+
+export interface QuizGroupAnalyticsRow {
+  role: UserRole | string | null;
+  year_level: string | null;
+  attempts_count: number;
+  learners_count: number;
+  avg_score_percent: number;
+}
 
 export interface ResidentMonthlyCensus {
   id: string;
@@ -420,4 +465,24 @@ export interface ResidentMonthlyCensusInput {
   plates_count: number;
   has_absence: boolean;
   absence_days: number;
+}
+
+export type AccountAccessRequestRole = 'resident' | 'consultant' | 'fellow';
+export type AccountAccessRequestStatusType = 'pending' | 'approved' | 'rejected';
+
+export interface AccountAccessRequestInput {
+  fullName: string;
+  email: string;
+  requestedRole: AccountAccessRequestRole;
+  yearLevel?: string | null;
+}
+
+export interface AccountAccessRequestStatus {
+  publicToken: string;
+  email: string;
+  requestedRole: AccountAccessRequestRole;
+  yearLevel: string | null;
+  status: AccountAccessRequestStatusType;
+  createdAt: string;
+  reviewedAt: string | null;
 }

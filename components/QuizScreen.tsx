@@ -1,14 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { SPECIALTIES } from '../constants';
-import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
-import { QuizAnswerMap, QuizAttemptSummary, QuizExam, QuizQuestion, UserRole } from '../types';
-import { getRoleLabel, normalizeUserRole } from '../utils/roles';
+import {
+  fetchQuizAnalytics,
+  getQuizBootstrapContext,
+  listExamQuestions,
+  listManageExams,
+  listPublishedExamsWithCounts,
+  QuizExamWithCounts,
+  saveExamWithQuestions,
+  submitQuizAttempt,
+  updateExamStatus,
+} from '../services/quizService';
+import {
+  QuizAnswerMap,
+  QuizAttemptSummary,
+  QuizClientEvent,
+  QuizExam,
+  QuizExamAnalyticsRow,
+  QuizGroupAnalyticsRow,
+  QuizQuestion,
+  QuizQuestionAnalyticsRow,
+  QuizUserAnalyticsRow,
+  UserRole,
+} from '../types';
+import { getRoleLabel } from '../utils/roles';
 import { toastError, toastInfo, toastSuccess } from '../utils/toast';
 import LoadingState from './LoadingState';
 
 type Tab = 'take' | 'manage' | 'analytics';
-type ExamRow = QuizExam & { question_count: number; attempt_count: number };
+type ExamRow = QuizExamWithCounts;
 
 type DraftQuestion = {
   id?: string;
@@ -44,7 +65,7 @@ const QuizScreen: React.FC = () => {
   const [answers, setAnswers] = useState<QuizAnswerMap>({});
   const [startedAt, setStartedAt] = useState<string | null>(null);
   const [seenAt, setSeenAt] = useState(0);
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<QuizClientEvent[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<QuizAttemptSummary | null>(null);
   const [practice, setPractice] = useState(false);
@@ -64,10 +85,10 @@ const QuizScreen: React.FC = () => {
   const [saving, setSaving] = useState(false);
 
   const [anLoading, setAnLoading] = useState(false);
-  const [examAn, setExamAn] = useState<any[]>([]);
-  const [questionAn, setQuestionAn] = useState<any[]>([]);
-  const [userAn, setUserAn] = useState<any[]>([]);
-  const [groupAn, setGroupAn] = useState<any[]>([]);
+  const [examAn, setExamAn] = useState<QuizExamAnalyticsRow[]>([]);
+  const [questionAn, setQuestionAn] = useState<QuizQuestionAnalyticsRow[]>([]);
+  const [userAn, setUserAn] = useState<QuizUserAnalyticsRow[]>([]);
+  const [groupAn, setGroupAn] = useState<QuizGroupAnalyticsRow[]>([]);
 
   const canManage = role === 'training_officer' || role === 'admin' || role === 'moderator';
   const canAnalytics = canManage;
@@ -112,16 +133,12 @@ const QuizScreen: React.FC = () => {
 
   const bootstrap = async () => {
     try {
-      const { data } = await supabase.auth.getUser();
-      const id = data?.user?.id || '';
-      setUid(id);
-      if (id) {
-        const { data: p, error } = await supabase.from('profiles').select('role').eq('id', id).single();
-        if (error) throw error;
-        setRole(normalizeUserRole(p?.role));
-      }
-    } catch (err: any) {
-      toastError('Quiz init failed', err?.message);
+      const context = await getQuizBootstrapContext();
+      setUid(context.uid);
+      setRole(context.role);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Quiz init failed', message);
     } finally {
       setBoot(false);
     }
@@ -130,43 +147,10 @@ const QuizScreen: React.FC = () => {
   const loadExams = async () => {
     try {
       setExamsLoading(true);
-      let rows: any[] = [];
-      const a = await supabase
-        .from('quiz_exams')
-        .select('id,title,specialty,description,duration_minutes,pass_mark_percent,status,is_published,created_by,created_at,updated_at')
-        .or('status.eq.published,is_published.eq.true');
-      if (a.error) {
-        const b = await supabase
-          .from('quiz_exams')
-          .select('id,title,specialty,description,duration_minutes,is_published,created_by,created_at,updated_at')
-          .eq('is_published', true);
-        if (b.error) throw b.error;
-        rows = (b.data || []).map((x) => ({ ...x, pass_mark_percent: 70, status: x.is_published ? 'published' : 'draft' }));
-      } else {
-        rows = a.data || [];
-      }
-      const ids = rows.map((x) => x.id);
-      const [qRows, atRows] = await Promise.all([
-        ids.length ? supabase.from('quiz_questions').select('exam_id').in('exam_id', ids) : Promise.resolve({ data: [], error: null } as any),
-        ids.length ? supabase.from('quiz_attempts').select('exam_id').in('exam_id', ids) : Promise.resolve({ data: [], error: null } as any),
-      ]);
-      if (qRows.error) throw qRows.error;
-      if (atRows.error) throw atRows.error;
-      const qCount: Record<string, number> = {};
-      (qRows.data || []).forEach((r: any) => (qCount[r.exam_id] = (qCount[r.exam_id] || 0) + 1));
-      const atCount: Record<string, number> = {};
-      (atRows.data || []).forEach((r: any) => (atCount[r.exam_id] = (atCount[r.exam_id] || 0) + 1));
-      setExams(
-        rows.map((x) => ({
-          ...x,
-          pass_mark_percent: n(x.pass_mark_percent, 70),
-          status: (x.status || (x.is_published ? 'published' : 'draft')) as QuizExam['status'],
-          question_count: qCount[x.id] || 0,
-          attempt_count: atCount[x.id] || 0,
-        })),
-      );
-    } catch (err: any) {
-      toastError('Failed to load exams', err?.message);
+      setExams(await listPublishedExamsWithCounts());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Failed to load exams', message);
       setExams([]);
     } finally {
       setExamsLoading(false);
@@ -174,13 +158,7 @@ const QuizScreen: React.FC = () => {
   };
 
   const loadQuestions = async (examId: string): Promise<QuizQuestion[]> => {
-    const { data, error } = await supabase
-      .from('quiz_questions')
-      .select('id,exam_id,question_text,question_type,image_url,options,correct_answer_index,explanation,points,sort_order,created_at')
-      .eq('exam_id', examId)
-      .order('sort_order');
-    if (error) throw error;
-    return (data || []).map((r: any) => ({ ...r, options: Array.isArray(r.options) ? r.options.map((z: any) => String(z)) : [] }));
+    return listExamQuestions(examId);
   };
 
   const startExam = async (exam: ExamRow) => {
@@ -203,8 +181,9 @@ const QuizScreen: React.FC = () => {
         if (saved?.answers) setAnswers(saved.answers);
         if (saved?.idx != null) setIdx(Math.max(0, Math.min(Number(saved.idx), qs.length - 1)));
       }
-    } catch (err: any) {
-      toastError('Failed to start exam', err?.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Failed to start exam', message);
     }
   };
 
@@ -241,30 +220,19 @@ const QuizScreen: React.FC = () => {
 
     try {
       setSubmitting(true);
-      const { data, error } = await supabase.rpc('submit_quiz_attempt', {
-        p_exam_id: activeExam.id,
-        p_answers: answers,
-        p_started_at: startedAt || new Date().toISOString(),
-        p_client_events: [...events, { event_type: 'submit', event_at: new Date().toISOString(), meta: {} }],
-      });
-      if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (!row) throw new Error('No result returned.');
-      setSummary({
-        attempt_id: row.attempt_id,
-        score: n(row.score),
-        total_points: n(row.total_points),
-        correct_count: n(row.correct_count),
-        is_pass: !!row.is_pass,
-        duration_seconds: n(row.duration_seconds),
-        completed_at: row.completed_at,
-      });
+      setSummary(
+        await submitQuizAttempt(activeExam.id, answers, startedAt || new Date().toISOString(), [
+          ...events,
+          { event_type: 'submit', question_id: null, event_at: new Date().toISOString(), meta: {} },
+        ]),
+      );
       if (key) localStorage.removeItem(key);
       toastSuccess('Exam submitted');
       void loadExams();
       if (canAnalytics) void loadAnalytics();
-    } catch (err: any) {
-      toastError('Submit failed', err?.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Submit failed', message);
     } finally {
       setSubmitting(false);
     }
@@ -280,7 +248,7 @@ const QuizScreen: React.FC = () => {
     setStartedAt(new Date().toISOString());
     setAnswers((p) => {
       const next: QuizAnswerMap = { ...p };
-      wrong.forEach((x) => (next[x.id] = { selected_answer_index: undefined as any, response_time_ms: 0 }));
+      wrong.forEach((x) => (next[x.id] = { response_time_ms: 0 }));
       return next;
     });
   };
@@ -300,16 +268,10 @@ const QuizScreen: React.FC = () => {
     if (!canManage) return;
     try {
       setManageLoading(true);
-      let q = supabase
-        .from('quiz_exams')
-        .select('id,title,specialty,description,duration_minutes,pass_mark_percent,status,is_published,created_by,created_at,updated_at')
-        .order('updated_at', { ascending: false });
-      if (role === 'training_officer') q = q.eq('created_by', uid);
-      const { data, error } = await q;
-      if (error) throw error;
-      setManageExams((data || []).map((x: any) => ({ ...x, pass_mark_percent: n(x.pass_mark_percent, 70), status: x.status || (x.is_published ? 'published' : 'draft'), question_count: 0, attempt_count: 0 })));
-    } catch (err: any) {
-      toastError('Manage load failed', err?.message);
+      setManageExams(await listManageExams(role, uid));
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Manage load failed', message);
     } finally {
       setManageLoading(false);
     }
@@ -335,21 +297,18 @@ const QuizScreen: React.FC = () => {
     if (valid.some((x) => x.options.filter((o) => o.trim()).length < 2 || !x.explanation.trim())) return toastError('Each question needs at least two options and explanation');
     try {
       setSaving(true);
-      let id = editExam.id;
-      const isNewExam = !id;
-      if (!id) {
-        const ins = await supabase.from('quiz_exams').insert({ ...editExam, created_by: uid }).select('id').single();
-        if (ins.error) throw ins.error;
-        id = ins.data.id;
-      } else {
-        const up = await supabase.from('quiz_exams').update(editExam).eq('id', id);
-        if (up.error) throw up.error;
-      }
-      const del = await supabase.from('quiz_questions').delete().eq('exam_id', id);
-      if (del.error) throw del.error;
-      const payload = valid.map((x, i) => ({ exam_id: id, question_text: x.question_text.trim(), options: x.options.map((o) => o.trim()), correct_answer_index: x.correct_answer_index, explanation: x.explanation.trim(), points: Math.max(1, n(x.points, 1)), sort_order: i, question_type: 'mcq' }));
-      const insQ = await supabase.from('quiz_questions').insert(payload);
-      if (insQ.error) throw insQ.error;
+      const { examId: id, isNewExam } = await saveExamWithQuestions(
+        editExam,
+        uid,
+        valid.map((item) => ({
+          question_text: item.question_text,
+          options: item.options,
+          correct_answer_index: item.correct_answer_index,
+          explanation: item.explanation,
+          points: item.points,
+          question_type: 'mcq',
+        })),
+      );
 
       try {
         const recipients = await fetchAllRecipientUserIds();
@@ -372,16 +331,21 @@ const QuizScreen: React.FC = () => {
       await Promise.all([loadManage(), loadExams()]);
       if (canAnalytics) await loadAnalytics();
       setEditExam((p) => ({ ...p, id }));
-    } catch (err: any) {
-      toastError('Save failed', err?.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Save failed', message);
     } finally {
       setSaving(false);
     }
   };
 
   const setStatus = async (id: string, status: QuizExam['status']) => {
-    const { error } = await supabase.from('quiz_exams').update({ status }).eq('id', id);
-    if (error) return toastError('Status update failed', error.message);
+    try {
+      await updateExamStatus(id, status);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      return toastError('Status update failed', message);
+    }
 
     if (status === 'published') {
       try {
@@ -410,29 +374,21 @@ const QuizScreen: React.FC = () => {
     if (!canAnalytics) return;
     try {
       setAnLoading(true);
-      const [a, b, c, d] = await Promise.all([
-        supabase.from('quiz_exam_analytics_v').select('*').limit(500),
-        supabase.from('quiz_question_analytics_v').select('*').limit(500),
-        supabase.from('quiz_user_analytics_v').select('*').limit(500),
-        supabase.from('quiz_group_analytics_v').select('*').limit(500),
-      ]);
-      if (a.error) throw a.error;
-      if (b.error) throw b.error;
-      if (c.error) throw c.error;
-      if (d.error) throw d.error;
-      setExamAn(a.data || []);
-      setQuestionAn(b.data || []);
-      setUserAn(c.data || []);
-      setGroupAn(d.data || []);
-    } catch (err: any) {
-      toastError('Analytics load failed', err?.message);
+      const analytics = await fetchQuizAnalytics();
+      setExamAn(analytics.exams);
+      setQuestionAn(analytics.questions);
+      setUserAn(analytics.users);
+      setGroupAn(analytics.groups);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : undefined;
+      toastError('Analytics load failed', message);
     } finally {
       setAnLoading(false);
     }
   };
 
   const exportCsv = () => {
-    const rows = [['Exam', 'Specialty', 'Attempts', 'Avg Score %', 'Pass Rate %'], ...examAn.map((x: any) => [x.exam_title, x.specialty, x.attempts_count, x.avg_score_percent, x.pass_rate_percent])];
+    const rows = [['Exam', 'Specialty', 'Attempts', 'Avg Score %', 'Pass Rate %'], ...examAn.map((x) => [x.exam_title, x.specialty, x.attempts_count, x.avg_score_percent, x.pass_rate_percent])];
     const csv = rows.map((r) => r.map(e).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -602,10 +558,10 @@ const QuizScreen: React.FC = () => {
                 <div className="glass-card-enhanced border border-white/10 rounded-xl p-3"><p className="text-[10px] text-slate-500 uppercase">Group Rows</p><p className="text-lg text-white font-bold">{groupAn.length}</p></div>
               </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 min-h-0">
-                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Exam Analytics</h4><div className="space-y-2">{examAn.slice(0, 30).map((x: any, i: number) => <div key={`${x.exam_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{x.exam_title}</p><p className="text-slate-400">{x.specialty}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Avg {n(x.avg_score_percent).toFixed(1)}% - Pass {n(x.pass_rate_percent).toFixed(1)}%</p></div>)}</div></div>
-                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Question Diagnostics</h4><div className="space-y-2">{questionAn.slice(0, 30).map((x: any, i: number) => <div key={`${x.question_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">Q{n(x.sort_order) + 1} - {x.exam_title}</p><p className="text-slate-400">{x.question_text}</p><p className="text-slate-400 mt-1">Correct {n(x.correct_rate_percent).toFixed(1)}% - Resp {Math.round(n(x.avg_response_time_ms))}ms - Disc {n(x.discrimination_proxy).toFixed(3)}</p></div>)}</div></div>
-                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">User Performance</h4><div className="space-y-2">{userAn.slice(0, 30).map((x: any, i: number) => <div key={`${x.user_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{x.full_name || x.username || 'Unknown'}</p><p className="text-slate-400">{getRoleLabel(x.role)}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Avg {n(x.avg_score_percent).toFixed(1)}% - Pass {n(x.pass_rate_percent).toFixed(1)}%</p></div>)}</div></div>
-                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Group Performance</h4><div className="space-y-2">{groupAn.slice(0, 30).map((x: any, i: number) => <div key={`${x.role}-${x.year_level}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{getRoleLabel(x.role)} - {x.year_level}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Learners {x.learners_count} - Avg {n(x.avg_score_percent).toFixed(1)}%</p></div>)}</div></div>
+                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Exam Analytics</h4><div className="space-y-2">{examAn.slice(0, 30).map((x, i: number) => <div key={`${x.exam_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{x.exam_title}</p><p className="text-slate-400">{x.specialty}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Avg {n(x.avg_score_percent).toFixed(1)}% - Pass {n(x.pass_rate_percent).toFixed(1)}%</p></div>)}</div></div>
+                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Question Diagnostics</h4><div className="space-y-2">{questionAn.slice(0, 30).map((x, i: number) => <div key={`${x.question_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">Q{n(x.sort_order) + 1} - {x.exam_title}</p><p className="text-slate-400">{x.question_text}</p><p className="text-slate-400 mt-1">Correct {n(x.correct_rate_percent).toFixed(1)}% - Resp {Math.round(n(x.avg_response_time_ms))}ms - Disc {n(x.discrimination_proxy).toFixed(3)}</p></div>)}</div></div>
+                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">User Performance</h4><div className="space-y-2">{userAn.slice(0, 30).map((x, i: number) => <div key={`${x.user_id}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{x.full_name || x.username || 'Unknown'}</p><p className="text-slate-400">{getRoleLabel(x.role)}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Avg {n(x.avg_score_percent).toFixed(1)}% - Pass {n(x.pass_rate_percent).toFixed(1)}%</p></div>)}</div></div>
+                <div className="glass-card-enhanced border border-white/10 rounded-2xl p-3 overflow-y-auto"><h4 className="text-sm text-white font-semibold mb-2">Group Performance</h4><div className="space-y-2">{groupAn.slice(0, 30).map((x, i: number) => <div key={`${x.role}-${x.year_level}-${i}`} className="border border-white/10 rounded-xl p-2 text-xs"><p className="text-slate-100">{getRoleLabel(x.role)} - {x.year_level || '-'}</p><p className="text-slate-400 mt-1">Attempts {x.attempts_count} - Learners {x.learners_count} - Avg {n(x.avg_score_percent).toFixed(1)}%</p></div>)}</div></div>
               </div>
             </>
           )}
@@ -616,4 +572,3 @@ const QuizScreen: React.FC = () => {
 };
 
 export default QuizScreen;
-
