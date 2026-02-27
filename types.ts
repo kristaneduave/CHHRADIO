@@ -47,6 +47,28 @@ export interface WorkspacePlayer {
   statusMessage: string | null;
 }
 
+export interface WorkspaceAreaPresenceRow {
+  id: string;
+  userId: string;
+  floorId: string;
+  x: number;
+  y: number;
+  statusMessage: string | null;
+  isPresent: boolean;
+  lastSeenAt: string;
+  clearedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  displayName: string;
+  avatarUrl: string | null;
+  role?: UserRole;
+}
+
+export interface MergedWorkspacePlayer extends WorkspacePlayer {
+  source: 'realtime' | 'persistent';
+  persisted: boolean;
+}
+
 export interface QuickAction {
   label: string;
   icon: string;

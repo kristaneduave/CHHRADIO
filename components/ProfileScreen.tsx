@@ -77,6 +77,16 @@ const getDisplayTitle = (item: any) => {
   return String(item?.analysis_result?.impression || item?.diagnosis || item?.title || 'Interesting Case').toUpperCase();
 };
 
+const buildFallbackNickname = (fullName?: string, username?: string, email?: string | null): string => {
+  const byName = String(fullName || '').trim();
+  if (byName.length >= 3) return byName;
+  const byUsername = String(username || '').trim();
+  if (byUsername.length >= 3) return byUsername;
+  const byEmail = String(email || '').split('@')[0].trim();
+  if (byEmail.length >= 3) return byEmail;
+  return 'Resident';
+};
+
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase }) => {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
@@ -154,6 +164,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       }
 
       if (data) {
+        const safeNickname = buildFallbackNickname(data.full_name, data.username, user.email);
         setProfile({
           full_name: data.full_name || '',
           username: data.username || '',
@@ -163,7 +174,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
           avatar_url: data.avatar_url || '',
           role: (data.role as UserRole) || 'resident',
-          nickname: data.nickname || ''
+          nickname: data.nickname || safeNickname
         });
       }
     } catch (error: any) {
@@ -209,11 +220,27 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
       if (!user) throw new Error('No user');
 
+      // Guard against DB username length checks for newly created accounts.
+      const normalizedUsername = String(profile.username || '')
+        .trim()
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      const fallbackBase =
+        String(profile.full_name || user.email?.split('@')[0] || 'user')
+          .trim()
+          .replace(/\s+/g, '_')
+          .toLowerCase() || 'user';
+      const minLen = 3;
+      const safeUsername =
+        normalizedUsername.length >= minLen
+          ? normalizedUsername
+          : `${fallbackBase}${Math.random().toString(36).slice(2, 6)}`.slice(0, 24);
+
       const updates = {
         id: user.id,
         full_name: profile.full_name,
-        username: profile.username,
-        nickname: profile.nickname, // Added nickname
+        username: safeUsername,
+        nickname: profile.nickname.trim(),
         bio: profile.bio,
         year_level: profile.year_level,
         avatar_url: avatarUrl || profile.avatar_url,
@@ -224,6 +251,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       const { error } = await supabase.from('profiles').upsert(updates);
 
       if (error) throw error;
+      setProfile((prev) => ({ ...prev, username: safeUsername }));
       setMessage({ type: 'success', text: 'Profile updated successfully!' });
 
       if (!avatarUrl) { // Don't close editing if just uploading avatar
@@ -306,6 +334,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   if (loading) {
     return <LoadingState title="Loading profile..." />;
   }
+
+  const nicknameTrimmed = String(profile.nickname || '').trim();
+  const nicknameError =
+    nicknameTrimmed.length < 3
+      ? 'Display name is required and must be at least 3 characters.'
+      : null;
+  const canSaveProfile = !nicknameError && !updating;
 
   const handleUnhideAnnouncement = async (announcementId: string) => {
     try {
@@ -413,56 +448,55 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         {/* Edit Form */}
         {isEditing && (
           <div className="w-full max-w-sm space-y-4">
-            <div>
-              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-              <input
-                name="full_name"
-                value={profile.full_name}
-                onChange={handleChange}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                placeholder="Dr. Alex Smith"
-              />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Identity</p>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
+                <input
+                  name="full_name"
+                  value={profile.full_name}
+                  onChange={handleChange}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  placeholder="Dr. Alex Smith"
+                />
+              </div>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Display Name (Required)</label>
+                <input
+                  name="nickname"
+                  value={profile.nickname || ''}
+                  onChange={handleChange}
+                  className={`w-full bg-white/5 border rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600 ${nicknameError ? 'border-rose-500/50' : 'border-white/10'}`}
+                  placeholder="How others will see your name"
+                />
+                <p className="mt-1 text-[10px] text-slate-500">Used in covers, activity feeds, and workspace presence.</p>
+                {nicknameError ? <p className="mt-1 text-[10px] text-rose-400">{nicknameError}</p> : null}
+              </div>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Year Level</label>
+                <input
+                  name="year_level"
+                  value={profile.year_level}
+                  onChange={handleChange}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
+                  placeholder="e.g. R1, R2, Fellow"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nickname (Optional)</label>
-              <input
-                name="nickname"
-                value={profile.nickname || ''}
-                onChange={handleChange}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
-                placeholder="e.g. Alex"
-              />
-            </div>
-            <div>
-              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Username</label>
-              <input
-                name="username"
-                value={profile.username}
-                onChange={handleChange}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                placeholder="asmith"
-              />
-            </div>
-            <div>
-              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
-              <textarea
-                name="bio"
-                value={profile.bio}
-                onChange={handleChange}
-                rows={3}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
-                placeholder="Resident physician..."
-              />
-            </div>
-            <div>
-              <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Year Level</label>
-              <input
-                name="year_level"
-                value={profile.year_level}
-                onChange={handleChange}
-                className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all"
-                placeholder="e.g. R1, R2, Fellow"
-              />
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">About</p>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
+                <textarea
+                  name="bio"
+                  value={profile.bio}
+                  onChange={handleChange}
+                  rows={3}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
+                  placeholder="Resident physician..."
+                />
+              </div>
             </div>
           </div>
         )}
@@ -505,6 +539,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
               onClick={() => updateProfile()}
               isLoading={updating}
               loadingText="Saving..."
+              disabled={!canSaveProfile}
               className="w-full py-4 bg-primary hover:bg-primary-dark rounded-2xl flex items-center justify-center gap-3 text-xs font-bold text-white transition-all uppercase tracking-widest shadow-lg shadow-primary/20 disabled:opacity-50"
             >
               Save Changes

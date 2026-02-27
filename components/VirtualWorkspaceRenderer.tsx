@@ -6,7 +6,9 @@ interface VirtualWorkspaceRendererProps {
     floor: Floor;
     workstations: CurrentWorkstationStatus[];
     currentUserId: string;
+    players?: WorkspacePlayer[];
     onPinClick: (ws: CurrentWorkstationStatus) => void;
+    onSetAreaPresence?: (floorId: string, x: number, y: number) => Promise<void>;
     occupiedWorkstation: CurrentWorkstationStatus | null;
     onCheckCurrentUserOccupancy: (workstationId: string) => Promise<boolean>;
     onRequestReleaseAndMove?: (intent: ReleaseAndMoveIntent) => void;
@@ -32,7 +34,9 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     floor,
     workstations,
     currentUserId,
+    players: externalPlayers,
     onPinClick,
+    onSetAreaPresence,
     occupiedWorkstation,
     onCheckCurrentUserOccupancy,
     onRequestReleaseAndMove,
@@ -43,6 +47,7 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
     useEffect(() => {
+        if (externalPlayers) return;
         if (!currentUserId) return;
         const unsubscribe = workspacePresenceService.subscribe({
             currentUserId,
@@ -55,7 +60,12 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
         return () => {
             unsubscribe();
         };
-    }, [currentUserId]);
+    }, [currentUserId, externalPlayers]);
+
+    useEffect(() => {
+        if (!externalPlayers) return;
+        setPlayers(externalPlayers);
+    }, [externalPlayers]);
 
     useEffect(() => {
         const myStation = occupiedWorkstation;
@@ -145,6 +155,11 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
         const x = ((e.clientX - rect.left) / rect.width) * 100;
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         await workspacePresenceService.setExactLocation(x, y, floor.id);
+        if (onSetAreaPresence) {
+            onSetAreaPresence(floor.id, x, y).catch((error) => {
+                console.error('Failed to persist area presence from tap:', error);
+            });
+        }
 
         if (DEBUG_WORKSPACE) {
             console.debug('[workspace] tap->move local ms', Math.round(performance.now() - tapStart));

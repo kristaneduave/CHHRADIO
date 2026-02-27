@@ -1,15 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AssignOccupancyPayload, CurrentWorkstationStatus, Floor, NewsfeedOnlineUser } from '../types';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  AssignOccupancyPayload,
+  CurrentWorkstationStatus,
+  Floor,
+  MergedWorkspacePlayer,
+  NewsfeedOnlineUser,
+  WorkspaceAreaPresenceRow,
+  WorkspacePlayer,
+} from '../types';
 import { workstationMapService } from '../services/workstationMapService';
 import { supabase } from '../services/supabase';
 import { fetchOnlineProfiles, subscribeToOnlineUsers } from '../services/newsfeedPresenceService';
 import { workspacePresenceService } from '../services/virtualWorkspacePresence';
+import { workspaceAreaPresenceService, ENABLE_PERSISTENT_AREA_PRESENCE } from '../services/workspaceAreaPresenceService';
 import CompactWorkstationWidget from './CompactWorkstationWidget';
 import WorkstationViewerModal from './WorkstationViewerModal';
 import WorkstationActionModal from './WorkstationActionModal';
 import AssignOccupancyModal from './AssignOccupancyModal';
 import OccupantProfileModal from './OccupantProfileModal';
 import OnlineUsersModal from './OnlineUsersModal';
+import { toastError, toastSuccess } from '../utils/toast';
 
 const WorkstationMapWidget: React.FC = () => {
   const [floors, setFloors] = useState<Floor[]>([]);
@@ -27,16 +37,51 @@ const WorkstationMapWidget: React.FC = () => {
   const [isOnlineModalOpen, setIsOnlineModalOpen] = useState(false);
 
   const [onlineUsers, setOnlineUsers] = useState<NewsfeedOnlineUser[]>([]);
+  const [workspacePlayers, setWorkspacePlayers] = useState<WorkspacePlayer[]>([]);
+  const [areaPresenceRows, setAreaPresenceRows] = useState<WorkspaceAreaPresenceRow[]>([]);
   const [loadingOnline, setLoadingOnline] = useState(false);
   const [onlineError, setOnlineError] = useState<string | null>(null);
   const [currentStatusMessage, setCurrentStatusMessage] = useState<string | null>(null);
-  const fallbackViewerIdRef = useRef(`guest-${Math.random().toString(36).slice(2, 10)}`);
-  const viewerUserId = currentUserId || fallbackViewerIdRef.current;
+  const [isLeavingArea, setIsLeavingArea] = useState(false);
 
   useEffect(() => {
     if (!isViewerModalOpen) return;
     setCurrentStatusMessage(workspacePresenceService.getCurrentStatusMessage());
   }, [isViewerModalOpen]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    const unsubscribe = workspacePresenceService.subscribe({
+      currentUserId,
+      onPlayersChange: setWorkspacePlayers,
+      onError: console.error,
+    });
+    return unsubscribe;
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId || !ENABLE_PERSISTENT_AREA_PRESENCE) return;
+    let mounted = true;
+
+    const refresh = async () => {
+      try {
+        const rows = await workspaceAreaPresenceService.fetchActiveAreaPresence();
+        if (mounted) setAreaPresenceRows(rows);
+      } catch (error) {
+        if (mounted) console.error('Failed to load persistent area presence:', error);
+      }
+    };
+
+    void refresh();
+    const unsubscribe = workspaceAreaPresenceService.subscribeAreaPresenceChanges(() => {
+      void refresh();
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, [currentUserId]);
 
   useEffect(() => {
     let mounted = true;
@@ -186,6 +231,9 @@ const WorkstationMapWidget: React.FC = () => {
 
   const handleSetAvatarStatus = async (message: string | null) => {
     await workspacePresenceService.setStatusMessage(message);
+    if (ENABLE_PERSISTENT_AREA_PRESENCE) {
+      await workspaceAreaPresenceService.setMyAreaPresenceStatus(message);
+    }
     setCurrentStatusMessage(workspacePresenceService.getCurrentStatusMessage());
 
     const occupiedMine = workstations.find(
@@ -198,6 +246,76 @@ const WorkstationMapWidget: React.FC = () => {
         .catch((error) => console.warn('Status updated in workspace, session sync failed:', error));
     }
   };
+
+  const handleSetAreaPresence = async (floorId: string, x: number, y: number) => {
+    if (!ENABLE_PERSISTENT_AREA_PRESENCE) return;
+    try {
+      await workspaceAreaPresenceService.upsertMyAreaPresence({
+        floorId,
+        x,
+        y,
+        statusMessage: workspacePresenceService.getCurrentStatusMessage(),
+      });
+    } catch (error: any) {
+      console.error('Failed to persist area presence:', error);
+    }
+  };
+
+  const handleLeaveArea = async () => {
+    if (!ENABLE_PERSISTENT_AREA_PRESENCE || !currentUserId) return;
+    setIsLeavingArea(true);
+    try {
+      await workspaceAreaPresenceService.clearMyAreaPresence();
+      await workspacePresenceService.updateLocalPlayer({
+        floorId: null,
+        isWalking: false,
+        statusMessage: null,
+      });
+      setAreaPresenceRows((prev) => prev.filter((row) => row.userId !== currentUserId));
+      toastSuccess('Presence removed', 'You are no longer pinned to a map area.');
+    } catch (error: any) {
+      console.error('Failed to leave area:', error);
+      toastError('Failed to leave area', error?.message || 'Please try again.');
+    } finally {
+      setIsLeavingArea(false);
+    }
+  };
+
+  const mergedPlayers = useMemo<MergedWorkspacePlayer[]>(() => {
+    const byId = new Map<string, MergedWorkspacePlayer>();
+    areaPresenceRows.forEach((row) => {
+      byId.set(row.userId, {
+        id: row.userId,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        role: row.role,
+        floorId: row.floorId,
+        x: row.x,
+        y: row.y,
+        isWalking: false,
+        statusMessage: row.statusMessage,
+        source: 'persistent',
+        persisted: true,
+      });
+    });
+
+    workspacePlayers.forEach((player) => {
+      const existing = byId.get(player.id);
+      byId.set(player.id, {
+        ...player,
+        displayName:
+          player.displayName && player.displayName !== 'User'
+            ? player.displayName
+            : existing?.displayName || player.displayName || 'User',
+        avatarUrl: player.avatarUrl || existing?.avatarUrl || null,
+        role: player.role || existing?.role,
+        source: 'realtime',
+        persisted: Boolean(existing?.persisted),
+      });
+    });
+
+    return [...byId.values()];
+  }, [areaPresenceRows, workspacePlayers]);
 
   return (
     <>
@@ -216,7 +334,8 @@ const WorkstationMapWidget: React.FC = () => {
         onClose={() => setIsViewerModalOpen(false)}
         workstations={workstations}
         onlineUsers={onlineUsers}
-        currentUserId={viewerUserId}
+        players={mergedPlayers}
+        currentUserId={currentUserId}
         loading={loading}
         onPinClick={handlePinClick}
         onReleaseWorkstation={handleRelease}
@@ -224,6 +343,9 @@ const WorkstationMapWidget: React.FC = () => {
           workstationMapService.isCurrentUserOccupyingWorkstation(workstationId, { maxAgeMs: 2500 })
         }
         onSetAvatarStatus={handleSetAvatarStatus}
+        onSetAreaPresence={handleSetAreaPresence}
+        onLeaveArea={handleLeaveArea}
+        isLeavingArea={isLeavingArea}
         currentStatusMessage={currentStatusMessage}
         floors={floors}
         error={error}

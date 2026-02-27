@@ -442,6 +442,13 @@ export const workspacePresenceService = {
                 currentLocalPlayer.targetX = undefined;
                 currentLocalPlayer.targetY = undefined;
                 clearInterval(movementInterval!);
+                if (currentLocalPlayer.floorId) {
+                    writePersistedLocation({
+                        floorId: currentLocalPlayer.floorId,
+                        x: currentLocalPlayer.x,
+                        y: currentLocalPlayer.y,
+                    });
+                }
                 emitPlayers([
                     ...lastPlayers.filter((p) => p.id !== currentLocalPlayer!.id),
                     currentLocalPlayer,
@@ -462,6 +469,13 @@ export const workspacePresenceService = {
                 // Broadcast if threshold met
                 if (Date.now() - lastBroadcast > broadcastThrottleMs) {
                     activeChannel?.track({ player: currentLocalPlayer });
+                    if (currentLocalPlayer.floorId) {
+                        writePersistedLocation({
+                            floorId: currentLocalPlayer.floorId,
+                            x: currentLocalPlayer.x,
+                            y: currentLocalPlayer.y,
+                        });
+                    }
                     lastBroadcast = Date.now();
                 }
             }

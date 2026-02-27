@@ -28,7 +28,7 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
         </span>
       ) : (
         <span className="inline-flex items-center gap-2">
-          <span>{children}</span>
+          {children}
           {icon ? <span className="material-icons text-sm">{icon}</span> : null}
         </span>
       )}
@@ -37,4 +37,3 @@ const LoadingButton: React.FC<LoadingButtonProps> = ({
 };
 
 export default LoadingButton;
-

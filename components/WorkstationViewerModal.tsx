@@ -9,12 +9,16 @@ interface WorkstationViewerModalProps {
     onClose: () => void;
     workstations: CurrentWorkstationStatus[];
     onlineUsers: NewsfeedOnlineUser[];
+    players: WorkspacePlayer[];
     currentUserId: string;
     loading: boolean;
     onPinClick: (ws: CurrentWorkstationStatus) => void;
     onReleaseWorkstation: (workstationId: string) => Promise<void>;
     onCheckCurrentUserOccupancy: (workstationId: string) => Promise<boolean>;
     onSetAvatarStatus: (message: string | null) => Promise<void>;
+    onSetAreaPresence: (floorId: string, x: number, y: number) => Promise<void>;
+    onLeaveArea: () => Promise<void>;
+    isLeavingArea?: boolean;
     currentStatusMessage?: string | null;
     floors: Floor[];
     error?: string | null;
@@ -33,12 +37,16 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     onClose,
     workstations,
     onlineUsers,
+    players,
     currentUserId,
     loading,
     onPinClick,
     onReleaseWorkstation,
     onCheckCurrentUserOccupancy,
     onSetAvatarStatus,
+    onSetAreaPresence,
+    onLeaveArea,
+    isLeavingArea = false,
     currentStatusMessage,
     floors,
     error,
@@ -47,8 +55,9 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     const [showMobileStatusSheet, setShowMobileStatusSheet] = useState(false);
     const [pendingReleaseIntent, setPendingReleaseIntent] = useState<ReleaseAndMoveIntent | null>(null);
     const [expandedFloorId, setExpandedFloorId] = useState<string | null>(null);
-    const [players, setPlayers] = useState<WorkspacePlayer[]>([]);
+    const [showCoachTip, setShowCoachTip] = useState(false);
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+    const COACH_KEY = 'chh_workspace_coach_tip_seen_v1';
 
     useEffect(() => {
         if (!isOpen) return;
@@ -56,14 +65,10 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     }, [isOpen, currentStatusMessage]);
 
     useEffect(() => {
-        if (!isOpen || !currentUserId) return;
-        const unsubscribe = workspacePresenceService.subscribe({
-            currentUserId,
-            onPlayersChange: setPlayers,
-            onError: console.error,
-        });
-        return unsubscribe;
-    }, [isOpen, currentUserId]);
+        if (!isOpen || typeof window === 'undefined') return;
+        const seen = window.localStorage.getItem(COACH_KEY) === '1';
+        setShowCoachTip(!seen);
+    }, [isOpen]);
 
     useEffect(() => {
         if (!pendingReleaseIntent) return;
@@ -76,13 +81,43 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     const myOccupiedWorkstation =
         workstations.find((ws) => ws.status === 'IN_USE' && ws.occupant_id === currentUserId) || null;
 
+    const hydratedPlayers = useMemo(() => {
+        const onlineById = new Map<string, NewsfeedOnlineUser>(
+            onlineUsers.map((user): [string, NewsfeedOnlineUser] => [user.id, user]),
+        );
+        return players.map((player) => {
+            const online = onlineById.get(player.id);
+            return {
+                ...player,
+                displayName:
+                    player.displayName && player.displayName !== 'User'
+                        ? player.displayName
+                        : online?.displayName || player.displayName || 'User',
+                avatarUrl: player.avatarUrl || online?.avatarUrl || null,
+                role: player.role || online?.role,
+            };
+        });
+    }, [players, onlineUsers]);
+
+    const myLivePlayer = useMemo(
+        () => hydratedPlayers.find((player) => player.id === currentUserId) || null,
+        [hydratedPlayers, currentUserId],
+    );
+    const myLiveFloorName = useMemo(
+        () => floors.find((floor) => floor.id === myLivePlayer?.floorId)?.name || null,
+        [floors, myLivePlayer?.floorId],
+    );
+
     const groupedUsers = useMemo(() => {
-        type UserWithLoc = typeof onlineUsers[0] & { floorId?: string | null, statusMessage?: string | null };
+        type UserWithLoc = NewsfeedOnlineUser & { floorId?: string | null, statusMessage?: string | null };
         const groups: Record<string, UserWithLoc[]> = {};
         const UNKNOWN_LOC = 'Elsewhere';
+        const playerById = new Map<string, WorkspacePlayer>(
+            hydratedPlayers.map((player): [string, WorkspacePlayer] => [player.id, player]),
+        );
 
         onlineUsers.forEach(u => {
-            const p = players.find(player => player.id === u.id);
+            const p = playerById.get(u.id);
             const userWithLoc = { ...u, floorId: p?.floorId, statusMessage: p?.statusMessage };
             const floor = floors.find(f => f.id === p?.floorId);
             const groupName = floor ? floor.name : UNKNOWN_LOC;
@@ -102,7 +137,19 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
         }
 
         return orderedGroups;
-    }, [onlineUsers, players, floors]);
+    }, [onlineUsers, hydratedPlayers, floors]);
+
+    const floorUsersById = useMemo(() => {
+        const map = new Map<string, WorkspacePlayer[]>();
+        hydratedPlayers.forEach((player) => {
+            if (player.id === currentUserId) return;
+            if (!player.floorId) return;
+            const existing = map.get(player.floorId) || [];
+            existing.push(player);
+            map.set(player.floorId, existing);
+        });
+        return map;
+    }, [hydratedPlayers, currentUserId]);
 
     if (!isOpen) return null;
 
@@ -125,6 +172,11 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                 pendingReleaseIntent.targetX,
                 pendingReleaseIntent.targetY,
                 pendingReleaseIntent.targetFloorId,
+            );
+            await onSetAreaPresence(
+                pendingReleaseIntent.targetFloorId,
+                pendingReleaseIntent.targetX,
+                pendingReleaseIntent.targetY,
             );
             if (DEBUG_WORKSPACE) {
                 console.debug('[workspace] release+move ms', Math.round(performance.now() - releaseStart));
@@ -150,10 +202,23 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                             <div>
                                 <h2 className="text-xl font-bold text-white tracking-tight">Workstation Viewer</h2>
                                 <p className="text-xs text-slate-400 font-medium">Live map and avatar status</p>
+                                {myLiveFloorName ? (
+                                    <p className="mt-0.5 text-[11px] font-semibold text-cyan-300">You are in: {myLiveFloorName}</p>
+                                ) : null}
                             </div>
                         </div>
 
                         <div className="flex items-center gap-2">
+                            {myLivePlayer?.floorId ? (
+                                <button
+                                    onClick={() => void onLeaveArea()}
+                                    disabled={isLeavingArea}
+                                    className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-semibold border border-rose-500/25 disabled:opacity-60"
+                                    title="Remove your pinned area presence"
+                                >
+                                    {isLeavingArea ? 'Leaving...' : 'Leave Area'}
+                                </button>
+                            ) : null}
                             <button
                                 onClick={() => setShowMobileStatusSheet(true)}
                                 className="md:hidden px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold border border-white/10"
@@ -211,6 +276,20 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-transparent scrollbar-hide">
+                        {showCoachTip ? (
+                            <div className="mb-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 flex items-start justify-between gap-3">
+                                <p className="text-xs text-cyan-100">Tap map to set your area.</p>
+                                <button
+                                    onClick={() => {
+                                        setShowCoachTip(false);
+                                        if (typeof window !== 'undefined') window.localStorage.setItem(COACH_KEY, '1');
+                                    }}
+                                    className="text-[11px] text-cyan-200 hover:text-white font-semibold"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        ) : null}
                         {error ? (
                             <div className="h-full flex flex-col items-center justify-center text-center text-slate-300 px-6">
                                 <span className="material-icons text-4xl mb-3 text-rose-400">error_outline</span>
@@ -233,28 +312,80 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                                 {(expandedFloorId ? floors.filter(f => f.id === expandedFloorId) : floors).map((floor) => (
                                     <div key={floor.id} className="flex flex-col h-full bg-black/40 shadow-2xl backdrop-blur-md rounded-2xl border border-white/10 overflow-hidden transition-all duration-300">
                                         <div className="px-4 py-2 bg-gradient-to-r from-black/40 to-transparent border-b border-white/5 flex items-center justify-between">
-                                            <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-cyan-500"></span>
-                                                {floor.name}
-                                            </h3>
-                                            {floors.length > 1 && (
-                                                <button
-                                                    onClick={() => setExpandedFloorId(expandedFloorId === floor.id ? null : floor.id)}
-                                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/5"
-                                                    title={expandedFloorId === floor.id ? "Show All Maps" : "Focus Map"}
-                                                >
-                                                    <span className="material-icons text-[18px]">
-                                                        {expandedFloorId === floor.id ? 'fullscreen_exit' : 'fullscreen'}
-                                                    </span>
-                                                </button>
-                                            )}
+                                            <div className="min-w-0 flex items-center gap-2">
+                                                <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2 min-w-0">
+                                                    <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0"></span>
+                                                    <span className="truncate">{floor.name}</span>
+                                                </h3>
+                                                {myLivePlayer?.floorId === floor.id ? (
+                                                    <div
+                                                        className="h-6 w-6 rounded-full border border-cyan-400/60 shadow-[0_0_0_2px_rgba(6,182,212,0.15)] overflow-hidden"
+                                                        title="You are here"
+                                                    >
+                                                        {myLivePlayer.avatarUrl ? (
+                                                            <img
+                                                                src={myLivePlayer.avatarUrl}
+                                                                alt={myLivePlayer.displayName || 'You'}
+                                                                className="h-full w-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="h-full w-full flex items-center justify-center bg-primary/30 text-primary text-[10px] font-bold">
+                                                                {(myLivePlayer.displayName || 'U').charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null}
+                                                {(floorUsersById.get(floor.id)?.length || 0) > 0 && (
+                                                    <div className="flex items-center -space-x-1.5 pl-1">
+                                                        {(floorUsersById.get(floor.id) || []).slice(0, 3).map((user) => (
+                                                            user.avatarUrl ? (
+                                                                <img
+                                                                    key={user.id}
+                                                                    src={user.avatarUrl}
+                                                                    alt={user.displayName}
+                                                                    title={user.displayName}
+                                                                    className="w-5 h-5 rounded-full object-cover border border-[#0f1621]"
+                                                                />
+                                                            ) : (
+                                                                <div
+                                                                    key={user.id}
+                                                                    title={user.displayName}
+                                                                    className="w-5 h-5 rounded-full bg-primary/30 text-primary border border-[#0f1621] flex items-center justify-center text-[9px] font-bold"
+                                                                >
+                                                                    {user.displayName.charAt(0).toUpperCase()}
+                                                                </div>
+                                                            )
+                                                        ))}
+                                                        {(floorUsersById.get(floor.id)?.length || 0) > 3 && (
+                                                            <span className="ml-1 text-[10px] font-semibold text-slate-400">
+                                                                +{(floorUsersById.get(floor.id)?.length || 0) - 3}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {floors.length > 1 && (
+                                                    <button
+                                                        onClick={() => setExpandedFloorId(expandedFloorId === floor.id ? null : floor.id)}
+                                                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/5"
+                                                        title={expandedFloorId === floor.id ? "Show All Maps" : "Focus Map"}
+                                                    >
+                                                        <span className="material-icons text-[18px]">
+                                                            {expandedFloorId === floor.id ? 'fullscreen_exit' : 'fullscreen'}
+                                                        </span>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </div>
                                         <div className="flex-1 relative min-h-[320px]">
                                             <VirtualWorkspaceRenderer
                                                 floor={floor}
                                                 workstations={workstations.filter((ws) => ws.floor_id === floor.id)}
                                                 currentUserId={currentUserId}
+                                                players={hydratedPlayers}
                                                 onPinClick={onPinClick}
+                                                onSetAreaPresence={onSetAreaPresence}
                                                 occupiedWorkstation={myOccupiedWorkstation}
                                                 onCheckCurrentUserOccupancy={onCheckCurrentUserOccupancy}
                                                 onRequestReleaseAndMove={setPendingReleaseIntent}
