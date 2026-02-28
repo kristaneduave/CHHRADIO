@@ -4,12 +4,13 @@ import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
+import { normalizeUserRole } from '../utils/roles';
 
 const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [expandedEventId, setExpandedEventId] = useState<string | null>(null); // For click-to-expand actions
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null); // Quick actions menu target
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,6 +41,8 @@ const CalendarScreen: React.FC = () => {
   const [coverageDetails, setCoverageDetails] = useState<{ user_id: string, name: string, modalities: string[] }[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [userRole, setUserRole] = useState<'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer'>('resident');
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -95,6 +98,19 @@ const CalendarScreen: React.FC = () => {
   useEffect(() => {
     fetchEvents();
   }, [currentDate]);
+
+  useEffect(() => {
+    const loadCurrentUserRole = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      setCurrentUserId(user.id);
+      const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+      if (data?.role) setUserRole(normalizeUserRole(data.role));
+    };
+    loadCurrentUserRole();
+  }, []);
 
   useEffect(() => {
     // Debounce search
@@ -222,6 +238,10 @@ const CalendarScreen: React.FC = () => {
 
   const agendaEvents = getAgendaEvents();
 
+  const isPrivilegedCalendarManager = ['admin', 'training_officer', 'moderator'].includes(userRole);
+  const canManageEvent = (event: CalendarEvent): boolean =>
+    isPrivilegedCalendarManager || (userRole === 'consultant' && event.created_by === currentUserId);
+
   // Coverage Management
   const addCoverage = () => {
     if (coverageDetails.length < 5) {
@@ -297,8 +317,16 @@ const CalendarScreen: React.FC = () => {
     setShowAddEvent(true);
   };
 
-  const handleDeleteEvent = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteEvent = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const target = events.find((event) => event.id === id) || searchResults.find((event) => event.id === id) || upcomingEvents.find((event) => event.id === id);
+    const canDelete = Boolean(target) && canManageEvent(target!);
+
+    if (!canDelete) {
+      alert('You do not have permission to delete this event.');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this event?')) {
       try {
         await CalendarService.deleteEvent(id);
@@ -626,7 +654,11 @@ const CalendarScreen: React.FC = () => {
                 agendaEvents.map(event => (
                   <div
                     key={event.id}
-                    onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
+                    onClick={() => {
+                      if (canManageEvent(event)) {
+                        handleEditEvent(event);
+                      }
+                    }}
                     className={`relative group rounded-[1.25rem] transition-all cursor-pointer p-5 py-6 mb-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${expandedEventId === event.id
                       ? 'bg-white/[0.06]'
                       : 'bg-white/[0.03] hover:bg-white/[0.05]'
@@ -651,12 +683,41 @@ const CalendarScreen: React.FC = () => {
                           </span>
                         </div>
 
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                          className="w-8 h-8 rounded-full bg-black/20 hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
-                        >
-                          <span className="material-icons text-[14px]">edit</span>
-                        </button>
+                        {canManageEvent(event) && (
+                          <div className="relative" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setExpandedEventId(expandedEventId === event.id ? null : event.id)}
+                              className="w-8 h-8 rounded-full bg-black/20 hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+                            >
+                              <span className="material-icons text-[16px]">more_horiz</span>
+                            </button>
+
+                            {expandedEventId === event.id && (
+                              <div className="absolute right-0 top-10 z-20 min-w-[138px] rounded-xl border border-white/10 bg-[#101826] p-1.5 shadow-xl">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedEventId(null);
+                                    handleEditEvent(event);
+                                  }}
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                                >
+                                  Edit Event
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    setExpandedEventId(null);
+                                    void handleDeleteEvent(event.id, e);
+                                  }}
+                                  className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/15"
+                                >
+                                  Delete Event
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-col gap-1 mt-1">
@@ -680,17 +741,6 @@ const CalendarScreen: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* EXPANDED Actions Row */}
-                    {expandedEventId === event.id && (
-                      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/5 animate-in slide-in-from-top-2 fade-in duration-200">
-                        <button
-                          onClick={(e) => handleDeleteEvent(event.id, e)}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 text-[11px] font-bold transition-all border border-transparent hover:border-rose-500/10 uppercase tracking-wide"
-                        >
-                          <span className="material-icons text-[16px]">delete</span> Delete Event
-                        </button>
-                      </div>
-                    )}
                   </div>
                 ))
               ) : (
@@ -727,7 +777,7 @@ const CalendarScreen: React.FC = () => {
                     <div className="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
                       <span className="material-icons text-sky-400 text-sm">event</span>
                     </div>
-                    Create Event
+                    {editingEventId ? 'Edit Event' : 'Create Event'}
                   </h2>
                   <button
                     onClick={() => setShowAddEvent(false)}
@@ -827,7 +877,6 @@ const CalendarScreen: React.FC = () => {
                       onChange={(e) => setAssignedToName(e.target.value)}
                       placeholder={newEventType === 'leave' ? "Enter name (e.g., Dr. Reyes)" : "Event Title"}
                       className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
-                      autoFocus
                     />
                   </div>
                 </div>
