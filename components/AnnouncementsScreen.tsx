@@ -15,7 +15,11 @@ import {
 import {
   normalizeCategoryForUi,
 } from '../utils/newsPresentation';
-import { getNewsCategoryStyleTokens, NEWS_SURFACE_BASE_CLASS, NEWS_SURFACE_INTERACTIVE_CLASS } from '../utils/newsStyleTokens';
+import { getNewsCategoryStyleTokens } from '../utils/newsStyleTokens';
+import LoadingState from './LoadingState';
+import NewsPageShell from './news/NewsPageShell';
+import NewsCardBase from './news/NewsCardBase';
+import NewsCardBadge from './news/NewsCardBadge';
 
 interface AnnouncementsScreenProps {
   initialOpenAnnouncementId?: string | null;
@@ -31,6 +35,7 @@ interface NewsViewPrefs {
 }
 
 const ITEMS_PER_PAGE = 8;
+const NEWS_READ_STORAGE_KEY = 'chh_news_read_ids_v1';
 const DEFAULT_VIEW_PREFS: NewsViewPrefs = {
   typeFilter: 'all',
   sortOrder: 'newest',
@@ -93,6 +98,13 @@ const parseStoredViewPrefs = (): NewsViewPrefs => {
   }
 };
 
+const resolveCategoryIcon = (category: TypeFilter | 'all'): string => {
+  if (category === 'Research') return 'biotech';
+  if (category === 'Event') return 'event';
+  if (category === 'Miscellaneous') return 'description';
+  return 'campaign';
+};
+
 const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAnnouncementId, onHandledInitialOpen }) => {
   const [userRole, setUserRole] = useState<UserRole>('resident');
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -110,6 +122,17 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const [supportsPriorityColumns, setSupportsPriorityColumns] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set<string>();
+    try {
+      const raw = window.localStorage.getItem(NEWS_READ_STORAGE_KEY);
+      if (!raw) return new Set<string>();
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? new Set<string>(parsed.filter((id) => typeof id === 'string')) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const lastHandledInitialOpenRef = useRef<string | null>(null);
 
@@ -122,6 +145,11 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(NEWS_FILTER_STORAGE_KEY, JSON.stringify(viewPrefs));
   }, [viewPrefs]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(NEWS_READ_STORAGE_KEY, JSON.stringify(Array.from(readAnnouncementIds)));
+  }, [readAnnouncementIds]);
 
   const isMissingPriorityColumnError = (error: any) => {
     const message = String(error?.message || '').toLowerCase();
@@ -338,6 +366,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   const pinnedItems = useMemo(() => sortedAnnouncements.filter((item) => normalizeAnnouncementPinned(item)), [sortedAnnouncements]);
   const regularItems = useMemo(() => sortedAnnouncements.filter((item) => !normalizeAnnouncementPinned(item)), [sortedAnnouncements]);
+  const orderedAnnouncements = useMemo(() => [...pinnedItems, ...regularItems], [pinnedItems, regularItems]);
 
   const handleHideAnnouncement = async (announcementId: string) => {
     try {
@@ -373,132 +402,254 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     }
   };
 
+  const isMissingPinColumnError = (error: any) => {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('is_pinned') || message.includes('pinned_at') || message.includes("'pinned'");
+  };
+
+  const handleTogglePinAnnouncement = async (announcementId: string) => {
+    const target = announcements.find((item) => item.id === announcementId);
+    if (!target || !canManageAnnouncement(target.author_id)) return;
+
+    const nextPinned = !normalizeAnnouncementPinned(target);
+    const pinnedAt = nextPinned ? new Date().toISOString() : null;
+    const attempts: Array<Record<string, any>> = [
+      { is_pinned: nextPinned, pinned_at: pinnedAt },
+      { is_pinned: nextPinned },
+      { pinned: nextPinned, pinned_at: pinnedAt },
+      { pinned: nextPinned },
+    ];
+
+    try {
+      let updated = false;
+      for (const patch of attempts) {
+        const { error } = await supabase.from('announcements').update(patch).eq('id', announcementId);
+        if (!error) {
+          updated = true;
+          break;
+        }
+        if (!isMissingPinColumnError(error)) throw error;
+      }
+
+      if (!updated) throw new Error('Unable to update pin state.');
+
+      setAnnouncements((prev) =>
+        prev.map((item) =>
+          item.id === announcementId
+            ? {
+                ...item,
+                is_pinned: nextPinned,
+                pinned_at: pinnedAt,
+              }
+            : item,
+        ),
+      );
+      setSelectedAnnouncement((prev) =>
+        prev && prev.id === announcementId
+          ? {
+              ...prev,
+              is_pinned: nextPinned,
+              pinned_at: pinnedAt,
+            }
+          : prev,
+      );
+      toastSuccess(nextPinned ? 'Pinned' : 'Unpinned');
+    } catch (error: any) {
+      toastError('Unable to update pin', error?.message || 'Please try again.');
+    }
+  };
+
+  const markAnnouncementAsRead = (announcementId: string) => {
+    if (!announcementId) return;
+    setReadAnnouncementIds((prev) => {
+      if (prev.has(announcementId)) return prev;
+      const next = new Set(prev);
+      next.add(announcementId);
+      return next;
+    });
+  };
+
   const renderCard = (post: Announcement) => {
     const metaDateTime = post.createdAt
       ? `${new Date(post.createdAt).toLocaleDateString([], { month: 'numeric', day: 'numeric', year: '2-digit' })} ${new Date(post.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
       : post.date;
     const normalizedCategory = normalizeCategoryForUi(post.category);
-    const watermarkKey =
-      normalizedCategory === 'Research'
-        ? 'research'
-        : normalizedCategory === 'Event'
-          ? 'event'
-          : normalizedCategory === 'Miscellaneous'
-            ? 'misc'
-            : 'announcement';
     const typeStyles = getNewsCategoryStyleTokens(normalizedCategory);
     const canManageCard = canManageAnnouncement(post.author_id);
     const canHideCard = canManageAnyAnnouncement;
     const showActionMenu = canManageCard || canHideCard;
     const isActionMenuOpen = actionMenuPostId === post.id;
+    const isPinned = normalizeAnnouncementPinned(post);
+    const isImportant = Boolean(post.is_important);
+    const createdAtMs = post.createdAt ? new Date(post.createdAt).getTime() : 0;
+    const isRecent = createdAtMs > 0 && (Date.now() - createdAtMs) < (24 * 60 * 60 * 1000);
+    const isRead = readAnnouncementIds.has(post.id);
+    const isPinnedHighlight = isPinned;
+    const isUnreadHighlight = (!isRead) && (isImportant || isRecent);
+    const isHighlighted = isPinnedHighlight || isUnreadHighlight;
+    const iconName = resolveCategoryIcon(normalizedCategory as TypeFilter);
+    const unreadTone = (() => {
+      if (normalizedCategory === 'Announcement') {
+        return {
+          cardClass: 'bg-amber-500/[0.08] border border-amber-500/30 shadow-[0_4px_24px_-8px_rgba(217,119,6,0.25)] hover:bg-amber-500/[0.12]',
+          glowClass: 'bg-amber-500/20',
+          iconClass: 'bg-amber-500/20 border border-amber-500/40 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
+        };
+      }
+      if (normalizedCategory === 'Research') {
+        return {
+          cardClass: 'bg-indigo-500/[0.08] border border-indigo-500/30 shadow-[0_4px_24px_-8px_rgba(99,102,241,0.25)] hover:bg-indigo-500/[0.12]',
+          glowClass: 'bg-indigo-500/20',
+          iconClass: 'bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 shadow-[0_0_15px_rgba(129,140,248,0.3)]',
+        };
+      }
+      if (normalizedCategory === 'Event') {
+        return {
+          cardClass: 'bg-emerald-500/[0.08] border border-emerald-500/30 shadow-[0_4px_24px_-8px_rgba(16,185,129,0.25)] hover:bg-emerald-500/[0.12]',
+          glowClass: 'bg-emerald-500/20',
+          iconClass: 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 shadow-[0_0_15px_rgba(52,211,153,0.3)]',
+        };
+      }
+      return {
+        cardClass: 'bg-[#A95F3B]/[0.1] border border-[#A95F3B]/35 shadow-[0_4px_24px_-8px_rgba(169,95,59,0.25)] hover:bg-[#A95F3B]/[0.14]',
+        glowClass: 'bg-[#A95F3B]/20',
+        iconClass: 'bg-[#A95F3B]/20 border border-[#A95F3B]/40 text-[#EBC7A4] shadow-[0_0_15px_rgba(169,95,59,0.3)]',
+      };
+    })();
 
     return (
-      <button
-        type="button"
+      <NewsCardBase
         key={post.id}
+        isElevated={isActionMenuOpen}
+        className={
+          isPinnedHighlight
+            ? 'bg-rose-500/[0.08] border border-rose-500/30 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)] hover:bg-rose-500/[0.12]'
+            : isUnreadHighlight
+            ? unreadTone.cardClass
+            : 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
+        }
         onClick={() => {
           setActionMenuPostId(null);
           setSelectedAnnouncement(post);
         }}
-        className={`group ${NEWS_SURFACE_BASE_CLASS} ${NEWS_SURFACE_INTERACTIVE_CLASS} w-full min-h-[92px] overflow-visible rounded-b-xl rounded-t-none px-4 py-3.5 text-left ${isActionMenuOpen ? 'z-40' : 'z-0'}`}
       >
-        <span className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-b-xl rounded-t-none">
-          <span className="pointer-events-none absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
-          <span className={`absolute left-0 right-0 top-0 h-[2px] rounded-none ${typeStyles.railTint} opacity-15 blur-[0.5px]`} />
-          <span className="absolute left-0 right-0 top-[1px] h-[1px] rounded-none bg-[linear-gradient(90deg,rgba(255,255,255,0.34)_0%,rgba(255,255,255,0.12)_50%,rgba(255,255,255,0.3)_100%)] shadow-[0_0_6px_rgba(255,255,255,0.08)] backdrop-blur-[8px]" />
-          <span
-            className={`absolute -left-16 top-1/2 h-[30rem] w-[30rem] -translate-y-1/2 opacity-[0.02] ${typeStyles.watermark}`}
-            style={{
-              WebkitMaskImage: `url(/news-symbols/${watermarkKey}.svg)`,
-              maskImage: `url(/news-symbols/${watermarkKey}.svg)`,
-              WebkitMaskRepeat: 'no-repeat',
-              maskRepeat: 'no-repeat',
-              WebkitMaskPosition: 'left center',
-              maskPosition: 'left center',
-              WebkitMaskSize: 'contain',
-              maskSize: 'contain',
-            }}
-          />
-        </span>
-        <div className="relative z-10 flex min-h-[64px] items-center gap-2.5">
-          <div className="min-w-0 flex-1 self-center pr-2">
-            <h3 className="line-clamp-1 text-[18px] font-semibold leading-tight tracking-[0.005em] text-white sm:line-clamp-2 sm:text-[20px]">
-              {post.title}
-            </h3>
+        {isHighlighted && (
+          <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-2xl">
+            <div
+              className={`absolute top-0 right-0 w-36 h-36 blur-[54px] rounded-full transform -translate-y-1/2 translate-x-1/2 ${
+                isPinnedHighlight ? 'bg-rose-500/20' : unreadTone.glowClass
+              }`}
+            />
           </div>
-          <div className="relative flex shrink-0 items-center">
-            <div className="flex min-w-0 flex-col items-end gap-0.5 pr-9">
-              <div className="flex items-center gap-1 text-xs text-white/85">
-                <span className="max-w-[112px] truncate text-white/85">{post.author}</span>
-                <div className="h-4 w-4 shrink-0 overflow-hidden rounded-full border border-white/10 bg-slate-700">
-                  {post.authorAvatar ? (
-                    <img src={post.authorAvatar} alt={post.author} className="block h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[8px] font-semibold text-slate-200">
-                      {String(post.author || '?').charAt(0).toUpperCase()}
+        )}
+
+        {isPinned && (
+          <span className="absolute top-[-3px] -left-2 px-2 py-0.5 rounded-[4px] text-[9px] leading-none font-bold tracking-wider uppercase z-20 bg-slate-900 text-rose-400 border border-rose-500/30 shadow-[0_2px_8px_rgba(225,29,72,0.2)]">
+            Pinned
+          </span>
+        )}
+
+        <div className="relative z-10 flex items-start gap-3 w-full">
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+              isPinnedHighlight
+                ? 'mt-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+                : isUnreadHighlight
+                ? `mt-0.5 ${unreadTone.iconClass}`
+                : 'mt-0.5 bg-black/40 border border-white/5 text-primary-light opacity-80'
+            }`}
+          >
+            <span className="material-icons text-[20px]">{iconName}</span>
+          </div>
+
+          <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex items-center gap-2">
+                <h3 className={`truncate text-[14px] sm:text-[15px] tracking-tight font-bold uppercase ${isPinned ? 'text-rose-300' : typeStyles.accentText}`}>
+                  {String(post.title || '').toUpperCase()}
+                </h3>
+                {isImportant && <NewsCardBadge label="New" className="bg-rose-500/15 border-rose-400/35 text-rose-200" />}
+              </div>
+              <span className="text-[10px] sm:text-[11px] whitespace-nowrap font-medium uppercase tracking-wider text-white/80">{metaDateTime}</span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0 flex items-center gap-1.5 text-[11px] sm:text-[12px] truncate uppercase tracking-wider">
+                <span className="font-semibold text-white">{normalizedCategory}</span>
+                <span className="text-white/70 font-bold px-0.5">|</span>
+                <span className="truncate normal-case tracking-normal text-white">by {post.author}</span>
+              </div>
+
+              {showActionMenu ? (
+                <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    type="button"
+                    onClick={() => setActionMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300"
+                    aria-label="Open card actions"
+                  >
+                    <span className="material-icons text-[15px]">more_horiz</span>
+                  </button>
+                  {isActionMenuOpen && (
+                    <div className="absolute right-0 top-7 z-30 min-w-[128px] rounded-xl border border-white/10 bg-surface p-1.5 shadow-xl">
+                      {canManageCard && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionMenuPostId(null);
+                            void handleTogglePinAnnouncement(post.id);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                        >
+                          {isPinned ? 'Unpin' : 'Pin news'}
+                        </button>
+                      )}
+                      {canManageCard && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionMenuPostId(null);
+                            handleEditAnnouncement(post.id);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canManageCard && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionMenuPostId(null);
+                            handleDeleteAnnouncement(post.id);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/15"
+                        >
+                          Delete
+                        </button>
+                      )}
+                      {canHideCard && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActionMenuPostId(null);
+                            handleHideAnnouncement(post.id);
+                          }}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
+                        >
+                          Hide
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
-              </div>
-              <span className="shrink-0 text-[12px] font-medium text-white/75">{metaDateTime}</span>
+              ) : (
+                <span className="material-icons shrink-0 text-[14px] text-slate-600 transition-colors group-hover:text-slate-400">visibility_off</span>
+              )}
             </div>
-            {showActionMenu ? (
-              <div className="absolute right-0 top-0 shrink-0" onClick={(event) => event.stopPropagation()}>
-                <button
-                  type="button"
-                  onClick={() => setActionMenuPostId((prev) => (prev === post.id ? null : post.id))}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-slate-300 transition-colors hover:bg-white/[0.08] hover:text-white"
-                  aria-label="Open card actions"
-                >
-                  <span className="material-icons text-[14px]">more_horiz</span>
-                </button>
-                {isActionMenuOpen && (
-                  <div className="absolute right-0 top-8 z-30 min-w-[122px] rounded-lg border border-white/10 bg-[#122034] p-1.5 shadow-xl">
-                    {canManageCard && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionMenuPostId(null);
-                          handleEditAnnouncement(post.id);
-                        }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
-                      >
-                        Edit
-                      </button>
-                    )}
-                    {canManageCard && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionMenuPostId(null);
-                          handleDeleteAnnouncement(post.id);
-                        }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-rose-200 hover:bg-rose-500/15"
-                      >
-                        Delete
-                      </button>
-                    )}
-                    {canHideCard && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActionMenuPostId(null);
-                          handleHideAnnouncement(post.id);
-                        }}
-                        className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-slate-200 hover:bg-white/[0.08]"
-                      >
-                        Hide
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <span className="material-icons absolute right-0 top-0 shrink-0 text-[14px] text-slate-600 transition-colors group-hover:text-slate-400">visibility_off</span>
-            )}
           </div>
         </div>
-      </button>
+      </NewsCardBase>
     );
   };
 
@@ -510,154 +661,201 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const resultCount = sortedAnnouncements.length;
 
   return (
-    <div className="min-h-full pb-24">
-      <div className="sticky top-0 z-20 px-6 pb-4 pt-6 bg-app/95 backdrop-blur-xl">
-        <div className="mx-auto w-full max-w-md flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-white">News</h1>
-            {canCreateAnnouncement && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="h-10 shrink-0 rounded-xl bg-primary px-3.5 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
-                title="Add Post"
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="material-icons text-[18px]">add</span>
-                  <span className="hidden sm:inline">Add Post</span>
-                </span>
-              </button>
-            )}
-          </div>
-          <div className="w-full relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
-            <div className="relative flex-1">
-              <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">search</span>
+    <>
+      <NewsPageShell
+        title="News"
+        headerAction={
+          canCreateAnnouncement ? (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="h-10 shrink-0 rounded-xl bg-primary px-3.5 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
+              title="Add Post"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <span className="material-icons text-[18px]">add</span>
+                <span className="hidden sm:inline">Add Post</span>
+              </span>
+            </button>
+          ) : null
+        }
+        searchFilterBar={
+          <div className="relative mb-0">
+            <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
+              <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">
+                search
+              </span>
               <input
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search..."
-                className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-3 text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+                placeholder="Search by title or content..."
+                className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-[11rem] text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+                aria-label="Search news"
               />
+              {searchQuery ? (
+                <button
+                  onClick={clearSearch}
+                  className="absolute right-[8.7rem] top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                  aria-label="Clear search"
+                >
+                  <span className="material-icons text-sm">close</span>
+                </button>
+              ) : null}
+              <div className="absolute right-1.5 top-1.5 h-10 w-[126px]">
+                <select
+                  value={viewPrefs.typeFilter}
+                  onChange={(event) =>
+                    setViewPrefs((prev) => ({
+                      ...prev,
+                      typeFilter: event.target.value as TypeFilter,
+                    }))
+                  }
+                  className="h-full w-full appearance-none border border-white/10 bg-white/[0.03] pl-3 pr-8 text-[12px] font-bold text-slate-200 focus:outline-none hover:bg-white/[0.07] rounded-xl transition-colors"
+                  aria-label="Filter news type"
+                >
+                  <option value="all" className="bg-surface">All</option>
+                  <option value="Announcement" className="bg-surface">Announcement</option>
+                  <option value="Research" className="bg-surface">Research</option>
+                  <option value="Event" className="bg-surface">Event</option>
+                  <option value="Miscellaneous" className="bg-surface">Misc</option>
+                </select>
+                <span className="material-icons pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[17px] text-slate-500">tune</span>
+              </div>
             </div>
-            <span className="h-6 w-px bg-white/10 my-auto mx-2" />
-            <div className="relative h-10 w-[140px] shrink-0">
-              <select
-                value={viewPrefs.typeFilter}
-                onChange={(event) =>
+          </div>
+        }
+        topUtilityRegion={
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+              {resultCount} item(s)
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
                   setViewPrefs((prev) => ({
                     ...prev,
-                    typeFilter: event.target.value as TypeFilter,
+                    sortOrder: prev.sortOrder === 'newest' ? 'oldest' : 'newest',
                   }))
                 }
-                className="h-full w-full appearance-none border-0 bg-transparent pl-4 pr-10 text-[13px] font-bold text-slate-300 focus:outline-none cursor-pointer hover:bg-white/5 rounded-xl transition-colors"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-white/[0.08] transition-colors"
+                aria-label="Toggle sort order"
               >
-                <option value="all">All Types</option>
-                <option value="Announcement">Announcement</option>
-                <option value="Research">Research</option>
-                <option value="Event">Event</option>
-                <option value="Miscellaneous">Miscellaneous</option>
-              </select>
-              <span className="material-icons pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">tune</span>
+                <span className="material-icons text-[12px]">swap_vert</span>
+                {viewPrefs.sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+              </button>
+              {(searchQuery || viewPrefs.typeFilter !== 'all' || viewPrefs.sortOrder !== DEFAULT_VIEW_PREFS.sortOrder) && (
+                <button
+                  type="button"
+                  onClick={resetView}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-white/[0.08] transition-colors"
+                >
+                  <span className="material-icons text-[12px]">restart_alt</span>
+                  Reset
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="mx-auto w-full max-w-md space-y-4 px-4 pt-2">
-        {pinnedItems.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.1em] text-amber-200/90">Pinned</h2>
-            <div className="space-y-3">{pinnedItems.map(renderCard)}</div>
-          </section>
-        )}
-
-        {regularItems.length > 0 && (
-          <section className="space-y-3">
-            <div className="space-y-3">{regularItems.map(renderCard)}</div>
-          </section>
-        )}
-
-        {!loading && resultCount === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-white/[0.02] py-16 text-center">
-            <span className="material-icons mb-3 text-4xl text-slate-600">inbox</span>
-            <p className="text-xs font-medium uppercase tracking-widest text-slate-500">No news found</p>
-            {searchQuery.trim().length > 0 && (
-              <button
-                onClick={clearSearch}
-                className="mt-4 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
-              >
-                Clear search
-              </button>
+        }
+        feedRegion={
+          <div className="space-y-4 pt-2">
+            {loading && resultCount === 0 ? (
+              <LoadingState title="Loading News..." compact />
+            ) : (
+              <>
+                {orderedAnnouncements.length > 0 && (
+                  <section className="space-y-3">
+                    <div className="space-y-3">{orderedAnnouncements.map(renderCard)}</div>
+                  </section>
+                )}
+              </>
             )}
-            <button
-              onClick={resetView}
-              className="mt-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
-            >
-              Reset filters
-            </button>
-            {canCreateAnnouncement && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-2 rounded-full border border-white/10 bg-white/[0.03] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
-              >
-                Create News
-              </button>
+
+            {!loading && resultCount === 0 && (
+              <div className="glass-card-enhanced rounded-2xl border border-white/10 p-8 text-center">
+                <span className="material-icons mb-3 text-4xl text-slate-600">inbox</span>
+                <p className="text-xs font-medium uppercase tracking-widest text-slate-500">No news found</p>
+                <p className="mt-2 text-xs text-slate-500">Adjust filters or try a different search term.</p>
+                {searchQuery.trim().length > 0 && (
+                  <button
+                    onClick={clearSearch}
+                    className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+                  >
+                    Clear search
+                  </button>
+                )}
+                <button
+                  onClick={resetView}
+                  className="mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+                >
+                  Reset filters
+                </button>
+                {canCreateAnnouncement && (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="mt-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] font-semibold text-slate-200 transition-colors hover:bg-white/[0.08]"
+                  >
+                    Create News
+                  </button>
+                )}
+              </div>
             )}
+
+            <div ref={loaderRef} className="flex min-h-[56px] items-center justify-center">
+              {loadingMore && <p className="text-xs text-slate-500">Loading more...</p>}
+              {!loadingMore && loadMoreError && (
+                <button
+                  onClick={() => {
+                    setLoadMoreError(null);
+                    const nextPage = page + 1;
+                    setPage(nextPage);
+                    fetchAnnouncements(nextPage, false);
+                  }}
+                  className="text-[10px] px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
+                >
+                  Retry loading
+                </button>
+              )}
+            </div>
           </div>
-        )}
+        }
+      />
 
-        <div ref={loaderRef} className="flex min-h-[56px] items-center justify-center">
-          {loadingMore && <p className="text-xs text-slate-500">Loading more...</p>}
-          {!loadingMore && loadMoreError && (
-            <button
-              onClick={() => {
-                setLoadMoreError(null);
-                const nextPage = page + 1;
-                setPage(nextPage);
-                fetchAnnouncements(nextPage, false);
-              }}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-slate-300 hover:bg-white/[0.08]"
-            >
-              Retry loading
-            </button>
-          )}
-        </div>
-      </div>
+      {showCreateModal && (
+        <CreateAnnouncementModal
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingAnnouncement(null);
+          }}
+          onSuccess={() => {
+            setPage(0);
+            fetchAnnouncements(0, true);
+            setShowCreateModal(false);
+            setEditingAnnouncement(null);
+          }}
+          editingAnnouncement={editingAnnouncement}
+        />
+      )}
 
-      {
-        showCreateModal && (
-          <CreateAnnouncementModal
-            onClose={() => {
-              setShowCreateModal(false);
-              setEditingAnnouncement(null);
-            }}
-            onSuccess={() => {
-              setPage(0);
-              fetchAnnouncements(0, true);
-              setShowCreateModal(false);
-              setEditingAnnouncement(null);
-            }}
-            editingAnnouncement={editingAnnouncement}
-          />
-        )
-      }
-
-      {
-        selectedAnnouncement && (
-          <AnnouncementDetailModal
-            announcement={selectedAnnouncement}
-            onClose={() => setSelectedAnnouncement(null)}
-            onHide={handleHideAnnouncement}
-            onEdit={handleEditAnnouncement}
-            onDelete={handleDeleteAnnouncement}
-            canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
-            supportsSaved={false}
-          />
-        )
-      }
-    </div >
+      {selectedAnnouncement && (
+        <AnnouncementDetailModal
+          announcement={selectedAnnouncement}
+          onClose={() => {
+            markAnnouncementAsRead(selectedAnnouncement.id);
+            setSelectedAnnouncement(null);
+          }}
+          onHide={handleHideAnnouncement}
+          onEdit={handleEditAnnouncement}
+          onDelete={handleDeleteAnnouncement}
+          canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
+          supportsSaved={false}
+          onSavedChanged={() => {
+            setPage(0);
+            fetchAnnouncements(0, true);
+          }}
+        />
+      )}
+    </>
   );
 };
 
 export default AnnouncementsScreen;
-
-
