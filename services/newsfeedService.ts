@@ -329,3 +329,20 @@ export const fetchAllRecipientUserIds = async (): Promise<string[]> => {
   const selfId = authData.user?.id;
   return selfId ? [selfId] : [];
 };
+
+export const sendSummonNotification = async (
+  senderId: string,
+  senderName: string,
+  targetUserId: string,
+  floorName: string,
+): Promise<void> => {
+  await createSystemNotification({
+    actorUserId: senderId,
+    type: 'SUMMON_MAP',
+    severity: 'info',
+    title: 'Map Request',
+    message: `${senderName} is requesting your presence at ${floorName}`,
+    linkScreen: 'live-map',
+    recipientUserIds: [targetUserId],
+  });
+};

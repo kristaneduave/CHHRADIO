@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
-import { Profile } from '../types';
+import { NeedleUserStats, Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
 import MonthlyCensusModal from './MonthlyCensusModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { toastError } from '../utils/toast';
+import NeedleNavigatorCard from './NeedleNavigatorCard';
+import NeedleNavigatorGame from './NeedleNavigatorGame';
+import { getNeedleUserStats } from '../services/needleNavigatorService';
 const SCOPE_REMAINING = 'Remaining studies';
 
 // Generate a unique ID for each slot to track overrides
@@ -124,6 +127,9 @@ const ResidentsCornerScreen: React.FC = () => {
         timeSlot: ''
     });
     const [isMonthlyCensusModalOpen, setIsMonthlyCensusModalOpen] = useState(false);
+    const [isNeedleNavigatorOpen, setIsNeedleNavigatorOpen] = useState(false);
+    const needleNavigatorEnabled = import.meta.env.VITE_FEATURE_NEEDLE_NAVIGATOR === 'true';
+    const [needleStats, setNeedleStats] = useState<NeedleUserStats | null>(null);
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
 
@@ -331,6 +337,16 @@ const ResidentsCornerScreen: React.FC = () => {
         setIsMonthlyCensusModalOpen(true);
     };
 
+    useEffect(() => {
+        if (!needleNavigatorEnabled || !currentUser?.id) {
+            setNeedleStats(null);
+            return;
+        }
+        getNeedleUserStats(currentUser.id)
+            .then((data) => setNeedleStats(data))
+            .catch(() => setNeedleStats(null));
+    }, [currentUser?.id, needleNavigatorEnabled]);
+
 
 
     return (
@@ -371,6 +387,13 @@ const ResidentsCornerScreen: React.FC = () => {
                         <span className="material-icons text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all">arrow_forward</span>
                     </a>
                 </div>
+
+                {needleNavigatorEnabled && (
+                    <NeedleNavigatorCard
+                        onOpen={() => setIsNeedleNavigatorOpen(true)}
+                        stats={needleStats}
+                    />
+                )}
 
                 {/* Hospital Selector - Segmented Control Style */}
                 <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
@@ -713,6 +736,13 @@ const ResidentsCornerScreen: React.FC = () => {
                 onClose={() => setIsMonthlyCensusModalOpen(false)}
                 residentId={currentUser?.id || null}
             />
+
+            {needleNavigatorEnabled && isNeedleNavigatorOpen && (
+                <NeedleNavigatorGame
+                    userId={currentUser?.id || null}
+                    onClose={() => setIsNeedleNavigatorOpen(false)}
+                />
+            )}
         </div>
     );
 };

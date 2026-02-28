@@ -122,6 +122,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const [supportsPriorityColumns, setSupportsPriorityColumns] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [isTypeMenuOpen, setIsTypeMenuOpen] = useState(false);
   const [readAnnouncementIds, setReadAnnouncementIds] = useState<Set<string>>(() => {
     if (typeof window === 'undefined') return new Set<string>();
     try {
@@ -135,6 +136,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   });
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const lastHandledInitialOpenRef = useRef<string | null>(null);
+  const typeMenuRef = useRef<HTMLDivElement | null>(null);
 
   const canCreateAnnouncement = ['admin', 'training_officer', 'moderator', 'consultant'].includes(userRole);
   const canManageAnyAnnouncement = ['admin', 'training_officer', 'moderator'].includes(userRole);
@@ -253,6 +255,17 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     if (!hiddenAnnouncementIds.size) return;
     setAnnouncements((prev) => prev.filter((item) => !hiddenAnnouncementIds.has(item.id)));
   }, [hiddenAnnouncementIds]);
+
+  useEffect(() => {
+    if (!isTypeMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (typeMenuRef.current?.contains(target)) return;
+      setIsTypeMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [isTypeMenuOpen]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -664,23 +677,20 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     <>
       <NewsPageShell
         title="News"
-        headerAction={
-          canCreateAnnouncement ? (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="h-10 shrink-0 rounded-xl bg-primary px-3.5 flex items-center justify-center text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95 sm:px-4"
-              title="Add Post"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <span className="material-icons text-[18px]">add</span>
-                <span className="hidden sm:inline">Add Post</span>
-              </span>
-            </button>
-          ) : null
-        }
+        headerAction={null}
         searchFilterBar={
-          <div className="relative mb-0">
-            <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
+          <div ref={typeMenuRef} className="relative mb-0 flex items-center gap-2">
+            {canCreateAnnouncement && (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95"
+                aria-label="Create news"
+              >
+                <span className="material-icons text-[18px]">add</span>
+              </button>
+            )}
+            <div className="relative group flex-1 bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
               <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">
                 search
               </span>
@@ -688,74 +698,55 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Search by title or content..."
-                className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-[11rem] text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
+                className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-[3.5rem] text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
                 aria-label="Search news"
               />
               {searchQuery ? (
                 <button
                   onClick={clearSearch}
-                  className="absolute right-[8.7rem] top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
+                  className="absolute top-1/2 right-[3.15rem] -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
                   aria-label="Clear search"
                 >
                   <span className="material-icons text-sm">close</span>
                 </button>
               ) : null}
-              <div className="absolute right-1.5 top-1.5 h-10 w-[126px]">
-                <select
-                  value={viewPrefs.typeFilter}
-                  onChange={(event) =>
-                    setViewPrefs((prev) => ({
-                      ...prev,
-                      typeFilter: event.target.value as TypeFilter,
-                    }))
-                  }
-                  className="h-full w-full appearance-none border border-white/10 bg-white/[0.03] pl-3 pr-8 text-[12px] font-bold text-slate-200 focus:outline-none hover:bg-white/[0.07] rounded-xl transition-colors"
-                  aria-label="Filter news type"
-                >
-                  <option value="all" className="bg-surface">All</option>
-                  <option value="Announcement" className="bg-surface">Announcement</option>
-                  <option value="Research" className="bg-surface">Research</option>
-                  <option value="Event" className="bg-surface">Event</option>
-                  <option value="Miscellaneous" className="bg-surface">Misc</option>
-                </select>
-                <span className="material-icons pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[17px] text-slate-500">tune</span>
-              </div>
-            </div>
-          </div>
-        }
-        topUtilityRegion={
-          <div className="flex items-center justify-between gap-2 px-1">
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-              {resultCount} item(s)
-            </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() =>
-                  setViewPrefs((prev) => ({
-                    ...prev,
-                    sortOrder: prev.sortOrder === 'newest' ? 'oldest' : 'newest',
-                  }))
-                }
-                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-white/[0.08] transition-colors"
-                aria-label="Toggle sort order"
-              >
-                <span className="material-icons text-[12px]">swap_vert</span>
-                {viewPrefs.sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-              </button>
-              {(searchQuery || viewPrefs.typeFilter !== 'all' || viewPrefs.sortOrder !== DEFAULT_VIEW_PREFS.sortOrder) && (
+              <div className="absolute right-1.5 top-1.5 h-10 flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={resetView}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:bg-white/[0.08] transition-colors"
+                  onClick={() => setIsTypeMenuOpen((prev) => !prev)}
+                  className={`absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                    isTypeMenuOpen || viewPrefs.typeFilter !== 'all'
+                      ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                  }`}
+                  aria-label="Filter news type"
                 >
-                  <span className="material-icons text-[12px]">restart_alt</span>
-                  Reset
+                  <span className="material-icons text-[18px]">tune</span>
                 </button>
-              )}
+              </div>
             </div>
+            {isTypeMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-white/10 bg-[#101826] p-1.5 shadow-xl z-30 animate-in fade-in zoom-in-95 duration-100">
+                {(['all', 'Announcement', 'Research', 'Event', 'Miscellaneous'] as TypeFilter[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setViewPrefs((prev) => ({ ...prev, typeFilter: type }));
+                      setIsTypeMenuOpen(false);
+                    }}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
+                      viewPrefs.typeFilter === type ? 'bg-white/[0.08] text-white' : 'text-slate-200 hover:bg-white/[0.08]'
+                    }`}
+                  >
+                    {type === 'all' ? 'All' : type}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         }
+        topUtilityRegion={null}
         feedRegion={
           <div className="space-y-4 pt-2">
             {loading && resultCount === 0 ? (

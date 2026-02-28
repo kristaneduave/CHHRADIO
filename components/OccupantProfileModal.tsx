@@ -96,7 +96,7 @@ const OccupantProfileModal: React.FC<OccupantProfileModalProps> = ({
             disabled={submitting}
             className="w-full rounded-xl border border-rose-500/25 bg-rose-500/10 py-2.5 text-sm font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
           >
-            {submitting ? 'Releasing...' : 'Release Workstation'}
+            {submitting ? 'Clearing...' : 'Clear Colleague from Workstation'}
           </button>
         </div>
       </div>

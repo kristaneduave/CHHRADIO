@@ -49,6 +49,7 @@ const AnnouncementsScreen = lazy(() => import('./components/AnnouncementsScreen'
 const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
 const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
 const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
+const LiveMapScreen = lazy(() => import('./components/LiveMapScreen'));
 
 const App: React.FC = () => {
   useThemePreference();
@@ -320,6 +321,8 @@ const App: React.FC = () => {
         return <NewsfeedScreen onNavigateToTarget={handleNewsfeedNavigate} />;
       case 'residents-corner':
         return <ResidentsCornerScreen />;
+      case 'live-map':
+        return <LiveMapScreen />;
       default:
         return <Dashboard onNavigate={navigateToScreen} onStartUpload={startUploadFlow} />;
     }

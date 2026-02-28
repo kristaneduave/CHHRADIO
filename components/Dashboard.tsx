@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { QUICK_ACTIONS } from '../constants';
 import { Screen, SubmissionType } from '../types';
-import WorkstationMapWidget from './WorkstationMapWidget';
 
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
@@ -80,21 +79,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
 
   return (
     <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
-      <header className="pt-3 pb-1 px-4 relative z-10">
-        <div className="header-panel relative overflow-hidden rounded-xl border border-white/10 px-4 py-3.5 shadow-2xl">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(34,211,238,0.16),transparent_48%),radial-gradient(circle_at_85%_18%,rgba(99,102,241,0.16),transparent_52%)]" />
-          <div className="pointer-events-none absolute top-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-cyan-200/60 to-transparent" />
-          <div className="pointer-events-none absolute bottom-0 left-0 h-px w-full bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-          <div className="relative mx-auto flex w-full items-center justify-center gap-1.5 -translate-x-2">
-            <img
-              src="/logo-radcore.svg"
-              alt="CHH RadCore logo"
-              className="h-[4.45rem] w-[4.45rem] shrink-0 object-contain"
-            />
-            <h1 className="flex min-w-0 flex-col items-center justify-center gap-1 leading-none">
-              <span className="text-[1.62rem] font-extrabold tracking-[0.045em] text-white">CHH RadCore</span>
-            </h1>
-          </div>
+      <header className="pt-8 pb-4 px-6 relative z-10">
+        <div className="relative mx-auto flex w-full items-center justify-center gap-3">
+          <img
+            src="/logo-radcore.svg"
+            alt="CHH RadCore logo"
+            className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+          />
+          <h1 className="flex min-w-0 flex-col justify-center leading-none">
+            <span className="text-xl font-black tracking-[0.2em] text-white uppercase drop-shadow-md">CHH RadCore</span>
+          </h1>
         </div>
       </header>
 
@@ -133,9 +127,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
               );
             })}
           </div>
-          <div className="mt-4">
-            <SafeWorkstationMapWidget />
-          </div>
         </div>
       </main>
 
@@ -153,64 +144,64 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
           ></div>
           {/* Modal Container */}
           <div
-            className="w-full max-w-sm bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden relative z-10 animate-in slide-in-from-bottom-8 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 flex flex-col"
+            className="w-full max-w-[320px] bg-[#0a0f18]/80 backdrop-blur-2xl border border-white/10 rounded-[1.75rem] shadow-[0_0_40px_-10px_rgba(0,0,0,0.8)] overflow-hidden relative z-10 animate-in zoom-in-95 duration-200 flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Content Area */}
-            <div className="p-6 relative overflow-hidden shrink-0">
+            <div className="p-5 relative overflow-hidden shrink-0">
               <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
-              <div className="relative z-10 space-y-3">
+              <div className="relative z-10 space-y-2.5">
                 <button
-                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
                   onClick={() => {
                     setIsUploadTypePickerOpen(false);
                     onStartUpload('interesting_case');
                   }}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-sky-400 flex items-center justify-center border border-sky-400/30 shadow-sm group-hover:border-sky-400/50 transition-colors">
-                      <span className="material-icons text-[22px]">library_books</span>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-[0.85rem] bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20 shadow-[0_0_15px_rgba(56,189,248,0.15)] group-hover:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all">
+                      <span className="material-icons text-[20px]">library_books</span>
                     </div>
-                    <span className="block text-[15px] font-[800] text-sky-400 transition-colors tracking-wide uppercase">INTERESTING CASE</span>
+                    <span className="block text-[13px] font-bold text-sky-400 group-hover:text-sky-300 transition-colors tracking-widest uppercase">INTERESTING CASE</span>
                   </div>
-                  <div className="flex items-center pr-1">
-                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <span className="material-icons text-white text-[20px]">chevron_right</span>
                   </div>
                 </button>
 
                 <button
-                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
                   onClick={() => {
                     setIsUploadTypePickerOpen(false);
                     onStartUpload('rare_pathology');
                   }}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-rose-400 flex items-center justify-center border border-rose-400/30 shadow-sm group-hover:border-rose-400/50 transition-colors">
-                      <span className="material-icons text-[22px]">biotech</span>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-[0.85rem] bg-rose-500/10 text-rose-400 flex items-center justify-center border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)] group-hover:shadow-[0_0_20px_rgba(244,63,94,0.25)] transition-all">
+                      <span className="material-icons text-[20px]">biotech</span>
                     </div>
-                    <span className="block text-[15px] font-[800] text-rose-400 transition-colors tracking-wide uppercase">RARE PATHOLOGY</span>
+                    <span className="block text-[13px] font-bold text-rose-400 group-hover:text-rose-300 transition-colors tracking-widest uppercase">RARE PATHOLOGY</span>
                   </div>
-                  <div className="flex items-center pr-1">
-                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <span className="material-icons text-white text-[20px]">chevron_right</span>
                   </div>
                 </button>
 
                 <button
-                  className="w-full p-4 rounded-[1.3rem] bg-[#111721] border border-white/5 hover:bg-white/[0.04] transition-all text-left flex items-center justify-between group"
+                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
                   onClick={() => {
                     setIsUploadTypePickerOpen(false);
                     onStartUpload('aunt_minnie');
                   }}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-[1rem] bg-[#161c28] text-amber-400 flex items-center justify-center border border-amber-400/30 shadow-sm group-hover:border-amber-400/50 transition-colors">
-                      <span className="material-icons text-[22px]">psychology</span>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-[0.85rem] bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)] group-hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] transition-all">
+                      <span className="material-icons text-[20px]">psychology</span>
                     </div>
-                    <span className="block text-[15px] font-[800] text-amber-400 transition-colors tracking-wide uppercase">AUNT MINNIE</span>
+                    <span className="block text-[13px] font-bold text-amber-400 group-hover:text-amber-300 transition-colors tracking-widest uppercase">AUNT MINNIE</span>
                   </div>
-                  <div className="flex items-center pr-1">
-                    <span className="material-icons text-slate-500/50 font-bold transition-colors text-[24px] group-hover:text-white/60">chevron_right</span>
+                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <span className="material-icons text-white text-[20px]">chevron_right</span>
                   </div>
                 </button>
               </div>
@@ -265,22 +256,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
       `}</style>
     </div>
   );
-};
-
-const SafeWorkstationMapWidget: React.FC = () => {
-  try {
-    return <WorkstationMapWidget />;
-  } catch (error: any) {
-    console.error('Workstation map widget crashed:', error);
-    return (
-      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-4 text-rose-200">
-        <p className="text-sm font-semibold">Workspace widget failed to render.</p>
-        <p className="text-xs mt-1 text-rose-100/80">
-          {error?.message || 'Unknown render error.'}
-        </p>
-      </div>
-    );
-  }
 };
 
 export default Dashboard;

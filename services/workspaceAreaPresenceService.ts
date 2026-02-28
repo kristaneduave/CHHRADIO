@@ -1,8 +1,17 @@
 import { supabase } from './supabase';
-import { WorkspaceAreaPresenceRow } from '../types';
+import { LiveMapKickResult, WorkspaceAreaPresenceRow } from '../types';
+import { parsePositiveInt } from '../utils/liveMapPresence';
 
 export const ENABLE_PERSISTENT_AREA_PRESENCE =
   String(import.meta.env?.VITE_ENABLE_PERSISTENT_AREA_PRESENCE ?? 'true').toLowerCase() !== 'false';
+export const LIVE_MAP_STALE_TTL_SECONDS = parsePositiveInt(
+  import.meta.env?.VITE_LIVE_MAP_STALE_TTL_SECONDS,
+  90,
+);
+export const LIVE_MAP_HEARTBEAT_SECONDS = parsePositiveInt(
+  import.meta.env?.VITE_LIVE_MAP_HEARTBEAT_SECONDS,
+  30,
+);
 
 type AreaPresenceDbRow = {
   id: string;
@@ -63,7 +72,11 @@ const getCurrentUserId = async (): Promise<string> => {
 };
 
 export const workspaceAreaPresenceService = {
-  async fetchActiveAreaPresence(): Promise<WorkspaceAreaPresenceRow[]> {
+  async fetchActiveAreaPresence(options?: {
+    staleTtlSeconds?: number;
+    staleOnly?: boolean;
+    nowMs?: number;
+  }): Promise<WorkspaceAreaPresenceRow[]> {
     if (!ENABLE_PERSISTENT_AREA_PRESENCE) return [];
 
     const { data, error } = await supabase
@@ -94,7 +107,18 @@ export const workspaceAreaPresenceService = {
       .eq('is_present', true);
 
     if (error) throw new Error(error.message);
-    return (data || []).map((row) => mapRow(row as AreaPresenceDbRow));
+    const rows = (data || []).map((row) => mapRow(row as AreaPresenceDbRow));
+    if (!options?.staleOnly) {
+      return rows;
+    }
+
+    const ttlSeconds = options.staleTtlSeconds ?? LIVE_MAP_STALE_TTL_SECONDS;
+    const nowMs = options.nowMs ?? Date.now();
+    return rows.filter((row) => {
+      const seenAtMs = new Date(row.lastSeenAt).getTime();
+      if (!Number.isFinite(seenAtMs)) return true;
+      return nowMs - seenAtMs > ttlSeconds * 1000;
+    });
   },
 
   async upsertMyAreaPresence(payload: { floorId: string; x: number; y: number; statusMessage?: string | null }): Promise<void> {
@@ -184,6 +208,30 @@ export const workspaceAreaPresenceService = {
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  },
+
+  async forceRemoveUserFromLiveMap(targetUserId: string, reason?: string): Promise<LiveMapKickResult> {
+    const trimmedTarget = targetUserId.trim();
+    if (!trimmedTarget) throw new Error('Target user id is required.');
+
+    const { data, error } = await supabase.rpc('force_remove_user_from_live_map', {
+      p_target_user_id: trimmedTarget,
+      p_reason: reason?.trim() || null,
+    });
+    if (error) throw new Error(error.message);
+
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
+      throw new Error('No kick result returned.');
+    }
+
+    return {
+      target_user_id: String(row.target_user_id),
+      cleared_presence_count: Number(row.cleared_presence_count) || 0,
+      released_workstation_count: Number(row.released_workstation_count) || 0,
+      kicked_by: String(row.kicked_by),
+      created_at: String(row.created_at),
     };
   },
 };

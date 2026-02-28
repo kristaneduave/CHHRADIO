@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed' | 'live-map';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 
 export type ToastKind = 'success' | 'error' | 'info';
@@ -45,6 +45,9 @@ export interface WorkspacePlayer {
   targetY?: number;
   isWalking: boolean;
   statusMessage: string | null;
+  presenceSource?: 'realtime' | 'persistent' | 'merged';
+  isStale?: boolean;
+  lastSeenAt?: string | null;
 }
 
 export interface WorkspaceAreaPresenceRow {
@@ -507,4 +510,132 @@ export interface AccountAccessRequestStatus {
   status: AccountAccessRequestStatusType;
   createdAt: string;
   reviewedAt: string | null;
+}
+
+export interface LiveMapKickResult {
+  target_user_id: string;
+  cleared_presence_count: number;
+  released_workstation_count: number;
+  kicked_by: string;
+  created_at: string;
+}
+
+export interface LiveMapKickAuditRow extends LiveMapKickResult {
+  id: string;
+  reason: string | null;
+}
+
+export type OnlinePanelRenderMode = 'simple' | 'virtualized';
+
+export interface LiveMapPerfSample {
+  label: string;
+  durationMs: number;
+  at: string;
+  meta?: Record<string, unknown>;
+}
+
+export type NeedleDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface NeedleRiskZone {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  radius: number;
+}
+
+export interface NeedleTargetConfig {
+  x: number;
+  baseY: number;
+  radiusX: number;
+  radiusY: number;
+  amplitude: number;
+  frequencyHz: number;
+  jitter: number;
+}
+
+export interface NeedleRiskConfig {
+  nearMissDistance: number;
+  zones: NeedleRiskZone[];
+}
+
+export interface NeedleScenario {
+  id: string;
+  title: string;
+  anatomy: string;
+  difficulty: NeedleDifficulty;
+  time_limit_sec: number;
+  field_width: number;
+  field_height: number;
+  needle_entry_x: number;
+  needle_entry_y: number;
+  max_depth: number;
+  target_config: NeedleTargetConfig;
+  risk_config: NeedleRiskConfig;
+  is_active?: boolean;
+}
+
+export interface NeedleRunEvent {
+  event_type:
+    | 'start'
+    | 'angle_change'
+    | 'depth_change'
+    | 'commit_attempt'
+    | 'risk_enter'
+    | 'risk_exit'
+    | 'success'
+    | 'timeout'
+    | 'abandon';
+  event_at: string;
+  meta: Record<string, unknown>;
+}
+
+export interface NeedleScoreBreakdown {
+  accuracy: number;
+  trajectory: number;
+  safety: number;
+  efficiency: number;
+}
+
+export interface NeedleSessionMetrics {
+  elapsed_ms: number;
+  puncture_attempts: number;
+  redirects: number;
+  risk_hits: number;
+  risk_exposure_ms: number;
+  near_miss_ms: number;
+  stable_ms_at_commit: number;
+  final_distance_px: number;
+  success: boolean;
+}
+
+export interface NeedleSessionResult {
+  id: string;
+  scenario_id: string;
+  user_id?: string | null;
+  started_at: string;
+  completed_at: string;
+  duration_ms: number;
+  score: number;
+  competency_band: 'Excellent' | 'Safe' | 'Needs Practice';
+  metrics: NeedleSessionMetrics;
+  breakdown: NeedleScoreBreakdown;
+}
+
+export interface NeedleLeaderboardRow {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  role?: UserRole | null;
+  runs_count: number;
+  avg_score: number;
+  best_score: number;
+}
+
+export interface NeedleUserStats {
+  user_id: string;
+  runs_count: number;
+  avg_score: number;
+  best_score: number;
+  excellent_count: number;
 }

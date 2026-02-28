@@ -29,6 +29,8 @@ const getInitial = (name?: string | null): string => {
 
 // Distance in coordinate space (0-100%) to trigger interaction
 const INTERACTION_RADIUS = 3.5;
+const LIVE_MAP_PERF_LOG =
+    String(import.meta.env?.VITE_LIVE_MAP_PERF_LOG ?? 'false').toLowerCase() === 'true';
 
 const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     floor,
@@ -44,6 +46,9 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     const [players, setPlayers] = useState<WorkspacePlayer[]>([]);
     const [renderPlayers, setRenderPlayers] = useState<WorkspacePlayer[]>([]);
     const containerRef = useRef<HTMLDivElement>(null);
+    const [isDocumentVisible, setIsDocumentVisible] = useState<boolean>(
+        typeof document !== 'undefined' ? !document.hidden : true,
+    );
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
     useEffect(() => {
@@ -102,10 +107,21 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
     }, [players, currentUserId]);
 
     useEffect(() => {
+        const onVisibility = () => {
+            setIsDocumentVisible(!document.hidden);
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, []);
+
+    useEffect(() => {
+        if (!isDocumentVisible) return;
         let frameId: number;
+        let idleTicks = 0;
+        let activeFrames = 0;
+        const targetById = new Map<string, WorkspacePlayer>(players.map((p) => [p.id, p]));
         const step = () => {
             setRenderPlayers((prev) => {
-                const targetById = new Map<string, WorkspacePlayer>(players.map((p) => [p.id, p]));
                 let changed = false;
 
                 const next = prev.map((rp: WorkspacePlayer) => {
@@ -138,14 +154,28 @@ const VirtualWorkspaceRenderer: React.FC<VirtualWorkspaceRendererProps> = ({
                     }
                 }
 
-                return changed ? next : prev;
+                if (changed) {
+                    idleTicks = 0;
+                    activeFrames += 1;
+                    return next;
+                }
+
+                idleTicks += 1;
+                return prev;
             });
-            frameId = window.requestAnimationFrame(step);
+
+            if (idleTicks < 6) {
+                frameId = window.requestAnimationFrame(step);
+            } else if (LIVE_MAP_PERF_LOG && activeFrames > 0) {
+                console.debug('[live-map-perf] renderer-active-frames', activeFrames, 'floor', floor.id);
+            }
         };
 
         frameId = window.requestAnimationFrame(step);
-        return () => window.cancelAnimationFrame(frameId);
-    }, [players, currentUserId]);
+        return () => {
+            if (frameId) window.cancelAnimationFrame(frameId);
+        };
+    }, [players, currentUserId, floor.id, isDocumentVisible]);
 
     const handleMapClick = async (e: React.MouseEvent<HTMLDivElement>) => {
         if (!containerRef.current) return;

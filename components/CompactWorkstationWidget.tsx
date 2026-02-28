@@ -23,7 +23,7 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
     const MAP_BOUNDS = { minX: 0, maxX: 1000, minY: 0, maxY: 1000 };
 
     return (
-        <div className="rounded-3xl border border-white/5 bg-[#111721] p-4 lg:p-5 shadow-2xl relative overflow-hidden group h-full flex flex-col justify-between">
+        <div className="bg-[#0a0f18]/80 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-4 lg:p-5 shadow-[0_0_40px_-10px_rgba(0,0,0,0.8)] relative overflow-hidden group h-full flex flex-col justify-between">
             {/* Decorative Glow */}
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none transition-opacity duration-700 opacity-50 group-hover:opacity-100" />
             <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-emerald-500/10 rounded-full blur-[80px] pointer-events-none transition-opacity duration-700 opacity-30 group-hover:opacity-60" />
@@ -32,13 +32,13 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
 
                 {/* Header Row */}
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-emerald-500/20 flex items-center justify-center border border-white/10 shadow-inner block">
-                            <span className="material-icons text-cyan-400 text-[22px]">map</span>
+                    <div className="flex items-center gap-3 w-full">
+                        <div className="w-[38px] h-[38px] shrink-0 rounded-[14px] bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.15)] group-hover:shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all">
+                            <span className="material-icons text-cyan-400 text-[18px]">map</span>
                         </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-white tracking-tight leading-tight">Live Map</h2>
-                            <p className="text-xs text-slate-400 font-medium">Workstation status</p>
+                        <div className="flex-1 min-w-0 pr-1">
+                            <h2 className="text-[12px] sm:text-[13px] tracking-widest font-extrabold text-white group-hover:text-cyan-400 transition-colors uppercase mb-0.5 mt-1">Live Map</h2>
+                            <p className="text-[9px] text-white/50 uppercase tracking-widest font-bold">Workstation status</p>
                         </div>
                     </div>
 
@@ -64,7 +64,7 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
                 </div>
 
                 {/* Mini Map Viewport */}
-                <div className="relative w-full flex-1 min-h-[140px] bg-black/40 rounded-2xl border border-white/5 overflow-hidden mt-1 shadow-inner">
+                <div className="relative w-full flex-1 min-h-[140px] bg-white/[0.03] rounded-2xl border border-white/5 overflow-hidden mt-2 shadow-inner group-hover:border-white/10 transition-colors">
                     {/* Simplified Map Background via CSS */}
                     <div
                         className="absolute inset-0 opacity-80 mix-blend-screen"
@@ -77,13 +77,13 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
 
                     {/* Live Stats Overlays */}
                     <div className="absolute top-2 left-2 flex gap-2">
-                        <div className="bg-[#111721]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5 shadow-lg">
+                        <div className="bg-[#0a0f18]/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 shadow-lg">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                            <span className="text-[10px] font-bold text-white tracking-wide">{loading ? '-' : availableCount} <span className="text-slate-400 hidden sm:inline">Avail</span></span>
+                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">{loading ? '-' : availableCount} <span className="text-slate-500 hidden sm:inline">Avail</span></span>
                         </div>
-                        <div className="bg-[#111721]/80 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10 flex items-center gap-1.5 shadow-lg">
-                            <span className="w-2 h-2 rounded-full bg-rose-400"></span>
-                            <span className="text-[10px] font-bold text-white tracking-wide">{loading ? '-' : inUseCount} <span className="text-slate-400 hidden sm:inline">Used</span></span>
+                        <div className="bg-[#0a0f18]/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 shadow-lg">
+                            <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></span>
+                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">{loading ? '-' : inUseCount} <span className="text-slate-500 hidden sm:inline">Used</span></span>
                         </div>
                     </div>
 
@@ -111,10 +111,10 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
                 {/* CTA Button */}
                 <button
                     onClick={onOpenViewer}
-                    className="w-full py-3 mt-1 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-400 font-bold text-[14px] transition-all duration-200 shadow-[0_0_15px_rgba(6,182,212,0.15)] flex items-center justify-center gap-2"
+                    className="w-full py-3.5 mt-2 rounded-2xl bg-cyan-500/[0.03] hover:bg-cyan-500/[0.08] border border-cyan-500/10 hover:border-cyan-500/20 text-cyan-400 font-bold text-[10px] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
                 >
                     Enter Workspace
-                    <span className="material-icons text-[18px]">arrow_forward</span>
+                    <span className="material-icons text-[16px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </button>
             </div>
 

@@ -12,7 +12,7 @@ interface WorkstationActionModalProps {
   onRelease: (workstationId: string) => Promise<void>;
 }
 
-const PRESET_MESSAGES = ['On break', 'Reading', 'Procedure', 'Report', 'Back soon'];
+const PRESET_MESSAGES = ['Deep Work 🎧', 'Coffee Break ☕', 'Lunch 🍱', 'Available 🟢', 'BRB 5 mins ⏳'];
 
 const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
   isOpen,
@@ -116,14 +116,14 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
                 disabled={isSubmitting}
                 className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold text-[15px] transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)] disabled:opacity-50"
               >
-                {isSubmitting ? 'Processing...' : 'Claim Workstation'}
+                {isSubmitting ? 'Processing...' : 'Sit Here'}
               </button>
               <button
                 onClick={onOpenAssign}
                 disabled={isSubmitting}
                 className="w-full py-2.5 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 text-sm font-semibold transition-colors"
               >
-                Set as occupied by...
+                Assign Colleague
               </button>
             </div>
           )}

@@ -30,6 +30,11 @@ let occupancyCapabilities: OccupancySchemaCapabilities = {
   hasV3AssignmentColumns: true,
 };
 const occupancyOwnershipCache = new Map<string, { at: number; value: boolean }>();
+const OCCUPANT_PROFILE_CACHE_TTL_MS = 60_000;
+const occupantProfileCache = new Map<
+  string,
+  { at: number; value: { nickname: string | null; fullName: string | null; avatarUrl: string | null; role: any } }
+>();
 
 const isMissingColumnError = (message?: string): boolean =>
   Boolean(
@@ -121,13 +126,16 @@ export const workstationMapService = {
       throw new Error(error.message);
     }
 
-    // Override with mock design for now
-    return (data || []).map(f => ({
-      ...f,
-      image_url: '/mock-map.png',
-      width: 735,
-      height: 824
-    }));
+    return (data || []).map((floor: any) => {
+      const width = Number(floor.width);
+      const height = Number(floor.height);
+      return {
+        ...floor,
+        image_url: floor.image_url || '/mock-map.png',
+        width: Number.isFinite(width) && width > 0 ? width : 735,
+        height: Number.isFinite(height) && height > 0 ? height : 824,
+      } as Floor;
+    });
   },
 
   async getWorkstationsByFloor(floorId: string): Promise<CurrentWorkstationStatus[]> {
@@ -146,6 +154,7 @@ export const workstationMapService = {
   async hydrateWorkstationOccupants(
     workstations: CurrentWorkstationStatus[],
   ): Promise<CurrentWorkstationStatus[]> {
+    const now = Date.now();
     const occupantIds = Array.from(
       new Set(
         workstations
@@ -156,30 +165,36 @@ export const workstationMapService = {
 
     if (!occupantIds.length) return workstations;
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, nickname, avatar_url, role')
-      .in('id', occupantIds);
+    const missingIds = occupantIds.filter((id) => {
+      const cached = occupantProfileCache.get(id);
+      return !cached || now - cached.at > OCCUPANT_PROFILE_CACHE_TTL_MS;
+    });
 
-    if (error) {
-      console.error('Error hydrating workstation occupants:', error);
-      return workstations;
+    if (missingIds.length) {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, nickname, avatar_url, role')
+        .in('id', missingIds);
+
+      if (error) {
+        console.error('Error hydrating workstation occupants:', error);
+      } else {
+        (data || []).forEach((profile: any) => {
+          occupantProfileCache.set(String(profile.id), {
+            at: now,
+            value: {
+              nickname: (profile.nickname as string | null) || null,
+              fullName: (profile.full_name as string | null) || null,
+              avatarUrl: (profile.avatar_url as string | null) || null,
+              role: (profile.role as any) || null,
+            },
+          });
+        });
+      }
     }
 
-    const profileById = new Map(
-      (data || []).map((profile: any) => [
-        String(profile.id),
-        {
-          nickname: (profile.nickname as string | null) || null,
-          fullName: (profile.full_name as string | null) || null,
-          avatarUrl: (profile.avatar_url as string | null) || null,
-          role: (profile.role as any) || null,
-        },
-      ]),
-    );
-
     return workstations.map((ws) => {
-      const profile = ws.occupant_id ? profileById.get(ws.occupant_id) : null;
+      const profile = ws.occupant_id ? occupantProfileCache.get(ws.occupant_id)?.value : null;
       if (!profile) return ws;
       return {
         ...ws,
