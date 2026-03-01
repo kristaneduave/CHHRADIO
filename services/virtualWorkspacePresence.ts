@@ -202,7 +202,10 @@ export const workspacePresenceService = {
             for (const id in state) {
                 const presences = state[id];
                 if (presences && presences.length > 0) {
-                    players.push(presences[0].player);
+                    // A user can have multiple presence metas (e.g. reconnects or multiple sessions).
+                    // Picking index 0 can resurrect an older location and cause visible snap-back.
+                    const latestPresence = presences[presences.length - 1];
+                    players.push(latestPresence.player);
                 }
             }
 

@@ -3,6 +3,7 @@ import {
     AssignOccupancyPayload,
     CurrentWorkstationStatus,
     Floor,
+    LiveMapModerationAction,
     LiveMapPerfSample,
     NewsfeedOnlineUser,
     WorkspaceAreaPresenceRow,
@@ -78,6 +79,11 @@ const LiveMapScreen: React.FC = () => {
     const [workstationQuery, setWorkstationQuery] = useState('');
     const [workstationFilter, setWorkstationFilter] = useState<WorkstationViewFilter>('all');
     const [kickingUserId, setKickingUserId] = useState<string | null>(null);
+    const [summonStateByUserId, setSummonStateByUserId] = useState<Record<string, 'idle' | 'sending' | 'sent'>>({});
+    const [staleFirstEnabled, setStaleFirstEnabled] = useState(true);
+    const [moderationActions, setModerationActions] = useState<LiveMapModerationAction[]>([]);
+    const [isModerationLoading, setIsModerationLoading] = useState(false);
+    const [moderationError, setModerationError] = useState<string | null>(null);
     const [isDocumentVisible, setIsDocumentVisible] = useState(
         typeof document === 'undefined' ? true : !document.hidden,
     );
@@ -97,6 +103,19 @@ const LiveMapScreen: React.FC = () => {
             console.error('Failed to refresh area presence:', refreshError);
         }
     }, [currentUserId]);
+
+    const refreshModerationActions = useCallback(async () => {
+        try {
+            setIsModerationLoading(true);
+            setModerationError(null);
+            const rows = await workspaceAreaPresenceService.fetchRecentModerationActions(12);
+            setModerationActions(rows);
+        } catch (auditError: any) {
+            setModerationError(auditError?.message || 'Unable to load moderation history.');
+        } finally {
+            setIsModerationLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         setCurrentStatusMessage(workspacePresenceService.getCurrentStatusMessage());
@@ -469,9 +488,22 @@ const LiveMapScreen: React.FC = () => {
         [hydratedPlayers, currentUserId],
     );
 
+    const myRole = useMemo(() => {
+        const fromLivePlayer = myLivePlayer?.role;
+        if (fromLivePlayer) return fromLivePlayer;
+        return onlineUsers.find((user) => user.id === currentUserId)?.role;
+    }, [currentUserId, myLivePlayer?.role, onlineUsers]);
+
+    const isModerator = useMemo(
+        () => myRole === 'admin' || myRole === 'moderator' || myRole === 'training_officer',
+        [myRole],
+    );
+
     const stalePlayers = useMemo(() => {
         return hydratedPlayers.filter((player) => player.id !== currentUserId && player.isStale);
     }, [currentUserId, hydratedPlayers]);
+
+    const staleUserIds = useMemo(() => new Set(stalePlayers.map((player) => player.id)), [stalePlayers]);
 
     const myLiveFloorName = useMemo(
         () => floors.find((floor) => floor.id === myLivePlayer?.floorId)?.name || null,
@@ -508,6 +540,35 @@ const LiveMapScreen: React.FC = () => {
 
         return orderedGroups;
     }, [onlineUsers, hydratedPlayers, floors]);
+
+    const moderationCounts = useMemo(() => {
+        let active = 0;
+        let elsewhere = 0;
+        groupedUsers.forEach((group) => {
+            group.users.forEach((user) => {
+                if (user.id === currentUserId) return;
+                if (staleUserIds.has(user.id)) return;
+                if (user.floorId) active += 1;
+                else elsewhere += 1;
+            });
+        });
+        return {
+            active,
+            stale: stalePlayers.length,
+            elsewhere,
+        };
+    }, [currentUserId, groupedUsers, stalePlayers.length, staleUserIds]);
+
+    useEffect(() => {
+        if (!currentUserId) return;
+        if (!isModerator) {
+            setModerationActions([]);
+            setModerationError(null);
+            setIsModerationLoading(false);
+            return;
+        }
+        void refreshModerationActions();
+    }, [currentUserId, isModerator, refreshModerationActions]);
 
     const floorUsersById = useMemo(() => {
         const map = new Map<string, WorkspacePlayer[]>();
@@ -581,25 +642,35 @@ const LiveMapScreen: React.FC = () => {
         setPerfSamples((previous) => [...previous.slice(-59), sample]);
     }, []);
 
-    const handleKickUser = useCallback(async (targetUserId: string, targetDisplayName: string) => {
+    const handleKickUser = useCallback(async (targetUserId: string, targetDisplayName: string, knownStale = false) => {
         if (!targetUserId || targetUserId === currentUserId) return;
         const appearsRealtime = workspacePlayers.some((player) => player.id === targetUserId);
-        const warning = appearsRealtime ? '\n\nThis user appears active right now, so they may reappear.' : '';
-        if (!window.confirm(`Kick ${targetDisplayName} from Live Map and release active workstation occupancy?${warning}`)) {
+        const isStaleTarget = knownStale || staleUserIds.has(targetUserId) || !appearsRealtime;
+        const promptMessage = isStaleTarget
+            ? `Remove stale user ${targetDisplayName} from Live Map and release occupancy sessions?`
+            : `Kick active user ${targetDisplayName} from Live Map and release active workstation occupancy?`;
+        if (!window.confirm(promptMessage)) {
             return;
+        }
+        if (!isStaleTarget) {
+            const activeWarningConfirmed = window.confirm(
+                `${targetDisplayName} appears active right now. Continue with moderator force-remove?`,
+            );
+            if (!activeWarningConfirmed) return;
         }
 
         try {
             setKickingUserId(targetUserId);
             const result = await workspaceAreaPresenceService.forceRemoveUserFromLiveMap(
                 targetUserId,
-                appearsRealtime ? 'manual_kick_active_user' : 'manual_kick_stale_user',
+                isStaleTarget ? 'manual_kick_stale_user' : 'manual_kick_active_user',
             );
             toastSuccess(
                 'User removed from Live Map',
                 `Cleared ${result.cleared_presence_count} presence rows and released ${result.released_workstation_count} workstation sessions.`,
             );
             await refreshAreaPresence();
+            await refreshModerationActions();
             if (activeFloor?.id) {
                 await loadWorkstations(activeFloor.id);
             }
@@ -608,27 +679,43 @@ const LiveMapScreen: React.FC = () => {
         } finally {
             setKickingUserId(null);
         }
-    }, [activeFloor?.id, currentUserId, loadWorkstations, refreshAreaPresence, workspacePlayers]);
+    }, [activeFloor?.id, currentUserId, loadWorkstations, refreshAreaPresence, refreshModerationActions, staleUserIds, workspacePlayers]);
 
     const handleSummonUser = useCallback(
         async (user: NewsfeedOnlineUser & { floorId?: string | null, statusMessage?: string | null }) => {
+            if (!user?.id || user.id === currentUserId) return;
+            const existingState = summonStateByUserId[user.id];
+            if (existingState && existingState !== 'idle') return;
             const floorName = floors.find((f) => f.id === myLivePlayer?.floorId)?.name || 'the Map';
             const senderName = myLivePlayer?.displayName || 'A colleague';
             try {
+                setSummonStateByUserId((previous) => ({ ...previous, [user.id]: 'sending' }));
                 const { sendSummonNotification } = await import('../services/newsfeedService');
                 await sendSummonNotification(currentUserId, senderName, user.id, floorName);
                 toastSuccess(`Summoned ${user.displayName}`);
+                setSummonStateByUserId((previous) => ({ ...previous, [user.id]: 'sent' }));
+                window.setTimeout(() => {
+                    setSummonStateByUserId((previous) => ({ ...previous, [user.id]: 'idle' }));
+                }, 6000);
             } catch (err: any) {
                 console.error(err);
                 toastError('Failed to send summon request');
+                setSummonStateByUserId((previous) => ({ ...previous, [user.id]: 'idle' }));
             }
         },
-        [currentUserId, floors, myLivePlayer?.displayName, myLivePlayer?.floorId],
+        [currentUserId, floors, myLivePlayer?.displayName, myLivePlayer?.floorId, summonStateByUserId],
     );
 
     const handleKickUserFromRow = useCallback(
         (user: WorkspacePlayer) => {
-            void handleKickUser(user.id, user.displayName);
+            void handleKickUser(user.id, user.displayName, true);
+        },
+        [handleKickUser],
+    );
+
+    const handleKickUserFromOnlineRow = useCallback(
+        (targetUserId: string, targetDisplayName: string, isStale: boolean) => {
+            void handleKickUser(targetUserId, targetDisplayName, isStale);
         },
         [handleKickUser],
     );
@@ -721,19 +808,40 @@ const LiveMapScreen: React.FC = () => {
         }
     };
 
+    const formatModerationTime = (value: string) => {
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+        return parsed.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+        });
+    };
+
     return (
-        <div className="flex-1 w-full bg-[#0a1018] relative animate-in fade-in duration-200">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.10),transparent_45%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.10),transparent_40%)]" />
+        <div className="flex-1 w-full bg-[#0a1018] relative animate-in fade-in duration-200" style={{ backgroundColor: '#0a1018' }}>
+            {/* Deep Space Background matching Dashboard */}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0a0f18] via-[#0d1624] to-[#04080f] -z-20 pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.12),transparent_45%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.12),transparent_40%)] -z-10 pointer-events-none" />
+
+            {/* Glowing Rings Background Element */}
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full border border-sky-500/5 -z-10 pointer-events-none animate-[spin_60s_linear_infinite]" />
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/5 -z-10 pointer-events-none animate-[spin_40s_linear_infinite_reverse]" />
 
             <div className="relative z-10 h-full w-full flex flex-col xl:flex-row pb-12">
-                <div className="flex-1 flex flex-col overflow-hidden xl:border-r border-white/5">
+                <div className="flex-1 flex flex-col overflow-hidden xl:border-r border-r-white/10 shadow-[8px_0_30px_rgba(0,0,0,0.5)] bg-[#0a0f18]/30 backdrop-blur-md z-20">
                     <LiveMapHeader
                         myLiveFloorName={myLiveFloorName}
                         hasAreaPresence={Boolean(myLivePlayer?.floorId)}
                         isLeavingArea={isLeavingArea}
+                        isModerator={isModerator}
+                        staleFirstEnabled={staleFirstEnabled}
+                        moderationCounts={moderationCounts}
                         statusInput={statusInput}
                         statusPresets={STATUS_PRESETS}
                         onLeaveArea={() => void handleLeaveArea()}
+                        onToggleStaleFirst={setStaleFirstEnabled}
                         onOpenMobileStatus={() => setShowMobileStatusSheet(true)}
                         onChangeStatusInput={setStatusInput}
                         onApplyPreset={(preset) => {
@@ -761,6 +869,43 @@ const LiveMapScreen: React.FC = () => {
                             onSetWorkstationFilter={setWorkstationFilter}
                             onPerfSample={handlePerfSample}
                         />
+                        {isModerator ? (
+                            <div className="xl:hidden mb-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Recent Moderator Actions</p>
+                                    <button
+                                        onClick={() => void refreshModerationActions()}
+                                        className="text-[11px] text-primary-light hover:text-primary"
+                                    >
+                                        Refresh
+                                    </button>
+                                </div>
+                                {isModerationLoading ? (
+                                    <p className="text-xs text-slate-400">Loading moderation history...</p>
+                                ) : null}
+                                {moderationError ? (
+                                    <p className="text-xs text-rose-300">{moderationError}</p>
+                                ) : null}
+                                {!isModerationLoading && !moderationError && moderationActions.length === 0 ? (
+                                    <p className="text-xs text-slate-500">No moderation actions recorded yet.</p>
+                                ) : null}
+                                {!isModerationLoading && !moderationError && moderationActions.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {moderationActions.slice(0, 6).map((action) => (
+                                            <div key={action.id} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                                                <p className="text-[11px] text-slate-200">
+                                                    <span className="font-semibold text-white">{action.actor_display_name}</span>{' '}
+                                                    removed <span className="font-semibold text-white">{action.target_display_name}</span>
+                                                </p>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                                    {formatModerationTime(action.created_at)} - presence {action.cleared_presence_count}, sessions {action.released_workstation_count}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
                         <LiveMapCanvasPanel
                             error={error}
                             loading={loading}
@@ -789,11 +934,21 @@ const LiveMapScreen: React.FC = () => {
                     onlineUsersCount={onlineUsers.length}
                     groupedUsers={groupedUsers}
                     stalePlayers={stalePlayers}
+                    staleUserIds={staleUserIds}
                     currentUserId={currentUserId}
+                    isModerator={isModerator}
+                    staleFirstEnabled={staleFirstEnabled}
+                    staleTtlSeconds={LIVE_MAP_STALE_TTL_SECONDS}
                     kickingUserId={kickingUserId}
+                    summonStateByUserId={summonStateByUserId}
+                    moderationActions={moderationActions}
+                    isModerationLoading={isModerationLoading}
+                    moderationError={moderationError}
                     onSummon={handleSummonUser}
                     onFocusFloor={setExpandedFloorId}
                     onKick={handleKickUserFromRow}
+                    onKickByUserId={handleKickUserFromOnlineRow}
+                    onRefreshModerationActions={() => void refreshModerationActions()}
                     onPerfSample={handlePerfSample}
                 />
             </div>

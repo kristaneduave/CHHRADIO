@@ -82,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
     <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
       <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0">
         <h1 className="text-5xl sm:text-6xl font-black tracking-[0.1em] text-white uppercase drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] leading-none">RADCORE</h1>
-        <p className="text-sm sm:text-base font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 drop-shadow-md">CHH Radiology Residency Portal</p>
+        <p className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 drop-shadow-md">CHH Radiology Residency Portal</p>
       </header>
 
       <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] overflow-y-auto w-[100vw] overflow-x-hidden">
@@ -93,6 +93,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
           <div className="absolute inset-0 m-auto w-[270px] h-[270px] rounded-full border border-sky-500/5 pointer-events-none" />
           <div className="absolute inset-0 m-auto w-[190px] h-[190px] rounded-full border border-white/5 pointer-events-none" />
 
+          {/* Dark Glowing Backdrop */}
+          <div className="absolute inset-0 m-auto w-[104px] h-[104px] rounded-full bg-[#070b12]/30 border border-sky-500/10 shadow-[0_0_15px_rgba(34,211,238,0.08)] z-10 backdrop-blur-sm" />
+
           {/* Central Logo */}
           <button
             onClick={() => {
@@ -100,7 +103,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
               setIsLogoPulsing(true);
               setTimeout(() => setIsLogoPulsing(false), 2000);
             }}
-            className="absolute inset-0 m-auto w-28 h-28 flex flex-col items-center justify-center z-20 outline-none hover:scale-105 active:scale-95 transition-transform cursor-pointer select-none"
+            className="absolute inset-0 m-auto w-28 h-28 flex flex-col items-center justify-center z-20 outline-none hover:scale-105 active:scale-95 transition-transform cursor-pointer select-none rounded-full"
             style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
           >
             <div className={`absolute inset-0 rounded-full bg-sky-500/0 transition-all duration-500 ${isLogoPulsing ? 'animate-logoPulse' : ''}`} />
@@ -108,7 +111,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
               src="/logo-radcore.svg"
               alt="CHH RadCore logo"
               draggable={false}
-              className={`h-24 w-24 object-contain transition-all duration-300 pointer-events-none select-none ${isLogoPulsing ? 'drop-shadow-[0_0_35px_rgba(34,211,238,1)] scale-110 brightness-150' : 'drop-shadow-[0_0_15px_rgba(34,211,238,0.4)]'}`}
+              className={`h-28 w-28 object-contain transition-all duration-300 pointer-events-none select-none ${isLogoPulsing ? 'drop-shadow-[0_0_35px_rgba(34,211,238,1)] scale-110 brightness-150' : 'drop-shadow-[0_0_15px_rgba(34,211,238,0.3)]'}`}
             />
           </button>
 

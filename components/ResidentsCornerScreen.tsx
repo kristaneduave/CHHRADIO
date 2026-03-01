@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
-import { NeedleUserStats, Profile } from '../types';
+import { NeedleUserStats, PickleballUserStats, Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
 import { supabase } from '../services/supabase';
@@ -10,6 +10,8 @@ import { toastError } from '../utils/toast';
 import NeedleNavigatorCard from './NeedleNavigatorCard';
 import NeedleNavigatorGame from './NeedleNavigatorGame';
 import { getNeedleUserStats } from '../services/needleNavigatorService';
+import PickleballRallyGame from './PickleballRallyGame';
+import { getPickleballUserStats } from '../services/pickleballRallyService';
 const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
@@ -132,6 +134,9 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     const [isNeedleNavigatorOpen, setIsNeedleNavigatorOpen] = useState(false);
     const needleNavigatorEnabled = import.meta.env.VITE_FEATURE_NEEDLE_NAVIGATOR === 'true';
     const [needleStats, setNeedleStats] = useState<NeedleUserStats | null>(null);
+    const pickleballEnabled = import.meta.env.VITE_FEATURE_PICKLEBALL_RALLY === 'true';
+    const [isPickleballOpen, setIsPickleballOpen] = useState(false);
+    const [pickleballStats, setPickleballStats] = useState<PickleballUserStats | null>(null);
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
 
@@ -360,6 +365,16 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             .catch(() => setNeedleStats(null));
     }, [currentUser?.id, needleNavigatorEnabled]);
 
+    useEffect(() => {
+        if (!pickleballEnabled || !currentUser?.id) {
+            setPickleballStats(null);
+            return;
+        }
+        getPickleballUserStats(currentUser.id)
+            .then((data) => setPickleballStats(data))
+            .catch(() => setPickleballStats(null));
+    }, [currentUser?.id, pickleballEnabled]);
+
 
 
     return (
@@ -437,6 +452,21 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-xs font-bold text-cyan-300 truncate">Needle Game</h3>
                                     <p className="text-[9px] text-slate-400 mt-0.5 truncate">Best: {Math.round(needleStats?.best_score ?? 0)}</p>
+                                </div>
+                            </button>
+                        )}
+
+                        {pickleballEnabled && (
+                            <button
+                                onClick={() => setIsPickleballOpen(true)}
+                                className="w-full text-left glass-card-enhanced p-2.5 rounded-xl border border-emerald-500/20 flex items-center gap-2.5 group hover:bg-emerald-500/10 transition-all active:scale-[0.99] relative overflow-hidden bg-emerald-500/5"
+                            >
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform shadow-inner border border-emerald-500/30">
+                                    <span className="material-icons text-[16px]">sports_tennis</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-xs font-bold text-emerald-200 truncate">Pickleball Rally</h3>
+                                    <p className="text-[9px] text-slate-400 mt-0.5 truncate">Best: {Math.round(pickleballStats?.best_score ?? 0)}</p>
                                 </div>
                             </button>
                         )}
@@ -775,6 +805,12 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                 <NeedleNavigatorGame
                     userId={currentUser?.id || null}
                     onClose={() => setIsNeedleNavigatorOpen(false)}
+                />
+            )}
+            {pickleballEnabled && isPickleballOpen && (
+                <PickleballRallyGame
+                    userId={currentUser?.id || null}
+                    onClose={() => setIsPickleballOpen(false)}
                 />
             )}
         </div>

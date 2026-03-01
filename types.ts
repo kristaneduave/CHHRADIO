@@ -571,6 +571,11 @@ export interface LiveMapKickAuditRow extends LiveMapKickResult {
   reason: string | null;
 }
 
+export interface LiveMapModerationAction extends LiveMapKickAuditRow {
+  actor_display_name: string;
+  target_display_name: string;
+}
+
 export type OnlinePanelRenderMode = 'simple' | 'virtualized';
 
 export interface LiveMapPerfSample {
@@ -684,4 +689,42 @@ export interface NeedleUserStats {
   avg_score: number;
   best_score: number;
   excellent_count: number;
+}
+
+export type PickleballDifficulty = 'beginner' | 'intermediate' | 'advanced';
+
+export interface PickleballRunMetrics {
+  duration_ms: number;
+  rally_count: number;
+  max_combo: number;
+  miss_count: number;
+  sweet_hits: number;
+}
+
+export interface PickleballRunResult {
+  id: string;
+  user_id?: string | null;
+  score: number;
+  difficulty: PickleballDifficulty;
+  metrics: PickleballRunMetrics;
+  started_at: string;
+  completed_at: string;
+}
+
+export interface PickleballLeaderboardRow {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  role?: UserRole | null;
+  runs_count: number;
+  avg_score: number;
+  best_score: number;
+}
+
+export interface PickleballUserStats {
+  user_id: string;
+  runs_count: number;
+  avg_score: number;
+  best_score: number;
+  top10_count: number;
 }

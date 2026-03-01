@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { LiveMapKickResult, WorkspaceAreaPresenceRow } from '../types';
+import { LiveMapKickResult, LiveMapModerationAction, WorkspaceAreaPresenceRow } from '../types';
 import { parsePositiveInt } from '../utils/liveMapPresence';
 
 export const ENABLE_PERSISTENT_AREA_PRESENCE =
@@ -233,5 +233,59 @@ export const workspaceAreaPresenceService = {
       kicked_by: String(row.kicked_by),
       created_at: String(row.created_at),
     };
+  },
+
+  async fetchRecentModerationActions(limit = 12): Promise<LiveMapModerationAction[]> {
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(50, Math.trunc(limit))) : 12;
+
+    const { data, error } = await supabase
+      .from('live_map_kick_audit')
+      .select('id, kicked_by, target_user_id, reason, cleared_presence_count, released_workstation_count, created_at')
+      .order('created_at', { ascending: false })
+      .limit(safeLimit);
+
+    if (error) throw new Error(error.message);
+
+    const rows = (data || []) as Array<{
+      id: string;
+      kicked_by: string;
+      target_user_id: string;
+      reason: string | null;
+      cleared_presence_count: number | null;
+      released_workstation_count: number | null;
+      created_at: string;
+    }>;
+
+    if (!rows.length) return [];
+
+    const userIds = Array.from(new Set(rows.flatMap((row) => [row.kicked_by, row.target_user_id]).filter(Boolean)));
+    let namesById = new Map<string, string>();
+
+    if (userIds.length) {
+      const { data: profileRows, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, full_name, nickname')
+        .in('id', userIds);
+      if (!profileError && profileRows) {
+        namesById = new Map(
+          profileRows.map((profile: any): [string, string] => [
+            String(profile.id),
+            String(profile.nickname || profile.full_name || 'User'),
+          ]),
+        );
+      }
+    }
+
+    return rows.map((row) => ({
+      id: String(row.id),
+      kicked_by: String(row.kicked_by),
+      target_user_id: String(row.target_user_id),
+      reason: row.reason || null,
+      cleared_presence_count: Number(row.cleared_presence_count) || 0,
+      released_workstation_count: Number(row.released_workstation_count) || 0,
+      created_at: String(row.created_at),
+      actor_display_name: namesById.get(String(row.kicked_by)) || 'Moderator',
+      target_display_name: namesById.get(String(row.target_user_id)) || 'User',
+    }));
   },
 };

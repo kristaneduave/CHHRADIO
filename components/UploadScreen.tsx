@@ -6,6 +6,7 @@ import { createSystemNotification, fetchAllRecipientUserIds } from '../services/
 import { generateViberText } from '../utils/formatters';
 import { SubmissionType } from '../types';
 import { toastError, toastSuccess, toastInfo } from '../utils/toast';
+import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 
 const ORGAN_SYSTEMS = [
   'Neuroradiology',
@@ -62,6 +63,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0]
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [annotatingImageIndex, setAnnotatingImageIndex] = useState<number | null>(null);
 
   const [customTitle, setCustomTitle] = useState(existingCase?.title || '');
   const [images, setImages] = useState<ImageUpload[]>(
@@ -640,10 +642,26 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
                       {images.map((img, idx) => (
                         <div key={idx} className="shrink-0 w-48 bg-white/5 rounded-2xl p-2 snap-start">
-                          <div className="relative w-full aspect-square mb-2 group">
-                            <img src={img.url} className="w-full h-full object-cover rounded-xl border border-white/10 bg-black" alt={`Scan ${idx}`} />
-                            <button onClick={(e) => { e.stopPropagation(); removeImage(idx); }} className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-lg pointer-events-auto z-10">
-                              <span className="material-icons text-[10px]">close</span>
+                          <div
+                            className="relative w-full aspect-square mb-2 group overflow-hidden rounded-xl border border-white/10 cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); setAnnotatingImageIndex(idx); }}
+                          >
+                            <img src={img.url} className="w-full h-full object-cover bg-black" alt={`Scan ${idx}`} />
+
+                            {/* Tap to Edit Overlay */}
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-8 pb-2 px-2 flex flex-col items-center justify-end pointer-events-none opacity-90 group-hover:opacity-100 transition-opacity">
+                              <span className="text-[10px] uppercase font-bold text-white tracking-widest flex items-center gap-1 drop-shadow-md">
+                                <span className="material-icons text-[14px] text-primary">edit</span>
+                                Tap to Edit
+                              </span>
+                            </div>
+
+                            {/* Delete Button (Subtle) */}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 border border-white/10 backdrop-blur-md text-slate-300 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors hover:border-rose-400 z-10"
+                            >
+                              <span className="material-icons text-[12px]">close</span>
                             </button>
                           </div>
                           <input
@@ -787,6 +805,33 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               <span className="material-icons text-sm">arrow_forward</span>
             </button>
           </div>
+        )}
+
+        {/* Annotator Dialog */}
+        {annotatingImageIndex !== null && (
+          <ImageAnnotatorDialog
+            imageSrc={images[annotatingImageIndex].url}
+            onCancel={() => setAnnotatingImageIndex(null)}
+            onSave={(base64) => {
+              setImages(prev => {
+                const next = [...prev];
+                // Create a new file from base64 if it was a file upload, 
+                // or just update url if we don't strictly need the File object immediately.
+                // Since supabase upload uses the File object, we must convert base64 to File buffer
+                // but for now, assigning base64 to url and making a dummy file is fine
+                // to satisfy the type. The saving logic uses the blob.
+                fetch(base64)
+                  .then(res => res.blob())
+                  .then(blob => {
+                    const file = new File([blob], `annotated_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                    next[annotatingImageIndex] = { ...next[annotatingImageIndex], url: base64, file };
+                    setImages(next);
+                  });
+                return next;
+              });
+              setAnnotatingImageIndex(null);
+            }}
+          />
         )}
 
         {step === 2 && !isScreenshotMode && (

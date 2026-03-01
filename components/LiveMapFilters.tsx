@@ -39,30 +39,30 @@ const LiveMapFilters: React.FC<LiveMapFiltersProps> = ({
   return (
     <>
       {showCoachTip ? (
-        <div className="mb-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 flex items-start justify-between gap-3">
-          <p className="text-xs text-cyan-100">Tap map to set your area.</p>
+        <div className="mb-4 rounded-xl border border-cyan-500/50 bg-cyan-500/20 px-4 py-3 flex items-start justify-between gap-3 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+          <p className="text-[11px] font-black text-cyan-100 uppercase tracking-widest drop-shadow-md">Tap map to set your area.</p>
           <button
             onClick={() => {
               onDismissCoachTip();
               if (typeof window !== 'undefined') window.localStorage.setItem(coachKey, '1');
             }}
-            className="text-[11px] text-cyan-200 hover:text-white font-semibold"
+            className="text-[10px] uppercase font-bold text-cyan-200 hover:text-white tracking-widest transition-colors"
           >
             Dismiss
           </button>
         </div>
       ) : null}
-      <div className="mb-3 rounded-xl border border-white/10 bg-black/20 p-3 space-y-2">
+      <div className="mb-4 rounded-2xl border border-white/10 bg-black/40 p-4 space-y-3 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
         <div className="flex items-center gap-2">
           <input
             value={workstationQuery}
             onChange={(e) => onSetWorkstationQuery(e.target.value)}
-            placeholder="Find workstation or occupant"
-            className="flex-1 bg-black/35 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-500/60"
+            placeholder="FIND STATION OR OCCUPANT"
+            className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-2 text-xs font-bold text-white focus:outline-none focus:border-cyan-500/50 focus:bg-cyan-950/20 transition-all placeholder:text-slate-500 placeholder:uppercase placeholder:tracking-widest"
           />
           <button
             onClick={() => onSetWorkstationQuery('')}
-            className="px-2.5 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-semibold"
+            className="px-3 py-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 text-slate-300 text-[10px] font-bold uppercase tracking-widest transition-colors"
           >
             Clear
           </button>
@@ -72,17 +72,17 @@ const LiveMapFilters: React.FC<LiveMapFiltersProps> = ({
             <button
               key={filterKey}
               onClick={() => onSetWorkstationFilter(filterKey)}
-              className={`px-2.5 py-1.5 rounded-lg border text-[11px] uppercase tracking-wider ${workstationFilter === filterKey
-                ? 'border-cyan-400/60 bg-cyan-500/15 text-cyan-200'
-                : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${workstationFilter === filterKey
+                ? 'border-cyan-400/60 bg-cyan-500/20 text-cyan-200 shadow-[0_0_10px_rgba(34,211,238,0.2)]'
+                : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:border-sky-500/30'
                 }`}
             >
               {filterKey === 'all' ? 'All' : filterKey === 'in_use' ? 'In Use' : filterKey === 'mine' ? 'Mine' : 'Available'}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-slate-400">
-          Showing {filteredCount} of {totalCount} workstations
+        <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase">
+          Tracking {filteredCount} / {totalCount} assets
         </p>
       </div>
     </>
