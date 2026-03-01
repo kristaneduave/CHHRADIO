@@ -1,9 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { PatientRecord, SearchFilters } from '../types';
 import { supabase } from '../services/supabase';
 import { toastError } from '../utils/toast';
 import LoadingState from './LoadingState';
+import { Skeleton } from './Skeleton';
+import EmptyState from './EmptyState';
 
+const DatabaseItemSkeleton = () => (
+  <div className="w-full p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative bg-white/[0.03] border border-white/5 opacity-80 mb-3">
+    <div className="flex items-center gap-3 w-full relative">
+      <Skeleton variant="rectangular" className="w-10 h-10 rounded-xl shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-2.5 py-0.5">
+        <Skeleton variant="text" className="w-1/2 h-4" />
+        <div className="flex items-center justify-between">
+          <Skeleton variant="text" className="w-1/3 h-3" />
+          <Skeleton variant="text" className="w-16 h-3" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
 interface SearchScreenProps {
   onCaseSelect: (caseItem: any) => void;
 }
@@ -100,8 +116,23 @@ const getPrimaryMeta = (rawCase: any, fallbackType?: string) => {
   return 'Case';
 };
 
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
+
+const DATABASE_LOADING_WATCHDOG_MS = 15_000;
+
 const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -134,10 +165,32 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   });
 
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(true);
+  const fetchCasesSeqRef = useRef(0);
 
   useEffect(() => {
     fetchCases();
   }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loading) return;
+    const timeoutId = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      setError((prev) => prev ?? 'Database load is taking too long. Please tap Retry.');
+      setLoading(false);
+    }, DATABASE_LOADING_WATCHDOG_MS);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [loading]);
 
   const sortCases = (input: PatientRecord[]) => {
     return [...input].sort((a, b) => {
@@ -148,18 +201,30 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   };
 
   const fetchCases = async () => {
+    const seq = ++fetchCasesSeqRef.current;
+    let loadingWatchdogId: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     setError(null);
+    loadingWatchdogId = setTimeout(() => {
+      if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
+      setError('Database load is taking too long. Please tap Retry.');
+      setLoading(false);
+    }, DATABASE_LOADING_WATCHDOG_MS);
     try {
-      const { data, error: queryError } = await supabase
-        .from('cases')
-        .select('*')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
+      const { data, error: queryError } = await withTimeout(
+        supabase
+          .from('cases')
+          .select('*')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false }),
+        12_000,
+        'Database request timed out.',
+      );
 
       if (queryError) throw queryError;
 
       if (data) {
+        if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
         setRawCases(data);
 
         // Fetch authors
@@ -167,10 +232,14 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
         let authorMap = new Map<string, string>();
 
         if (creatorIds.length > 0) {
-          const { data: profilesData } = await supabase
-            .from('profiles')
-            .select('id, full_name, nickname')
-            .in('id', creatorIds);
+          const { data: profilesData } = await withTimeout(
+            supabase
+              .from('profiles')
+              .select('id, full_name, nickname')
+              .in('id', creatorIds),
+            8_000,
+            'Author lookup timed out.',
+          );
 
           if (profilesData) {
             authorMap = new Map(
@@ -221,26 +290,34 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
             author: item.created_by ? authorMap.get(item.created_by) || 'Hospital Staff' : 'Hospital Staff',
           };
         });
-        setAllCases(mappedCases);
-        setResults(sortCases(mappedCases));
+        if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
+        startTransition(() => {
+          setAllCases(mappedCases);
+          setResults(sortCases(mappedCases));
+        });
       }
     } catch (loadError) {
       console.error('Error fetching cases:', loadError);
+      if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
       setError('Unable to load Database. Please try again.');
       toastError('Failed to load Database');
     } finally {
+      if (loadingWatchdogId) {
+        clearTimeout(loadingWatchdogId);
+      }
+      if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (query.trim().length > 0) {
+    if (deferredQuery.trim().length > 0) {
       const matches = allCases
         .filter(
           (p) =>
-            p.name.toLowerCase().includes(query.toLowerCase()) ||
-            p.initials.toLowerCase().includes(query.toLowerCase()) ||
-            p.diagnosticCode.toLowerCase().includes(query.toLowerCase()),
+            p.name.toLowerCase().includes(deferredQuery.toLowerCase()) ||
+            p.initials.toLowerCase().includes(deferredQuery.toLowerCase()) ||
+            p.diagnosticCode.toLowerCase().includes(deferredQuery.toLowerCase()),
         )
         .slice(0, 4);
       setSuggestions(matches);
@@ -248,7 +325,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
     } else {
       setShowSuggestions(false);
     }
-  }, [query, allCases]);
+  }, [deferredQuery, allCases]);
 
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
@@ -261,7 +338,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   }, []);
 
   useEffect(() => {
-    setResults((prev) => sortCases(prev));
+    startTransition(() => {
+      setResults((prev) => sortCases(prev));
+    });
   }, [sortOrder]);
 
   const markCaseAsOpened = (caseId: string) => {
@@ -324,7 +403,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       return matchQuery && matchSpecialty && matchCode && matchSubmissionType && matchDate;
     });
 
-    setResults(sortCases(filtered));
+    startTransition(() => {
+      setResults(sortCases(filtered));
+    });
     setShowFilters(false);
     setShowSuggestions(false);
   };
@@ -339,13 +420,17 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       datePreset: 'all',
     });
     setQuery('');
-    setResults(sortCases(allCases));
+    startTransition(() => {
+      setResults(sortCases(allCases));
+    });
   };
 
   const selectSuggestion = (p: PatientRecord) => {
     setQuery(p.name);
     setShowSuggestions(false);
-    setResults(sortCases([p]));
+    startTransition(() => {
+      setResults(sortCases([p]));
+    });
     markCaseAsOpened(p.id);
   };
 
@@ -592,7 +677,11 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
         <div className="space-y-3 pr-1 pt-2">
 
           {loading && results.length === 0 ? (
-            <LoadingState title="Loading Database..." />
+            <div className="animate-in fade-in duration-500">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <DatabaseItemSkeleton key={i} />
+              ))}
+            </div>
           ) : error ? (
             <div className="glass-card-enhanced rounded-2xl border border-red-500/20 p-6 text-center">
               <p className="text-sm font-semibold text-red-300 mb-3">{error}</p>
@@ -617,7 +706,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                     markCaseAsOpened(p.id);
                     if (raw && onCaseSelect) onCaseSelect(raw);
                   }}
-                  className={`w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group ${isRecent
+                  className={`w-full text-left p-3 rounded-2xl backdrop-blur-md transition-all duration-300 relative group ${isRecent
                     ? typeMeta.unreadCardClass
                     : 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
                     }`}
@@ -629,41 +718,37 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                     </div>
                   )}
 
-                  {isRecent && (
-                    <span className={`absolute top-[-3px] -left-2 px-2 py-0.5 rounded-[4px] text-[9px] leading-none font-bold tracking-wider uppercase z-20 ${typeMeta.unreadBadgeClass}`}>
-                      New
-                    </span>
-                  )}
 
-                  <div className="flex items-center gap-3 w-full z-10 relative">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner border ${isRecent ? typeMeta.boxClass : 'bg-black/40 border-white/5'}`}>
-                      <span className={`material-icons text-xl ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
+
+                  <div className="flex items-center gap-3.5 w-full z-10 relative">
+                    <div className={`w-[38px] h-[38px] rounded-[14px] flex items-center justify-center shrink-0 shadow-inner border ${isRecent ? typeMeta.boxClass : 'bg-black/40 border-white/5'}`}>
+                      <span className={`material-icons text-[18px] ${typeMeta.tintClass}`}>{typeMeta.icon}</span>
                     </div>
 
-                    <div className="flex-1 min-w-0 flex flex-col gap-1">
-                      <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                      <div className="flex flex-col min-w-0 pr-1 gap-0.5">
                         <div className="flex items-center flex-wrap gap-2 min-w-0">
-                          <h4 className={`text-[14px] sm:text-[15px] truncate tracking-tight font-bold ${typeMeta.tintClass}`}>
-                            {p.name}
+                          <h4 className={`truncate text-[12px] sm:text-[13px] tracking-widest font-extrabold uppercase ${typeMeta.tintClass}`}>
+                            {String(p.name || '').toUpperCase()}
                           </h4>
                         </div>
-                        <span className="material-icons text-slate-500 group-hover:text-primary transition-colors hover:bg-white/10 hover:text-slate-300 rounded-full h-6 w-6 inline-flex items-center justify-center -mt-1 -mr-1">
-                          chevron_right
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-[11px] sm:text-[12px] truncate uppercase tracking-wider font-semibold">
+                        <div className="flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
                           <span className="text-white opacity-90">{primaryMeta}</span>
                           <span className="text-slate-600 font-bold px-0.5">|</span>
                           <span className="text-slate-300 truncate">{p.author || 'Hospital Staff'}</span>
                         </div>
-                        <span className="text-[10px] sm:text-[11px] whitespace-nowrap font-medium uppercase tracking-wider text-slate-500">
+                      </div>
+
+                      <div className="flex items-center shrink-0 gap-2 relative z-50">
+                        <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold uppercase tracking-widest text-slate-500">
                           {new Date(p.date).toLocaleDateString('en-US', {
                             month: 'numeric',
                             day: 'numeric',
                             year: '2-digit',
                           })}
+                        </span>
+                        <span className="material-icons text-slate-500 group-hover:text-primary transition-colors hover:bg-white/10 hover:text-slate-300 rounded-full h-6 w-6 inline-flex items-center justify-center -mr-1">
+                          chevron_right
                         </span>
                       </div>
                     </div>
@@ -672,27 +757,28 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
               );
             })
           ) : (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/5">
-                <span className="material-icons text-slate-600 text-3xl">sentiment_dissatisfied</span>
-              </div>
-              <h3 className="text-white font-semibold mb-1">{query ? `No results for "${query}"` : 'No matches found'}</h3>
-              <p className="text-xs text-slate-500 mb-3">Adjust your filters or try a different search term.</p>
-              <button
-                onClick={clearFilters}
-                className="rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold text-slate-200 hover:bg-white/15 transition-colors"
-              >
-                Reset Search
-              </button>
-            </div>
+            <EmptyState
+              icon="search_off"
+              title={query ? `No results for "${query}"` : 'No matches found'}
+              description="Adjust your filters or try a different search term to find what you need."
+              action={
+                <button
+                  onClick={clearFilters}
+                  className="rounded-xl px-5 py-2.5 font-bold tracking-wider uppercase text-[11px] bg-primary/20 text-primary-light border border-primary/30 hover:bg-primary/30 transition-all shadow-lg"
+                >
+                  Reset Search
+                </button>
+              }
+            />
           )}
         </div>
 
         {/* Bottom spacer so last cards remain accessible above fixed nav */}
         <div className="h-24 shrink-0" aria-hidden="true" />
       </div>
-    </div>
+    </div >
   );
 };
 
 export default SearchScreen;
+

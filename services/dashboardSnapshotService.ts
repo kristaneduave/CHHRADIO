@@ -2,6 +2,7 @@ import { CalendarService } from './CalendarService';
 import { supabase } from './supabase';
 import { DashboardSnapshotData, Screen } from '../types';
 import { fetchDutyRosterByDate } from './dutyRosterService';
+import { fetchWithCache } from '../utils/requestCache';
 
 export const APP_OPEN_STORAGE_KEY = 'chh_last_app_open_at';
 export const SNAPSHOT_BASELINE_STORAGE_KEY = 'chh_snapshot_baseline_open_at';
@@ -77,31 +78,52 @@ export const fetchDashboardSnapshot = async (): Promise<DashboardSnapshotResult>
 
   const [announcementsResult, casesResult, calendarResult, leaveResult, onDutyResult] = await Promise.allSettled([
     announcementsBaseline
-      ? supabase
-          .from('announcements')
-          .select('id,title,created_at')
-          .gt('created_at', announcementsBaseline)
-          .order('is_pinned', { ascending: false })
-          .order('is_important', { ascending: false })
-          .order('created_at', { ascending: false })
+      ? fetchWithCache(
+          `snapshot:announcements:${announcementsBaseline}`,
+          () =>
+            supabase
+              .from('announcements')
+              .select('id,title,created_at')
+              .gt('created_at', announcementsBaseline)
+              .order('is_pinned', { ascending: false })
+              .order('is_important', { ascending: false })
+              .order('created_at', { ascending: false }),
+          { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        )
       : Promise.resolve({ data: [], error: null } as any),
     casesBaseline
-      ? supabase
-          .from('cases')
-          .select('id,title,created_at,status')
-          .eq('status', 'published')
-          .gt('created_at', casesBaseline)
-          .order('created_at', { ascending: false })
+      ? fetchWithCache(
+          `snapshot:cases:${casesBaseline}`,
+          () =>
+            supabase
+              .from('cases')
+              .select('id,title,created_at,status')
+              .eq('status', 'published')
+              .gt('created_at', casesBaseline)
+              .order('created_at', { ascending: false }),
+          { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        )
       : Promise.resolve({ data: [], error: null } as any),
     calendarBaseline
-      ? supabase
-          .from('events')
-          .select('id,title,created_at')
-          .gt('created_at', calendarBaseline)
-          .order('created_at', { ascending: false })
+      ? fetchWithCache(
+          `snapshot:calendar:${calendarBaseline}`,
+          () =>
+            supabase
+              .from('events')
+              .select('id,title,created_at')
+              .gt('created_at', calendarBaseline)
+              .order('created_at', { ascending: false }),
+          { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        )
       : Promise.resolve({ data: [], error: null } as any),
-    CalendarService.getLeaveEvents(new Date()),
-    fetchDutyRosterByDate(new Date()),
+    fetchWithCache('snapshot:leave:today', () => CalendarService.getLeaveEvents(new Date()), {
+      ttlMs: 30_000,
+      allowStaleWhileRevalidate: true,
+    }),
+    fetchWithCache('snapshot:duty:today', () => fetchDutyRosterByDate(new Date()), {
+      ttlMs: 30_000,
+      allowStaleWhileRevalidate: true,
+    }),
   ]);
 
   let newAnnouncementsCount = 0;

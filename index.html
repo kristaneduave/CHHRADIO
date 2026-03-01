@@ -8,7 +8,7 @@
     <title>CHH Radiology Portal</title>
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Inter:wght@400;500;600;700;800;900&display=swap"
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Nunito:wght@400;500;600;700;800;900&display=swap"
         rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght,FILL@100..700,0..1&display=swap"
         rel="stylesheet" />
@@ -33,7 +33,7 @@
                         "error": "rgb(var(--status-error) / <alpha-value>)"
                     },
                     fontFamily: {
-                        "display": ["Inter", "\"Segoe UI\"", "Roboto", "Helvetica", "Arial", "sans-serif"]
+                        "display": ["Nunito", "\"Segoe UI\"", "Roboto", "Helvetica", "Arial", "sans-serif"]
                     },
                     boxShadow: {
                         "clinical": "0 1px 3px 0 rgba(0,0,0,.12), 0 1px 2px -1px rgba(0,0,0,.12)",
@@ -59,7 +59,7 @@
             --status-warning: 202 138 4;
             --status-error: 220 38 38;
             color-scheme: light;
-            --font-ui: Inter, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-ui: Nunito, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
 
         html.dark {
@@ -137,22 +137,30 @@
                 'opsz' 24;
         }
 
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+        /* Global Button Micro-interactions */
+        button,
+        a[role="button"],
+        .interactive-haptic {
+            transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, opacity 0.2s, border-color 0.2s, box-shadow 0.2s;
         }
 
-        ::-webkit-scrollbar-track {
-            background: rgb(var(--bg-surface-alt));
+        button:active:not(:disabled),
+        a[role="button"]:active:not(:disabled),
+        .interactive-haptic:active {
+            transform: scale(0.96);
         }
 
-        ::-webkit-scrollbar-thumb {
-            background: color-mix(in srgb, rgb(var(--text-tertiary)) 50%, transparent);
-            border-radius: 9999px;
+        /* Hide scrollbar for Chrome, Safari and Opera */
+        *::-webkit-scrollbar {
+            display: none;
         }
 
-        ::-webkit-scrollbar-thumb:hover {
-            background: color-mix(in srgb, rgb(var(--text-tertiary)) 80%, transparent);
+        /* Hide scrollbar for IE, Edge and Firefox */
+        * {
+            -ms-overflow-style: none;
+            /* IE and Edge */
+            scrollbar-width: none;
+            /* Firefox */
         }
 
         .surface-card {
@@ -246,10 +254,25 @@
         }
 
         @keyframes logo-flicker {
-            0% { opacity: 0.45; transform: scale(0.98); }
-            30% { opacity: 1; transform: scale(1); }
-            60% { opacity: 0.62; transform: scale(0.992); }
-            100% { opacity: 0.95; transform: scale(1); }
+            0% {
+                opacity: 0.45;
+                transform: scale(0.98);
+            }
+
+            30% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            60% {
+                opacity: 0.62;
+                transform: scale(0.992);
+            }
+
+            100% {
+                opacity: 0.95;
+                transform: scale(1);
+            }
         }
 
         .logo-flicker {

@@ -4,12 +4,13 @@ import { Screen } from '../types';
 
 interface NewsfeedScreenProps {
   onNavigateToTarget?: (screen: Screen, entityId?: string | null) => void;
+  onUnreadCountChange?: (count: number) => void;
 }
 
-const NewsfeedScreen: React.FC<NewsfeedScreenProps> = ({ onNavigateToTarget }) => {
+const NewsfeedScreen: React.FC<NewsfeedScreenProps> = ({ onNavigateToTarget, onUnreadCountChange }) => {
   return (
     <div className="min-h-screen bg-app pb-24">
-      <NewsfeedPanel variant="screen" onNavigateToTarget={onNavigateToTarget} />
+      <NewsfeedPanel variant="screen" onNavigateToTarget={onNavigateToTarget} onUnreadCountChange={onUnreadCountChange} />
     </div>
   );
 };

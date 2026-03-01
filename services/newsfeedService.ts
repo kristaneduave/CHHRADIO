@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { NewsfeedNotification, NotificationSeverity, Screen } from '../types';
+import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 
 const formatTimeAgo = (iso: string): string => {
   const ts = new Date(iso).getTime();
@@ -32,38 +33,45 @@ export const fetchNotificationsPage = async (
   limit = 20,
   beforeCreatedAt?: string,
 ): Promise<{ data: NewsfeedNotification[]; hasMore: boolean }> => {
-  let query = supabase
-    .from('notification_recipients')
-    .select(
-      `
-        id,
-        notification_id,
-        user_id,
-        read_at,
-        created_at,
-        notifications:notification_id (
-          id,
-          title,
-          message,
-          severity,
-          type,
-          created_by,
-          link_screen,
-          link_entity_id,
-          created_at
+  const pageKey = beforeCreatedAt || 'latest';
+  const { data, error } = await fetchWithCache(
+    `newsfeed:notifications:${userId}:${limit}:${pageKey}`,
+    () => {
+      let query = supabase
+        .from('notification_recipients')
+        .select(
+          `
+            id,
+            notification_id,
+            user_id,
+            read_at,
+            created_at,
+            notifications:notification_id (
+              id,
+              title,
+              message,
+              severity,
+              type,
+              created_by,
+              link_screen,
+              link_entity_id,
+              created_at
+            )
+          `,
         )
-      `,
-    )
-    .eq('user_id', userId)
-    .is('archived_at', null)
-    .order('created_at', { ascending: false })
-    .limit(limit + 1);
+        .eq('user_id', userId)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false })
+        .limit(limit + 1);
 
-  if (beforeCreatedAt) {
-    query = query.lt('created_at', beforeCreatedAt);
-  }
+      if (beforeCreatedAt) {
+        query = query.lt('created_at', beforeCreatedAt);
+      }
 
-  const { data, error } = await query;
+      return query;
+    },
+    { ttlMs: 5_000, allowStaleWhileRevalidate: true },
+  );
   if (error) throw error;
 
   const creatorIds = Array.from(
@@ -112,6 +120,9 @@ export const markNotificationRead = async (notificationId: string, userId: strin
     .is('read_at', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const markAllNotificationsRead = async (userId: string): Promise<void> => {
@@ -122,6 +133,9 @@ export const markAllNotificationsRead = async (userId: string): Promise<void> =>
     .is('read_at', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const hideNotificationForUser = async (notificationId: string, userId: string): Promise<void> => {
@@ -133,6 +147,9 @@ export const hideNotificationForUser = async (notificationId: string, userId: st
     .is('archived_at', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const hideAllNotificationsForUser = async (userId: string): Promise<void> => {
@@ -143,6 +160,9 @@ export const hideAllNotificationsForUser = async (userId: string): Promise<void>
     .is('archived_at', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const unhideNotificationForUser = async (notificationId: string, userId: string): Promise<void> => {
@@ -154,6 +174,9 @@ export const unhideNotificationForUser = async (notificationId: string, userId: 
     .not('archived_at', 'is', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const unhideAllNotificationsForUser = async (userId: string): Promise<void> => {
@@ -164,6 +187,9 @@ export const unhideAllNotificationsForUser = async (userId: string): Promise<voi
     .not('archived_at', 'is', null);
 
   if (error) throw error;
+  invalidateCacheByPrefix(`newsfeed:notifications:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:hidden:${userId}:`);
+  invalidateCacheByPrefix(`newsfeed:unread-count:${userId}`);
 };
 
 export const fetchHiddenNotificationsForUser = async (
@@ -172,33 +198,38 @@ export const fetchHiddenNotificationsForUser = async (
 ): Promise<NewsfeedNotification[]> => {
   if (!userId) return [];
 
-  const { data, error } = await supabase
-    .from('notification_recipients')
-    .select(
-      `
-        id,
-        notification_id,
-        user_id,
-        read_at,
-        created_at,
-        archived_at,
-        notifications:notification_id (
-          id,
-          title,
-          message,
-          severity,
-          type,
-          created_by,
-          link_screen,
-          link_entity_id,
-          created_at
+  const { data, error } = await fetchWithCache(
+    `newsfeed:hidden:${userId}:${limit}`,
+    () =>
+      supabase
+        .from('notification_recipients')
+        .select(
+          `
+            id,
+            notification_id,
+            user_id,
+            read_at,
+            created_at,
+            archived_at,
+            notifications:notification_id (
+              id,
+              title,
+              message,
+              severity,
+              type,
+              created_by,
+              link_screen,
+              link_entity_id,
+              created_at
+            )
+          `,
         )
-      `,
-    )
-    .eq('user_id', userId)
-    .not('archived_at', 'is', null)
-    .order('archived_at', { ascending: false })
-    .limit(limit);
+        .eq('user_id', userId)
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false })
+        .limit(limit),
+    { ttlMs: 10_000, allowStaleWhileRevalidate: true },
+  );
 
   if (error) throw error;
 
@@ -235,12 +266,17 @@ export const fetchHiddenNotificationsForUser = async (
 };
 
 export const fetchUnreadNotificationsCount = async (userId: string): Promise<number> => {
-  const { count, error } = await supabase
-    .from('notification_recipients')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .is('archived_at', null)
-    .is('read_at', null);
+  const { count, error } = await fetchWithCache(
+    `newsfeed:unread-count:${userId}`,
+    () =>
+      supabase
+        .from('notification_recipients')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .is('archived_at', null)
+        .is('read_at', null),
+    { ttlMs: 4_000, allowStaleWhileRevalidate: true },
+  );
 
   if (error) throw error;
   return count || 0;
@@ -309,6 +345,11 @@ export const createSystemNotification = async (params: {
   );
 
   if (recipientsError) throw recipientsError;
+  uniqueRecipients.forEach((uid) => {
+    invalidateCacheByPrefix(`newsfeed:notifications:${uid}:`);
+    invalidateCacheByPrefix(`newsfeed:hidden:${uid}:`);
+    invalidateCacheByPrefix(`newsfeed:unread-count:${uid}`);
+  });
 };
 
 export const fetchRecipientUserIdsByRoles = async (roles: string[]): Promise<string[]> => {

@@ -64,6 +64,7 @@ const BUTTON_LABELS: Record<string, string> = {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   const [isUploadTypePickerOpen, setIsUploadTypePickerOpen] = useState(false);
+  const [isLogoPulsing, setIsLogoPulsing] = useState(false);
 
   const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "Resident Hub"];
   const orderedActions = [...QUICK_ACTIONS].sort((a, b) => buttonOrder.indexOf(a.label) - buttonOrder.indexOf(b.label));
@@ -79,32 +80,58 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
 
   return (
     <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
-      <header className="pt-8 pb-4 px-6 relative z-10">
-        <div className="relative mx-auto flex w-full items-center justify-center gap-3">
-          <img
-            src="/logo-radcore.svg"
-            alt="CHH RadCore logo"
-            className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_0_15px_rgba(34,211,238,0.4)]"
-          />
-          <h1 className="flex min-w-0 flex-col justify-center leading-none">
-            <span className="text-xl font-black tracking-[0.2em] text-white uppercase drop-shadow-md">CHH RadCore</span>
-          </h1>
-        </div>
+      <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0">
+        <h1 className="text-5xl sm:text-6xl font-black tracking-[0.1em] text-white uppercase drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] leading-none">RADCORE</h1>
+        <p className="text-sm sm:text-base font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 drop-shadow-md">CHH Radiology Residency Portal</p>
       </header>
 
-      <main className="relative z-10 flex-1 px-4 max-w-md mx-auto w-full pb-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] overflow-y-auto">
-        <div className="flex flex-col pt-4 pb-6 gap-2">
-          <div className="grid grid-cols-3 gap-3">
-            {orderedActions.map((action, index) => {
-              const style = NEW_BUTTON_STYLES[action.label] || {
-                colorClass: 'text-slate-300',
-                bgClass: 'bg-white/10',
-                borderClass: 'border-white/10',
-                shadowClass: '',
-              };
-              return (
+      <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] overflow-y-auto w-[100vw] overflow-x-hidden">
+        <div className="relative w-[320px] h-[320px] flex items-center justify-center mb-8">
+
+          {/* Orbital Rings Decoration */}
+          <div className={`absolute inset-0 m-auto w-[250px] h-[250px] rounded-full border-[1.5px] border-white/5 border-dashed pointer-events-none transition-all duration-700 ${isLogoPulsing ? 'animate-[spin_2s_linear_infinite] border-sky-400/40 scale-105' : 'animate-[spin_40s_linear_infinite]'}`} />
+          <div className="absolute inset-0 m-auto w-[270px] h-[270px] rounded-full border border-sky-500/5 pointer-events-none" />
+          <div className="absolute inset-0 m-auto w-[190px] h-[190px] rounded-full border border-white/5 pointer-events-none" />
+
+          {/* Central Logo */}
+          <button
+            onClick={() => {
+              if (isLogoPulsing) return;
+              setIsLogoPulsing(true);
+              setTimeout(() => setIsLogoPulsing(false), 2000);
+            }}
+            className="absolute inset-0 m-auto w-28 h-28 flex flex-col items-center justify-center z-20 outline-none hover:scale-105 active:scale-95 transition-transform cursor-pointer select-none"
+            style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+          >
+            <div className={`absolute inset-0 rounded-full bg-sky-500/0 transition-all duration-500 ${isLogoPulsing ? 'animate-logoPulse' : ''}`} />
+            <img
+              src="/logo-radcore.svg"
+              alt="CHH RadCore logo"
+              draggable={false}
+              className={`h-24 w-24 object-contain transition-all duration-300 pointer-events-none select-none ${isLogoPulsing ? 'drop-shadow-[0_0_35px_rgba(34,211,238,1)] scale-110 brightness-150' : 'drop-shadow-[0_0_15px_rgba(34,211,238,0.4)]'}`}
+            />
+          </button>
+
+          {/* Orbiting Action Buttons */}
+          {orderedActions.map((action, index) => {
+            const angle = (index * (360 / orderedActions.length)) - 90; // Start Top (-90deg)
+            const radius = 125; // Distance from center
+            const style = NEW_BUTTON_STYLES[action.label] || {
+              colorClass: 'text-slate-300',
+              bgClass: 'bg-white/10',
+              borderClass: 'border-white/10',
+              shadowClass: '',
+            };
+
+            return (
+              <div
+                key={action.label}
+                className="absolute inset-0 m-auto w-16 h-16 z-30"
+                style={{
+                  transform: `rotate(${angle}deg) translate(${radius}px) rotate(${-angle}deg)`,
+                }}
+              >
                 <button
-                  key={action.label}
                   onClick={() => {
                     if (action.target === 'upload') {
                       setIsUploadTypePickerOpen(true);
@@ -112,21 +139,27 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
                     }
                     onNavigate(action.target);
                   }}
-                  className={`bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-xl p-3 flex flex-col items-center justify-center gap-3 aspect-square transition-all active:scale-95 text-center hover:bg-white/[0.06]`}
-                  style={{ animationDelay: `${index * 60}ms` }}
+                  className={`w-full h-full rounded-full flex flex-col items-center justify-center transition-all duration-300 hover:scale-[1.15] active:scale-95 group`}
+                  style={{
+                    animation: `fadeInUp 0.5s ease-out forwards ${index * 0.1}s`,
+                    opacity: 0,
+                  }}
                 >
-                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center border ${style.bgClass} ${style.borderClass} ${style.shadowClass}`}>
-                    <span className={`material-icons text-xl ${style.colorClass}`}>
+                  <div className={`w-[56px] h-[56px] rounded-full flex items-center justify-center border-[1.5px] ${style.bgClass} ${style.borderClass} ${style.shadowClass} backdrop-blur-md group-hover:bg-white/10 transition-colors`}>
+                    <span className={`material-icons text-[28px] ${style.colorClass}`}>
                       {action.icon}
                     </span>
                   </div>
-                  <div>
-                    <p className="text-white text-xs font-semibold leading-tight">{BUTTON_LABELS[action.label] || action.label}</p>
+                  {/* Custom Label Layout */}
+                  <div className="absolute -bottom-5 w-28 text-center pointer-events-none">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 tracking-widest uppercase group-hover:text-white transition-colors block leading-tight drop-shadow-md">
+                      {BUTTON_LABELS[action.label] || action.label}
+                    </span>
                   </div>
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </main>
 
@@ -211,6 +244,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
       )}
 
       <style>{`
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(20px) scale(0.9); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes logoPulse {
+          0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); background-color: rgba(34, 211, 238, 0.2); }
+          70% { box-shadow: 0 0 0 40px rgba(34, 211, 238, 0); background-color: rgba(34, 211, 238, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); background-color: transparent; }
+        }
+
         .header-panel {
           background:
             linear-gradient(155deg, rgba(11, 19, 31, 0.94) 0%, rgba(18, 32, 51, 0.9) 42%, rgba(11, 19, 31, 0.96) 100%);

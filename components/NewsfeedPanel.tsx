@@ -20,9 +20,10 @@ interface NewsfeedPanelProps {
   variant: 'screen' | 'modal';
   onClose?: () => void;
   onNavigateToTarget?: (screen: Screen, entityId?: string | null) => void;
+  onUnreadCountChange?: (count: number) => void;
 }
 
-const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavigateToTarget }) => {
+const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavigateToTarget, onUnreadCountChange }) => {
   const SNAPSHOT_STALE_MS = 60_000;
   const FEED_FILTER_KEY = 'chh_newsfeed_filter';
   const [activeTab, setActiveTab] = useState<'notifications' | 'activity'>('notifications');
@@ -38,6 +39,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const [notifications, setNotifications] = useState<NewsfeedNotification[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const filterMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
   const [hidingNotificationId, setHidingNotificationId] = useState<string | null>(null);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
@@ -137,6 +139,11 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   }, [activities]);
 
   useEffect(() => {
+    if (!userId) return;
+    onUnreadCountChange?.(unreadCount);
+  }, [onUnreadCountChange, unreadCount, userId]);
+
+  useEffect(() => {
     let cleanup = () => { };
     const init = async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -170,6 +177,20 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
       loadActivity(userId);
     }
   }, [activeTab, userId]);
+
+  useEffect(() => {
+    if (!isFilterSheetOpen) return;
+
+    const handleFilterClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (filterMenuRef.current && !filterMenuRef.current.contains(target)) {
+        setIsFilterSheetOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleFilterClickOutside);
+    return () => document.removeEventListener('mousedown', handleFilterClickOutside);
+  }, [isFilterSheetOpen]);
 
   useEffect(() => {
     if (!userId) return;
@@ -393,13 +414,56 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
 
         {activeTab === 'notifications' && (
           <div className="grid grid-cols-3 gap-2 mt-4 mb-2">
-            <button
-              onClick={() => setIsFilterSheetOpen(true)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-all shadow-sm"
-            >
-              <span className="material-icons text-[14px]">tune</span>
-              <span className="truncate">Filter: {notificationFilter === 'all' ? 'All' : notificationFilter}</span>
-            </button>
+            <div className="relative" ref={filterMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsFilterSheetOpen((prev) => !prev)}
+                className={`w-full inline-flex items-center justify-center gap-1.5 rounded-xl border py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider transition-all shadow-sm ${notificationFilter !== 'all'
+                  ? 'border-primary/40 bg-primary/15 text-primary-light'
+                  : 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-300'
+                  }`}
+                aria-label="Filter notifications"
+                aria-expanded={isFilterSheetOpen}
+                aria-controls="newsfeed-filter-menu"
+              >
+                <span className="material-icons text-[14px]">tune</span>
+                <span className="truncate">Filter: {notificationFilter === 'all' ? 'All' : notificationFilter}</span>
+                <span className={`material-icons text-[14px] transition-transform duration-200 ${isFilterSheetOpen ? 'rotate-180' : ''}`}>expand_more</span>
+              </button>
+              <div
+                id="newsfeed-filter-menu"
+                className={`absolute left-0 top-full mt-2 w-52 bg-[#1a2332] border border-white/5 rounded-2xl overflow-hidden transition-all duration-200 transform origin-top-left z-50 ${isFilterSheetOpen ? 'opacity-100 visible scale-100' : 'opacity-0 invisible scale-95'}`}
+              >
+                <div className="max-h-[280px] overflow-y-auto custom-scrollbar p-2">
+                  <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                    Notification Type
+                  </div>
+                  {[
+                    { key: 'all', label: 'All' },
+                    { key: 'unread', label: 'Unread' },
+                    { key: 'announcements', label: 'News' },
+                    { key: 'calendar', label: 'Calendar' },
+                    { key: 'cases', label: 'Cases' },
+                    { key: 'system', label: 'System' },
+                  ].map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        setNotificationFilter(item.key as typeof notificationFilter);
+                        setIsFilterSheetOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl transition-all flex items-center justify-between ${notificationFilter === item.key
+                        ? 'bg-primary/20 text-primary border border-primary/20'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                      {item.label}
+                      {notificationFilter === item.key && <span className="material-icons text-sm">check</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
             <button
               onClick={handleMarkAllRead}
               disabled={unreadCount === 0 || bulkActionLoading !== null}
@@ -436,7 +500,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                   <button
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden ${notif.read
+                    className={`w-full text-left p-3 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden ${notif.read
                       ? 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
                       : 'bg-primary/[0.08] border border-primary/30 shadow-[0_4px_24px_-8px_rgba(13,162,231,0.25)] hover:bg-primary/[0.12]'
                       }`}
@@ -445,9 +509,9 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                     {!notif.read && (
                       <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
                     )}
-                    <div className="flex items-start gap-3 w-full z-10 relative">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 ${notif.read ? 'bg-black/40 border border-white/5 text-primary-light opacity-80' : 'bg-primary/20 border border-primary/40 text-primary-light shadow-[0_0_15px_rgba(13,162,231,0.3)]'}`}>
-                        <span className="material-icons text-xl">
+                    <div className="flex items-center gap-3.5 w-full z-10 relative">
+                      <div className={`w-[38px] h-[38px] rounded-[14px] flex items-center justify-center shrink-0 shadow-inner ${notif.read ? 'bg-black/40 border border-white/5 text-primary-light opacity-80' : 'bg-primary/20 border border-primary/40 text-primary-light shadow-[0_0_15px_rgba(13,162,231,0.3)]'}`}>
+                        <span className="material-icons text-[18px]">
                           {notif.type.toLowerCase().includes('calendar') || notif.type.toLowerCase().includes('leave') ? 'event' :
                             notif.type.toLowerCase().includes('case') ? 'folder_special' :
                               notif.type.toLowerCase().includes('announcement') ? 'campaign' :
@@ -455,32 +519,31 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                         </span>
                       </div>
 
-                      <div className="flex-1 min-w-0 flex flex-col gap-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center flex-wrap gap-2 min-w-0">
-                            <h4 className={`text-[14px] sm:text-[15px] truncate tracking-tight ${notif.read ? 'font-medium text-slate-200' : 'font-bold text-white'}`}>
+                      <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                        <div className="flex flex-col min-w-0 pr-1 gap-0.5">
+                          <div className="min-w-0 flex items-center gap-2">
+                            <h4 className={`truncate text-[12px] sm:text-[13px] tracking-widest uppercase ${notif.read ? 'text-slate-400 font-medium' : 'text-white font-semibold'}`}>
                               {formatNotificationType(notif.type)}
                             </h4>
-                            {!notif.read && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] leading-none font-bold tracking-wider uppercase bg-primary/20 text-primary border border-primary/35 shrink-0 mt-0.5">
-                                New
-                              </span>
-                            )}
                           </div>
+                          <div className="min-w-0 flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
+                            <span className="text-slate-400">by <span className="text-slate-300">{notif.actorName || 'Hospital Staff'}</span></span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center shrink-0 gap-1.5 relative z-50">
+                          <span className={`text-[9px] sm:text-[10px] whitespace-nowrap font-bold uppercase tracking-widest ${notif.read ? 'text-slate-500' : 'text-white/50'}`}>
+                            {formatNotificationDate(notif.createdAt)}
+                          </span>
                           <button
                             onClick={(event) => handleHideNotification(event, notif.id)}
                             disabled={hidingNotificationId === notif.id}
-                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 -mt-1 -mr-1"
+                            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 -mr-1"
                             aria-label="Hide notification"
                             title="Hide notification"
                           >
                             <span className="material-icons text-[14px]">visibility_off</span>
                           </button>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] sm:text-[12px] text-slate-400 truncate">by <span className="text-slate-300">{notif.actorName || 'Hospital Staff'}</span></span>
-                          <span className={`text-[10px] sm:text-[11px] whitespace-nowrap font-medium uppercase tracking-wider ${notif.read ? 'text-slate-500' : 'text-primary-light/80'}`}>{formatNotificationDate(notif.createdAt)}</span>
                         </div>
                       </div>
                     </div>
@@ -600,55 +663,6 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
         )}
       </div>
 
-      {isFilterSheetOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/45 backdrop-blur-sm"
-          onClick={() => setIsFilterSheetOpen(false)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Notification filters"
-        >
-          <div
-            className="absolute bottom-0 left-0 right-0 mx-auto max-w-md rounded-t-2xl border border-border-default/70 bg-surface p-4"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Filter notifications</h3>
-              <button
-                onClick={() => setIsFilterSheetOpen(false)}
-                className="rounded-full p-1 text-slate-400 hover:bg-white/5 hover:text-white"
-                aria-label="Close filter sheet"
-              >
-                <span className="material-icons text-[16px]">close</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { key: 'all', label: 'All' },
-                { key: 'unread', label: 'Unread' },
-                { key: 'announcements', label: 'News' },
-                { key: 'calendar', label: 'Calendar' },
-                { key: 'cases', label: 'Cases' },
-                { key: 'system', label: 'System' },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  onClick={() => {
-                    setNotificationFilter(item.key as typeof notificationFilter);
-                    setIsFilterSheetOpen(false);
-                  }}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${notificationFilter === item.key
-                    ? 'border-primary/45 bg-primary/15 text-primary-light'
-                    : 'border-border-default/70 bg-black/15 text-slate-300'
-                    }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 };

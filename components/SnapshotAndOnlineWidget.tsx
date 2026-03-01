@@ -3,7 +3,24 @@ import { supabase } from '../services/supabase';
 import { DashboardSnapshotData, Screen, UserRole } from '../types';
 import { fetchDashboardSnapshot, markSnapshotSectionSeen } from '../services/dashboardSnapshotService';
 import { DutyRosterUpsertEntry, upsertDutyRosterForDate } from '../services/dutyRosterService';
+import { fetchWithCache } from '../utils/requestCache';
 import LoadingState from './LoadingState';
+import { Skeleton } from './Skeleton';
+import AnimatedCounter from './AnimatedCounter';
+
+const ScheduleSkeleton = () => (
+  <div className="space-y-2.5 animate-in fade-in duration-500">
+    {[1, 2, 3].map((i) => (
+      <div key={i} className="w-full flex items-center gap-3.5 p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
+        <Skeleton variant="rectangular" className="w-8 h-8 rounded-lg shrink-0" />
+        <div className="flex-1">
+          <Skeleton variant="text" className="w-24 h-4" />
+        </div>
+        <Skeleton variant="rectangular" className="w-7 h-7 rounded-lg shrink-0" />
+      </div>
+    ))}
+  </div>
+);
 import { toastError, toastSuccess } from '../utils/toast';
 
 interface SnapshotAndOnlineWidgetProps {
@@ -31,6 +48,8 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
   const [isDutyEditorOpen, setIsDutyEditorOpen] = useState(false);
   const [dutyDraft, setDutyDraft] = useState<DutyDraftEntry[]>([]);
   const [savingDuty, setSavingDuty] = useState(false);
+  const snapshotSeqRef = React.useRef(0);
+  const isMountedRef = React.useRef(true);
 
   const canEditDuty = userRole === 'admin' || userRole === 'moderator';
   const snapshotHasLeave = (snapshotData?.leaveToday.length || 0) > 0;
@@ -38,6 +57,13 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
   const snapshotHasExams = todayExamCount > 0;
   const snapshotHasCards = snapshotHasLeave || snapshotHasEvents || snapshotHasExams;
   const hasDutyRoster = (snapshotData?.onDutyToday.length || 0) > 0;
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -69,22 +95,28 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
 
   const refreshSnapshot = async (uid: string) => {
     if (!uid) return;
+    const seq = ++snapshotSeqRef.current;
     try {
       setSnapshotLoading(true);
       const [{ data, sectionErrors }, todayEventsResult] = await Promise.all([
         fetchDashboardSnapshot(),
-        (() => {
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
-          const end = new Date();
-          end.setHours(23, 59, 59, 999);
-          return supabase
-            .from('events')
-            .select('id,event_type,start_time,end_time')
-            .lte('start_time', end.toISOString())
-            .gte('end_time', start.toISOString());
-        })(),
+        fetchWithCache(
+          'snapshot:events:today',
+          () => {
+            const start = new Date();
+            start.setHours(0, 0, 0, 0);
+            const end = new Date();
+            end.setHours(23, 59, 59, 999);
+            return supabase
+              .from('events')
+              .select('id,event_type,start_time,end_time')
+              .lte('start_time', end.toISOString())
+              .gte('end_time', start.toISOString());
+          },
+          { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        ),
       ]);
+      if (!isMountedRef.current || seq !== snapshotSeqRef.current) return;
       setSnapshotData(data);
       const mergedErrors: Partial<Record<'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'onDuty' | 'auth', string>> = {
         auth: sectionErrors.auth,
@@ -108,8 +140,10 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
       setSnapshotErrors(mergedErrors);
     } catch (error) {
       console.error('Error loading today snapshot:', error);
+      if (!isMountedRef.current || seq !== snapshotSeqRef.current) return;
       setSnapshotErrors((prev) => ({ ...prev, auth: 'Unable to load snapshot.' }));
     } finally {
+      if (!isMountedRef.current || seq !== snapshotSeqRef.current) return;
       setSnapshotLoading(false);
     }
   };
@@ -216,7 +250,7 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
         </div>
 
         {snapshotLoading ? (
-          <LoadingState title="Loading schedule..." compact />
+          <ScheduleSkeleton />
         ) : (
           <div className="space-y-2.5">
             {todayEventCount > 0 && (
@@ -230,7 +264,9 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
                   </div>
                   <span className="text-[14px] font-semibold text-slate-200 group-hover:text-white transition-colors">Events Today</span>
                 </div>
-                <span className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-[13px] font-bold text-white group-hover:bg-primary group-hover:text-black transition-colors">{todayEventCount}</span>
+                <span className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-[13px] font-bold text-white group-hover:bg-primary group-hover:text-black transition-colors">
+                  <AnimatedCounter value={todayEventCount} />
+                </span>
               </button>
             )}
 
@@ -245,7 +281,9 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
                   </div>
                   <span className="text-[14px] font-semibold text-slate-200 group-hover:text-white transition-colors">Exams Today</span>
                 </div>
-                <span className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-[13px] font-bold text-white group-hover:bg-emerald-400 group-hover:text-black transition-colors">{todayExamCount}</span>
+                <span className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 text-[13px] font-bold text-white group-hover:bg-emerald-400 group-hover:text-black transition-colors">
+                  <AnimatedCounter value={todayExamCount} />
+                </span>
               </button>
             )}
 

@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { NewsfeedOnlineUser, UserRole } from '../types';
+import { fetchWithCache } from '../utils/requestCache';
 
 interface PresencePayload {
   user_id: string;
@@ -146,10 +147,21 @@ export const subscribeToOnlineUsers = ({
 export const fetchOnlineProfiles = async (userIds: string[]): Promise<NewsfeedOnlineUser[]> => {
   if (!userIds.length) return [];
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, nickname, avatar_url, role')
-    .in('id', userIds);
+  const normalizedIds = Array.from(new Set(userIds)).sort();
+  const cacheKey = `profiles:online:${normalizedIds.join(',')}`;
+
+  const { data, error } = await fetchWithCache(
+    cacheKey,
+    () =>
+      supabase
+        .from('profiles')
+        .select('id, full_name, nickname, avatar_url, role')
+        .in('id', normalizedIds),
+    {
+      ttlMs: 45_000,
+      allowStaleWhileRevalidate: true,
+    },
+  );
 
   if (error) throw error;
 

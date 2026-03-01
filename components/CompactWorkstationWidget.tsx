@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CurrentWorkstationStatus, NewsfeedOnlineUser } from '../types';
+import AnimatedCounter from './AnimatedCounter';
 
 interface CompactWorkstationWidgetProps {
     workstations: CurrentWorkstationStatus[];
@@ -79,11 +80,15 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
                     <div className="absolute top-2 left-2 flex gap-2">
                         <div className="bg-[#0a0f18]/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 shadow-lg">
                             <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span>
-                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">{loading ? '-' : availableCount} <span className="text-slate-500 hidden sm:inline">Avail</span></span>
+                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">
+                                {loading ? '-' : <AnimatedCounter value={availableCount} />} <span className="text-slate-500 hidden sm:inline">Avail</span>
+                            </span>
                         </div>
                         <div className="bg-[#0a0f18]/80 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/10 flex items-center gap-2 shadow-lg">
                             <span className="w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></span>
-                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">{loading ? '-' : inUseCount} <span className="text-slate-500 hidden sm:inline">Used</span></span>
+                            <span className="text-[9px] font-bold text-white tracking-widest uppercase">
+                                {loading ? '-' : <AnimatedCounter value={inUseCount} />} <span className="text-slate-500 hidden sm:inline">Used</span>
+                            </span>
                         </div>
                     </div>
 

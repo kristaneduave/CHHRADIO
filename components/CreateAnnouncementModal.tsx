@@ -18,6 +18,7 @@ interface CreateAnnouncementModalProps {
     onClose: () => void;
     onSuccess: () => void;
     editingAnnouncement?: Announcement | null;
+    canSetPriorityFlags?: boolean;
 }
 
 interface Attachment {
@@ -26,7 +27,7 @@ interface Attachment {
     id: string; // temp id for UI
 }
 
-const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess, editingAnnouncement }) => {
+const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClose, onSuccess, editingAnnouncement, canSetPriorityFlags: canSetPriorityFlagsProp }) => {
     const [title, setTitle] = useState(editingAnnouncement?.title || '');
     const [content, setContent] = useState(editingAnnouncement?.content || '');
     // Handle legacy mappings
@@ -44,7 +45,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [canSetPriorityFlags, setCanSetPriorityFlags] = useState(false);
+    const [resolvedCanSetPriorityFlags, setResolvedCanSetPriorityFlags] = useState(false);
     const [priorityColumnsSupported, setPriorityColumnsSupported] = useState(true);
     const [isPinned, setIsPinned] = useState<boolean>(Boolean(editingAnnouncement?.is_pinned));
 
@@ -59,19 +60,27 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
     const categories = [...NEWS_CATEGORY_OPTIONS];
     useEffect(() => {
+        if (typeof canSetPriorityFlagsProp === 'boolean') {
+            setResolvedCanSetPriorityFlags(canSetPriorityFlagsProp);
+            return;
+        }
         const loadRole = async () => {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
             const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
             const role = normalizeUserRole(data?.role);
-            setCanSetPriorityFlags(['admin', 'training_officer', 'moderator'].includes(role));
+            setResolvedCanSetPriorityFlags(['admin', 'training_officer', 'moderator'].includes(role));
         };
         loadRole();
-    }, []);
+    }, [canSetPriorityFlagsProp]);
+
+    const canSetPriorityFlags = typeof canSetPriorityFlagsProp === 'boolean'
+        ? canSetPriorityFlagsProp
+        : resolvedCanSetPriorityFlags;
 
     const isMissingPriorityColumnError = (error: any) => {
         const message = String(error?.message || '').toLowerCase();
-        return message.includes('is_pinned') || message.includes('pinned_at');
+        return message.includes('is_pinned') || message.includes('pinned_at') || message.includes("'pinned'");
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,30 +199,34 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     icon: icon || null,
                     created_at: new Date().toISOString(), // Bump
                 };
-                if (canSetPriorityFlags && priorityColumnsSupported) {
-                    updatePayload.is_pinned = isPinned;
-                    updatePayload.pinned_at = isPinned ? (editingAnnouncement?.pinned_at || new Date().toISOString()) : null;
-                }
 
-                // Update
-                let updateResult = await supabase
-                    .from('announcements')
-                    .update(updatePayload)
-                    .eq('id', editingAnnouncement.id)
-                    .select('id')
-                    .single();
+                const pinTimestamp = isPinned ? (editingAnnouncement?.pinned_at || new Date().toISOString()) : null;
+                const updateAttempts: Array<Record<string, any>> =
+                    canSetPriorityFlags && priorityColumnsSupported
+                        ? [
+                            { ...updatePayload, is_pinned: isPinned, pinned_at: pinTimestamp },
+                            { ...updatePayload, is_pinned: isPinned },
+                            { ...updatePayload, pinned: isPinned, pinned_at: pinTimestamp },
+                            { ...updatePayload, pinned: isPinned },
+                            updatePayload,
+                        ]
+                        : [updatePayload];
 
-                if (updateResult.error && isMissingPriorityColumnError(updateResult.error)) {
-                    setPriorityColumnsSupported(false);
-                    const fallbackPayload = { ...updatePayload };
-                    delete fallbackPayload.is_pinned;
-                    delete fallbackPayload.pinned_at;
+                let updateResult: { data: { id: string } | null; error: any } = { data: null, error: null };
+                for (const attemptPayload of updateAttempts) {
                     updateResult = await supabase
                         .from('announcements')
-                        .update(fallbackPayload)
+                        .update(attemptPayload)
                         .eq('id', editingAnnouncement.id)
                         .select('id')
                         .single();
+
+                    if (!updateResult.error) break;
+                    if (!isMissingPriorityColumnError(updateResult.error)) throw updateResult.error;
+                }
+
+                if (updateResult.error && canSetPriorityFlags && priorityColumnsSupported) {
+                    setPriorityColumnsSupported(false);
                 }
 
                 if (updateResult.error) throw updateResult.error;
@@ -230,28 +243,33 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                     links: links,
                     icon: icon || null,
                 };
-                if (canSetPriorityFlags && priorityColumnsSupported) {
-                    insertPayload.is_pinned = isPinned;
-                    insertPayload.pinned_at = isPinned ? new Date().toISOString() : null;
-                }
 
-                // Insert
-                let insertResult = await supabase
-                    .from('announcements')
-                    .insert(insertPayload)
-                    .select('id')
-                    .single();
+                const pinTimestamp = isPinned ? new Date().toISOString() : null;
+                const insertAttempts: Array<Record<string, any>> =
+                    canSetPriorityFlags && priorityColumnsSupported
+                        ? [
+                            { ...insertPayload, is_pinned: isPinned, pinned_at: pinTimestamp },
+                            { ...insertPayload, is_pinned: isPinned },
+                            { ...insertPayload, pinned: isPinned, pinned_at: pinTimestamp },
+                            { ...insertPayload, pinned: isPinned },
+                            insertPayload,
+                        ]
+                        : [insertPayload];
 
-                if (insertResult.error && isMissingPriorityColumnError(insertResult.error)) {
-                    setPriorityColumnsSupported(false);
-                    const fallbackPayload = { ...insertPayload };
-                    delete fallbackPayload.is_pinned;
-                    delete fallbackPayload.pinned_at;
+                let insertResult: { data: { id: string } | null; error: any } = { data: null, error: null };
+                for (const attemptPayload of insertAttempts) {
                     insertResult = await supabase
                         .from('announcements')
-                        .insert(fallbackPayload)
+                        .insert(attemptPayload)
                         .select('id')
                         .single();
+
+                    if (!insertResult.error) break;
+                    if (!isMissingPriorityColumnError(insertResult.error)) throw insertResult.error;
+                }
+
+                if (insertResult.error && canSetPriorityFlags && priorityColumnsSupported) {
+                    setPriorityColumnsSupported(false);
                 }
 
                 if (insertResult.error) throw insertResult.error;
@@ -353,13 +371,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                         {/* Top Controls: Type + Pin */}
                         <div className="space-y-2">
-                            <p className="text-2xl sm:text-3xl font-bold leading-tight text-white/95">
-                                {editingAnnouncement ? 'Update this post' : "What's happening?"}
-                            </p>
-                            <p className="text-[16px] text-slate-400">
-                                Share the details...
-                            </p>
-                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                             <div className="relative">
                                 <button
                                     type="button"
@@ -507,7 +519,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                         {/* Attachments Area */}
                         <div className="space-y-3">
-                            <div className="flex items-center justify-end gap-2 mb-2">
+                            <div className="flex items-center justify-center gap-2 mb-2">
                                 {/* Add Link Button */}
                                 <button
                                     type="button"

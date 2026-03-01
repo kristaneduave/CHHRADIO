@@ -12,7 +12,7 @@ const NewsCardBase: React.FC<NewsCardBaseProps> = ({ children, isElevated = fals
     <button
       type="button"
       onClick={onClick}
-      className={`group relative w-full overflow-visible rounded-2xl px-4 py-4 text-left transition-all duration-300 ${isElevated ? 'z-40' : 'z-0'} ${className}`}
+      className={`group relative w-full overflow-visible rounded-2xl p-3 text-left transition-all duration-300 ${isElevated ? 'z-40' : 'z-0'} ${className}`}
     >
       {children}
     </button>

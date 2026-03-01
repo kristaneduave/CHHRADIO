@@ -1,5 +1,6 @@
 import { AssignOccupancyPayload, AssignableOccupant, CurrentWorkstationStatus, Floor } from '../types';
 import { supabase } from './supabase';
+import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 
 const ACTIVE_WINDOW_MINUTES = 30;
 const ASSIGNED_TTL_HOURS = 8;
@@ -33,7 +34,22 @@ const occupancyOwnershipCache = new Map<string, { at: number; value: boolean }>(
 const OCCUPANT_PROFILE_CACHE_TTL_MS = 60_000;
 const occupantProfileCache = new Map<
   string,
-  { at: number; value: { nickname: string | null; fullName: string | null; avatarUrl: string | null; role: any } }
+  {
+    at: number; value: {
+      nickname: string | null;
+      fullName: string | null;
+      avatarUrl: string | null;
+      role: any;
+      title?: string | null;
+      motto?: string | null;
+      workMode?: string | null;
+      mainModality?: string | null;
+      faction?: string | null;
+      mapStatus?: string | null;
+      avatarSeed?: string | null;
+      activeBadges?: string[] | null;
+    }
+  }
 >();
 
 const isMissingColumnError = (message?: string): boolean =>
@@ -120,7 +136,14 @@ const clearOccupancyOwnershipCache = (workstationId?: string) => {
 
 export const workstationMapService = {
   async getFloors(): Promise<Floor[]> {
-    const { data, error } = await supabase.from('floors').select('*').order('name');
+    const { data, error } = await fetchWithCache(
+      'workstation:floors',
+      async () => await supabase.from('floors').select('*').order('name'),
+      {
+        ttlMs: 60_000,
+        allowStaleWhileRevalidate: true,
+      },
+    );
     if (error) {
       console.error('Error fetching floors:', error);
       throw new Error(error.message);
@@ -139,10 +162,17 @@ export const workstationMapService = {
   },
 
   async getWorkstationsByFloor(floorId: string): Promise<CurrentWorkstationStatus[]> {
-    const { data, error } = await supabase
-      .from('current_workstation_status')
-      .select('*')
-      .eq('floor_id', floorId);
+    const { data, error } = await fetchWithCache(
+      `workstation:floor:${floorId}`,
+      async () => await supabase
+        .from('current_workstation_status')
+        .select('*')
+        .eq('floor_id', floorId),
+      {
+        ttlMs: 2_500,
+        allowStaleWhileRevalidate: true,
+      },
+    );
 
     if (error) {
       console.error('Error fetching workstations:', error);
@@ -173,7 +203,7 @@ export const workstationMapService = {
     if (missingIds.length) {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, nickname, avatar_url, role')
+        .select('id, full_name, nickname, avatar_url, role, title, motto, work_mode, main_modality, faction, map_status, avatar_seed, active_badges')
         .in('id', missingIds);
 
       if (error) {
@@ -187,6 +217,14 @@ export const workstationMapService = {
               fullName: (profile.full_name as string | null) || null,
               avatarUrl: (profile.avatar_url as string | null) || null,
               role: (profile.role as any) || null,
+              title: (profile.title as string | null) || null,
+              motto: (profile.motto as string | null) || null,
+              workMode: (profile.work_mode as string | null) || null,
+              mainModality: (profile.main_modality as string | null) || null,
+              faction: (profile.faction as string | null) || null,
+              mapStatus: (profile.map_status as string | null) || null,
+              avatarSeed: (profile.avatar_seed as string | null) || null,
+              activeBadges: (profile.active_badges as string[] | null) || null,
             },
           });
         });
@@ -201,6 +239,14 @@ export const workstationMapService = {
         occupant_avatar_url: profile.avatarUrl,
         occupant_role: profile.role,
         occupant_nickname: profile.nickname,
+        occupant_title: profile.title,
+        occupant_motto: profile.motto,
+        occupant_work_mode: profile.workMode,
+        occupant_main_modality: profile.mainModality,
+        occupant_faction: profile.faction,
+        occupant_map_status: profile.mapStatus,
+        occupant_avatar_seed: profile.avatarSeed,
+        occupant_active_badges: profile.activeBadges,
         occupant_name: ws.occupant_name || profile.nickname || profile.fullName || ws.occupant_name || null,
       };
     });
@@ -241,6 +287,7 @@ export const workstationMapService = {
       .eq('id', activeSession.id);
 
     if (updateError) throw new Error(updateError.message);
+    invalidateCacheByPrefix('workstation:floor:');
   },
 
   async claimWorkstation(workstationId: string): Promise<void> {
@@ -270,6 +317,7 @@ export const workstationMapService = {
     };
 
     await insertOccupancySession(v3Payload, legacyPayload);
+    invalidateCacheByPrefix('workstation:floor:');
     clearOccupancyOwnershipCache(workstationId);
   },
 
@@ -311,6 +359,7 @@ export const workstationMapService = {
         expires_at: toIsoAfterHours(ASSIGNED_TTL_HOURS),
       };
       await insertOccupancySession(v3Payload, legacyPayload);
+      invalidateCacheByPrefix('workstation:floor:');
       clearOccupancyOwnershipCache(workstationId);
       return;
     }
@@ -335,6 +384,7 @@ export const workstationMapService = {
     };
 
     await insertOccupancySession(v3Payload, legacyPayload);
+    invalidateCacheByPrefix('workstation:floor:');
     clearOccupancyOwnershipCache(workstationId);
   },
 
@@ -355,6 +405,7 @@ export const workstationMapService = {
       .eq('id', activeSession.id);
 
     if (updateError) throw new Error(updateError.message);
+    invalidateCacheByPrefix('workstation:floor:');
     clearOccupancyOwnershipCache(workstationId);
   },
 

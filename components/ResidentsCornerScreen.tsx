@@ -4,7 +4,6 @@ import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
 import { NeedleUserStats, Profile } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
-import MonthlyCensusModal from './MonthlyCensusModal';
 import { supabase } from '../services/supabase';
 import { format, startOfWeek, addDays, parseISO } from 'date-fns';
 import { toastError } from '../utils/toast';
@@ -13,12 +12,16 @@ import NeedleNavigatorGame from './NeedleNavigatorGame';
 import { getNeedleUserStats } from '../services/needleNavigatorService';
 const SCOPE_REMAINING = 'Remaining studies';
 
+interface ResidentsCornerScreenProps {
+    onOpenMonthlyCensus?: () => void;
+}
+
 // Generate a unique ID for each slot to track overrides
 const getSlotId = (hospitalId: string, modalityId: string, day: string, index: number) => {
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
-const ResidentsCornerScreen: React.FC = () => {
+const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus }) => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -126,7 +129,6 @@ const ResidentsCornerScreen: React.FC = () => {
         originalDoctor: '',
         timeSlot: ''
     });
-    const [isMonthlyCensusModalOpen, setIsMonthlyCensusModalOpen] = useState(false);
     const [isNeedleNavigatorOpen, setIsNeedleNavigatorOpen] = useState(false);
     const needleNavigatorEnabled = import.meta.env.VITE_FEATURE_NEEDLE_NAVIGATOR === 'true';
     const [needleStats, setNeedleStats] = useState<NeedleUserStats | null>(null);
@@ -329,12 +331,23 @@ const ResidentsCornerScreen: React.FC = () => {
         }
     };
 
-    const handleOpenMonthlyCensus = () => {
-        if (!currentUser?.id) {
+    const handleOpenMonthlyCensus = async () => {
+        let userId = currentUser?.id || null;
+
+        // Handle first-tap race where local state hasn't hydrated yet.
+        if (!userId) {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.id) {
+                setCurrentUser(user);
+                userId = user.id;
+            }
+        }
+
+        if (!userId) {
             toastError('Sign in required', 'Please sign in to submit monthly census.');
             return;
         }
-        setIsMonthlyCensusModalOpen(true);
+        onOpenMonthlyCensus?.();
     };
 
     useEffect(() => {
@@ -355,46 +368,100 @@ const ResidentsCornerScreen: React.FC = () => {
                 {/* Header Section */}
                 <div className="mb-4">
                     <h1 className="text-3xl font-bold text-white mb-2">Resident Hub</h1>
-                    <button
-                        onClick={handleOpenMonthlyCensus}
-                        className="mt-2 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-colors"
-                    >
-                        <span className="material-icons text-sm">checklist</span>
-                        Submit Monthly Census
-                    </button>
                 </div>
-
-                {/* Patient List - Prominent Action */}
-                <div className="relative group mt-2 mb-4">
-                    <a
-                        href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full text-left p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative overflow-hidden flex items-center justify-between gap-3 bg-black/40 border-white/5 opacity-90 hover:bg-white/[0.05] cursor-pointer shadow-lg"
-                    >
-                        {/* Subtle glow effect */}
-                        <div className={`absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2`} />
-
-                        <div className="flex items-center gap-4 z-10 w-full">
-                            <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-inner mt-0.5 border bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.2)]">
-                                <span className="material-icons text-2xl text-sky-400">description</span>
+                {/* Unified Quick Actions & Tools Section - Compact Design */}
+                <section className="mb-6">
+                    <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2 pl-1">
+                        <span className="material-icons text-[12px] text-primary">apps</span>
+                        Quick Actions & Tools
+                    </h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                        {/* Monthly Census */}
+                        <button
+                            onClick={handleOpenMonthlyCensus}
+                            className="w-full text-left rounded-xl border border-white/10 bg-white/[0.03] p-2.5 flex items-center gap-2.5 group hover:bg-white/[0.06] transition-all active:scale-[0.99] relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-primary/15 flex items-center justify-center text-primary group-hover:scale-110 transition-transform shadow-inner border border-primary/30">
+                                <span className="material-icons text-[16px]">checklist</span>
                             </div>
-                            <div className="text-left flex-1 min-w-0">
-                                <span className="block text-[15px] sm:text-[16px] truncate tracking-tight font-bold text-sky-400">VIEW PATIENT DECKING LIST</span>
-                                <span className="block text-[10px] sm:text-[11px] truncate uppercase tracking-wider font-semibold text-slate-400">Google Docs • Live Updates</span>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-xs font-bold text-slate-100 group-hover:text-white transition-colors truncate">Monthly Census</h3>
+                                <p className="text-[9px] text-slate-400 mt-0.5 truncate">Log requirements</p>
                             </div>
-                        </div>
-                        <span className="material-icons text-slate-500 group-hover:text-white group-hover:translate-x-1 transition-all">arrow_forward</span>
-                    </a>
-                </div>
+                        </button>
 
-                {needleNavigatorEnabled && (
-                    <NeedleNavigatorCard
-                        onOpen={() => setIsNeedleNavigatorOpen(true)}
-                        stats={needleStats}
-                    />
-                )}
+                        {/* Patient Decking List */}
+                        <a
+                            href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-sky-500/5 to-sky-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform shadow-inner border border-sky-500/20">
+                                <span className="material-icons text-[16px]">description</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">Decking List</h3>
+                                <p className="text-[9px] text-slate-500 mt-0.5 truncate">Live Updates</p>
+                            </div>
+                        </a>
 
+                        {/* Doctors on Leave */}
+                        <a
+                            href="https://docs.google.com/spreadsheets/u/0/d/1zlSKOCLmBmvrxZqoPKUysf3RcNpLQQoB/htmlview#gid=799246403"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/5 to-emerald-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform shadow-inner border border-emerald-500/20">
+                                <span className="material-icons text-[16px]">event_busy</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">On Leave</h3>
+                                <p className="text-[9px] text-slate-500 mt-0.5 truncate">March 2026</p>
+                            </div>
+                        </a>
+
+                        {/* Needle Navigator */}
+                        {needleNavigatorEnabled && (
+                            <button
+                                onClick={() => setIsNeedleNavigatorOpen(true)}
+                                className="w-full text-left glass-card-enhanced p-2.5 rounded-xl border border-cyan-500/20 flex items-center gap-2.5 group hover:bg-cyan-500/10 transition-all active:scale-[0.99] relative overflow-hidden bg-cyan-500/5"
+                            >
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform shadow-inner border border-cyan-500/30">
+                                    <span className="material-icons text-[16px]">sports_esports</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-xs font-bold text-cyan-300 truncate">Needle Game</h3>
+                                    <p className="text-[9px] text-slate-400 mt-0.5 truncate">Best: {Math.round(needleStats?.best_score ?? 0)}</p>
+                                </div>
+                            </button>
+                        )}
+
+                        {/* Essential Tools Mapped */}
+                        {RESIDENT_TOOLS.map((tool, idx) => (
+                            <a
+                                key={idx}
+                                href={tool.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-slate-500/10 flex items-center justify-center text-slate-300 group-hover:scale-110 group-hover:text-white transition-transform border border-slate-500/20 shadow-inner">
+                                    <span className="material-icons text-[16px]">{tool.icon}</span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">{tool.name}</h3>
+                                    <p className="text-[9px] text-slate-500 mt-0.5 truncate">{tool.description}</p>
+                                </div>
+                            </a>
+                        ))}
+                    </div>
+                </section>
                 {/* Hospital Selector - Segmented Control Style */}
                 <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
                     {/* Sliding Indicator (simplified) */}
@@ -668,34 +735,7 @@ const ResidentsCornerScreen: React.FC = () => {
                     )}
                 </div>
 
-                {/* Tools Section */}
-                <section>
-                    <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2 pl-1">
-                        <span className="material-icons text-sm text-primary">build</span>
-                        Essential Tools
-                    </h2>
-                    <div className="grid grid-cols-1 gap-3">
-                        {RESIDENT_TOOLS.map((tool, idx) => (
-                            <a
-                                key={idx}
-                                href={tool.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="glass-card-enhanced p-4 rounded-xl border border-white/5 flex items-center gap-4 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                                    <span className="material-icons text-xl">{tool.icon}</span>
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{tool.name}</h3>
-                                    <p className="text-[10px] text-slate-500">{tool.description}</p>
-                                </div>
-                                <span className="material-icons text-slate-600 ml-auto group-hover:translate-x-1 transition-transform">open_in_new</span>
-                            </a>
-                        ))}
-                    </div>
-                </section>
+
             </div>
 
             {/* Manage Covers Modal */}
@@ -729,12 +769,6 @@ const ResidentsCornerScreen: React.FC = () => {
                         timeSlot: detailsModalData.timeSlot
                     });
                 }}
-            />
-
-            <MonthlyCensusModal
-                isOpen={isMonthlyCensusModalOpen}
-                onClose={() => setIsMonthlyCensusModalOpen(false)}
-                residentId={currentUser?.id || null}
             />
 
             {needleNavigatorEnabled && isNeedleNavigatorOpen && (

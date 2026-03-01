@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { CurrentWorkstationStatus, NewsfeedOnlineUser, Floor, WorkspacePlayer } from '../types';
 import VirtualWorkspaceRenderer, { ReleaseAndMoveIntent } from './VirtualWorkspaceRenderer';
 import { workspacePresenceService } from '../services/virtualWorkspacePresence';
+import BattleChatLog from './BattleChatLog';
 
 interface WorkstationViewerModalProps {
     isOpen: boolean;
@@ -55,9 +56,21 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
     const [showMobileStatusSheet, setShowMobileStatusSheet] = useState(false);
     const [pendingReleaseIntent, setPendingReleaseIntent] = useState<ReleaseAndMoveIntent | null>(null);
     const [expandedFloorId, setExpandedFloorId] = useState<string | null>(null);
+    const [isTransitioning, setIsTransitioning] = useState(false);
     const [showCoachTip, setShowCoachTip] = useState(false);
     const DEBUG_WORKSPACE = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
     const COACH_KEY = 'chh_workspace_coach_tip_seen_v1';
+
+    const handleZoneChange = (floorId: string | null) => {
+        if (floorId === expandedFloorId) return;
+        setIsTransitioning(true);
+        setTimeout(() => {
+            setExpandedFloorId(floorId);
+            setTimeout(() => {
+                setIsTransitioning(false);
+            }, 150); // Fade in duration
+        }, 300); // Fade out duration
+    };
 
     useEffect(() => {
         if (!isOpen) return;
@@ -367,7 +380,7 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                                             <div className="flex items-center gap-2">
                                                 {floors.length > 1 && (
                                                     <button
-                                                        onClick={() => setExpandedFloorId(expandedFloorId === floor.id ? null : floor.id)}
+                                                        onClick={() => handleZoneChange(expandedFloorId === floor.id ? null : floor.id)}
                                                         className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-colors border border-white/5"
                                                         title={expandedFloorId === floor.id ? "Show All Maps" : "Focus Map"}
                                                     >
@@ -393,6 +406,14 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                                         </div>
                                     </div>
                                 ))}
+
+                                {/* Retro Pixel/Fade Zone Transition Overlay */}
+                                <div
+                                    className={`absolute inset-0 z-50 bg-[#0a1018] pointer-events-none transition-opacity duration-300 ease-in-out ${isTransitioning ? 'opacity-100' : 'opacity-0'}`}
+                                >
+                                    {/* Optional: You could add a pixelated noise texture overlay here for more retro feel */}
+                                    <div className="absolute inset-0 opacity-20 mix-blend-overlay bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQIW2NkYGD4z8DAwMgAA0QAMwuL3gQAAAAASUVORK5CYII=')] rendering-pixelated" />
+                                </div>
                             </div>
                         )}
                     </div>
@@ -449,7 +470,7 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                                             </div>
                                             {user.floorId && (
                                                 <button
-                                                    onClick={() => setExpandedFloorId(user.floorId!)}
+                                                    onClick={() => handleZoneChange(user.floorId!)}
                                                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all focus:opacity-100"
                                                     title="Focus Map"
                                                 >
@@ -462,84 +483,90 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                             </div>
                         ))}
                     </div>
+                    {/* Retro RPG Activity Log */}
+                    <BattleChatLog />
                 </div>
             </div>
 
-            {showMobileStatusSheet && (
-                <div className="md:hidden fixed inset-0 z-[120] flex items-end">
-                    <div className="absolute inset-0 bg-black/70" onClick={() => setShowMobileStatusSheet(false)} />
-                    <div className="relative w-full rounded-t-3xl border border-white/10 bg-[#0f1621] p-4 space-y-3">
-                        <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-bold text-white">Set Avatar Status</h3>
-                            <button onClick={() => setShowMobileStatusSheet(false)} className="text-slate-400 text-xs font-semibold">Close</button>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {STATUS_PRESETS.map((preset) => (
+            {
+                showMobileStatusSheet && (
+                    <div className="md:hidden fixed inset-0 z-[120] flex items-end">
+                        <div className="absolute inset-0 bg-black/70" onClick={() => setShowMobileStatusSheet(false)} />
+                        <div className="relative w-full rounded-t-3xl border border-white/10 bg-[#0f1621] p-4 space-y-3">
+                            <div className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-bold text-white">Set Avatar Status</h3>
+                                <button onClick={() => setShowMobileStatusSheet(false)} className="text-slate-400 text-xs font-semibold">Close</button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {STATUS_PRESETS.map((preset) => (
+                                    <button
+                                        key={preset}
+                                        onClick={() => {
+                                            setStatusInput(preset);
+                                            void saveStatus(preset, true);
+                                        }}
+                                        className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200"
+                                    >
+                                        {preset}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="flex gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+                                <input
+                                    value={statusInput}
+                                    onChange={(e) => setStatusInput(e.target.value.slice(0, 20))}
+                                    placeholder="Set status (max 20)"
+                                    className="flex-1 bg-black/35 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/60"
+                                />
                                 <button
-                                    key={preset}
-                                    onClick={() => {
-                                        setStatusInput(preset);
-                                        void saveStatus(preset, true);
-                                    }}
-                                    className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200"
+                                    onClick={() => void saveStatus(statusInput, true)}
+                                    className="px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-sm font-bold"
                                 >
-                                    {preset}
+                                    Set
                                 </button>
-                            ))}
-                        </div>
-                        <div className="flex gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-                            <input
-                                value={statusInput}
-                                onChange={(e) => setStatusInput(e.target.value.slice(0, 20))}
-                                placeholder="Set status (max 20)"
-                                className="flex-1 bg-black/35 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500/60"
-                            />
-                            <button
-                                onClick={() => void saveStatus(statusInput, true)}
-                                className="px-3 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-sm font-bold"
-                            >
-                                Set
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setStatusInput('');
-                                    void saveStatus(null, true);
-                                }}
-                                className="px-3 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 text-sm font-semibold"
-                            >
-                                Clear
-                            </button>
+                                <button
+                                    onClick={() => {
+                                        setStatusInput('');
+                                        void saveStatus(null, true);
+                                    }}
+                                    className="px-3 py-2 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 text-sm font-semibold"
+                                >
+                                    Clear
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
-            {pendingReleaseIntent && (
-                <div className="fixed inset-x-0 bottom-4 z-[130] px-4 pointer-events-none">
-                    <div className="mx-auto max-w-md pointer-events-auto rounded-2xl border border-white/10 bg-black/70 backdrop-blur-sm px-4 py-3 flex items-center gap-3 shadow-xl">
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-white truncate">
-                                Release {pendingReleaseIntent.workstationLabel} and move here?
-                            </p>
-                            <p className="text-[10px] text-slate-400">Auto-dismisses in a few seconds</p>
+            {
+                pendingReleaseIntent && (
+                    <div className="fixed inset-x-0 bottom-4 z-[130] px-4 pointer-events-none">
+                        <div className="mx-auto max-w-md pointer-events-auto rounded-2xl border border-white/10 bg-black/70 backdrop-blur-sm px-4 py-3 flex items-center gap-3 shadow-xl">
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-white truncate">
+                                    Release {pendingReleaseIntent.workstationLabel} and move here?
+                                </p>
+                                <p className="text-[10px] text-slate-400">Auto-dismisses in a few seconds</p>
+                            </div>
+                            <button
+                                onClick={() => void handleConfirmReleaseAndMove()}
+                                className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-xs font-bold"
+                            >
+                                Release & Move
+                            </button>
+                            <button
+                                onClick={() => setPendingReleaseIntent(null)}
+                                className="px-2.5 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold"
+                            >
+                                Cancel
+                            </button>
                         </div>
-                        <button
-                            onClick={() => void handleConfirmReleaseAndMove()}
-                            className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-xs font-bold"
-                        >
-                            Release & Move
-                        </button>
-                        <button
-                            onClick={() => setPendingReleaseIntent(null)}
-                            className="px-2.5 py-1.5 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-slate-200 text-xs font-semibold"
-                        >
-                            Cancel
-                        </button>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 
     if (typeof document === 'undefined') return null;

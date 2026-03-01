@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
@@ -20,6 +20,7 @@ import LoadingState from './LoadingState';
 import NewsPageShell from './news/NewsPageShell';
 import NewsCardBase from './news/NewsCardBase';
 import NewsCardBadge from './news/NewsCardBadge';
+import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 
 interface AnnouncementsScreenProps {
   initialOpenAnnouncementId?: string | null;
@@ -113,6 +114,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const [viewPrefs, setViewPrefs] = useState<NewsViewPrefs>(() => parseStoredViewPrefs());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
@@ -137,6 +139,15 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const lastHandledInitialOpenRef = useRef<string | null>(null);
   const typeMenuRef = useRef<HTMLDivElement | null>(null);
+  const isMountedRef = useRef(true);
+  const fetchSequenceRef = useRef(0);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const canCreateAnnouncement = ['admin', 'training_officer', 'moderator', 'consultant'].includes(userRole);
   const canManageAnyAnnouncement = ['admin', 'training_officer', 'moderator'].includes(userRole);
@@ -160,43 +171,55 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   const queryAnnouncementsPage = async (from: number, to: number) => {
     if (supportsPriorityColumns) {
-      const prioritized = await supabase
-        .from('announcements')
-        .select(
-          `*,
-          profiles:author_id (
-            full_name,
-            avatar_url,
-            role,
-            nickname
-          )`,
-        )
-        .order('is_pinned', { ascending: false })
-        .order('is_important', { ascending: false })
-        .order('created_at', { ascending: false })
-        .range(from, to);
+      const prioritized = await fetchWithCache(
+        `announcements:page:priority:${from}:${to}`,
+        () =>
+          supabase
+            .from('announcements')
+            .select(
+              `*,
+              profiles:author_id (
+                full_name,
+                avatar_url,
+                role,
+                nickname
+              )`,
+            )
+            .order('is_pinned', { ascending: false })
+            .order('is_important', { ascending: false })
+            .order('created_at', { ascending: false })
+            .range(from, to),
+        { ttlMs: 10_000, allowStaleWhileRevalidate: true },
+      );
 
       if (!prioritized.error) return prioritized;
       if (!isMissingPriorityColumnError(prioritized.error)) return prioritized;
       setSupportsPriorityColumns(false);
+      invalidateCacheByPrefix('announcements:page:priority:');
     }
 
-    return supabase
-      .from('announcements')
-      .select(
-        `*,
-        profiles:author_id (
-          full_name,
-          avatar_url,
-          role,
-          nickname
-        )`,
-      )
-      .order('created_at', { ascending: false })
-      .range(from, to);
+    return fetchWithCache(
+      `announcements:page:default:${from}:${to}`,
+      () =>
+        supabase
+          .from('announcements')
+          .select(
+            `*,
+            profiles:author_id (
+              full_name,
+              avatar_url,
+              role,
+              nickname
+            )`,
+          )
+          .order('created_at', { ascending: false })
+          .range(from, to),
+      { ttlMs: 10_000, allowStaleWhileRevalidate: true },
+    );
   };
 
   const fetchAnnouncements = async (pageNumber: number, reset = false) => {
+    const seq = ++fetchSequenceRef.current;
     try {
       if (reset) {
         setLoading(true);
@@ -213,22 +236,29 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
       const mapped = sortAnnouncementsByPriority(data.map(mapAnnouncementRow));
       const visible = mapped.filter((item) => !hiddenAnnouncementIds.has(item.id));
+      if (!isMountedRef.current || seq !== fetchSequenceRef.current) return;
 
       if (reset) {
-        setAnnouncements(visible);
+        startTransition(() => {
+          setAnnouncements(visible);
+        });
       } else {
-        setAnnouncements((prev) => sortAnnouncementsByPriority([...prev, ...visible]));
+        startTransition(() => {
+          setAnnouncements((prev) => sortAnnouncementsByPriority([...prev, ...visible]));
+        });
       }
 
       setHasMore(data.length >= ITEMS_PER_PAGE);
     } catch (error: any) {
       console.error('Error fetching announcements:', error);
+      if (!isMountedRef.current || seq !== fetchSequenceRef.current) return;
       if (reset) {
         toastError('Failed to load news', error?.message || 'Please refresh and try again.');
       } else {
         setLoadMoreError('Could not load more posts.');
       }
     } finally {
+      if (!isMountedRef.current || seq !== fetchSequenceRef.current) return;
       setLoading(false);
       setLoadingMore(false);
     }
@@ -253,7 +283,9 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   useEffect(() => {
     if (!hiddenAnnouncementIds.size) return;
-    setAnnouncements((prev) => prev.filter((item) => !hiddenAnnouncementIds.has(item.id)));
+    startTransition(() => {
+      setAnnouncements((prev) => prev.filter((item) => !hiddenAnnouncementIds.has(item.id)));
+    });
   }, [hiddenAnnouncementIds]);
 
   useEffect(() => {
@@ -326,7 +358,9 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         }
 
         const mapped = mapAnnouncementRow(data);
-        setAnnouncements((prev) => sortAnnouncementsByPriority(prev.some((item) => item.id === mapped.id) ? prev : [mapped, ...prev]));
+        startTransition(() => {
+          setAnnouncements((prev) => sortAnnouncementsByPriority(prev.some((item) => item.id === mapped.id) ? prev : [mapped, ...prev]));
+        });
         setSelectedAnnouncement(mapped);
         onHandledInitialOpen?.();
       } catch (error) {
@@ -353,14 +387,14 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   );
 
   const searchedAnnouncements = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) return hydratedAnnouncements;
     return hydratedAnnouncements.filter((item) => {
       const title = String(item.title || '').toLowerCase();
       const content = String(item.content || item.summary || '').toLowerCase();
       return title.includes(q) || content.includes(q);
     });
-  }, [hydratedAnnouncements, searchQuery]);
+  }, [deferredSearchQuery, hydratedAnnouncements]);
 
   const typeFilteredAnnouncements = useMemo(() => {
     if (viewPrefs.typeFilter === 'all') return searchedAnnouncements;
@@ -406,6 +440,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     try {
       const { error } = await supabase.from('announcements').delete().eq('id', announcementId);
       if (error) throw error;
+      invalidateCacheByPrefix('announcements:page:');
       setAnnouncements((prev) => prev.filter((item) => item.id !== announcementId));
       setSelectedAnnouncement(null);
       toastSuccess('News deleted');
@@ -445,25 +480,26 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
       }
 
       if (!updated) throw new Error('Unable to update pin state.');
+      invalidateCacheByPrefix('announcements:page:');
 
       setAnnouncements((prev) =>
         prev.map((item) =>
           item.id === announcementId
             ? {
-                ...item,
-                is_pinned: nextPinned,
-                pinned_at: pinnedAt,
-              }
+              ...item,
+              is_pinned: nextPinned,
+              pinned_at: pinnedAt,
+            }
             : item,
         ),
       );
       setSelectedAnnouncement((prev) =>
         prev && prev.id === announcementId
           ? {
-              ...prev,
-              is_pinned: nextPinned,
-              pinned_at: pinnedAt,
-            }
+            ...prev,
+            is_pinned: nextPinned,
+            pinned_at: pinnedAt,
+          }
           : prev,
       );
       toastSuccess(nextPinned ? 'Pinned' : 'Unpinned');
@@ -538,8 +574,8 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
           isPinnedHighlight
             ? 'bg-rose-500/[0.08] border border-rose-500/30 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)] hover:bg-rose-500/[0.12]'
             : isUnreadHighlight
-            ? unreadTone.cardClass
-            : 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
+              ? unreadTone.cardClass
+              : 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
         }
         onClick={() => {
           setActionMenuPostId(null);
@@ -549,49 +585,47 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         {isHighlighted && (
           <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-2xl">
             <div
-              className={`absolute top-0 right-0 w-36 h-36 blur-[54px] rounded-full transform -translate-y-1/2 translate-x-1/2 ${
-                isPinnedHighlight ? 'bg-rose-500/20' : unreadTone.glowClass
-              }`}
+              className={`absolute top-0 right-0 w-36 h-36 blur-[54px] rounded-full transform -translate-y-1/2 translate-x-1/2 ${isPinnedHighlight ? 'bg-rose-500/20' : unreadTone.glowClass
+                }`}
             />
           </div>
         )}
 
-        {isPinned && (
-          <span className="absolute top-[-3px] -left-2 px-2 py-0.5 rounded-[4px] text-[9px] leading-none font-bold tracking-wider uppercase z-20 bg-slate-900 text-rose-400 border border-rose-500/30 shadow-[0_2px_8px_rgba(225,29,72,0.2)]">
-            Pinned
-          </span>
-        )}
-
-        <div className="relative z-10 flex items-start gap-3 w-full">
+        <div className="relative z-10 flex items-center gap-3.5 w-full shrink-0">
           <div
-            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              isPinnedHighlight
-                ? 'mt-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
-                : isUnreadHighlight
-                ? `mt-0.5 ${unreadTone.iconClass}`
-                : 'mt-0.5 bg-black/40 border border-white/5 text-primary-light opacity-80'
-            }`}
+            className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[14px] ${isPinnedHighlight
+              ? 'bg-rose-500/20 border border-rose-500/40 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.3)]'
+              : isUnreadHighlight
+                ? `${unreadTone.iconClass}`
+                : 'bg-black/40 border border-white/5 text-primary-light opacity-80'
+              }`}
           >
-            <span className="material-icons text-[20px]">{iconName}</span>
+            <span className="material-icons text-[18px]">{iconName}</span>
           </div>
 
-          <div className="min-w-0 flex-1 flex flex-col gap-0.5">
-            <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
+            <div className="flex flex-col min-w-0 pr-1 gap-0.5">
               <div className="min-w-0 flex items-center gap-2">
-                <h3 className={`truncate text-[14px] sm:text-[15px] tracking-tight font-bold uppercase ${isPinned ? 'text-rose-300' : typeStyles.accentText}`}>
+                <h3 className={`truncate text-[12px] sm:text-[13px] tracking-widest font-extrabold uppercase ${isPinned ? 'text-rose-300' : typeStyles.accentText}`}>
                   {String(post.title || '').toUpperCase()}
                 </h3>
-                {isImportant && <NewsCardBadge label="New" className="bg-rose-500/15 border-rose-400/35 text-rose-200" />}
+                {isPinned && (
+                  <span className="px-1.5 py-[3px] rounded-[4px] text-[9px] leading-none font-bold tracking-wider uppercase shrink-0 bg-slate-900 text-rose-400 border border-rose-500/30 shadow-[0_2px_8px_rgba(225,29,72,0.2)]">
+                    Pinned
+                  </span>
+                )}
+                {isImportant && <NewsCardBadge label="New" className="bg-rose-500/15 border-rose-400/35 text-rose-200 shrink-0" />}
               </div>
-              <span className="text-[10px] sm:text-[11px] whitespace-nowrap font-medium uppercase tracking-wider text-white/80">{metaDateTime}</span>
-            </div>
 
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0 flex items-center gap-1.5 text-[11px] sm:text-[12px] truncate uppercase tracking-wider">
+              <div className="min-w-0 flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
                 <span className="font-semibold text-white">{normalizedCategory}</span>
                 <span className="text-white/70 font-bold px-0.5">|</span>
                 <span className="truncate normal-case tracking-normal text-white">by {post.author}</span>
               </div>
+            </div>
+
+            <div className="flex items-center shrink-0 gap-2 relative z-50">
+              <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold uppercase tracking-widest text-white/50">{metaDateTime}</span>
 
               {showActionMenu ? (
                 <div className="relative shrink-0" onClick={(event) => event.stopPropagation()}>
@@ -680,17 +714,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         headerAction={null}
         searchFilterBar={
           <div ref={typeMenuRef} className="relative mb-0 flex items-center gap-2">
-            {canCreateAnnouncement && (
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white shadow-lg shadow-primary/25 transition-all hover:bg-primary-dark active:scale-95"
-                aria-label="Create news"
-              >
-                <span className="material-icons text-[18px]">add</span>
-              </button>
-            )}
-            <div className="relative group flex-1 bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
+            <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5 w-full">
               <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">
                 search
               </span>
@@ -714,36 +738,45 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
                 <button
                   type="button"
                   onClick={() => setIsTypeMenuOpen((prev) => !prev)}
-                  className={`absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
-                    isTypeMenuOpen || viewPrefs.typeFilter !== 'all'
-                      ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                  }`}
+                  className={`absolute right-0 top-0 inline-flex h-10 w-10 items-center justify-center rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${isTypeMenuOpen || viewPrefs.typeFilter !== 'all'
+                    ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                    }`}
                   aria-label="Filter news type"
                 >
                   <span className="material-icons text-[18px]">tune</span>
                 </button>
               </div>
             </div>
-            {isTypeMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-44 rounded-xl border border-white/10 bg-[#101826] p-1.5 shadow-xl z-30 animate-in fade-in zoom-in-95 duration-100">
-                {(['all', 'Announcement', 'Research', 'Event', 'Miscellaneous'] as TypeFilter[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => {
-                      setViewPrefs((prev) => ({ ...prev, typeFilter: type }));
-                      setIsTypeMenuOpen(false);
-                    }}
-                    className={`block w-full rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
-                      viewPrefs.typeFilter === type ? 'bg-white/[0.08] text-white' : 'text-slate-200 hover:bg-white/[0.08]'
-                    }`}
-                  >
-                    {type === 'all' ? 'All' : type}
-                  </button>
-                ))}
+            <div
+              className={`absolute right-0 top-full mt-2 w-56 bg-[#1a2332] border border-white/5 rounded-2xl overflow-hidden transition-all duration-200 transform origin-top-right z-50 shadow-xl ${isTypeMenuOpen ? 'opacity-100 visible scale-100' : 'opacity-0 invisible scale-95'}`}
+            >
+              <div className="max-h-[300px] overflow-y-auto custom-scrollbar p-2">
+                <div className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">
+                  News Type
+                </div>
+                {(['all', 'Announcement', 'Research', 'Event', 'Miscellaneous'] as TypeFilter[]).map((type) => {
+                  const isActive = viewPrefs.typeFilter === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => {
+                        setViewPrefs((prev) => ({ ...prev, typeFilter: type }));
+                        setIsTypeMenuOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold rounded-xl transition-all flex items-center justify-between ${isActive
+                        ? 'bg-primary/20 text-primary border border-primary/20'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                      {type === 'all' ? 'All News' : type}
+                      {isActive && <span className="material-icons text-sm">check</span>}
+                    </button>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
         }
         topUtilityRegion={null}
@@ -818,12 +851,14 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
             setEditingAnnouncement(null);
           }}
           onSuccess={() => {
+            invalidateCacheByPrefix('announcements:page:');
             setPage(0);
             fetchAnnouncements(0, true);
             setShowCreateModal(false);
             setEditingAnnouncement(null);
           }}
           editingAnnouncement={editingAnnouncement}
+          canSetPriorityFlags={canManageAnyAnnouncement}
         />
       )}
 
@@ -840,10 +875,27 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
           canManage={canManageAnnouncement(selectedAnnouncement.author_id)}
           supportsSaved={false}
           onSavedChanged={() => {
+            invalidateCacheByPrefix('announcements:page:');
             setPage(0);
             fetchAnnouncements(0, true);
           }}
         />
+      )}
+
+      {/* Floating Add Button */}
+      {canCreateAnnouncement && (
+        <div className="fixed top-2 right-4 sm:right-6 lg:right-10 z-[60]">
+          <div className="pointer-events-auto bg-[#1a232f]/80 backdrop-blur-xl shadow-2xl shadow-black/50 border border-white/[0.08] rounded-full p-2">
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="flex flex-col items-center justify-center w-[54px] h-[54px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full text-slate-300 hover:text-white hover:bg-white/5"
+              aria-label="Create news"
+            >
+              <span className="material-icons text-[26px]">post_add</span>
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

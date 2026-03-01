@@ -103,8 +103,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
     avatar_url: '',
     role: 'resident' as UserRole,
-    nickname: '' // Added nickname
+    nickname: '', // Added nickname
+    title: '',
+    motto: '',
+    work_mode: 'Focused',
+    avatar_seed: '',
+    main_modality: 'CT',
+    faction: '',
+    map_status: 'At Workstation'
   });
+  const [activeBadges, setActiveBadges] = useState<string[]>([]);
   const [myCases, setMyCases] = useState<any[]>([]);
   const [loadingCases, setLoadingCases] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null); // For delete confirmation
@@ -174,8 +182,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
           avatar_url: data.avatar_url || '',
           role: (data.role as UserRole) || 'resident',
-          nickname: data.nickname || safeNickname
+          nickname: data.nickname || safeNickname,
+          title: data.title || '',
+          motto: data.motto || '',
+          work_mode: data.work_mode || 'Focused',
+          avatar_seed: data.avatar_seed || user.id,
+          main_modality: data.main_modality || 'CT',
+          faction: data.faction || '',
+          map_status: data.map_status || 'At Workstation'
         });
+        setActiveBadges(data.active_badges || []);
       }
     } catch (error: any) {
       console.error('Error loading profile:', error.message);
@@ -245,6 +261,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         year_level: profile.year_level,
         avatar_url: avatarUrl || profile.avatar_url,
         role: profile.role, // FIX: Ensure role is included to satisfy constraint
+        title: profile.title,
+        motto: profile.motto,
+        work_mode: profile.work_mode,
+        avatar_seed: profile.avatar_seed,
+        main_modality: profile.main_modality,
+        faction: profile.faction,
+        map_status: profile.map_status,
         updated_at: new Date().toISOString(),
       };
 
@@ -303,9 +326,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setProfile(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleRerollAvatar = () => {
+    // Generate a random string as the new seed
+    const newSeed = Math.random().toString(36).substring(2, 10);
+    setProfile(prev => ({ ...prev, avatar_seed: newSeed }));
   };
 
   const confirmDelete = (id: string) => {
@@ -431,7 +460,28 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
             <p className="text-primary text-[11px] font-black uppercase tracking-[0.2em] mb-3 mt-1 opacity-90">
               {profile.year_level || 'Resident'} • {profile.specialty}
             </p>
-            <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.bio || 'No bio yet.'}"</p>
+            <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.motto || profile.bio || 'No motto equipped.'}"</p>
+
+            {/* Badges Display */}
+            {activeBadges.length > 0 && (
+              <div className="flex justify-center gap-2 mb-4">
+                {activeBadges.map(badge => {
+                  let badgeIcon = 'star';
+                  let badgeColor = 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20 shadow-[0_0_10px_rgba(250,204,21,0.2)]';
+                  let badgeTitle = 'Award';
+                  if (badge === 'workhorse') { badgeIcon = 'hardware'; badgeColor = 'text-slate-300 bg-slate-400/10 border-slate-400/20'; badgeTitle = 'Workhorse'; }
+                  if (badge === 'scholar') { badgeIcon = 'school'; badgeColor = 'text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-[0_0_10px_rgba(251,191,36,0.2)]'; badgeTitle = 'Scholar'; }
+                  if (badge === 'punctuality') { badgeIcon = 'query_builder'; badgeColor = 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'; badgeTitle = 'Punctuality'; }
+                  if (badge === 'high_scorer') { badgeIcon = 'workspace_premium'; badgeColor = 'text-purple-400 bg-purple-400/10 border-purple-400/20 shadow-[0_0_10px_rgba(192,132,252,0.2)]'; badgeTitle = 'High Scorer'; }
+
+                  return (
+                    <div key={badge} title={badgeTitle} className={`w-8 h-8 rounded-full flex items-center justify-center border ${badgeColor}`}>
+                      <span className="material-icons text-[16px]">{badgeIcon}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Stats Row */}
             <div className="flex justify-center gap-8 pt-5 border-t border-white/5 pb-1">
@@ -451,7 +501,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         {isEditing && (
           <div className="w-full max-w-sm space-y-4 z-10 mb-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">Identity</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">Identity & Avatar</p>
+                <button
+                  onClick={handleRerollAvatar}
+                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-[9px] font-bold uppercase text-slate-300 transition-colors flex items-center gap-1"
+                >
+                  <span className="material-icons text-[12px]">casino</span>
+                  Reroll Sprite
+                </button>
+              </div>
               <div>
                 <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
                 <input
@@ -483,6 +542,85 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
                   className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
                   placeholder="e.g. R1, R2, Fellow"
                 />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">Roleplay & Gamification</p>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Title / Specialization</label>
+                <input
+                  name="title"
+                  value={profile.title}
+                  onChange={handleChange}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
+                  placeholder="e.g. CT Veteran, Neuro Whisperer"
+                />
+              </div>
+              <div>
+                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Character Motto</label>
+                <input
+                  name="motto"
+                  value={profile.motto}
+                  onChange={handleChange}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
+                  placeholder="A short, catchy phrase..."
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Work Mode</label>
+                  <select
+                    name="work_mode"
+                    value={profile.work_mode}
+                    onChange={handleChange}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-xs focus:border-primary focus:ring-1 outline-none appearance-none"
+                  >
+                    <option value="Focused">Focused</option>
+                    <option value="Collaborative">Collaborative</option>
+                    <option value="Speed Reading">Speed Reading</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Main Modality</label>
+                  <select
+                    name="main_modality"
+                    value={profile.main_modality}
+                    onChange={handleChange}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-xs focus:border-primary focus:ring-1 outline-none appearance-none"
+                  >
+                    <option value="CT">CT</option>
+                    <option value="MRI">MRI</option>
+                    <option value="X-Ray">X-Ray</option>
+                    <option value="Ultrasound">Ultrasound</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Faction / Guild</label>
+                  <input
+                    name="faction"
+                    value={profile.faction}
+                    onChange={handleChange}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-[11px] focus:border-primary focus:ring-1 outline-none placeholder:text-slate-600"
+                    placeholder="e.g. The ER Squad"
+                  />
+                </div>
+                <div>
+                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Map Status</label>
+                  <select
+                    name="map_status"
+                    value={profile.map_status}
+                    onChange={handleChange}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-[11px] focus:border-primary focus:ring-1 outline-none appearance-none"
+                  >
+                    <option value="At Workstation">At Workstation</option>
+                    <option value="On Rounds">On Rounds</option>
+                    <option value="Coffee Break">Coffee Break</option>
+                    <option value="In Conference">In Conference</option>
+                  </select>
+                </div>
               </div>
             </div>
 

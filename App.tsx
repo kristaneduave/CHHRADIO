@@ -50,6 +50,7 @@ const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
 const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
 const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
 const LiveMapScreen = lazy(() => import('./components/LiveMapScreen'));
+const MonthlyCensusPage = lazy(() => import('./components/MonthlyCensusPage'));
 
 const App: React.FC = () => {
   useThemePreference();
@@ -318,9 +319,23 @@ const App: React.FC = () => {
           />
         );
       case 'newsfeed':
-        return <NewsfeedScreen onNavigateToTarget={handleNewsfeedNavigate} />;
+        return (
+          <NewsfeedScreen
+            onNavigateToTarget={handleNewsfeedNavigate}
+            onUnreadCountChange={setUnreadNotificationsCount}
+          />
+        );
       case 'residents-corner':
-        return <ResidentsCornerScreen />;
+        return <ResidentsCornerScreen onOpenMonthlyCensus={() => navigateToScreen('monthly-census')} />;
+      case 'monthly-census':
+        return (
+          <MonthlyCensusPage
+            residentId={session?.user?.id || null}
+            onBack={() => navigateToScreen('residents-corner')}
+            onHome={() => navigateToScreen('dashboard')}
+            onSubmitted={() => navigateToScreen('dashboard')}
+          />
+        );
       case 'live-map':
         return <LiveMapScreen />;
       default:

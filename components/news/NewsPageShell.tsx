@@ -17,7 +17,7 @@ const NewsPageShell: React.FC<NewsPageShellProps> = ({
 }) => {
   return (
     <div className="flex min-h-full flex-col pb-24">
-      <div className="bg-app/90 backdrop-blur-xl">
+      <div className="bg-app/90 backdrop-blur-xl relative z-50">
         <div className="px-6 pt-6 pb-2">
           <div className="mx-auto w-full max-w-md">
             <header className="flex items-center justify-between min-h-[32px]">

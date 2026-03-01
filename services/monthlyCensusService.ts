@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { ResidentMonthlyCensus, ResidentMonthlyCensusInput } from '../types';
+import { isValidMonthlyCensusRotation } from '../utils/monthlyCensusValidation';
 
 const normalizeReportMonth = (reportMonth: string) => {
   if (/^\d{4}-\d{2}$/.test(reportMonth)) {
@@ -28,10 +29,21 @@ export const getMonthlyCensusByMonth = async (residentId: string, reportMonth: s
 };
 
 export const upsertMonthlyCensus = async (payload: ResidentMonthlyCensusInput) => {
+  const normalizedAbsenceDays = payload.absence_days < 0 ? 0 : payload.absence_days;
+  const normalizedRotation = payload.rotation?.trim();
+  if (!normalizedRotation || !isValidMonthlyCensusRotation(normalizedRotation)) {
+    throw new Error('Invalid rotation selected.');
+  }
+
+  const normalizedComments = payload.comments?.trim() ?? null;
   const normalizedPayload = {
     ...payload,
     report_month: normalizeReportMonth(payload.report_month),
-    absence_days: payload.has_absence ? payload.absence_days : 0,
+    rotation: normalizedRotation,
+    comments: normalizedComments,
+    msk_pedia_target_met: normalizedRotation === 'Pedia/MSK' ? payload.msk_pedia_target_met ?? false : null,
+    absence_days: normalizedAbsenceDays,
+    has_absence: normalizedAbsenceDays > 0,
   };
 
   const { data, error } = await supabase

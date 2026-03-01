@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { CalendarEvent, EventType } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
+import EmptyState from './EmptyState';
 import { normalizeUserRole } from '../utils/roles';
+import { formatWeekRange, getWeekDays, getWeekStart, isSameDay } from '../utils/calendarView';
 
 const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -22,6 +24,7 @@ const CalendarScreen: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
+  const [isWeekDrawerOpen, setIsWeekDrawerOpen] = useState(true);
 
   // Form state
   // Form state - Minimalist by default
@@ -43,6 +46,9 @@ const CalendarScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userRole, setUserRole] = useState<'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer'>('resident');
+  const isMountedRef = useRef(true);
+  const eventsFetchSeqRef = useRef(0);
+  const searchSeqRef = useRef(0);
 
   const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -78,26 +84,83 @@ const CalendarScreen: React.FC = () => {
     pcr: 'bg-cyan-500'
   };
 
+  const weekStartDate = useMemo(() => getWeekStart(selectedDate, true), [selectedDate]);
+  const weekDays = useMemo(() => getWeekDays(selectedDate, true), [selectedDate]);
+  const weekEndDate = useMemo(() => {
+    const end = new Date(weekStartDate);
+    end.setDate(weekStartDate.getDate() + 6);
+    return end;
+  }, [weekStartDate]);
+
+  const toDayStart = (date: Date) => {
+    const next = new Date(date);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  };
+
+  const toDayEnd = (date: Date) => {
+    const next = new Date(date);
+    next.setHours(23, 59, 59, 999);
+    return next;
+  };
+
+  const eventOverlapsRange = (event: CalendarEvent, start: Date, end: Date) => {
+    const eventStart = new Date(event.start_time);
+    const eventEnd = new Date(event.end_time || event.start_time);
+    return eventStart <= end && eventEnd >= start;
+  };
+
+  const setSelectedDateAndSyncMonth = (date: Date) => {
+    setSelectedDate(date);
+    if (date.getMonth() !== currentDate.getMonth() || date.getFullYear() !== currentDate.getFullYear()) {
+      setCurrentDate(new Date(date.getFullYear(), date.getMonth(), 1));
+    }
+  };
+
   const fetchEvents = async () => {
+    const seq = ++eventsFetchSeqRef.current;
     setLoading(true);
     try {
       const start = new Date(year, month, 1);
       const end = new Date(year, month + 1, 0, 23, 59, 59);
       const data = await CalendarService.getEvents(start, end);
-      setEvents(data);
+      let mergedData = data;
+
+      if (isWeekDrawerOpen && (weekStartDate < start || weekEndDate > end)) {
+        const spillStart = weekStartDate < start ? weekStartDate : start;
+        const spillEnd = weekEndDate > end ? weekEndDate : end;
+        const spillData = await CalendarService.getEvents(spillStart, spillEnd);
+        const byId = new Map<string, CalendarEvent>();
+        [...data, ...spillData].forEach((item) => byId.set(item.id, item));
+        mergedData = Array.from(byId.values()).sort(
+          (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+        );
+      }
+
+      if (!isMountedRef.current || seq !== eventsFetchSeqRef.current) return;
+      setEvents(mergedData);
 
       const upcoming = await CalendarService.getUpcomingEvents(10);
+      if (!isMountedRef.current || seq !== eventsFetchSeqRef.current) return;
       setUpcomingEvents(upcoming);
     } catch (error) {
       console.error('Error fetching events:', error);
     } finally {
+      if (!isMountedRef.current || seq !== eventsFetchSeqRef.current) return;
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchEvents();
-  }, [currentDate]);
+  }, [currentDate, selectedDate, isWeekDrawerOpen]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     const loadCurrentUserRole = async () => {
@@ -116,13 +179,16 @@ const CalendarScreen: React.FC = () => {
     // Debounce search
     const timer = setTimeout(async () => {
       if (searchQuery.trim().length > 1) {
+        const seq = ++searchSeqRef.current;
         setIsSearching(true);
         try {
           const results = await CalendarService.searchEvents(searchQuery);
+          if (!isMountedRef.current || seq !== searchSeqRef.current) return;
           setSearchResults(results);
         } catch (error) {
           console.error("Search error", error);
         } finally {
+          if (!isMountedRef.current || seq !== searchSeqRef.current) return;
           setIsSearching(false);
         }
       } else {
@@ -180,6 +246,18 @@ const CalendarScreen: React.FC = () => {
   const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
   const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
 
+  const prevWeek = () => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() - 7);
+    setSelectedDateAndSyncMonth(next);
+  };
+
+  const nextWeek = () => {
+    const next = new Date(selectedDate);
+    next.setDate(next.getDate() + 7);
+    setSelectedDateAndSyncMonth(next);
+  };
+
   const isToday = (day: number) => {
     const today = new Date();
     return today.getDate() === day && today.getMonth() === month && today.getFullYear() === year;
@@ -191,9 +269,7 @@ const CalendarScreen: React.FC = () => {
 
   const isSelectedDateToday = () => {
     const today = new Date();
-    return selectedDate.getDate() === today.getDate() &&
-      selectedDate.getMonth() === today.getMonth() &&
-      selectedDate.getFullYear() === today.getFullYear();
+    return isSameDay(selectedDate, today);
   };
 
   // Updated: Get unique event types for a day to show dots
@@ -220,6 +296,17 @@ const CalendarScreen: React.FC = () => {
 
     if (searchQuery.length > 1) {
       baseEvents = searchResults;
+      if (isWeekDrawerOpen) {
+        const start = toDayStart(weekStartDate);
+        const end = toDayEnd(weekEndDate);
+        baseEvents = baseEvents.filter((e) => eventOverlapsRange(e, start, end));
+      }
+    } else if (isWeekDrawerOpen) {
+      const start = toDayStart(weekStartDate);
+      const end = toDayEnd(weekEndDate);
+      baseEvents = events
+        .filter((e) => eventOverlapsRange(e, start, end))
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     } else if (isSelectedDateToday()) {
       baseEvents = upcomingEvents;
     } else {
@@ -237,6 +324,19 @@ const CalendarScreen: React.FC = () => {
   };
 
   const agendaEvents = getAgendaEvents();
+  const weekDayMeta = useMemo(() => {
+    const labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    return weekDays.map((date, index) => {
+      const count = events.filter((event) => eventOverlapsRange(event, toDayStart(date), toDayEnd(date))).length;
+      return {
+        date,
+        label: labels[index],
+        isSelected: isSameDay(date, selectedDate),
+        isToday: isSameDay(date, new Date()),
+        count,
+      };
+    });
+  }, [events, selectedDate, weekDays]);
 
   const isPrivilegedCalendarManager = ['admin', 'training_officer', 'moderator'].includes(userRole);
   const canManageEvent = (event: CalendarEvent): boolean =>
@@ -442,6 +542,9 @@ const CalendarScreen: React.FC = () => {
 
   const allowedTypes: EventType[] = ['leave', 'meeting', 'pcr', 'lecture', 'exam', 'pickleball'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
+  const panelClass = 'bg-black/40 border border-white/5 rounded-[2rem] backdrop-blur-md';
+  const controlPillClass = 'bg-black/30 border border-white/10 rounded-2xl p-1';
+  const weekRangeLabel = formatWeekRange(weekStartDate, weekEndDate);
 
 
 
@@ -535,14 +638,14 @@ const CalendarScreen: React.FC = () => {
       <div className="flex flex-col lg:flex-row gap-8 flex-1 lg:overflow-hidden relative z-0">
         {/* Calendar Grid */}
         <div className="flex-[2] flex flex-col gap-6 lg:overflow-hidden">
-          <div className="bg-[#0b0f19] rounded-[2rem] p-6 h-full flex flex-col">
+          <div className={`${panelClass} p-6 h-full flex flex-col`}>
             {/* Integrated Navigation and Title */}
             <div className="flex items-center justify-between w-full mb-6 relative">
 
               <div className="w-10"></div> {/* Spacer for perfect centering */}
 
               {/* Centered Month Navigation Pill */}
-              <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-between bg-black/20 rounded-2xl p-1 w-[280px]">
+              <div className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-between ${controlPillClass} w-[280px]`}>
                 <button
                   onClick={prevMonth}
                   className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 transition-all rounded-xl active:scale-95"
@@ -573,7 +676,18 @@ const CalendarScreen: React.FC = () => {
                 </button>
               </div>
 
-              <div className="w-10"></div> {/* Spacer for perfect centering */}
+              <button
+                type="button"
+                onClick={() => setIsWeekDrawerOpen((prev) => !prev)}
+                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isWeekDrawerOpen
+                  ? 'bg-primary/20 text-primary border border-primary/40'
+                  : 'text-slate-400 border border-white/10 hover:text-white hover:bg-white/5'
+                  }`}
+                aria-label="Toggle weekly drawer"
+                title="Toggle weekly drawer"
+              >
+                <span className="material-icons text-[18px]">date_range</span>
+              </button>
             </div>
 
             <div className="grid grid-cols-7 mb-4">
@@ -589,7 +703,7 @@ const CalendarScreen: React.FC = () => {
                 return (
                   <button
                     key={day}
-                    onClick={() => setSelectedDate(new Date(year, month, day))}
+                    onClick={() => setSelectedDateAndSyncMonth(new Date(year, month, day))}
                     className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all group ${isActive
                       ? 'bg-[#5b8cff] z-10'
                       : isToday(day)
@@ -614,6 +728,67 @@ const CalendarScreen: React.FC = () => {
                 );
               })}
             </div>
+
+            <div className="mt-5 min-h-[108px]">
+              <div
+                className={`overflow-hidden transition-all duration-300 ${isWeekDrawerOpen ? 'max-h-[220px] opacity-100 scale-100' : 'max-h-0 opacity-0 scale-[0.98]'
+                  }`}
+              >
+                <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                      Week: {weekRangeLabel}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={prevWeek}
+                        className="w-8 h-8 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                        aria-label="Previous week"
+                      >
+                        <span className="material-icons text-[18px]">chevron_left</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={nextWeek}
+                        className="w-8 h-8 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+                        aria-label="Next week"
+                      >
+                        <span className="material-icons text-[18px]">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <div className="flex gap-2 min-w-[560px] lg:min-w-0">
+                      {weekDayMeta.map((dayMeta) => (
+                        <button
+                          key={dayMeta.date.toISOString()}
+                          type="button"
+                          onClick={() => setSelectedDateAndSyncMonth(new Date(dayMeta.date))}
+                          className={`flex-1 min-w-[72px] rounded-xl border px-2 py-2.5 transition-all ${dayMeta.isSelected
+                            ? 'bg-primary/20 border-primary/40 text-white'
+                            : 'bg-black/25 border-white/10 text-slate-300 hover:bg-white/5'
+                            }`}
+                        >
+                          <div className="text-[10px] font-bold tracking-widest uppercase">{dayMeta.label}</div>
+                          <div className={`mt-1 text-sm font-bold ${dayMeta.isToday ? 'text-primary-light' : ''}`}>{dayMeta.date.getDate()}</div>
+                          <div className="mt-1 flex items-center justify-center gap-1">
+                            {dayMeta.count > 0 ? (
+                              <>
+                                <span className={`w-1.5 h-1.5 rounded-full ${dayMeta.isSelected ? 'bg-white' : 'bg-primary'}`}></span>
+                                <span className="text-[10px] font-semibold">{dayMeta.count}</span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-slate-500">0</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
 
@@ -622,7 +797,7 @@ const CalendarScreen: React.FC = () => {
         {/* Agenda */}
         <div className="w-full lg:w-[400px] flex flex-col gap-6 lg:overflow-hidden relative z-10">
 
-          <div className="bg-[#0b0f19] rounded-[2rem] p-6 flex-1 lg:overflow-hidden flex flex-col relative">
+          <div className={`${panelClass} p-6 flex-1 lg:overflow-hidden flex flex-col relative`}>
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 bg-black/30 rounded-2xl flex items-center justify-center">
@@ -631,20 +806,18 @@ const CalendarScreen: React.FC = () => {
                 <div>
                   <h3 className="text-lg font-bold text-white tracking-tight leading-tight">AGENDA</h3>
                   <span className="text-[11px] text-slate-400 font-medium">
-                    {searchQuery ? `Searching "${searchQuery}"` : isSelectedDateToday() ? 'Upcoming' : `For ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
+                    {searchQuery
+                      ? `Searching "${searchQuery}"`
+                      : isWeekDrawerOpen
+                        ? `Week of ${weekRangeLabel}`
+                        : isSelectedDateToday()
+                          ? 'Upcoming'
+                          : `For ${selectedDate.getDate()} ${monthNames[selectedDate.getMonth()].substring(0, 3)}`}
                   </span>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
-                {/* Embedded Add Event Button in Agenda Header */}
-                <button
-                  onClick={() => setShowAddEvent(true)}
-                  className="bg-white/5 hover:bg-white/10 text-white w-10 h-10 shrink-0 rounded-2xl flex items-center justify-center transition-all active:scale-95"
-                  title="Add Event"
-                >
-                  <span className="material-icons text-[18px]">add</span>
-                </button>
               </div>
             </div>
 
@@ -659,7 +832,7 @@ const CalendarScreen: React.FC = () => {
                         handleEditEvent(event);
                       }
                     }}
-                    className={`relative group rounded-[1.25rem] transition-all cursor-pointer p-5 py-6 mb-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${expandedEventId === event.id
+                    className={`event-card relative group rounded-[1.25rem] transition-all cursor-pointer p-5 py-6 mb-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${expandedEventId === event.id
                       ? 'bg-white/[0.06]'
                       : 'bg-white/[0.03] hover:bg-white/[0.05]'
                       }`}
@@ -744,9 +917,13 @@ const CalendarScreen: React.FC = () => {
                   </div>
                 ))
               ) : (
-                <div className="flex flex-col items-center justify-center h-32 text-center opacity-40">
-                  <span className="material-icons text-3xl text-slate-600 mb-2">event_busy</span>
-                  <p className="text-xs text-slate-500 font-medium">No events for this period</p>
+                <div className="flex flex-col items-center justify-center mt-8">
+                  <EmptyState
+                    icon="event_busy"
+                    title="No events"
+                    description="There are no scheduled activities for this time."
+                    compact
+                  />
                 </div>
               )}
             </div>
@@ -756,6 +933,21 @@ const CalendarScreen: React.FC = () => {
 
 
       {/* Render Portal Modal directly without nested component */}
+      {/* Floating Add Event Button (Visible to all users) */}
+      <div className="fixed top-2 right-4 sm:right-6 lg:right-10 z-[60]">
+        <div className="pointer-events-auto bg-[#1a232f]/80 backdrop-blur-xl shadow-2xl shadow-black/50 border border-white/[0.08] rounded-full p-2">
+          <button
+            type="button"
+            onClick={() => setShowAddEvent(true)}
+            className="flex flex-col items-center justify-center w-[54px] h-[54px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full text-slate-300 hover:text-white hover:bg-white/5"
+            aria-label="Create Event"
+            title="Create Event"
+          >
+            <span className="material-icons text-[26px]">post_add</span>
+          </button>
+        </div>
+      </div>
+
       {/* Add Event Overlay / Modal */}
       {
         showAddEvent && ReactDOM.createPortal(

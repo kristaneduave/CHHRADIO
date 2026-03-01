@@ -1,69 +1,84 @@
 import { supabase } from './supabase';
 import { CalendarEvent, EventType } from '../types';
+import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
+
+const normalizeIds = (ids: Iterable<string>): string[] => Array.from(new Set(ids)).filter(Boolean).sort();
+
+const fetchProfilesByIds = async (ids: string[]) => {
+    const normalized = normalizeIds(ids);
+    if (!normalized.length) return [];
+    const key = `calendar:profiles:${normalized.join(',')}`;
+    const { data, error } = await fetchWithCache(
+        key,
+        () =>
+            supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url, role, nickname')
+                .in('id', normalized),
+        { ttlMs: 60_000, allowStaleWhileRevalidate: true },
+    );
+    if (error) throw error;
+    return data || [];
+};
+
+const hydrateEventsWithProfiles = async (events: any[]): Promise<CalendarEvent[]> => {
+    const userIds = new Set<string>();
+    events.forEach(e => {
+        if (e.covered_by) userIds.add(e.covered_by);
+        if (e.assigned_to) userIds.add(e.assigned_to);
+        if (e.created_by) userIds.add(e.created_by);
+        if (e.coverage_details && Array.isArray(e.coverage_details)) {
+            e.coverage_details.forEach((d: any) => {
+                if (d.user_id) userIds.add(d.user_id);
+            });
+        }
+    });
+
+    const profiles = await fetchProfilesByIds(normalizeIds(userIds));
+    if (!profiles.length) return events as CalendarEvent[];
+
+    return events.map(event => {
+        let enrichedCoverage = event.coverage_details;
+        if (event.coverage_details && Array.isArray(event.coverage_details)) {
+            enrichedCoverage = event.coverage_details.map((d: any) => ({
+                ...d,
+                user: profiles.find(p => p.id === d.user_id),
+            }));
+        }
+
+        return {
+            ...event,
+            covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
+            user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
+                profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
+            creator: event.created_by ? profiles.find(p => p.id === event.created_by) : undefined,
+            coverage_details: enrichedCoverage,
+        };
+    }) as CalendarEvent[];
+};
 
 export const CalendarService = {
     async getEvents(startDate: Date, endDate: Date, filters?: { type?: EventType[] }) {
-        let query = supabase
-            .from('events')
-            .select('*')
-            .gte('end_time', startDate.toISOString())
-            .lte('start_time', endDate.toISOString())
-            .order('start_time', { ascending: true });
+        const typeKey = filters?.type && filters.type.length > 0 ? normalizeIds(filters.type).join(',') : 'all';
+        const { data: events, error } = await fetchWithCache(
+            `calendar:events:${startDate.toISOString()}:${endDate.toISOString()}:${typeKey}`,
+            () => {
+                let query = supabase
+                    .from('events')
+                    .select('*')
+                    .gte('end_time', startDate.toISOString())
+                    .lte('start_time', endDate.toISOString())
+                    .order('start_time', { ascending: true });
 
-        if (filters?.type && filters.type.length > 0) {
-            query = query.in('event_type', filters.type);
-        }
-
-        const { data: events, error } = await query;
+                if (filters?.type && filters.type.length > 0) {
+                    query = query.in('event_type', filters.type);
+                }
+                return query;
+            },
+            { ttlMs: 20_000, allowStaleWhileRevalidate: true },
+        );
         if (error) throw error;
-
-        // Collect all user IDs to fetch (assigned_to, covered_by, and those in coverage_details)
-        const userIds = new Set<string>();
-        events.forEach(e => {
-            if (e.covered_by) userIds.add(e.covered_by);
-            if (e.assigned_to) userIds.add(e.assigned_to);
-
-            // Always fetch creator
-            if (e.created_by) userIds.add(e.created_by);
-
-            // Handle coverage_details
-            if (e.coverage_details && Array.isArray(e.coverage_details)) {
-                e.coverage_details.forEach((d: any) => {
-                    if (d.user_id) userIds.add(d.user_id);
-                });
-            }
-        });
-
-        if (userIds.size > 0) {
-            const { data: profiles, error: profilesError } = await supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url, role, nickname')
-                .in('id', Array.from(userIds));
-
-            if (!profilesError && profiles) {
-                return events.map(event => {
-                    // Enrich coverage_details with user profiles
-                    let enrichedCoverage = event.coverage_details;
-                    if (event.coverage_details && Array.isArray(event.coverage_details)) {
-                        enrichedCoverage = event.coverage_details.map((d: any) => ({
-                            ...d,
-                            user: profiles.find(p => p.id === d.user_id)
-                        }));
-                    }
-
-                    return {
-                        ...event,
-                        covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
-                        user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
-                            profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
-                        creator: event.created_by ? profiles.find(p => p.id === event.created_by) : undefined,
-                        coverage_details: enrichedCoverage
-                    }
-                }) as CalendarEvent[];
-            }
-        }
-
-        return events as CalendarEvent[];
+        return hydrateEventsWithProfiles(events || []);
     },
 
     async createEvent(event: Omit<CalendarEvent, 'id' | 'created_at' | 'created_by' | 'covered_user'>) {
@@ -76,6 +91,10 @@ export const CalendarService = {
             .single();
 
         if (error) throw error;
+        invalidateCacheByPrefix('calendar:events:');
+        invalidateCacheByPrefix('calendar:upcoming:');
+        invalidateCacheByPrefix('calendar:leave:');
+        invalidateCacheByPrefix('calendar:search:');
         return data as CalendarEvent;
     },
 
@@ -91,6 +110,10 @@ export const CalendarService = {
             .single();
 
         if (error) throw error;
+        invalidateCacheByPrefix('calendar:events:');
+        invalidateCacheByPrefix('calendar:upcoming:');
+        invalidateCacheByPrefix('calendar:leave:');
+        invalidateCacheByPrefix('calendar:search:');
         return data as CalendarEvent;
     },
 
@@ -101,6 +124,10 @@ export const CalendarService = {
             .eq('id', id);
 
         if (error) throw error;
+        invalidateCacheByPrefix('calendar:events:');
+        invalidateCacheByPrefix('calendar:upcoming:');
+        invalidateCacheByPrefix('calendar:leave:');
+        invalidateCacheByPrefix('calendar:search:');
     },
 
     // Fetch who is on leave for a specific date
@@ -111,182 +138,82 @@ export const CalendarService = {
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
 
-        const { data: events, error: eventsError } = await supabase
-            .from('events')
-            .select('*')
-            .eq('event_type', 'leave')
-            // Check for overlap: event start <= EOD AND event end >= SOD
-            .lte('start_time', endOfDay.toISOString())
-            .gte('end_time', startOfDay.toISOString());
+        const { data: events, error: eventsError } = await fetchWithCache(
+            `calendar:leave:${startOfDay.toISOString()}:${endOfDay.toISOString()}`,
+            () =>
+                supabase
+                    .from('events')
+                    .select('*')
+                    .eq('event_type', 'leave')
+                    .lte('start_time', endOfDay.toISOString())
+                    .gte('end_time', startOfDay.toISOString()),
+            { ttlMs: 20_000, allowStaleWhileRevalidate: true },
+        );
 
         if (eventsError) throw eventsError;
         if (!events || events.length === 0) return [];
-
-        // Get unique user IDs involved
-        const userIds = new Set<string>();
-        events.forEach(e => {
-            if (e.assigned_to) userIds.add(e.assigned_to);
-            userIds.add(e.created_by);
-            if (e.covered_by) userIds.add(e.covered_by);
-
-            if (e.coverage_details && Array.isArray(e.coverage_details)) {
-                e.coverage_details.forEach((d: any) => {
-                    if (d.user_id) userIds.add(d.user_id);
-                });
-            }
-        });
-
-        const { data: profiles, error: profilesError } = await supabase
-            .from('profiles')
-            .select('id, full_name, role, avatar_url, nickname')
-            .in('id', Array.from(userIds));
-
-        if (profilesError) throw profilesError;
-
-        // Merge profile data into events
-        return events.map(event => {
-            const userId = event.assigned_to || event.created_by;
-            const profile = profiles?.find(p => p.id === userId);
-            const coverProfile = event.covered_by ? profiles?.find(p => p.id === event.covered_by) : undefined;
-            const creatorProfile = event.created_by ? profiles?.find(p => p.id === event.created_by) : undefined;
-
-            // Enrich coverage_details
-            let enrichedCoverage = event.coverage_details;
-            if (event.coverage_details && Array.isArray(event.coverage_details)) {
-                enrichedCoverage = event.coverage_details.map((d: any) => ({
-                    ...d,
-                    user: profiles?.find(p => p.id === d.user_id)
-                }));
-            }
-
-            return {
-                ...event,
-                user: profile,
-                covered_user: coverProfile,
-                creator: creatorProfile,
-                coverage_details: enrichedCoverage
-            };
-        });
+        return hydrateEventsWithProfiles(events);
     },
 
     // We can keep this or deprecate it since the agenda view might use filter
     async getUpcomingEvents(limit: number = 5) {
         const now = new Date();
-        const { data, error } = await supabase
-            .from('events')
-            .select('*')
-            .gte('end_time', now.toISOString())
-            .order('start_time', { ascending: true })
-            .limit(limit);
-
-        // We should probably fetch profiles here too if we want avatars in upcoming
-        if (data && data.length > 0) {
-            // Simplified fetch just for covered_by/assigned_to
-            const userIds = new Set<string>();
-            data.forEach(e => {
-                if (e.covered_by) userIds.add(e.covered_by);
-                if (e.assigned_to) userIds.add(e.assigned_to);
-                if (e.assigned_to) userIds.add(e.assigned_to);
-                if (e.created_by) userIds.add(e.created_by);
-            });
-
-            if (userIds.size > 0) {
-                const { data: profiles } = await supabase
-                    .from('profiles')
-                    .select('id, full_name, avatar_url, role, nickname')
-                    .in('id', Array.from(userIds));
-
-                if (profiles) {
-                    return data.map(event => ({
-                        ...event,
-                        covered_user: event.covered_by ? profiles.find(p => p.id === event.covered_by) : undefined,
-                        user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
-                            profiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined
-                    })) as CalendarEvent[];
-                }
-            }
-        }
-
+        const { data, error } = await fetchWithCache(
+            `calendar:upcoming:${limit}:${now.toISOString().slice(0, 16)}`,
+            () =>
+                supabase
+                    .from('events')
+                    .select('*')
+                    .gte('end_time', now.toISOString())
+                    .order('start_time', { ascending: true })
+                    .limit(limit),
+            { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        );
         if (error) throw error;
-        return data as CalendarEvent[];
+        return hydrateEventsWithProfiles(data || []);
     },
 
     async searchEvents(query: string) {
         if (!query) return [];
+        const normalizedQuery = query.trim().toLowerCase();
+        if (!normalizedQuery) return [];
+        const { data: cached, error: cachedError } = await fetchWithCache(
+            `calendar:search:${normalizedQuery}`,
+            async () => {
+                // 1. Find users matching the query
+                const { data: profiles, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('id, full_name, avatar_url, role, nickname')
+                    .ilike('full_name', `%${normalizedQuery}%`);
 
-        // 1. Find users matching the query
-        const { data: profiles, error: profileError } = await supabase
-            .from('profiles')
-            .select('id, full_name, avatar_url, role, nickname')
-            .ilike('full_name', `%${query}%`);
+                if (profileError) throw profileError;
 
-        if (profileError) throw profileError;
+                let userIds: string[] = [];
+                if (profiles) {
+                    userIds = profiles.map(p => p.id);
+                }
 
-        let userIds: string[] = [];
-        if (profiles) {
-            userIds = profiles.map(p => p.id);
-        }
+                let eventQuery = supabase
+                    .from('events')
+                    .select('*')
+                    .gte('end_time', new Date().toISOString())
+                    .order('start_time', { ascending: true });
 
-        // 2. Find events where:
-        //    - Title matches query OR
-        //    - Description matches query OR
-        //    - Assigned_to is in userIds OR
-        //    - Created_by is in userIds (for leaves)
+                const textConditions = `title.ilike.%${normalizedQuery}%,description.ilike.%${normalizedQuery}%`;
 
-        let eventQuery = supabase
-            .from('events')
-            .select('*')
-            .gte('end_time', new Date().toISOString()) // Only future events? Or all? Let's say all future for now as user asked for "dates where that consultant WOULD BE on leave"
-            .order('start_time', { ascending: true });
+                let orCondition = textConditions;
+                if (userIds.length > 0) {
+                    const userConditions = `assigned_to.in.(${userIds.join(',')}),created_by.in.(${userIds.join(',')})`;
+                    orCondition = `${textConditions},${userConditions}`;
+                }
 
-        // Currently Supabase JS client doesn't support complex ORs easily with joined tables in one go without raw SQL or multiple queries.
-        // We will fetch based on text match OR user match.
-
-        // Simple text match on event fields
-        const textConditions = `title.ilike.%${query}%,description.ilike.%${query}%`;
-
-        // If we found users, add their IDs to the OR condition
-        let orCondition = textConditions;
-        if (userIds.length > 0) {
-            // assigned_to.in.(${userIds}),created_by.in.(${userIds})
-            // proper syntax for .or() is `column.operator.value,column.operator.value`
-            const userConditions = `assigned_to.in.(${userIds.join(',')}),created_by.in.(${userIds.join(',')})`;
-            orCondition = `${textConditions},${userConditions}`;
-        }
-
-        const { data: events, error: eventError } = await eventQuery.or(orCondition);
-
-        if (eventError) throw eventError;
-
-        // 3. hydration (profiles)
-        // We might need to fetch MORE profiles if the events returned involve users NOT in our initial `profiles` search
-        // For simplicity, let's just re-fetch all needed profiles for the result set.
-        const allUserIds = new Set<string>();
-        events?.forEach(e => {
-            if (e.covered_by) allUserIds.add(e.covered_by);
-            if (e.assigned_to) allUserIds.add(e.assigned_to);
-            if (e.assigned_to) allUserIds.add(e.assigned_to);
-            if (e.assigned_to) allUserIds.add(e.assigned_to);
-            if (e.created_by) allUserIds.add(e.created_by);
-        });
-
-        if (allUserIds.size > 0) {
-            const { data: allProfiles } = await supabase
-                .from('profiles')
-                .select('id, full_name, avatar_url, role, nickname')
-                .in('id', Array.from(allUserIds));
-
-            if (allProfiles) {
-                return events?.map(event => ({
-                    ...event,
-                    covered_user: event.covered_by ? allProfiles.find(p => p.id === event.covered_by) : undefined,
-                    user: (event.assigned_to || (event.event_type === 'leave' ? event.created_by : undefined)) ?
-                        allProfiles.find(p => p.id === (event.assigned_to || event.created_by)) : undefined,
-                    creator: event.created_by ? allProfiles.find(p => p.id === event.created_by) : undefined
-                })) as CalendarEvent[];
-            }
-        }
-
-        return events as CalendarEvent[];
+                const { data: events, error: eventError } = await eventQuery.or(orCondition);
+                if (eventError) throw eventError;
+                return events || [];
+            },
+            { ttlMs: 15_000, allowStaleWhileRevalidate: true },
+        );
+        if (cachedError) throw cachedError;
+        return hydrateEventsWithProfiles(cached || []);
     }
 };

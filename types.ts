@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed' | 'live-map';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed' | 'live-map' | 'monthly-census';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 
 export type ToastKind = 'success' | 'error' | 'info';
@@ -228,6 +228,14 @@ export interface Profile {
   avatar_url: string | null;
   role: UserRole; // Added role field
   nickname?: string | null;
+  title?: string | null;
+  motto?: string | null;
+  work_mode?: string | null;
+  main_modality?: string | null;
+  faction?: string | null;
+  map_status?: string | null;
+  avatar_seed?: string | null;
+  active_badges?: string[] | null;
   updated_at: string;
 }
 
@@ -361,6 +369,14 @@ export interface CurrentWorkstationStatus {
   occupant_avatar_url?: string | null;
   occupant_role?: UserRole | null;
   occupant_nickname?: string | null;
+  occupant_title?: string | null;
+  occupant_motto?: string | null;
+  occupant_work_mode?: string | null;
+  occupant_main_modality?: string | null;
+  occupant_faction?: string | null;
+  occupant_map_status?: string | null;
+  occupant_avatar_seed?: string | null;
+  occupant_active_badges?: string[] | null;
 }
 
 export interface AssignOccupancyPayload {
@@ -467,14 +483,29 @@ export interface ResidentMonthlyCensus {
   id: string;
   resident_id: string;
   report_month: string;
+  rotation: string;
+  dictation_met: boolean;
+  ct_mri_target_met: boolean;
+  msk_pedia_target_met?: boolean | null;
+  comments?: string | null;
   interesting_cases_submitted: number;
   notes_count: number;
   fuente_ct_census: number;
   fuente_mri_census: number;
   fuente_xray_census: number;
+  mandaue_ct_census: number;
+  mandaue_mri_census: number;
   plates_count: number;
+  lates_count: number;
+  overall_score: number;
   has_absence: boolean;
   absence_days: number;
+  fuente_ct_evidence_url?: string | null;
+  fuente_mri_evidence_url?: string | null;
+  fuente_xray_evidence_url?: string | null;
+  mandaue_ct_evidence_url?: string | null;
+  mandaue_mri_evidence_url?: string | null;
+  attendance_evidence_url?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -482,14 +513,29 @@ export interface ResidentMonthlyCensus {
 export interface ResidentMonthlyCensusInput {
   resident_id: string;
   report_month: string;
+  rotation: string;
+  dictation_met: boolean;
+  ct_mri_target_met: boolean;
+  msk_pedia_target_met?: boolean | null;
+  comments?: string | null;
   interesting_cases_submitted: number;
   notes_count: number;
   fuente_ct_census: number;
   fuente_mri_census: number;
   fuente_xray_census: number;
+  mandaue_ct_census: number;
+  mandaue_mri_census: number;
   plates_count: number;
+  lates_count: number;
+  overall_score: number;
   has_absence: boolean;
   absence_days: number;
+  fuente_ct_evidence_url?: string | null;
+  fuente_mri_evidence_url?: string | null;
+  fuente_xray_evidence_url?: string | null;
+  mandaue_ct_evidence_url?: string | null;
+  mandaue_mri_evidence_url?: string | null;
+  attendance_evidence_url?: string | null;
 }
 
 export type AccountAccessRequestRole = 'resident' | 'consultant' | 'fellow';
@@ -577,15 +623,15 @@ export interface NeedleScenario {
 
 export interface NeedleRunEvent {
   event_type:
-    | 'start'
-    | 'angle_change'
-    | 'depth_change'
-    | 'commit_attempt'
-    | 'risk_enter'
-    | 'risk_exit'
-    | 'success'
-    | 'timeout'
-    | 'abandon';
+  | 'start'
+  | 'angle_change'
+  | 'depth_change'
+  | 'commit_attempt'
+  | 'risk_enter'
+  | 'risk_exit'
+  | 'success'
+  | 'timeout'
+  | 'abandon';
   event_at: string;
   meta: Record<string, unknown>;
 }

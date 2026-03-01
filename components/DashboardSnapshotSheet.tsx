@@ -1,7 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { DashboardSnapshotData, Screen } from '../types';
 import LoadingState from './LoadingState';
+import { Skeleton } from './Skeleton';
+import AnimatedCounter from './AnimatedCounter';
 
+const SnapshotSheetSkeleton = () => (
+  <div className="space-y-2.5 animate-in fade-in duration-500">
+    {[1, 2].map((i) => (
+      <div key={i} className="w-full rounded-xl border border-white/10 bg-white/[0.05] p-3 flex flex-col gap-2.5">
+        <Skeleton variant="text" className="w-20 h-3" />
+        <Skeleton variant="text" className="w-32 h-4" />
+        <Skeleton variant="text" className="w-2/3 h-3" />
+      </div>
+    ))}
+  </div>
+);
 interface DashboardSnapshotSheetProps {
   isOpen: boolean;
   loading: boolean;
@@ -83,9 +96,7 @@ const DashboardSnapshotSheet: React.FC<DashboardSnapshotSheetProps> = ({
 
         <div className="space-y-2.5 overflow-y-auto pr-1 max-h-[calc(70vh-78px)]">
           {loading ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-2">
-              <LoadingState title="Loading updates..." compact />
-            </div>
+            <SnapshotSheetSkeleton />
           ) : (
             <>
               {hasAnnouncements ? (
@@ -98,7 +109,9 @@ const DashboardSnapshotSheet: React.FC<DashboardSnapshotSheetProps> = ({
                   aria-label="Open news"
                 >
                   <h3 className="mb-1 text-xs font-bold text-slate-200">News</h3>
-                  <p className="text-sm font-semibold text-white">{data?.newAnnouncementsCount} new posts</p>
+                  <p className="text-sm font-semibold text-white">
+                    <AnimatedCounter value={data?.newAnnouncementsCount || 0} /> new posts
+                  </p>
                   <p className="text-[11px] text-slate-400 truncate">{data?.latestAnnouncementTitle || 'New announcement'}</p>
                 </button>
               ) : null}
@@ -113,7 +126,9 @@ const DashboardSnapshotSheet: React.FC<DashboardSnapshotSheetProps> = ({
                   aria-label="Open case library"
                 >
                   <h3 className="mb-1 text-xs font-bold text-slate-200">Case Library</h3>
-                  <p className="text-sm font-semibold text-white">{data?.newCaseLibraryCount} new published cases</p>
+                  <p className="text-sm font-semibold text-white">
+                    <AnimatedCounter value={data?.newCaseLibraryCount || 0} /> new published cases
+                  </p>
                   <p className="text-[11px] text-slate-400 truncate">{data?.latestCaseTitle || 'New published case'}</p>
                 </button>
               ) : null}
@@ -128,7 +143,9 @@ const DashboardSnapshotSheet: React.FC<DashboardSnapshotSheetProps> = ({
                   aria-label="Open calendar updates"
                 >
                   <h3 className="mb-1 text-xs font-bold text-slate-200">Calendar</h3>
-                  <p className="text-sm font-semibold text-white">{data?.newCalendarCount} new events posted</p>
+                  <p className="text-sm font-semibold text-white">
+                    <AnimatedCounter value={data?.newCalendarCount || 0} /> new events posted
+                  </p>
                   <p className="text-[11px] text-slate-400 truncate">{data?.latestCalendarTitle || 'New calendar event'}</p>
                 </button>
               ) : null}
