@@ -17,6 +17,7 @@ type EvidenceKey =
   | 'mandaue_ct'
   | 'mandaue_mri'
   | 'attendance';
+type ModalSectionKey = 'census' | 'productivity' | 'status' | 'evidence';
 
 interface MonthlyCensusFormState {
   month: string;
@@ -82,7 +83,7 @@ const MonthlyCensusModal: React.FC<MonthlyCensusModalProps> = ({ isOpen, onClose
   const [evidenceFiles, setEvidenceFiles] = useState<Partial<Record<EvidenceKey, File>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({
+  const [expandedSections, setExpandedSections] = useState<Record<ModalSectionKey, boolean>>({
     census: true,
     productivity: false,
     status: false,
@@ -272,6 +273,11 @@ const MonthlyCensusModal: React.FC<MonthlyCensusModalProps> = ({ isOpen, onClose
     return {
       resident_id: residentId,
       report_month: reportMonth,
+      rotation: 'General Radiology',
+      dictation_met: false,
+      ct_mri_target_met: false,
+      msk_pedia_target_met: null,
+      comments: null,
       interesting_cases_submitted: interestingCasesSubmitted,
       notes_count: notesCount,
       fuente_ct_census: fuenteCtCensus,
@@ -409,12 +415,12 @@ const MonthlyCensusModal: React.FC<MonthlyCensusModalProps> = ({ isOpen, onClose
     </div>
   );
 
-  const toggleSection = (section: keyof typeof expandedSections) => {
+  const toggleSection = (section: ModalSectionKey) => {
     setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   const renderSection = (params: {
-    keyName: keyof typeof expandedSections;
+    keyName: ModalSectionKey;
     title: string;
     children: React.ReactNode;
   }) => {

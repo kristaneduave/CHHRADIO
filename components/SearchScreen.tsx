@@ -116,13 +116,13 @@ const getPrimaryMeta = (rawCase: any, fallbackType?: string) => {
   return 'Case';
 };
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
+const withTimeout = async <T,>(promise: PromiseLike<T> | T, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<T>((_, reject) => {
     timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
   });
   try {
-    return await Promise.race([promise, timeoutPromise]);
+    return await Promise.race([Promise.resolve(promise), timeoutPromise]);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
@@ -781,4 +781,3 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
 };
 
 export default SearchScreen;
-

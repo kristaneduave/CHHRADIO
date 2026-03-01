@@ -32,7 +32,7 @@ const isInFlightEntry = (value: unknown): value is InFlightEntry => {
 
 export const fetchWithCache = async <T>(
   key: string,
-  fetcher: () => Promise<T>,
+  fetcher: () => T | PromiseLike<T>,
   options?: FetchWithCacheOptions,
 ): Promise<T> => {
   const ttlMs = options?.ttlMs ?? DEFAULT_TTL_MS;
@@ -61,7 +61,7 @@ export const fetchWithCache = async <T>(
     return activeInFlight.promise as Promise<T>;
   }
 
-  const request = fetcher()
+  const request = Promise.resolve(fetcher())
     .then((value) => {
       cacheStore.set(key, {
         value,

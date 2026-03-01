@@ -177,7 +177,7 @@ export const CalendarService = {
         if (!query) return [];
         const normalizedQuery = query.trim().toLowerCase();
         if (!normalizedQuery) return [];
-        const { data: cached, error: cachedError } = await fetchWithCache(
+        const cached = await fetchWithCache(
             `calendar:search:${normalizedQuery}`,
             async () => {
                 // 1. Find users matching the query
@@ -213,7 +213,6 @@ export const CalendarService = {
             },
             { ttlMs: 15_000, allowStaleWhileRevalidate: true },
         );
-        if (cachedError) throw cachedError;
         return hydrateEventsWithProfiles(cached || []);
     }
 };
