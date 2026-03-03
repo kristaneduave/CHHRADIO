@@ -12,6 +12,12 @@ const mapAuthError = (message: string): string => {
   return message;
 };
 
+const resolveOAuthRedirectUrl = (): string => {
+  const configured = (import.meta.env.VITE_AUTH_REDIRECT_URL || '').trim();
+  if (configured) return configured;
+  return window.location.origin;
+};
+
 interface LoginScreenProps {
   onContinueWithoutAuth?: () => void;
 }
@@ -45,7 +51,7 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
     try {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: window.location.origin },
+        options: { redirectTo: resolveOAuthRedirectUrl() },
       });
       if (oauthError) throw oauthError;
     } catch (err: any) {

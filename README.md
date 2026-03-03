@@ -12,6 +12,7 @@
 2. Add environment variables in `.env.local`:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_AUTH_REDIRECT_URL` (optional, recommended for production OAuth callback; example: `https://your-app-domain.com`)
 3. Start dev server:
    `npm run dev`
 
@@ -21,6 +22,7 @@
 - Disable email confirmation if you want immediate email login without verification.
 - Enable phone sign-in and configure an SMS provider (for OTP delivery).
 - Keep Google provider configured if using Google login.
+- Set Supabase Auth `Site URL` and allowed redirect URLs to your deployed app URL to avoid localhost callback issues for end users.
 - This app UI is admin-managed access only: self-sign-up is removed from the login screen.
 
 ## Scripts
