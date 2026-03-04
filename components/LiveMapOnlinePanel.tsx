@@ -68,8 +68,8 @@ const OnlineUserRow = React.memo(function OnlineUserRow({
             </div>
           )}
           <span className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 border-2 border-[#0a0f18] rounded-full shadow-[0_0_8px_rgba(0,0,0,0.8)] ${presenceState === 'active' ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]' :
-              presenceState === 'stale' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]' :
-                'bg-slate-400'
+            presenceState === 'stale' ? 'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]' :
+              'bg-slate-400'
             }`}></span>
         </div>
         <div className="min-w-0 flex-1">
@@ -338,7 +338,7 @@ const LiveMapOnlinePanel: React.FC<LiveMapOnlinePanelProps> = ({
   });
 
   return (
-    <div className="w-full xl:w-80 shrink-0 bg-[#0a0f18]/40 backdrop-blur-xl flex-col relative z-10 h-64 xl:h-auto border-t xl:border-t-0 xl:border-l border-white/5 hidden xl:flex shadow-2xl overflow-hidden before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_100%_0%,rgba(6,182,212,0.05),transparent_40%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.05),transparent_30%)] before:pointer-events-none">
+    <div className="w-full xl:w-80 shrink-0 bg-[#0a0f18]/40 backdrop-blur-xl flex-col relative z-10 h-64 xl:h-auto border-t xl:border-t-0 xl:border-l border-white/5 hidden xl:flex shadow-2xl overflow-hidden">
       <div className="px-6 py-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-black/40 relative z-10">
         <h3 className="text-[13px] font-black flex items-center gap-2 uppercase tracking-[0.2em] text-slate-200 drop-shadow-md">
           <span className="relative flex h-2.5 w-2.5">

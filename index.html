@@ -120,6 +120,50 @@
             font-feature-settings: "cv11" 1, "ss01" 1;
         }
 
+        /* Option A: Ambient Imaging Glow Global Background */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            z-index: -1;
+            pointer-events: none;
+            border-radius: 50%;
+            filter: blur(140px);
+            opacity: 0.12;
+            animation: pulse-glow 12s ease-in-out infinite alternate;
+        }
+
+        body::before {
+            top: -20%;
+            left: -10%;
+            width: 70vw;
+            height: 70vh;
+            background: rgb(6, 182, 212);
+            /* Cyan */
+        }
+
+        body::after {
+            bottom: -20%;
+            right: -10%;
+            width: 60vw;
+            height: 60vh;
+            background: rgb(16, 185, 129);
+            /* Emerald */
+            animation-delay: -6s;
+        }
+
+        @keyframes pulse-glow {
+            0% {
+                opacity: 0.08;
+                transform: scale(0.9);
+            }
+
+            100% {
+                opacity: 0.16;
+                transform: scale(1.1);
+            }
+        }
+
         .material-icons {
             font-family: "Material Symbols Rounded";
             font-weight: normal;

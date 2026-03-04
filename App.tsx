@@ -37,6 +37,7 @@ const TRACKABLE_SCREENS: Screen[] = [
   'upload',
   'quiz',
   'residents-corner',
+  'resident-endorsements',
   'profile',
 ];
 
@@ -48,6 +49,7 @@ const ProfileScreen = lazy(() => import('./components/ProfileScreen'));
 const AnnouncementsScreen = lazy(() => import('./components/AnnouncementsScreen'));
 const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
 const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
+const ResidentEndorsementsScreen = lazy(() => import('./components/ResidentEndorsementsScreen'));
 const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
 const LiveMapScreen = lazy(() => import('./components/LiveMapScreen'));
 const MonthlyCensusPage = lazy(() => import('./components/MonthlyCensusPage'));
@@ -326,7 +328,14 @@ const App: React.FC = () => {
           />
         );
       case 'residents-corner':
-        return <ResidentsCornerScreen onOpenMonthlyCensus={() => navigateToScreen('monthly-census')} />;
+        return (
+          <ResidentsCornerScreen
+            onOpenMonthlyCensus={() => navigateToScreen('monthly-census')}
+            onOpenResidentEndorsements={() => navigateToScreen('resident-endorsements')}
+          />
+        );
+      case 'resident-endorsements':
+        return <ResidentEndorsementsScreen onBack={() => navigateToScreen('residents-corner')} />;
       case 'monthly-census':
         return (
           <MonthlyCensusPage

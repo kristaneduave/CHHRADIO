@@ -33,7 +33,7 @@ const ToastHost: React.FC = () => {
   };
 
   return (
-    <div className="pointer-events-none fixed top-4 right-4 z-[1000] flex w-[min(90vw,380px)] flex-col gap-2">
+    <div className="pointer-events-none fixed bottom-24 left-1/2 -translate-x-1/2 z-[1000] flex w-[min(90vw,380px)] flex-col items-center gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}

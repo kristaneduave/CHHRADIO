@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { QUICK_ACTIONS } from '../constants';
 import { Screen, SubmissionType } from '../types';
-
+import { UploadTypePickerModal } from './UploadTypePickerModal';
+import { OrbitalButton } from './OrbitalButton';
+import { toastSuccess } from '../utils/toast';
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
   onStartUpload: (submissionType: SubmissionType) => void;
@@ -64,10 +67,29 @@ const BUTTON_LABELS: Record<string, string> = {
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   const [isUploadTypePickerOpen, setIsUploadTypePickerOpen] = useState(false);
-  const [isLogoPulsing, setIsLogoPulsing] = useState(false);
+  const [isLogoSyncing, setIsLogoSyncing] = useState(false);
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [isOverdrive, setIsOverdrive] = useState(false);
+  const [hoveredActionIndex, setHoveredActionIndex] = useState<number | null>(null);
+  const [radius, setRadius] = useState(135);
 
   const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "Resident Hub"];
   const orderedActions = [...QUICK_ACTIONS].sort((a, b) => buttonOrder.indexOf(a.label) - buttonOrder.indexOf(b.label));
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 400) {
+        setRadius(115);
+      } else if (window.innerWidth < 640) {
+        setRadius(130);
+      } else {
+        setRadius(145);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!isUploadTypePickerOpen) return;
@@ -80,45 +102,134 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
 
   return (
     <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
+      {/* Fiery Overdrive Screen Overlay (Optimized for mobile GPU) */}
+      <div
+        className={`pointer-events-none fixed inset-0 h-[100dvh] w-screen z-[999] transition-opacity duration-500 will-change-[opacity] ${isOverdrive ? 'opacity-100 animate-pulse' : 'opacity-0'}`}
+        style={{
+          boxShadow: 'inset 0 0 80px rgba(239, 68, 68, 0.3)',
+          background: 'radial-gradient(circle at center, transparent 50%, rgba(220, 38, 38, 0.15) 100%)'
+        }}
+      >
+        <div className="absolute inset-0 border-[2px] border-red-500/40" />
+      </div>
       <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0">
-        <h1 className="text-5xl sm:text-6xl font-black tracking-[0.1em] text-white uppercase drop-shadow-[0_4px_10px_rgba(0,0,0,0.5)] leading-none">RADCORE</h1>
-        <p className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 drop-shadow-md">CHH Radiology Residency Portal</p>
+        <motion.h1
+          initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
+          animate={{
+            x: [0, -4, 4, -2, 2, 0],
+            filter: [
+              'drop-shadow(0 0 0 transparent)',
+              'drop-shadow(4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-4px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(4px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(2px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-2px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-1px 0 0 rgba(239, 68, 68, 1)) drop-shadow(1px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
+            ]
+          }}
+          transition={{
+            duration: 0.5,
+            ease: "linear",
+            times: [0, 0.2, 0.4, 0.6, 0.8, 1]
+          }}
+          className="text-5xl sm:text-6xl font-black text-white uppercase leading-none tracking-[0.1em] select-none"
+        >
+          RADCORE
+        </motion.h1>
+        <motion.p
+          initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
+          animate={{
+            x: [0, 6, -6, 3, -3, 0],
+            filter: [
+              'drop-shadow(0 0 0 transparent)',
+              'drop-shadow(-4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(4px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-4px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-2px 0 0 rgba(239, 68, 68, 1)) drop-shadow(2px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(1px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-1px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' /* matches default drop-shadow-md */
+            ]
+          }}
+          transition={{
+            duration: 0.5,
+            delay: 0.1, /* slight offset for visual cascade */
+            ease: "linear",
+            times: [0, 0.2, 0.4, 0.6, 0.8, 1]
+          }}
+          className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 mt-2 select-none"
+        >
+          CHH Radiology Residency Portal
+        </motion.p>
       </header>
 
-      <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 pb-[max(6rem,calc(env(safe-area-inset-bottom)+5rem))] overflow-y-auto w-[100vw] overflow-x-hidden">
+      <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 overflow-y-auto w-[100vw] overflow-x-hidden">
         <div className="relative w-[320px] h-[320px] flex items-center justify-center mb-8">
 
-          {/* Orbital Rings Decoration */}
-          <div className={`absolute inset-0 m-auto w-[250px] h-[250px] rounded-full border-[1.5px] border-white/5 border-dashed pointer-events-none transition-all duration-700 ${isLogoPulsing ? 'animate-[spin_2s_linear_infinite] border-sky-400/40 scale-105' : 'animate-[spin_40s_linear_infinite]'}`} />
-          <div className="absolute inset-0 m-auto w-[270px] h-[270px] rounded-full border border-sky-500/5 pointer-events-none" />
-          <div className="absolute inset-0 m-auto w-[190px] h-[190px] rounded-full border border-white/5 pointer-events-none" />
+          {/* Neural Network SVG Connecting Lines */}
+          <svg className="absolute inset-0 m-auto w-[320px] h-[320px] pointer-events-none z-10" style={{ overflow: 'visible' }}>
+            {orderedActions.map((action, index) => {
+              const angle = (index * (360 / orderedActions.length)) - 90;
+              const angleInRad = (angle * Math.PI) / 180;
+              const targetX = 160 + Math.cos(angleInRad) * radius;
+              const targetY = 160 + Math.sin(angleInRad) * radius;
 
-          {/* Dark Glowing Backdrop */}
-          <div className="absolute inset-0 m-auto w-[104px] h-[104px] rounded-full bg-[#070b12]/30 border border-sky-500/10 shadow-[0_0_15px_rgba(34,211,238,0.08)] z-10 backdrop-blur-sm" />
+              const isHovered = hoveredActionIndex === index;
+              const style = NEW_BUTTON_STYLES[action.label];
+              const strokeClass = (style?.colorClass || 'text-slate-300').replace('text-', 'stroke-');
 
-          {/* Central Logo */}
+              // Calculate SVG Start Point (Outside Central Logo: ~54px Radius)
+              const startRadius = 54;
+              const startX = 160 + Math.cos(angleInRad) * startRadius;
+              const startY = 160 + Math.sin(angleInRad) * startRadius;
+
+              // Calculate SVG End Point (Before Orbital Button: ~28px smaller than orbit radius)
+              const endRadius = radius - 28;
+              const endX = 160 + Math.cos(angleInRad) * endRadius;
+              const endY = 160 + Math.sin(angleInRad) * endRadius;
+
+              return (
+                <line
+                  key={`line-${action.label}`}
+                  x1={startX} y1={startY} x2={endX} y2={endY}
+                  strokeDasharray="2 4"
+                  className={`transition-all duration-300 ${isHovered ? `${strokeClass} stroke-[1.5px] opacity-40 drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]` : 'stroke-white/5 stroke-[1px] opacity-10'}`}
+                />
+              )
+            })}
+          </svg>
+
           <button
             onClick={() => {
-              if (isLogoPulsing) return;
-              setIsLogoPulsing(true);
-              setTimeout(() => setIsLogoPulsing(false), 2000);
+              const newCount = logoClickCount + 1;
+              setLogoClickCount(newCount);
+
+              if (newCount >= 3) { // Trigger on 3 or more
+                setIsLogoSyncing(true);
+                setTimeout(() => {
+                  setLogoClickCount(0);
+                  setIsLogoSyncing(false);
+                }, 2500);
+              }
             }}
-            className="absolute inset-0 m-auto w-28 h-28 flex flex-col items-center justify-center z-20 outline-none hover:scale-105 active:scale-95 transition-transform cursor-pointer select-none rounded-full"
+            className="peer absolute inset-0 m-auto w-[120px] h-[120px] flex flex-col items-center justify-center z-50 outline-none transition-all duration-200 cursor-pointer select-none rounded-full group"
             style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
           >
-            <div className={`absolute inset-0 rounded-full bg-sky-500/0 transition-all duration-500 ${isLogoPulsing ? 'animate-logoPulse' : ''}`} />
             <img
               src="/logo-radcore.svg"
               alt="CHH RadCore logo"
               draggable={false}
-              className={`h-28 w-28 object-contain transition-all duration-300 pointer-events-none select-none ${isLogoPulsing ? 'drop-shadow-[0_0_35px_rgba(34,211,238,1)] scale-110 brightness-150' : 'drop-shadow-[0_0_15px_rgba(34,211,238,0.3)]'}`}
+              className={`h-[116px] w-[116px] object-contain transition-all duration-300 pointer-events-none select-none z-50 group-active:brightness-150 group-active:animate-glitch group-active:scale-[0.98] ${isLogoSyncing ? 'animate-glitch brightness-150' : 'drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]'}`}
             />
           </button>
 
+          {/* Solid Dark Backdrop (hides lines passing underneath, perfectly matches app background) */}
+          <div className="absolute inset-0 m-auto w-[112px] h-[112px] rounded-full bg-app z-40 pointer-events-none" />
+
+          {/* Refined Premium Orbital Rings */}
+          <div className={`absolute inset-0 m-auto w-[260px] h-[260px] rounded-full border-[1.5px] pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite]' : 'border-white/5 animate-[spin_160s_linear_infinite]'}`} />
+          <div className={`absolute inset-0 m-auto w-[290px] h-[290px] rounded-full border-[1.5px] border-dashed pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse]' : 'border-white/5 animate-[spin_200s_linear_infinite_reverse]'}`} />
+          <div className={`absolute inset-0 m-auto w-[210px] h-[210px] rounded-full border pointer-events-none transition-all duration-1000 z-10 border-white/5`} />
+
           {/* Orbiting Action Buttons */}
           {orderedActions.map((action, index) => {
-            const angle = (index * (360 / orderedActions.length)) - 90; // Start Top (-90deg)
-            const radius = 125; // Distance from center
             const style = NEW_BUTTON_STYLES[action.label] || {
               colorClass: 'text-slate-300',
               bgClass: 'bg-white/10',
@@ -127,124 +238,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
             };
 
             return (
-              <div
+              <OrbitalButton
                 key={action.label}
-                className="absolute inset-0 m-auto w-16 h-16 z-30"
-                style={{
-                  transform: `rotate(${angle}deg) translate(${radius}px) rotate(${-angle}deg)`,
+                action={action}
+                index={index}
+                totalElements={orderedActions.length}
+                isLogoSyncing={isLogoSyncing}
+                onClick={() => {
+                  if (action.target === 'upload') {
+                    setIsUploadTypePickerOpen(true);
+                    return;
+                  }
+                  onNavigate(action.target);
                 }}
-              >
-                <button
-                  onClick={() => {
-                    if (action.target === 'upload') {
-                      setIsUploadTypePickerOpen(true);
-                      return;
-                    }
-                    onNavigate(action.target);
-                  }}
-                  className={`w-full h-full rounded-full flex flex-col items-center justify-center transition-all duration-300 hover:scale-[1.15] active:scale-95 group`}
-                  style={{
-                    animation: `fadeInUp 0.5s ease-out forwards ${index * 0.1}s`,
-                    opacity: 0,
-                  }}
-                >
-                  <div className={`w-[56px] h-[56px] rounded-full flex items-center justify-center border-[1.5px] ${style.bgClass} ${style.borderClass} ${style.shadowClass} backdrop-blur-md group-hover:bg-white/10 transition-colors`}>
-                    <span className={`material-icons text-[28px] ${style.colorClass}`}>
-                      {action.icon}
-                    </span>
-                  </div>
-                  {/* Custom Label Layout */}
-                  <div className="absolute -bottom-5 w-28 text-center pointer-events-none">
-                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-300 tracking-widest uppercase group-hover:text-white transition-colors block leading-tight drop-shadow-md">
-                      {BUTTON_LABELS[action.label] || action.label}
-                    </span>
-                  </div>
-                </button>
-              </div>
+                radius={radius}
+                onHover={() => setHoveredActionIndex(index)}
+                onHoverEnd={() => setHoveredActionIndex(null)}
+                displayLabel={BUTTON_LABELS[action.label] || action.label}
+                styleConfig={style}
+              />
             );
           })}
         </div>
       </main>
 
-      {isUploadTypePickerOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Choose upload type"
-        >
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-app/90 backdrop-blur-md transition-opacity"
-            onClick={() => setIsUploadTypePickerOpen(false)}
-          ></div>
-          {/* Modal Container */}
-          <div
-            className="w-full max-w-[320px] bg-[#0a0f18]/80 backdrop-blur-2xl border border-white/10 rounded-[1.75rem] shadow-[0_0_40px_-10px_rgba(0,0,0,0.8)] overflow-hidden relative z-10 animate-in zoom-in-95 duration-200 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Content Area */}
-            <div className="p-5 relative overflow-hidden shrink-0">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-sky-500/10 blur-[50px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
-              <div className="relative z-10 space-y-2.5">
-                <button
-                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
-                  onClick={() => {
-                    setIsUploadTypePickerOpen(false);
-                    onStartUpload('interesting_case');
-                  }}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-[0.85rem] bg-sky-500/10 text-sky-400 flex items-center justify-center border border-sky-500/20 shadow-[0_0_15px_rgba(56,189,248,0.15)] group-hover:shadow-[0_0_20px_rgba(56,189,248,0.25)] transition-all">
-                      <span className="material-icons text-[20px]">library_books</span>
-                    </div>
-                    <span className="block text-[13px] font-bold text-sky-400 group-hover:text-sky-300 transition-colors tracking-widest uppercase">INTERESTING CASE</span>
-                  </div>
-                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                    <span className="material-icons text-white text-[20px]">chevron_right</span>
-                  </div>
-                </button>
-
-                <button
-                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
-                  onClick={() => {
-                    setIsUploadTypePickerOpen(false);
-                    onStartUpload('rare_pathology');
-                  }}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-[0.85rem] bg-rose-500/10 text-rose-400 flex items-center justify-center border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.15)] group-hover:shadow-[0_0_20px_rgba(244,63,94,0.25)] transition-all">
-                      <span className="material-icons text-[20px]">biotech</span>
-                    </div>
-                    <span className="block text-[13px] font-bold text-rose-400 group-hover:text-rose-300 transition-colors tracking-widest uppercase">RARE PATHOLOGY</span>
-                  </div>
-                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                    <span className="material-icons text-white text-[20px]">chevron_right</span>
-                  </div>
-                </button>
-
-                <button
-                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
-                  onClick={() => {
-                    setIsUploadTypePickerOpen(false);
-                    onStartUpload('aunt_minnie');
-                  }}
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-[0.85rem] bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.15)] group-hover:shadow-[0_0_20px_rgba(245,158,11,0.25)] transition-all">
-                      <span className="material-icons text-[20px]">psychology</span>
-                    </div>
-                    <span className="block text-[13px] font-bold text-amber-400 group-hover:text-amber-300 transition-colors tracking-widest uppercase">AUNT MINNIE</span>
-                  </div>
-                  <div className="flex items-center pr-1 opacity-40 group-hover:opacity-100 transition-opacity">
-                    <span className="material-icons text-white text-[20px]">chevron_right</span>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <UploadTypePickerModal
+        isOpen={isUploadTypePickerOpen}
+        onClose={() => setIsUploadTypePickerOpen(false)}
+        onSelect={onStartUpload}
+      />
 
       <style>{`
         @keyframes fadeInUp {
@@ -252,10 +274,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
           to { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        @keyframes logoPulse {
-          0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); background-color: rgba(34, 211, 238, 0.2); }
-          70% { box-shadow: 0 0 0 40px rgba(34, 211, 238, 0); background-color: rgba(34, 211, 238, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); background-color: transparent; }
+        @keyframes glitch {
+          0% { transform: translate(0) scale(1); filter: drop-shadow(0 0 0 transparent); }
+          20% { transform: translate(-1px, 1px) scale(1.02); filter: drop-shadow(2px 0 0 rgba(239, 68, 68, 0.7)) drop-shadow(-2px 0 0 rgba(34, 211, 238, 0.7)); }
+          40% { transform: translate(1px, -1px) scale(1.02); filter: drop-shadow(-2px 0 0 rgba(239, 68, 68, 0.7)) drop-shadow(2px 0 0 rgba(34, 211, 238, 0.7)); }
+          60% { transform: translate(-1px, -1px) scale(1); filter: drop-shadow(1px 0 0 rgba(239, 68, 68, 0.7)) drop-shadow(-1px 0 0 rgba(34, 211, 238, 0.7)); }
+          80% { transform: translate(1px, 1px) scale(1.01); filter: drop-shadow(0 0 0 transparent); }
+          100% { transform: translate(0) scale(1); filter: drop-shadow(0 0 0 transparent); }
+        }
+
+        @keyframes orbitalGlitch {
+          0% { transform: scale(1); box-shadow: 0 0 0 transparent; border-color: rgba(255,255,255,0.05); }
+          10% { transform: scale(1.01) translate(-1px, 1px); border-color: #22d3ee; box-shadow: 0 0 5px #22d3ee, inset 0 0 2px #22d3ee; }
+          30% { transform: scale(0.99) translate(1px, -1px); border-color: #ef4444; box-shadow: 0 0 8px #ef4444, inset 0 0 2px #ef4444; }
+          50% { transform: scale(1.01) translate(-1px, -1px); border-color: #22d3ee; box-shadow: 0 0 5px #22d3ee; opacity: 0.8; }
+          70% { transform: scale(0.99) translate(1px, 1px); border-color: #ef4444; box-shadow: 0 0 8px #ef4444; opacity: 0.5; }
+          100% { transform: scale(1); border-color: rgba(255,255,255,0.05); box-shadow: 0 0 0 transparent; }
+        }
+
+        .animate-glitch {
+          animation: glitch 0.35s cubic-bezier(.25,.46,.45,.94) infinite;
         }
 
         .header-panel {
@@ -275,30 +313,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
             'wght' 500,
             'GRAD' 0,
             'opsz' 24;
-        }
-
-        @media (max-height: 760px) {
-          .quick-link-grid {
-            gap: 0.45rem;
-          }
-
-          .quick-link-card {
-            min-height: 5.05rem;
-          }
-
-          .quick-link-icon {
-            margin-bottom: 0.15rem;
-            padding: 0.45rem;
-          }
-
-          .quick-link-icon .material-icons {
-            font-size: 1.3rem;
-          }
-
-          .quick-link-label {
-            font-size: 0.64rem;
-          }
-
         }
       `}</style>
     </div>

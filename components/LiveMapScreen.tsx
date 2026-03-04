@@ -26,9 +26,7 @@ import OccupantProfileModal from './OccupantProfileModal';
 import OnlineUsersModal from './OnlineUsersModal';
 import LiveMapOnlinePanel from './LiveMapOnlinePanel';
 import LiveMapHeader from './LiveMapHeader';
-import LiveMapFilters from './LiveMapFilters';
 import LiveMapCanvasPanel from './LiveMapCanvasPanel';
-import LiveMapPerfPanel from './LiveMapPerfPanel';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
     PresenceSelectorCache,
@@ -821,13 +819,7 @@ const LiveMapScreen: React.FC = () => {
 
     return (
         <div className="flex-1 w-full bg-[#0a1018] relative animate-in fade-in duration-200" style={{ backgroundColor: '#0a1018' }}>
-            {/* Deep Space Background matching Dashboard */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0a0f18] via-[#0d1624] to-[#04080f] -z-20 pointer-events-none" />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_0%,rgba(6,182,212,0.12),transparent_45%),radial-gradient(circle_at_0%_100%,rgba(16,185,129,0.12),transparent_40%)] -z-10 pointer-events-none" />
 
-            {/* Glowing Rings Background Element */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full border border-sky-500/5 -z-10 pointer-events-none animate-[spin_60s_linear_infinite]" />
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/5 -z-10 pointer-events-none animate-[spin_40s_linear_infinite_reverse]" />
 
             <div className="relative z-10 h-full w-full flex flex-col xl:flex-row pb-12">
                 <div className="flex-1 flex flex-col overflow-hidden xl:border-r border-r-white/10 shadow-[8px_0_30px_rgba(0,0,0,0.5)] bg-[#0a0f18]/30 backdrop-blur-md z-20">
@@ -857,18 +849,7 @@ const LiveMapScreen: React.FC = () => {
                     />
 
                     <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-transparent scrollbar-hide">
-                        <LiveMapFilters
-                            showCoachTip={showCoachTip}
-                            coachKey={COACH_KEY}
-                            workstationQuery={workstationQuery}
-                            workstationFilter={workstationFilter}
-                            filteredCount={filteredWorkstations.length}
-                            totalCount={workstations.length}
-                            onDismissCoachTip={() => setShowCoachTip(false)}
-                            onSetWorkstationQuery={setWorkstationQuery}
-                            onSetWorkstationFilter={setWorkstationFilter}
-                            onPerfSample={handlePerfSample}
-                        />
+
                         {isModerator ? (
                             <div className="xl:hidden mb-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
                                 <div className="flex items-center justify-between">
@@ -953,7 +934,7 @@ const LiveMapScreen: React.FC = () => {
                 />
             </div>
 
-            {LIVE_MAP_PERF_LOG ? <LiveMapPerfPanel samples={perfSamples} /> : null}
+
 
             {showMobileStatusSheet && (
                 <div className="xl:hidden fixed inset-0 z-[120] flex items-end">

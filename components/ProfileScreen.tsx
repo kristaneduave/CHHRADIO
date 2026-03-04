@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { PROFILE_IMAGE } from '../constants';
-import { UserRole } from '../types';
+import { NoteSaveState, UserRole } from '../types';
 import AdminUserManagement from './AdminUserManagement';
 import LoadingButton from './LoadingButton';
 import LoadingState from './LoadingState';
@@ -18,64 +18,16 @@ import {
 } from '../services/newsfeedService';
 import { toastError, toastSuccess } from '../utils/toast';
 import ThemeToggle from './ThemeToggle';
+import { ResidentBadges } from './ResidentBadges';
+import { ProfileEditor } from './ProfileEditor';
+import { MyCaseLibrary } from './MyCaseLibrary';
+import { getMyProfileNote, upsertMyProfileNote } from '../services/profileNotesService';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
   onViewCase?: (caseItem: any) => void; // Added for navigation
 }
 
-const getSubmissionTypeMeta = (submissionType?: string) => {
-  switch (submissionType) {
-    case 'rare_pathology':
-      return {
-        icon: 'biotech',
-        tintClass: 'text-rose-400',
-        boxClass: 'bg-rose-500/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)]',
-        glowClass: 'bg-rose-500/20',
-        unreadCardClass: 'bg-rose-500/[0.08] border border-rose-500/30 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)] hover:bg-rose-500/[0.12]',
-        unreadBadgeClass: 'bg-rose-500/20 text-rose-400 border-rose-500/35',
-      };
-    case 'aunt_minnie':
-      return {
-        icon: 'psychology',
-        tintClass: 'text-amber-400',
-        boxClass: 'bg-amber-500/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.3)]',
-        glowClass: 'bg-amber-500/20',
-        unreadCardClass: 'bg-amber-500/[0.08] border border-amber-500/30 shadow-[0_4px_24px_-8px_rgba(217,119,6,0.25)] hover:bg-amber-500/[0.12]',
-        unreadBadgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/35',
-      };
-    default:
-      return {
-        icon: 'library_books',
-        tintClass: 'text-sky-400',
-        boxClass: 'bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.3)]',
-        glowClass: 'bg-sky-500/20',
-        unreadCardClass: 'bg-sky-500/[0.08] border border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)] hover:bg-sky-500/[0.12]',
-        unreadBadgeClass: 'bg-sky-500/20 text-sky-400 border-sky-500/35',
-      };
-  }
-};
-
-const getPrimaryMeta = (item: any) => {
-  const type = item?.submission_type || 'interesting_case';
-  if (type === 'interesting_case') return 'Interesting Case';
-  if (type === 'rare_pathology') return 'Rare Pathology';
-  if (type === 'aunt_minnie') return 'Aunt Minnie';
-  if (item?.organ_system) return item.organ_system;
-  if (item?.modality) return item.modality;
-  return 'Case';
-};
-
-const getDisplayTitle = (item: any) => {
-  const type = item?.submission_type || 'interesting_case';
-  if (type === 'aunt_minnie') {
-    return String(item?.findings || item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Aunt Minnie').toUpperCase();
-  }
-  if (type === 'rare_pathology') {
-    return String(item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Rare Pathology').toUpperCase();
-  }
-  return String(item?.analysis_result?.impression || item?.diagnosis || item?.title || 'Interesting Case').toUpperCase();
-};
 
 const buildFallbackNickname = (fullName?: string, username?: string, email?: string | null): string => {
   const byName = String(fullName || '').trim();
@@ -85,6 +37,21 @@ const buildFallbackNickname = (fullName?: string, username?: string, email?: str
   const byEmail = String(email || '').split('@')[0].trim();
   if (byEmail.length >= 3) return byEmail;
   return 'Resident';
+};
+
+const PROFILE_NOTES_MAX_LENGTH = 5000;
+const getProfileNotesDraftKey = (userId: string) => `profile:notes:draft:${userId}`;
+const formatSavedAt = (iso: string | null): string => {
+  if (!iso) return 'Not saved yet';
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return 'Not saved yet';
+  return dt.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 };
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase }) => {
@@ -122,54 +89,81 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   const [hiddenNotifications, setHiddenNotifications] = useState<any[]>([]);
   const [unhidingNotificationId, setUnhidingNotificationId] = useState<string | null>(null);
   const [unhidingAll, setUnhidingAll] = useState(false);
+  const [profileNotesUserId, setProfileNotesUserId] = useState<string | null>(null);
+  const [noteContent, setNoteContent] = useState('');
+  const [noteLoaded, setNoteLoaded] = useState(false);
+  const [noteSaveState, setNoteSaveState] = useState<NoteSaveState>('idle');
+  const [noteLastSavedAt, setNoteLastSavedAt] = useState<string | null>(null);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [notesFeatureUnavailable, setNotesFeatureUnavailable] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const noteAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    getProfile();
-    getMyCases();
-    getHiddenAnnouncements();
-    getHiddenNotifications();
+    const fetchAllData = async () => {
+      setLoading(true);
+      setLoadingCases(true);
+      setLoadingHiddenAnnouncements(true);
+      setNoteLoaded(false);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setProfileNotesUserId(null);
+          setNoteLoaded(true);
+          return;
+        }
+        setProfileNotesUserId(user.id);
+
+        await Promise.all([
+          fetchProfileData(user),
+          fetchMyCasesData(user),
+          fetchHiddenAnnouncementsData(user),
+          fetchHiddenNotificationsData(user),
+          fetchProfileNoteData(user),
+        ]);
+      } catch (error) {
+        console.error('Error fetching profile data:', error);
+        setNoteLoaded(true);
+      } finally {
+        setLoading(false);
+        setLoadingCases(false);
+        setLoadingHiddenAnnouncements(false);
+      }
+    };
+    fetchAllData();
   }, []);
 
-  const getMyCases = async () => {
+  const fetchMyCasesData = async (user: any) => {
     try {
-      setLoadingCases(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { data, error } = await supabase
         .from('cases')
         .select('*')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false });
-
       if (error) throw error;
       setMyCases(data || []);
     } catch (error) {
       console.error('Error fetching cases:', error);
-    } finally {
-      setLoadingCases(false);
     }
   };
 
-  const getProfile = async () => {
+  const getMyCases = async () => {
+    setLoadingCases(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await fetchMyCasesData(user);
+    setLoadingCases(false);
+  };
+
+  const fetchProfileData = async (user: any) => {
     try {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) throw new Error('No user');
-
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
 
-
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
         const safeNickname = buildFallbackNickname(data.full_name, data.username, user.email);
@@ -179,7 +173,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           bio: data.bio || '',
           year_level: data.year_level || '',
           specialty: 'Radiology',
-
           avatar_url: data.avatar_url || '',
           role: (data.role as UserRole) || 'resident',
           nickname: data.nickname || safeNickname,
@@ -195,38 +188,155 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       }
     } catch (error: any) {
       console.error('Error loading profile:', error.message);
-    } finally {
-      setLoading(false);
     }
   };
 
-  const getHiddenAnnouncements = async () => {
+  const getProfile = async () => {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await fetchProfileData(user);
+    setLoading(false);
+  };
+
+  const fetchHiddenAnnouncementsData = async (user: any) => {
     try {
-      setLoadingHiddenAnnouncements(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
       const rows = await fetchHiddenAnnouncements(user.id, 50);
       setHiddenAnnouncements(rows);
     } catch (error) {
       console.error('Error loading hidden announcements:', error);
-    } finally {
-      setLoadingHiddenAnnouncements(false);
     }
   };
 
-  const getHiddenNotifications = async () => {
+  const getHiddenAnnouncements = async () => {
+    setLoadingHiddenAnnouncements(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await fetchHiddenAnnouncementsData(user);
+    setLoadingHiddenAnnouncements(false);
+  };
+
+  const fetchHiddenNotificationsData = async (user: any) => {
     try {
-      setLoadingHiddenAnnouncements(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
       const rows = await fetchHiddenNotificationsForUser(user.id, 50);
       setHiddenNotifications(rows);
     } catch (error) {
       console.error('Error loading hidden notifications:', error);
-    } finally {
-      setLoadingHiddenAnnouncements(false);
     }
   };
+
+  const getHiddenNotifications = async () => {
+    setLoadingHiddenAnnouncements(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) await fetchHiddenNotificationsData(user);
+    setLoadingHiddenAnnouncements(false);
+  };
+
+  const fetchProfileNoteData = async (user: any) => {
+    const userId = String(user?.id || '');
+    if (!userId) {
+      setNoteContent('');
+      setNoteSaveState('idle');
+      setNoteLastSavedAt(null);
+      setNoteError(null);
+      setNotesFeatureUnavailable(false);
+      setNoteLoaded(true);
+      return;
+    }
+
+    const draftKey = getProfileNotesDraftKey(userId);
+    setNotesFeatureUnavailable(false);
+    try {
+      const remoteNote = await getMyProfileNote();
+      const draft = localStorage.getItem(draftKey);
+
+      if (draft !== null) {
+        setNoteContent(String(draft).slice(0, PROFILE_NOTES_MAX_LENGTH));
+        setNoteSaveState('dirty');
+        setNoteError('Local draft restored. Save to sync this note.');
+        setNoteLastSavedAt(remoteNote?.updated_at || null);
+      } else {
+        setNoteContent(remoteNote?.content || '');
+        setNoteSaveState('idle');
+        setNoteError(null);
+        setNoteLastSavedAt(remoteNote?.updated_at || null);
+      }
+    } catch (error: any) {
+      const draft = localStorage.getItem(draftKey);
+      if (draft !== null) {
+        setNoteContent(String(draft).slice(0, PROFILE_NOTES_MAX_LENGTH));
+        setNoteSaveState('dirty');
+        setNoteError('Could not load cloud note. Using local draft.');
+      } else {
+        setNoteContent('');
+        setNoteSaveState('error');
+        setNoteError('Notes feature is temporarily unavailable.');
+      }
+
+      if (error?.code === '42P01') {
+        setNotesFeatureUnavailable(true);
+      }
+    } finally {
+      setNoteLoaded(true);
+    }
+  };
+
+  const saveNoteNow = async () => {
+    if (!noteLoaded || notesFeatureUnavailable || !profileNotesUserId) return;
+
+    const draftKey = getProfileNotesDraftKey(profileNotesUserId);
+    try {
+      setNoteSaveState('saving');
+      setNoteError(null);
+      const saved = await upsertMyProfileNote(noteContent);
+      setNoteContent(saved.content);
+      setNoteLastSavedAt(saved.updated_at);
+      setNoteSaveState('saved');
+      localStorage.removeItem(draftKey);
+    } catch (error) {
+      localStorage.setItem(draftKey, noteContent);
+      setNoteSaveState('error');
+      setNoteError('Save failed. Retry.');
+    }
+  };
+
+  const handleNoteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = String(e.target.value || '').slice(0, PROFILE_NOTES_MAX_LENGTH);
+    setNoteContent(value);
+    setNoteSaveState('dirty');
+    setNoteError(null);
+
+    if (profileNotesUserId) {
+      localStorage.setItem(getProfileNotesDraftKey(profileNotesUserId), value);
+    }
+  };
+
+  const retrySaveNote = async () => {
+    await saveNoteNow();
+  };
+
+  useEffect(() => {
+    if (!noteLoaded || notesFeatureUnavailable || noteSaveState !== 'dirty') return;
+
+    if (noteAutosaveTimerRef.current) {
+      clearTimeout(noteAutosaveTimerRef.current);
+    }
+    noteAutosaveTimerRef.current = setTimeout(() => {
+      saveNoteNow();
+    }, 800);
+
+    return () => {
+      if (noteAutosaveTimerRef.current) {
+        clearTimeout(noteAutosaveTimerRef.current);
+      }
+    };
+  }, [noteContent, noteLoaded, noteSaveState, notesFeatureUnavailable]);
+
+  useEffect(() => {
+    return () => {
+      if (noteAutosaveTimerRef.current) {
+        clearTimeout(noteAutosaveTimerRef.current);
+      }
+    };
+  }, []);
 
   const updateProfile = async (avatarUrl?: string) => {
     try {
@@ -320,7 +430,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       await updateProfile(publicUrl);
 
     } catch (error: any) {
-      alert(error.message);
+      toastError(error.message);
     } finally {
       setUpdating(false);
     }
@@ -353,10 +463,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
       setMyCases(prev => prev.filter(c => c.id !== deletingId));
       setDeletingId(null);
-      alert('Case deleted successfully.');
+      toastSuccess('Case deleted successfully.');
     } catch (error: any) {
       console.error('Error deleting case:', error);
-      alert('Failed to delete case: ' + error.message);
+      toastError('Failed to delete case: ' + error.message);
     }
   }
 
@@ -370,6 +480,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       ? 'Display name is required and must be at least 3 characters.'
       : null;
   const canSaveProfile = !nicknameError && !updating;
+  const noteStatusLabel =
+    noteSaveState === 'saving'
+      ? 'Saving...'
+      : noteSaveState === 'saved'
+        ? 'Saved'
+        : noteSaveState === 'dirty'
+          ? 'Unsaved changes'
+          : noteSaveState === 'error'
+            ? 'Save failed'
+            : 'Idle';
+  const noteStatusClassName =
+    noteSaveState === 'saving'
+      ? 'text-sky-300 bg-sky-500/10 border-sky-500/20'
+      : noteSaveState === 'saved'
+        ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20'
+        : noteSaveState === 'dirty'
+          ? 'text-amber-300 bg-amber-500/10 border-amber-500/20'
+          : noteSaveState === 'error'
+            ? 'text-rose-300 bg-rose-500/10 border-rose-500/20'
+            : 'text-slate-400 bg-white/5 border-white/10';
 
   const handleUnhideAnnouncement = async (announcementId: string) => {
     try {
@@ -463,25 +593,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
             <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.motto || profile.bio || 'No motto equipped.'}"</p>
 
             {/* Badges Display */}
-            {activeBadges.length > 0 && (
-              <div className="flex justify-center gap-2 mb-4">
-                {activeBadges.map(badge => {
-                  let badgeIcon = 'star';
-                  let badgeColor = 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20 shadow-[0_0_10px_rgba(250,204,21,0.2)]';
-                  let badgeTitle = 'Award';
-                  if (badge === 'workhorse') { badgeIcon = 'hardware'; badgeColor = 'text-slate-300 bg-slate-400/10 border-slate-400/20'; badgeTitle = 'Workhorse'; }
-                  if (badge === 'scholar') { badgeIcon = 'school'; badgeColor = 'text-amber-400 bg-amber-400/10 border-amber-400/20 shadow-[0_0_10px_rgba(251,191,36,0.2)]'; badgeTitle = 'Scholar'; }
-                  if (badge === 'punctuality') { badgeIcon = 'query_builder'; badgeColor = 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'; badgeTitle = 'Punctuality'; }
-                  if (badge === 'high_scorer') { badgeIcon = 'workspace_premium'; badgeColor = 'text-purple-400 bg-purple-400/10 border-purple-400/20 shadow-[0_0_10px_rgba(192,132,252,0.2)]'; badgeTitle = 'High Scorer'; }
-
-                  return (
-                    <div key={badge} title={badgeTitle} className={`w-8 h-8 rounded-full flex items-center justify-center border ${badgeColor}`}>
-                      <span className="material-icons text-[16px]">{badgeIcon}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            <ResidentBadges activeBadges={activeBadges} />
 
             {/* Stats Row */}
             <div className="flex justify-center gap-8 pt-5 border-t border-white/5 pb-1">
@@ -499,146 +611,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
         {/* Edit Form */}
         {isEditing && (
-          <div className="w-full max-w-sm space-y-4 z-10 mb-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">Identity & Avatar</p>
-                <button
-                  onClick={handleRerollAvatar}
-                  className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 text-[9px] font-bold uppercase text-slate-300 transition-colors flex items-center gap-1"
-                >
-                  <span className="material-icons text-[12px]">casino</span>
-                  Reroll Sprite
-                </button>
-              </div>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-                <input
-                  name="full_name"
-                  value={profile.full_name}
-                  onChange={handleChange}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
-                  placeholder="Dr. Alex Smith"
-                />
-              </div>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Display Name (Required)</label>
-                <input
-                  name="nickname"
-                  value={profile.nickname || ''}
-                  onChange={handleChange}
-                  className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600 ${nicknameError ? 'border-rose-500/50' : 'border-white/10'}`}
-                  placeholder="How others will see your name"
-                />
-                <p className="mt-1.5 text-[10px] text-slate-500 text-left">Used in covers, activity feeds, and presence.</p>
-                {nicknameError ? <p className="mt-1 text-[10px] text-rose-400 text-left">{nicknameError}</p> : null}
-              </div>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Year Level</label>
-                <input
-                  name="year_level"
-                  value={profile.year_level}
-                  onChange={handleChange}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
-                  placeholder="e.g. R1, R2, Fellow"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">Roleplay & Gamification</p>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Title / Specialization</label>
-                <input
-                  name="title"
-                  value={profile.title}
-                  onChange={handleChange}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
-                  placeholder="e.g. CT Veteran, Neuro Whisperer"
-                />
-              </div>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Character Motto</label>
-                <input
-                  name="motto"
-                  value={profile.motto}
-                  onChange={handleChange}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all placeholder:text-slate-600"
-                  placeholder="A short, catchy phrase..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Work Mode</label>
-                  <select
-                    name="work_mode"
-                    value={profile.work_mode}
-                    onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-xs focus:border-primary focus:ring-1 outline-none appearance-none"
-                  >
-                    <option value="Focused">Focused</option>
-                    <option value="Collaborative">Collaborative</option>
-                    <option value="Speed Reading">Speed Reading</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Main Modality</label>
-                  <select
-                    name="main_modality"
-                    value={profile.main_modality}
-                    onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-xs focus:border-primary focus:ring-1 outline-none appearance-none"
-                  >
-                    <option value="CT">CT</option>
-                    <option value="MRI">MRI</option>
-                    <option value="X-Ray">X-Ray</option>
-                    <option value="Ultrasound">Ultrasound</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Faction / Guild</label>
-                  <input
-                    name="faction"
-                    value={profile.faction}
-                    onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-[11px] focus:border-primary focus:ring-1 outline-none placeholder:text-slate-600"
-                    placeholder="e.g. The ER Squad"
-                  />
-                </div>
-                <div>
-                  <label className="block text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Map Status</label>
-                  <select
-                    name="map_status"
-                    value={profile.map_status}
-                    onChange={handleChange}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-2 py-2.5 text-white text-[11px] focus:border-primary focus:ring-1 outline-none appearance-none"
-                  >
-                    <option value="At Workstation">At Workstation</option>
-                    <option value="On Rounds">On Rounds</option>
-                    <option value="Coffee Break">Coffee Break</option>
-                    <option value="In Conference">In Conference</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 text-left">About</p>
-              <div>
-                <label className="block text-left text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
-                <textarea
-                  name="bio"
-                  value={profile.bio}
-                  onChange={handleChange}
-                  rows={3}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all resize-none placeholder:text-slate-600"
-                  placeholder="Resident physician..."
-                />
-              </div>
-            </div>
-          </div>
+          <ProfileEditor
+            profile={profile}
+            handleChange={handleChange}
+            handleRerollAvatar={handleRerollAvatar}
+            nicknameError={nicknameError}
+          />
         )}
 
         {message && (
@@ -735,80 +713,72 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         </div>
       </div>
 
-      {/* My Cases Section */}
+      {/* My Notes Section */}
       <div>
-        <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 ml-2">My Case Library</h2>
+        <div className="mb-4 ml-2 flex items-center justify-between">
+          <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">My Notes</h2>
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Private to your account</span>
+        </div>
+        <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 space-y-3">
+          {!noteLoaded ? (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-3 w-28 rounded bg-white/10" />
+              <div className="h-28 rounded-xl bg-white/5" />
+              <div className="h-3 w-40 rounded bg-white/10" />
+            </div>
+          ) : notesFeatureUnavailable ? (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
+              <p className="text-sm font-bold text-rose-300">Notes feature is temporarily unavailable.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${noteStatusClassName}`}>
+                  {noteStatusLabel}
+                </span>
+                {noteSaveState === 'error' && (
+                  <button
+                    onClick={retrySaveNote}
+                    className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-white/10 hover:bg-white/15 text-white transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
+              </div>
 
-        {loadingCases ? (
-          <div className="text-center py-8 text-slate-500 text-xs">Loading cases...</div>
-        ) : myCases.length === 0 ? (
-          <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-8 rounded-[2rem] flex flex-col items-center justify-center text-center opacity-80 border-dashed border border-white/10">
-            <span className="material-icons text-4xl text-slate-600 mb-3">folder_open</span>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">No cases yet</p>
-            <p className="text-[10px] text-slate-500">Go to Upload tab to add new cases.</p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {myCases.map((c) => {
-              const typeMeta = getSubmissionTypeMeta(c.submission_type || 'interesting_case');
-              const displayTitle = getDisplayTitle(c);
-              const primaryMeta = getPrimaryMeta(c);
+              <textarea
+                value={noteContent}
+                onChange={handleNoteChange}
+                onBlur={() => {
+                  if (noteSaveState === 'dirty') {
+                    saveNoteNow();
+                  }
+                }}
+                maxLength={PROFILE_NOTES_MAX_LENGTH}
+                rows={6}
+                placeholder="Write personal notes..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-primary focus:outline-none transition-all resize-none"
+              />
 
-              const isRarePathology = c.submission_type === 'rare_pathology';
-              const isAuntMinnie = c.submission_type === 'aunt_minnie';
+              <div className="flex items-center justify-between gap-3 text-[10px] text-slate-400">
+                <span>Last saved: {formatSavedAt(noteLastSavedAt)}</span>
+                <span>{noteContent.length}/{PROFILE_NOTES_MAX_LENGTH}</span>
+              </div>
 
-              const tintColorClass = isRarePathology ? 'text-rose-400' : isAuntMinnie ? 'text-amber-400' : 'text-sky-400';
-              const bgGlowClass = isRarePathology ? 'bg-rose-500/10' : isAuntMinnie ? 'bg-amber-500/10' : 'bg-sky-500/10';
-              const borderGlowClass = isRarePathology ? 'border-rose-500/20' : isAuntMinnie ? 'border-amber-500/20' : 'border-sky-500/20';
-              const shadowClass = isRarePathology ? 'shadow-[0_0_15px_rgba(244,63,94,0.15)] group-hover:shadow-[0_0_20px_rgba(244,63,94,0.25)]'
-                : isAuntMinnie ? 'shadow-[0_0_15px_rgba(245,158,11,0.15)] group-hover:shadow-[0_0_20px_rgba(245,158,11,0.25)]'
-                  : 'shadow-[0_0_15px_rgba(56,189,248,0.15)] group-hover:shadow-[0_0_20px_rgba(56,189,248,0.25)]';
-
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => onViewCase && onViewCase(c)}
-                  className="w-full p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5 w-full z-10 relative">
-                    <div className={`w-[38px] h-[38px] rounded-[14px] ${bgGlowClass} ${tintColorClass} flex items-center justify-center border ${borderGlowClass} ${shadowClass} transition-all shrink-0`}>
-                      <span className="material-icons text-[18px]">{typeMeta.icon}</span>
-                    </div>
-
-                    <div className="flex-1 min-w-0 pr-1">
-                      <h4 className={`text-[12px] sm:text-[13px] truncate tracking-widest font-extrabold ${tintColorClass} group-hover:brightness-110 mb-0.5 uppercase`}>
-                        {displayTitle}
-                      </h4>
-                      <div className="flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
-                        <span className="text-white/70">{primaryMeta}</span>
-                        <span className="text-white/20">•</span>
-                        <span className="text-white/40">{new Date(c.created_at).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' })}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onEditCase && onEditCase(c); }}
-                        className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
-                        title="Edit Case"
-                      >
-                        <span className="material-icons text-[15px]">edit</span>
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); confirmDelete(c.id); }}
-                        className="w-8 h-8 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 flex items-center justify-center text-rose-500 hover:text-rose-400 transition-colors"
-                        title="Delete Case"
-                      >
-                        <span className="material-icons text-[15px]">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+              {noteError && <p className="text-[11px] text-amber-300">{noteError}</p>}
+            </>
+          )}
+        </div>
       </div>
+
+      {/* My Cases Section */}
+      <MyCaseLibrary
+        loadingCases={loadingCases}
+        myCases={myCases}
+        onViewCase={onViewCase}
+        onEditCase={onEditCase}
+        confirmDelete={confirmDelete}
+      />
 
       {/* Hidden News Section */}
       <div>

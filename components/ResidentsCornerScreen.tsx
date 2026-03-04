@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { RESIDENT_TOOLS } from '../constants';
 import { CONSULTANT_SCHEDULE } from './consultantScheduleData';
-import { NeedleUserStats, PickleballUserStats, Profile } from '../types';
+import { NeedleUserStats, PickleballUserStats, Profile, UserRole } from '../types';
 import ManageCoversModal, { CoverEntry, LogEntry } from './ManageCoversModal';
 import CoverDetailsModal from './CoverDetailsModal';
 import { supabase } from '../services/supabase';
@@ -12,10 +11,12 @@ import NeedleNavigatorGame from './NeedleNavigatorGame';
 import { getNeedleUserStats } from '../services/needleNavigatorService';
 import PickleballRallyGame from './PickleballRallyGame';
 import { getPickleballUserStats } from '../services/pickleballRallyService';
+import { normalizeUserRole } from '../utils/roles';
 const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
     onOpenMonthlyCensus?: () => void;
+    onOpenResidentEndorsements?: () => void;
 }
 
 // Generate a unique ID for each slot to track overrides
@@ -23,10 +24,12 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
-const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus }) => {
+const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenResidentEndorsements }) => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+    const [isRoleLoading, setIsRoleLoading] = useState(true);
 
     // State for cover overrides: { [slotId]: CoverEntry[] }
     const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>({});
@@ -36,8 +39,22 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     // Fetch user and covers on mount
     useEffect(() => {
         const init = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            setCurrentUser(user);
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                setCurrentUser(user);
+                if (user?.id) {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', user.id)
+                        .maybeSingle();
+                    setCurrentUserRole(normalizeUserRole(profile?.role));
+                } else {
+                    setCurrentUserRole(null);
+                }
+            } finally {
+                setIsRoleLoading(false);
+            }
             fetchCovers();
             fetchProfiles();
         };
@@ -139,6 +156,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     const [pickleballStats, setPickleballStats] = useState<PickleballUserStats | null>(null);
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
+    const canOpenEndorsements = currentUserRole === 'admin' || currentUserRole === 'moderator' || currentUserRole === 'resident';
 
     // Get current day
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -355,6 +373,17 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
         onOpenMonthlyCensus?.();
     };
 
+    const handleRadiopaediaSearch = () => {
+        const input = window.prompt('Search Radiopaedia for:');
+        const query = (input || '').trim();
+        if (!query) return;
+        const url = `https://radiopaedia.org/search?lang=us&q=${encodeURIComponent(query)}`;
+        const win = window.open(url, '_blank', 'noopener,noreferrer');
+        if (!win) {
+            toastError('Unable to open Radiopaedia', 'Please allow pop-ups for this site.');
+        }
+    };
+
     useEffect(() => {
         if (!needleNavigatorEnabled || !currentUser?.id) {
             setNeedleStats(null);
@@ -394,15 +423,29 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                         {/* Monthly Census */}
                         <button
                             onClick={handleOpenMonthlyCensus}
-                            className="w-full text-left rounded-xl border border-white/10 bg-white/[0.03] p-2.5 flex items-center gap-2.5 group hover:bg-white/[0.06] transition-all active:scale-[0.99] relative overflow-hidden"
+                            className="w-full text-left rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-amber-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
                         >
-                            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-primary/15 flex items-center justify-center text-primary group-hover:scale-110 transition-transform shadow-inner border border-primary/30">
+                            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-300 group-hover:scale-110 transition-transform shadow-inner border border-amber-500/30">
                                 <span className="material-icons text-[16px]">checklist</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-slate-100 group-hover:text-white transition-colors truncate">Monthly Census</h3>
-                                <p className="text-[9px] text-slate-400 mt-0.5 truncate">Log requirements</p>
+                                <h3 className="text-xs font-bold text-amber-200 group-hover:text-white transition-colors truncate">Monthly Census</h3>
+                                <p className="text-[9px] text-amber-100/70 mt-0.5 truncate">Log requirements</p>
+                            </div>
+                        </button>
+
+                        <button
+                            onClick={handleRadiopaediaSearch}
+                            className="w-full text-left rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-violet-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                        >
+                            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/10 to-violet-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 group-hover:scale-110 transition-transform shadow-inner border border-violet-500/30">
+                                <span className="material-icons text-[16px]">search</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-xs font-bold text-violet-200 group-hover:text-white transition-colors truncate">Search Radiopaedia</h3>
+                                <p className="text-[9px] text-violet-100/70 mt-0.5 truncate">Quick case lookup</p>
                             </div>
                         </button>
 
@@ -411,15 +454,15 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                            className="w-full text-left rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-blue-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
                         >
-                            <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-sky-500/5 to-sky-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-400 group-hover:scale-110 transition-transform shadow-inner border border-sky-500/20">
+                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-300 group-hover:scale-110 transition-transform shadow-inner border border-blue-500/30">
                                 <span className="material-icons text-[16px]">description</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">Decking List</h3>
-                                <p className="text-[9px] text-slate-500 mt-0.5 truncate">Live Updates</p>
+                                <h3 className="text-xs font-bold text-blue-200 group-hover:text-white transition-colors truncate">Decking List</h3>
+                                <p className="text-[9px] text-blue-100/70 mt-0.5 truncate">Live Updates</p>
                             </div>
                         </a>
 
@@ -428,15 +471,15 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             href="https://docs.google.com/spreadsheets/u/0/d/1zlSKOCLmBmvrxZqoPKUysf3RcNpLQQoB/htmlview#gid=799246403"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                            className="w-full text-left rounded-xl border border-lime-500/20 bg-lime-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-lime-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
                         >
-                            <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/5 to-emerald-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform shadow-inner border border-emerald-500/20">
+                            <div className="absolute inset-0 bg-gradient-to-r from-lime-500/0 via-lime-500/10 to-lime-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                            <div className="w-8 h-8 shrink-0 rounded-lg bg-lime-500/20 flex items-center justify-center text-lime-300 group-hover:scale-110 transition-transform shadow-inner border border-lime-500/30">
                                 <span className="material-icons text-[16px]">event_busy</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">On Leave</h3>
-                                <p className="text-[9px] text-slate-500 mt-0.5 truncate">March 2026</p>
+                                <h3 className="text-xs font-bold text-lime-200 group-hover:text-white transition-colors truncate">On Leave</h3>
+                                <p className="text-[9px] text-lime-100/70 mt-0.5 truncate">March 2026</p>
                             </div>
                         </a>
 
@@ -444,14 +487,15 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                         {needleNavigatorEnabled && (
                             <button
                                 onClick={() => setIsNeedleNavigatorOpen(true)}
-                                className="w-full text-left glass-card-enhanced p-2.5 rounded-xl border border-cyan-500/20 flex items-center gap-2.5 group hover:bg-cyan-500/10 transition-all active:scale-[0.99] relative overflow-hidden bg-cyan-500/5"
+                                className="w-full text-left rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-rose-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
                             >
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform shadow-inner border border-cyan-500/30">
+                                <div className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-rose-500/10 to-rose-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-300 group-hover:scale-110 transition-transform shadow-inner border border-rose-500/30">
                                     <span className="material-icons text-[16px]">sports_esports</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-bold text-cyan-300 truncate">Needle Game</h3>
-                                    <p className="text-[9px] text-slate-400 mt-0.5 truncate">Best: {Math.round(needleStats?.best_score ?? 0)}</p>
+                                    <h3 className="text-xs font-bold text-rose-200 truncate">Needle Game</h3>
+                                    <p className="text-[9px] text-rose-100/70 mt-0.5 truncate">Best: {Math.round(needleStats?.best_score ?? 0)}</p>
                                 </div>
                             </button>
                         )}
@@ -471,25 +515,31 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             </button>
                         )}
 
-                        {/* Essential Tools Mapped */}
-                        {RESIDENT_TOOLS.map((tool, idx) => (
-                            <a
-                                key={idx}
-                                href={tool.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="glass-card-enhanced p-2.5 rounded-xl border border-white/5 flex items-center gap-2.5 group hover:bg-white/5 transition-all active:scale-[0.99] relative overflow-hidden"
+                        {isRoleLoading && (
+                            <div className="w-full rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 relative overflow-hidden animate-pulse">
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/30" />
+                                <div className="flex-1 min-w-0 space-y-1">
+                                    <div className="h-3 w-24 rounded bg-fuchsia-200/20" />
+                                    <div className="h-2 w-20 rounded bg-fuchsia-100/20" />
+                                </div>
+                            </div>
+                        )}
+
+                        {!isRoleLoading && canOpenEndorsements && (
+                            <button
+                                onClick={() => onOpenResidentEndorsements?.()}
+                                className="w-full text-left rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-fuchsia-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
                             >
-                                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/5 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-slate-500/10 flex items-center justify-center text-slate-300 group-hover:scale-110 group-hover:text-white transition-transform border border-slate-500/20 shadow-inner">
-                                    <span className="material-icons text-[16px]">{tool.icon}</span>
+                                <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/10 to-fuchsia-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-fuchsia-500/20 flex items-center justify-center text-fuchsia-300 group-hover:scale-110 transition-transform shadow-inner border border-fuchsia-500/30">
+                                    <span className="material-icons text-[16px]">forum</span>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-bold text-slate-200 group-hover:text-white transition-colors truncate">{tool.name}</h3>
-                                    <p className="text-[9px] text-slate-500 mt-0.5 truncate">{tool.description}</p>
+                                    <h3 className="text-xs font-bold text-fuchsia-200 group-hover:text-white transition-colors truncate">Endorsements</h3>
+                                    <p className="text-[9px] text-fuchsia-100/70 mt-0.5 truncate">After-duty handoff</p>
                                 </div>
-                            </a>
-                        ))}
+                            </button>
+                        )}
                     </div>
                 </section>
                 {/* Hospital Selector - Segmented Control Style */}

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatWeekRange, getWeekDays, getWeekStart, isSameDay, isSameWeek } from './calendarView';
+import {
+  buildEventDateTimeRange,
+  formatWeekRange,
+  fromLocalDateInput,
+  getWeekDays,
+  getWeekStart,
+  isSameDay,
+  isSameWeek,
+  toLocalDateInputValue,
+} from './calendarView';
 
 const toLocalYmd = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -33,5 +42,37 @@ describe('calendarView utilities', () => {
     expect(isSameDay(a, c)).toBe(false);
     expect(isSameWeek(a, c, true)).toBe(true);
     expect(isSameWeek(a, d, true)).toBe(false);
+  });
+
+  it('round-trips local date input values without timezone shift', () => {
+    const value = '2026-03-03';
+    const parsed = fromLocalDateInput(value);
+    expect(toLocalDateInputValue(parsed)).toBe(value);
+  });
+
+  it('builds all-day local range correctly', () => {
+    const range = buildEventDateTimeRange({
+      startDate: '2026-03-03',
+      endDate: '2026-03-05',
+      startTime: '08:00',
+      endTime: '17:00',
+      isAllDay: true,
+    });
+    expect(toLocalYmd(range.start)).toBe('2026-03-03');
+    expect(toLocalYmd(range.end)).toBe('2026-03-05');
+    expect(range.start.getHours()).toBe(0);
+    expect(range.end.getHours()).toBe(23);
+  });
+
+  it('builds timed range across days and rejects invalid date input', () => {
+    const range = buildEventDateTimeRange({
+      startDate: '2026-03-03',
+      endDate: '2026-03-04',
+      startTime: '21:00',
+      endTime: '02:00',
+      isAllDay: false,
+    });
+    expect(range.end.getTime()).toBeGreaterThan(range.start.getTime());
+    expect(() => fromLocalDateInput('bad')).toThrow();
   });
 });

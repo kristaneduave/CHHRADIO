@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'newsfeed' | 'live-map' | 'monthly-census';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 
 export type ToastKind = 'success' | 'error' | 'info';
@@ -197,9 +197,9 @@ export interface CalendarEvent {
     nickname?: string | null;
   };
   coverage_details?: {
-    user_id: string;
-    name?: string; // Manual name entry
-    modalities: string[]; // Changed from modality: string
+    user_id?: string; // Optional when coverage is entered as a manual name
+    name?: string; // Manual coverage name entry
+    modalities: string[]; // Coverage modalities
     user?: {
       full_name: string | null;
       avatar_url: string | null;
@@ -238,6 +238,16 @@ export interface Profile {
   active_badges?: string[] | null;
   updated_at: string;
 }
+
+export interface ProfilePrivateNote {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type NoteSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 
 
@@ -304,6 +314,53 @@ export interface DutyRosterEntry {
   createdBy: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export type DutyShift = 'AM' | 'PM' | 'NIGHT';
+
+export interface ResidentEndorsementComment {
+  id: string;
+  post_id: string;
+  message: string;
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
+  author_name?: string;
+  author_role?: string | null;
+  author_avatar_url?: string | null;
+}
+
+export interface ResidentEndorsementPost {
+  id: string;
+  duty_date: string;
+  shift: DutyShift;
+  message: string;
+  tags: string[];
+  attachments?: { url: string; type: string; name: string; size: number }[];
+  is_pinned?: boolean;
+  pinned_at?: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
+  author_name?: string;
+  author_role?: string | null;
+  author_avatar_url?: string | null;
+  comments: ResidentEndorsementComment[];
+}
+
+export interface ResidentEndorsementPostInput {
+  duty_date: string;
+  shift: DutyShift;
+  message: string;
+  tags?: string[];
+  attachments?: { url: string; type: string; name: string; size: number }[];
+  is_pinned?: boolean;
+  pinned_at?: string | null;
+}
+
+export interface ResidentEndorsementCommentInput {
+  post_id: string;
+  message: string;
 }
 
 export interface DashboardSnapshotData {

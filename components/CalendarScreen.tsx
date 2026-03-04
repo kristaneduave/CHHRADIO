@@ -6,7 +6,14 @@ import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import EmptyState from './EmptyState';
 import { normalizeUserRole } from '../utils/roles';
-import { formatWeekRange, getWeekDays, getWeekStart, isSameDay } from '../utils/calendarView';
+import { buildEventDateTimeRange, formatWeekRange, getWeekDays, getWeekStart, isSameDay, toLocalDateInputValue } from '../utils/calendarView';
+import { toastError, toastSuccess } from '../utils/toast';
+
+type ValidationErrors = {
+  title?: string;
+  date?: string;
+  time?: string;
+};
 
 const CalendarScreen: React.FC = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -16,12 +23,14 @@ const CalendarScreen: React.FC = () => {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<EventType | 'all'>('all');
   const [searchResults, setSearchResults] = useState<CalendarEvent[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const [isWeekDrawerOpen, setIsWeekDrawerOpen] = useState(true);
@@ -44,6 +53,7 @@ const CalendarScreen: React.FC = () => {
   const [coverageDetails, setCoverageDetails] = useState<{ user_id: string, name: string, modalities: string[] }[]>([]);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userRole, setUserRole] = useState<'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer'>('resident');
   const isMountedRef = useRef(true);
@@ -120,6 +130,7 @@ const CalendarScreen: React.FC = () => {
   const fetchEvents = async () => {
     const seq = ++eventsFetchSeqRef.current;
     setLoading(true);
+    setFetchError('');
     try {
       const start = new Date(year, month, 1);
       const end = new Date(year, month + 1, 0, 23, 59, 59);
@@ -143,8 +154,9 @@ const CalendarScreen: React.FC = () => {
       const upcoming = await CalendarService.getUpcomingEvents(10);
       if (!isMountedRef.current || seq !== eventsFetchSeqRef.current) return;
       setUpcomingEvents(upcoming);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching events:', error);
+      setFetchError(error?.message || 'Unable to load calendar events.');
     } finally {
       if (!isMountedRef.current || seq !== eventsFetchSeqRef.current) return;
       setLoading(false);
@@ -181,18 +193,21 @@ const CalendarScreen: React.FC = () => {
       if (searchQuery.trim().length > 1) {
         const seq = ++searchSeqRef.current;
         setIsSearching(true);
+        setSearchError('');
         try {
           const results = await CalendarService.searchEvents(searchQuery);
           if (!isMountedRef.current || seq !== searchSeqRef.current) return;
           setSearchResults(results);
-        } catch (error) {
+        } catch (error: any) {
           console.error("Search error", error);
+          setSearchError(error?.message || 'Unable to search calendar events.');
         } finally {
           if (!isMountedRef.current || seq !== searchSeqRef.current) return;
           setIsSearching(false);
         }
       } else {
         setSearchResults([]);
+        setSearchError('');
       }
     }, 500);
     return () => clearTimeout(timer);
@@ -215,7 +230,7 @@ const CalendarScreen: React.FC = () => {
   // Pre-fill dates when opening modal
   useEffect(() => {
     if (showAddEvent && !editingEventId) {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      const dateStr = toLocalDateInputValue(selectedDate);
       setNewEventStartDate(dateStr);
       setNewEventEndDate(dateStr);
       // Reset complex state
@@ -225,8 +240,10 @@ const CalendarScreen: React.FC = () => {
       setNewEventDescription('');
       setIsAllDay(true);
       setShowMoreOptions(false); // Reset minimalist view
+      setValidationErrors({});
     } else if (!showAddEvent) {
       setEditingEventId(null);
+      setValidationErrors({});
     }
   }, [showAddEvent, selectedDate, editingEventId]);
 
@@ -292,7 +309,7 @@ const CalendarScreen: React.FC = () => {
     // If active filter is set to something other than 'all', filter everything by that type
     // If search query is present, return search results matching type if any
 
-    let baseEvents = [];
+    let baseEvents: CalendarEvent[] = [];
 
     if (searchQuery.length > 1) {
       baseEvents = searchResults;
@@ -310,9 +327,10 @@ const CalendarScreen: React.FC = () => {
     } else if (isSelectedDateToday()) {
       baseEvents = upcomingEvents;
     } else {
-      const startOfSelected = new Date(selectedDate);
-      startOfSelected.setHours(0, 0, 0, 0);
-      baseEvents = events.filter(e => new Date(e.end_time) >= startOfSelected)
+      const dayStart = toDayStart(selectedDate);
+      const dayEnd = toDayEnd(selectedDate);
+      baseEvents = events
+        .filter((e) => eventOverlapsRange(e, dayStart, dayEnd))
         .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     }
 
@@ -377,12 +395,7 @@ const CalendarScreen: React.FC = () => {
     setEditingEventId(event.id);
     setNewEventType(event.event_type);
 
-    // Handle Title / Name
-    if (event.event_type === 'leave') {
-      setAssignedToName(event.title.replace(' - Leave', ''));
-    } else {
-      setAssignedToName(event.title);
-    }
+    setAssignedToName(event.title);
 
     setNewEventDescription(event.description || '');
 
@@ -390,8 +403,8 @@ const CalendarScreen: React.FC = () => {
     const end = new Date(event.end_time);
 
     setIsAllDay(event.is_all_day);
-    setNewEventStartDate(start.toISOString().split('T')[0]);
-    setNewEventEndDate(end.toISOString().split('T')[0]);
+    setNewEventStartDate(toLocalDateInputValue(start));
+    setNewEventEndDate(toLocalDateInputValue(end));
 
     if (!event.is_all_day) {
       setNewEventTime(start.toTimeString().slice(0, 5));
@@ -414,6 +427,7 @@ const CalendarScreen: React.FC = () => {
       setShowMoreOptions(false);
     }
 
+    setValidationErrors({});
     setShowAddEvent(true);
   };
 
@@ -423,56 +437,61 @@ const CalendarScreen: React.FC = () => {
     const canDelete = Boolean(target) && canManageEvent(target!);
 
     if (!canDelete) {
-      alert('You do not have permission to delete this event.');
+      toastError('Permission denied', 'You do not have permission to delete this event.');
       return;
     }
 
     if (window.confirm('Are you sure you want to delete this event?')) {
       try {
         await CalendarService.deleteEvent(id);
+        toastSuccess('Event deleted');
         fetchEvents();
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error deleting event", error);
-        alert("Failed to delete event");
+        toastError('Failed to delete event', error?.message || 'Please try again.');
       }
     }
   };
 
   const handleSaveEvent = async () => {
-    let title = '';
-    if (newEventType === 'leave') {
-      title = assignedToName || 'Leave'; // Removed " - Leave" suffix
-    } else {
-      title = `${newEventType.charAt(0).toUpperCase() + newEventType.slice(1)}`;
+    const errors: ValidationErrors = {};
+    if (!assignedToName.trim()) {
+      errors.title = newEventType === 'leave' ? 'Name is required for leave events.' : 'Title is required.';
     }
+    if (!newEventStartDate || !newEventEndDate) {
+      errors.date = 'Start and end dates are required.';
+    }
+    if (!isAllDay && (!newEventTime || !newEventEndTime)) {
+      errors.time = 'Start and end times are required.';
+    }
+    setValidationErrors(errors);
+    if (Object.keys(errors).length > 0) return;
 
+    setIsSubmitting(true);
     try {
-      let start: Date, end: Date;
-
-      if (isAllDay) {
-        start = new Date(newEventStartDate);
-        start.setHours(0, 0, 0, 0);
-
-        end = new Date(newEventEndDate);
-        end.setHours(23, 59, 59, 999);
-      } else {
-        start = new Date(`${newEventStartDate}T${newEventTime}`);
-        end = new Date(`${newEventStartDate}T${newEventEndTime}`);
+      const { start, end } = buildEventDateTimeRange({
+        startDate: newEventStartDate,
+        endDate: newEventEndDate,
+        startTime: newEventTime,
+        endTime: newEventEndTime,
+        isAllDay,
+      });
+      if (end.getTime() < start.getTime()) {
+        setValidationErrors((prev) => ({ ...prev, time: 'End date/time must be after start date/time.' }));
+        return;
       }
 
-      const finalDescription = newEventType === 'leave' && assignedToName
-        ? `On Leave: ${assignedToName}\n\n${newEventDescription}`
-        : newEventDescription;
-
       const payload = {
-        title: title,
-        description: finalDescription,
+        title: assignedToName.trim(),
+        description: newEventDescription.trim(),
         start_time: start.toISOString(),
         end_time: end.toISOString(),
         event_type: newEventType,
         is_all_day: isAllDay,
         location: '',
-        coverage_details: coverageDetails.filter(d => d.name.trim() !== '')
+        coverage_details: coverageDetails
+          .filter((d) => d.name.trim() !== '')
+          .map((d) => ({ user_id: d.user_id || undefined, name: d.name.trim(), modalities: d.modalities })),
       };
 
       let savedEvent: CalendarEvent;
@@ -517,12 +536,15 @@ const CalendarScreen: React.FC = () => {
         console.error('Failed to emit calendar notification:', notifError);
       }
 
+      toastSuccess(editingEventId ? 'Event updated' : 'Event created');
       setShowAddEvent(false);
       setEditingEventId(null);
       fetchEvents();
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error saving event", e);
-      alert("Failed to save event");
+      toastError('Failed to save event', e?.message || 'Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -574,7 +596,10 @@ const CalendarScreen: React.FC = () => {
 
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery('')}
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchError('');
+                }}
                 className="absolute right-[3rem] top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
                 aria-label="Clear search"
               >
@@ -823,6 +848,27 @@ const CalendarScreen: React.FC = () => {
 
             {/* PADDED CONTAINER to fix Agenda overlap - Increased to pb-40 */}
             <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 pr-2 pb-40">
+              {activeFilter !== 'all' && (
+                <div className="mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveFilter('all')}
+                    className="text-[10px] px-2 py-1 rounded-full bg-primary/15 border border-primary/35 text-primary-light"
+                  >
+                    Filter: {activeFilter} (clear)
+                  </button>
+                </div>
+              )}
+              {fetchError && (
+                <div className="mb-2">
+                  <EmptyState icon="error_outline" title="Could not load events" description={fetchError} compact />
+                </div>
+              )}
+              {searchError && (
+                <div className="mb-2">
+                  <EmptyState icon="search_off" title="Search failed" description={searchError} compact />
+                </div>
+              )}
               {agendaEvents.length > 0 ? (
                 agendaEvents.map(event => (
                   <div
@@ -938,10 +984,17 @@ const CalendarScreen: React.FC = () => {
         <div className="pointer-events-auto bg-[#1a232f]/80 backdrop-blur-xl shadow-2xl shadow-black/50 border border-white/[0.08] rounded-full p-2">
           <button
             type="button"
-            onClick={() => setShowAddEvent(true)}
-            className="flex flex-col items-center justify-center w-[54px] h-[54px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full text-slate-300 hover:text-white hover:bg-white/5"
+            onClick={() => {
+              if (!currentUserId) {
+                toastError('Sign in required', 'You need an authenticated session to create events.');
+                return;
+              }
+              setShowAddEvent(true);
+            }}
+            disabled={!currentUserId}
+            className="flex flex-col items-center justify-center w-[54px] h-[54px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full text-slate-300 hover:text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Create Event"
-            title="Create Event"
+            title={currentUserId ? 'Create Event' : 'Sign in to create events'}
           >
             <span className="material-icons text-[26px]">post_add</span>
           </button>
@@ -1052,6 +1105,8 @@ const CalendarScreen: React.FC = () => {
                       )}
                     </div>
                   </div>
+                  {validationErrors.date && <p className="mt-2 text-xs text-rose-300">{validationErrors.date}</p>}
+                  {validationErrors.time && <p className="mt-1 text-xs text-rose-300">{validationErrors.time}</p>}
                 </div>
 
                 {/* Basic Who/Title Input always visible */}
@@ -1071,6 +1126,7 @@ const CalendarScreen: React.FC = () => {
                       className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/30 transition-all placeholder:text-slate-600 shadow-inner"
                     />
                   </div>
+                  {validationErrors.title && <p className="mt-1 text-xs text-rose-300">{validationErrors.title}</p>}
                 </div>
 
 

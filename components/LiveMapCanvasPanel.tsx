@@ -120,7 +120,7 @@ const LiveMapCanvasPanel: React.FC<LiveMapCanvasPanelProps> = ({
   return (
     <div className={`grid grid-cols-1 ${expandedFloorId ? '' : 'xl:grid-cols-2'} gap-4 md:gap-6 h-full min-h-[700px] xl:min-h-0`}>
       {displayedFloors.map((floor) => (
-        <div key={floor.id} className="flex flex-col h-full bg-[#0a0f18]/80 shadow-[0_0_40px_-10px_rgba(0,0,0,0.8)] backdrop-blur-2xl rounded-2xl border border-white/10 overflow-hidden transition-all duration-300">
+        <div key={floor.id} className="flex flex-col h-full bg-[#0a0f18]/60 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.5)] backdrop-blur-2xl rounded-2xl border border-white/5 overflow-hidden transition-all duration-300">
           <div className="px-4 py-3 bg-gradient-to-r from-black/20 to-transparent border-b border-white/5 flex items-center justify-between">
             <div className="min-w-0 flex items-center gap-2">
               <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300 flex items-center gap-2 min-w-0">
@@ -193,7 +193,6 @@ const LiveMapCanvasPanel: React.FC<LiveMapCanvasPanelProps> = ({
           </div>
           <div className="flex-1 relative min-h-[320px] bg-white/[0.03]">
             <VirtualWorkspaceRenderer
-              floor={floor}
               workstations={filteredWorkstationsByFloor.get(floor.id) || []}
               currentUserId={currentUserId}
               players={hydratedPlayers}
