@@ -85,10 +85,15 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     return sorted;
   }, [notifications, notificationFilter]);
 
-  const formatNotificationType = (type: string): string =>
-    (type || 'system')
+  const formatNotificationType = (type: string): string => {
+    const normalized = (type || 'system').toLowerCase();
+    if (normalized === 'resident_endorsement' || normalized === 'resident_endorsements') {
+      return 'Endorsements';
+    }
+    return (type || 'system')
       .replace(/[_-]/g, ' ')
       .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
 
   const formatNotificationDate = (iso: string): string => {
     const parsed = new Date(iso);

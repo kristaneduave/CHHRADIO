@@ -53,7 +53,7 @@ export const fetchCaseRatings = async (caseId: string): Promise<{ average: numbe
         .eq('case_id', caseId);
 
     if (error || !data) {
-        console.error('Error fetching ratings:', error);
+        console.error('Error fetching ratings:', JSON.stringify(error, null, 2));
         return { average: 0, userRating: null };
     }
 
@@ -84,7 +84,7 @@ export const submitCaseRating = async (caseId: string, rating: number): Promise<
         });
 
     if (error) {
-        console.error('Error submitting rating:', error);
+        console.error('Error submitting rating:', JSON.stringify(error, null, 2));
         return false;
     }
 
