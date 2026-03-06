@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { CurrentWorkstationStatus, Floor, LiveMapPerfSample, WorkspacePlayer } from '../types';
-import VirtualWorkspaceRenderer, { ReleaseAndMoveIntent } from './VirtualWorkspaceRenderer';
+import MapViewer from './MapViewer';
+import { ReleaseAndMoveIntent } from './VirtualWorkspaceRenderer';
 
 interface LiveMapCanvasPanelProps {
   error: string | null;
@@ -191,16 +192,12 @@ const LiveMapCanvasPanel: React.FC<LiveMapCanvasPanelProps> = ({
               )}
             </div>
           </div>
-          <div className="flex-1 relative min-h-[320px] bg-white/[0.03]">
-            <VirtualWorkspaceRenderer
+          <div className="flex-1 relative min-h-[320px] bg-white/[0.03] p-4 flex items-center justify-center">
+            <MapViewer
+              floor={floor}
               workstations={filteredWorkstationsByFloor.get(floor.id) || []}
-              currentUserId={currentUserId}
-              players={hydratedPlayers}
+              selectedWorkstationId={myOccupiedWorkstation?.id}
               onPinClick={onPinClick}
-              onSetAreaPresence={onSetAreaPresence}
-              occupiedWorkstation={myOccupiedWorkstation}
-              onCheckCurrentUserOccupancy={onCheckCurrentUserOccupancy}
-              onRequestReleaseAndMove={onRequestReleaseAndMove}
             />
           </div>
         </div>

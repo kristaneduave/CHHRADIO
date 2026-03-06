@@ -104,9 +104,9 @@ const MapViewer: React.FC<MapViewerProps> = ({
   );
 
   return (
-    <div className="relative w-full rounded-2xl border border-white/10 bg-black/25 p-2 backdrop-blur-sm shadow-[0_16px_40px_-18px_rgba(2,6,23,0.85)]">
+    <div className="relative w-full rounded-2xl border border-white/10 bg-black/25 p-2 backdrop-blur-sm shadow-[0_16px_40px_-18px_rgba(2,6,23,0.85)] flex justify-center">
       <div
-        className="relative w-full overflow-hidden rounded-xl border border-white/10 bg-[#0a1018]"
+        className="relative w-full max-w-4xl overflow-hidden rounded-xl border border-white/10 bg-[#0a1018]"
         style={{ aspectRatio, touchAction: 'pan-y' }}
       >
         <img
@@ -133,9 +133,8 @@ const MapViewer: React.FC<MapViewerProps> = ({
               style={{ left: `${left}%`, top: `${top}%` }}
             >
               <div
-                className={`relative flex items-center justify-center rounded-full h-7 w-7 ring-2 ${tone.ring} ${tone.glow} ${
-                  isSelected ? 'scale-110' : 'scale-100 group-hover:scale-105'
-                } transition-transform duration-150`}
+                className={`relative flex items-center justify-center rounded-full h-7 w-7 ring-2 ${tone.ring} ${tone.glow} ${isSelected ? 'scale-110' : 'scale-100 group-hover:scale-105'
+                  } transition-transform duration-150`}
               >
                 <span className={`absolute inset-0 rounded-full ${tone.dot} opacity-95`} />
                 {tone.pulse && <span className="absolute inset-0 rounded-full bg-emerald-300/30 animate-ping [animation-duration:1800ms]" />}
@@ -156,11 +155,10 @@ const MapViewer: React.FC<MapViewerProps> = ({
               </div>
 
               <span
-                className={`mt-1 block rounded-md border px-1.5 py-0.5 text-[9px] font-bold tracking-wide backdrop-blur-sm ${
-                  isSelected
+                className={`mt-1 block rounded-md border px-1.5 py-0.5 text-[9px] font-bold tracking-wide backdrop-blur-sm ${isSelected
                     ? 'border-primary/50 bg-primary/25 text-white'
                     : 'border-white/15 bg-black/45 text-slate-200'
-                }`}
+                  }`}
               >
                 {ws.label}
               </span>
