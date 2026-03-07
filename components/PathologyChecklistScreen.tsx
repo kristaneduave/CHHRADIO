@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import EmptyState from './EmptyState';
 import LoadingState from './LoadingState';
+import { LayoutScrollContext } from './Layout';
 import { supabase } from '../services/supabase';
 import {
   createPathologyGuidelineDraftFromCurrent,
@@ -18,6 +19,7 @@ import {
 } from '../services/pathologyChecklistService';
 import {
   createPathologyGuidelineRequest,
+  deletePathologyGuidelineRequest,
   listPathologyGuidelineRequests,
   updatePathologyGuidelineRequest,
 } from '../services/pathologyGuidelineRequestService';
@@ -70,6 +72,12 @@ interface ChecklistDetailSection {
   label: string;
 }
 
+interface GroupedChecklistSection {
+  id: string;
+  label: string;
+  items: PathologyChecklistItem[];
+}
+
 const DEFAULT_FORM: SourceFormState = {
   slug: '',
   pathology_name: '',
@@ -111,6 +119,8 @@ const makeSlug = (value: string) =>
     .replace(/[^a-z0-9\s-]/g, '')
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-');
+
+const makeChecklistSectionId = (value: string) => `section-checklist-${makeSlug(value || 'checklist')}`;
 
 const isValidDateValue = (value: string) => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
 
@@ -175,11 +185,11 @@ const renderQuickList = (items: string[], accent: 'cyan' | 'amber' | 'emerald' =
   if (!items.length) return null;
 
   const accentClasses =
-    accent === 'amber'
-      ? 'border-amber-500/20 bg-amber-500/[0.05] text-amber-50/90'
-      : accent === 'emerald'
-        ? 'border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-50/90'
-        : 'border-cyan-500/20 bg-cyan-500/[0.05] text-slate-100';
+      accent === 'amber'
+        ? 'border-white/5 bg-white/[0.03] text-amber-50/90'
+        : accent === 'emerald'
+          ? 'border-white/5 bg-white/[0.03] text-emerald-50/90'
+          : 'border-white/5 bg-white/[0.03] text-slate-100';
 
   return (
     <div className={`rounded-2xl border p-4 ${accentClasses}`}>
@@ -283,7 +293,7 @@ const validateImportPayload = (raw: string): { payload: PathologyGuidelineImport
   }
 };
 
-const ChecklistSection: React.FC<{ items: PathologyChecklistItem[] }> = ({ items }) => {
+const groupChecklistItems = (items: PathologyChecklistItem[]): GroupedChecklistSection[] => {
   const grouped: Record<string, PathologyChecklistItem[]> = items.reduce((acc, item) => {
     const key = item.section?.trim() || 'Checklist';
     if (!acc[key]) acc[key] = [];
@@ -291,17 +301,34 @@ const ChecklistSection: React.FC<{ items: PathologyChecklistItem[] }> = ({ items
     return acc;
   }, {} as Record<string, PathologyChecklistItem[]>);
 
+  return Object.entries(grouped).map(([label, sectionItems]) => ({
+    id: makeChecklistSectionId(label),
+    label,
+    items: sectionItems,
+  }));
+};
+
+const ChecklistSection: React.FC<{
+  sections: GroupedChecklistSection[];
+  bindSectionRef: (sectionId: string) => (node: HTMLElement | null) => void;
+  bindSectionContainerRef: (sectionId: string) => (node: HTMLElement | null) => void;
+}> = ({ sections, bindSectionRef, bindSectionContainerRef }) => {
+
   return (
     <div className="space-y-4">
-      {(Object.entries(grouped) as Array<[string, PathologyChecklistItem[]]>).map(([section, sectionItems]) => (
-        <section key={section} className="rounded-2xl border border-cyan-500/20 bg-slate-950/40 p-4">
-          <div className="mb-3 flex items-center gap-2">
+      {sections.map((section) => (
+        <section
+          key={section.id}
+          ref={bindSectionContainerRef(section.id)}
+            className="scroll-mt-24 rounded-2xl border border-white/5 bg-white/[0.03] p-4"
+        >
+          <div id={section.id} ref={bindSectionRef(section.id)} className="mb-3 flex scroll-mt-24 items-center gap-2">
             <span className="material-icons text-[18px] text-cyan-300">checklist</span>
-            <h3 className="text-sm font-semibold text-white">{section}</h3>
+            <h3 className="text-sm font-semibold text-white">{section.label}</h3>
           </div>
           <div className="space-y-3">
-            {sectionItems.map((item) => (
-              <div key={item.id} className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+            {section.items.map((item) => (
+                <div key={item.id} className="rounded-xl border border-white/5 bg-white/[0.03] p-3">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border border-cyan-400/40 bg-cyan-500/10">
                     <span className="material-icons text-[14px] text-cyan-200">done</span>
@@ -329,6 +356,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
   const [versions, setVersions] = useState<PathologyGuidelineVersion[]>([]);
   const [sourceRecord, setSourceRecord] = useState<PathologyGuidelineSource | null>(null);
   const [form, setForm] = useState<SourceFormState>(DEFAULT_FORM);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(true);
   const [isLoadingResults, setIsLoadingResults] = useState(true);
@@ -369,8 +397,13 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
   const [requestStatusDrafts, setRequestStatusDrafts] = useState<Record<string, PathologyGuidelineRequestStatus>>({});
   const [requestNotesDrafts, setRequestNotesDrafts] = useState<Record<string, string>>({});
   const [updatingRequestId, setUpdatingRequestId] = useState<string | null>(null);
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
+  const [isSuggestionOpen, setIsSuggestionOpen] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const sectionContainerRefs = useRef<Record<string, HTMLElement | null>>({});
+  const sectionNavRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainer = useContext(LayoutScrollContext);
 
   const canEdit = canEditPathologyChecklists(currentUserRole);
   const canSyncFromDrive = form.source_kind === 'google_drive' && !!form.google_drive_file_id.trim();
@@ -389,10 +422,14 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
           data: { user },
         } = await supabase.auth.getUser();
         if (!user?.id) {
-          if (active) setCurrentUserRole(null);
+          if (active) {
+            setCurrentUserId(null);
+            setCurrentUserRole(null);
+          }
           return;
         }
 
+        if (active) setCurrentUserId(user.id);
         const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
         if (active) setCurrentUserRole(normalizeUserRole(data?.role));
       } finally {
@@ -544,19 +581,22 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
     () => versions.filter((version) => version.sync_status !== 'published'),
     [versions],
   );
+  const checklistSections = useMemo(
+    () => groupChecklistItems(detail?.checklist_items || []),
+    [detail?.checklist_items],
+  );
   const detailSections = useMemo<ChecklistDetailSection[]>(() => {
     if (!detail || isEditMode) return [];
 
     return [
-      detail.tldr_md ? { id: 'section-quick-summary', label: 'Quick Summary' } : null,
       detail.reporting_takeaways.length ? { id: 'section-reporting-takeaways', label: 'Takeaways' } : null,
       detail.reporting_red_flags.length ? { id: 'section-red-flags', label: 'Red flags' } : null,
       detail.suggested_report_phrases.length ? { id: 'section-report-phrases', label: 'Phrases' } : null,
       detail.rich_summary_md ? { id: 'section-rich-summary', label: 'Summary' } : null,
-      detail.checklist_items.length ? { id: 'section-checklist', label: 'Checklist' } : null,
+      ...checklistSections.map((section) => ({ id: section.id, label: section.label })),
       detail.parse_notes ? { id: 'section-notes', label: 'Notes' } : null,
     ].filter(Boolean) as ChecklistDetailSection[];
-  }, [detail, isEditMode]);
+  }, [detail, checklistSections, isEditMode]);
 
   useEffect(() => {
     if (!detailSections.length || isEditMode) {
@@ -564,32 +604,60 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
       return;
     }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visibleEntries = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio);
+    const updateActiveSection = () => {
+      const sectionsWithNodes = detailSections
+        .map((section) => ({ section, node: sectionRefs.current[section.id] }))
+        .filter((entry): entry is { section: ChecklistDetailSection; node: HTMLElement } => Boolean(entry.node));
 
-        if (visibleEntries.length) {
-          setActiveSectionId(visibleEntries[0].target.id);
+      if (!sectionsWithNodes.length) {
+        setActiveSectionId(detailSections[0]?.id || null);
+        return;
+      }
+
+      const navBottom = sectionNavRef.current?.getBoundingClientRect().bottom ?? 96;
+      const viewportBottom = window.innerHeight - 110;
+      const readingTop = navBottom + 8;
+      const readingBottom = Math.max(readingTop + 120, viewportBottom);
+
+      const nextActiveId = sectionsWithNodes.reduce<{
+        id: string;
+        visibleHeight: number;
+        distanceToReadingTop: number;
+      }>((best, entry) => {
+        const containerNode = sectionContainerRefs.current[entry.section.id] || entry.node;
+        const rect = containerNode.getBoundingClientRect();
+        const visibleTop = Math.max(rect.top, readingTop);
+        const visibleBottom = Math.min(rect.bottom, readingBottom);
+        const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+        const distanceToReadingTop = Math.abs(entry.node.getBoundingClientRect().top - readingTop);
+
+        if (visibleHeight > best.visibleHeight) {
+          return { id: entry.section.id, visibleHeight, distanceToReadingTop };
         }
-      },
-      {
-        root: null,
-        rootMargin: '-15% 0px -55% 0px',
-        threshold: [0.2, 0.4, 0.6],
-      },
-    );
 
-    detailSections.forEach((section) => {
-      const node = sectionRefs.current[section.id];
-      if (node) observer.observe(node);
-    });
+        if (visibleHeight === best.visibleHeight && distanceToReadingTop < best.distanceToReadingTop) {
+          return { id: entry.section.id, visibleHeight, distanceToReadingTop };
+        }
 
-    setActiveSectionId((current) => current || detailSections[0]?.id || null);
+        return best;
+      }, {
+        id: sectionsWithNodes[0].section.id,
+        visibleHeight: -1,
+        distanceToReadingTop: Number.POSITIVE_INFINITY,
+      }).id;
 
-    return () => observer.disconnect();
-  }, [detailSections, isEditMode]);
+      setActiveSectionId(nextActiveId);
+    };
+
+    updateActiveSection();
+    scrollContainer?.addEventListener('scroll', updateActiveSection, { passive: true });
+    window.addEventListener('resize', updateActiveSection);
+
+    return () => {
+      scrollContainer?.removeEventListener('scroll', updateActiveSection);
+      window.removeEventListener('resize', updateActiveSection);
+    };
+  }, [detailSections, isEditMode, scrollContainer]);
 
   const scrollToSection = (sectionId: string) => {
     const node = sectionRefs.current[sectionId];
@@ -599,9 +667,13 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
   };
 
   const scrollToTopOfDetail = () => {
-    const node = sectionRefs.current[detailSections[0]?.id || ''];
-    if (node) {
-      window.scrollTo({ top: Math.max(window.scrollY + node.getBoundingClientRect().top - 140, 0), behavior: 'smooth' });
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+      window.setTimeout(() => {
+        if (scrollContainer.scrollTop > 0) {
+          scrollContainer.scrollTop = 0;
+        }
+      }, 250);
       return;
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -609,6 +681,10 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
 
   const bindSectionRef = (sectionId: string) => (node: HTMLElement | null) => {
     sectionRefs.current[sectionId] = node;
+  };
+
+  const bindSectionContainerRef = (sectionId: string) => (node: HTMLElement | null) => {
+    sectionContainerRefs.current[sectionId] = node;
   };
 
   const handleSelectItem = (item: PathologyGuidelineListItem) => {
@@ -1047,28 +1123,119 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
     }
   };
 
+  const handleDeleteRequest = async (requestId: string) => {
+    setDeletingRequestId(requestId);
+    try {
+      await deletePathologyGuidelineRequest(requestId);
+      toastSuccess('Request deleted');
+      await refreshRequests();
+    } catch (error: any) {
+      console.error('Failed to delete pathology checklist request:', error);
+      toastError('Unable to delete request', error?.message || 'Please try again.');
+    } finally {
+      setDeletingRequestId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-app px-6 pt-6 pb-64">
       <div className="mx-auto max-w-md space-y-6">
-        <section className="rounded-[28px] border border-cyan-500/20 bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/40 p-5 shadow-[0_20px_60px_rgba(8,145,178,0.12)]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-200">
-                <span className="material-icons text-[14px]">fact_check</span>
-                Resident Hub
+        <header className="pt-2">
+          <h1 className="text-3xl font-bold text-white">RadioGraphics</h1>
+        </header>
+
+          <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setIsSuggestionOpen((value) => !value)}
+                className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-3 text-left transition hover:bg-white/[0.05]"
+            >
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Suggest</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Need something added?</p>
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-white">Pathology Checklists</h1>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-slate-300">Search pathology keywords and review the latest published checklist from the current source.</p>
-            </div>
-            <button onClick={onBack} className="shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Back</button>
+              <span className={`material-icons text-cyan-200 transition-transform ${isSuggestionOpen ? 'rotate-180' : ''}`}>expand_more</span>
+            </button>
+            {isSuggestionOpen ? (
+              <div className="space-y-4">
+                <p className="text-xs leading-5 text-slate-400">Request a topic, file, or update.</p>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-300">Title</span>
+                  <input value={requestForm.title} onChange={(event) => setRequestForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="What do you want added?" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-300">Link</span>
+                  <input value={requestForm.source_url} onChange={(event) => setRequestForm((prev) => ({ ...prev, source_url: event.target.value }))} placeholder="Optional source link" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-300">Note</span>
+                  <textarea value={requestForm.description} onChange={(event) => setRequestForm((prev) => ({ ...prev, description: event.target.value }))} rows={3} placeholder="Optional context" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={handleSubmitRequest} disabled={isSubmittingRequest} className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60">{isSubmittingRequest ? 'Sending...' : 'Send request'}</button>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{canEdit ? 'Requests' : 'Your requests'}</h3>
+                  {isLoadingRequests ? (
+                    <LoadingState compact title="Loading requests..." />
+                  ) : requests.length ? (
+                    requests.map((request) => (
+                        <div key={request.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100">{getRequestTypeLabel(request.request_type)}</span>
+                                <span className="rounded-full border border-white/5 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">{getRequestStatusLabel(request.status)}</span>
+                                <span className="text-xs text-slate-500">{formatDateLabel(request.created_at)}</span>
+                              </div>
+                              <p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Requested by {request.requester_name || request.requester_username || 'Unknown requester'}</p>
+                              <p className="mt-2 text-sm font-semibold text-white">{request.title}</p>
+                              {request.description ? <p className="mt-1 text-xs leading-5 text-slate-400">{request.description}</p> : null}
+                              {request.source_url ? <a href={request.source_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">Open link</a> : null}
+                              {!canEdit && request.review_notes ? <p className="mt-2 text-xs leading-5 text-amber-100/80">{request.review_notes}</p> : null}
+                            </div>
+                            {(canEdit || request.created_by === currentUserId) ? (
+                              <button onClick={() => handleDeleteRequest(request.id)} disabled={deletingRequestId === request.id} className="rounded-xl border border-rose-400/16 bg-rose-500/[0.08] px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/[0.12] disabled:cursor-not-allowed disabled:opacity-60">{deletingRequestId === request.id ? 'Deleting...' : 'Delete'}</button>
+                            ) : null}
+                          </div>
+                          {canEdit ? (
+                            <div className="mt-3 space-y-3 border-t border-white/5 pt-3">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              <label className="block">
+                                <span className="mb-1 block text-xs font-medium text-slate-300">Status</span>
+                                <select value={requestStatusDrafts[request.id] || request.status} onChange={(event) => setRequestStatusDrafts((prev) => ({ ...prev, [request.id]: event.target.value as PathologyGuidelineRequestStatus }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35">
+                                  <option value="pending">Pending</option>
+                                  <option value="reviewed">Reviewed</option>
+                                  <option value="approved">Approved</option>
+                                  <option value="rejected">Rejected</option>
+                                  <option value="completed">Completed</option>
+                                </select>
+                              </label>
+                            </div>
+                            <label className="block">
+                              <span className="mb-1 block text-xs font-medium text-slate-300">Review note</span>
+                              <textarea value={requestNotesDrafts[request.id] || ''} onChange={(event) => setRequestNotesDrafts((prev) => ({ ...prev, [request.id]: event.target.value }))} rows={3} placeholder="Optional note" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
+                            </label>
+                            <button onClick={() => handleUpdateRequest(request.id)} disabled={updatingRequestId === request.id} className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">{updatingRequestId === request.id ? 'Saving...' : 'Save'}</button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyState compact icon="forum" title="No requests yet" description={canEdit ? 'Requests will appear here.' : 'Your requests will appear here.'} />
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/8 bg-slate-950/50 p-4 backdrop-blur-sm">
+          <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
           <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">Search pathology</label>
           <div className="relative">
             <span className="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">search</span>
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Type pathology, syndrome, or keyword" className="w-full rounded-2xl border border-cyan-500/20 bg-slate-900/80 py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/40" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Type pathology, syndrome, or keyword" className="w-full rounded-2xl border border-white/5 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/28" />
           </div>
           <div className="mt-4">
             {isLoadingResults ? <LoadingState compact title="Loading pathology index..." /> : results.length ? (
@@ -1076,14 +1243,11 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
                 {results.map((item) => {
                   const active = item.guideline_id === selectedItem?.guideline_id;
                   return (
-                    <button key={item.guideline_id} onClick={() => handleSelectItem(item)} className={`w-full rounded-2xl border p-3 text-left transition ${active ? 'border-cyan-400/40 bg-cyan-500/10 shadow-[0_0_0_1px_rgba(34,211,238,0.14)]' : 'border-white/8 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.05]'}`}>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">{item.pathology_name}</p>
-                          <p className="mt-1 truncate text-xs text-slate-400">{[item.specialty, item.issuing_body].filter(Boolean).join(' • ') || 'Published guideline'}</p>
-                          {!!item.synonyms.length && <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">Synonyms: {item.synonyms.join(', ')}</p>}
-                        </div>
-                        <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200">Latest</span>
+                    <button key={item.guideline_id} onClick={() => handleSelectItem(item)} className={`w-full rounded-2xl border p-3 text-left transition ${active ? 'border-cyan-400/22 bg-cyan-950/[0.08] shadow-[0_0_0_1px_rgba(8,145,178,0.05)]' : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.05]'}`}>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{item.pathology_name}</p>
+                        <p className="mt-1 truncate text-xs text-slate-400">{[item.specialty, item.issuing_body].filter(Boolean).join(' • ') || 'Published guideline'}</p>
+                        {!!item.synonyms.length && <p className="mt-2 line-clamp-2 text-[11px] leading-5 text-slate-500">Synonyms: {item.synonyms.join(', ')}</p>}
                       </div>
                     </button>
                   );
@@ -1093,7 +1257,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/8 bg-slate-950/50 p-4 backdrop-blur-sm">
+          <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
           {isLoadingDetail ? <LoadingState compact title="Loading checklist detail..." /> : detail ? (
             isEditMode ? (
               <div className="space-y-4">
@@ -1145,27 +1309,23 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
               <div className="space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
-                    <div className="mb-2 flex flex-wrap items-center gap-2"><span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em] text-emerald-200">Latest published version</span><span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-100">{getSourceKindLabel(detail.source_kind)}</span>{detail.specialty ? <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">{detail.specialty}</span> : null}</div>
                     <h2 className="text-2xl font-black tracking-tight text-white">{detail.pathology_name}</h2>
                     <p className="mt-2 text-xs leading-5 text-slate-400">{detail.source_title || 'Untitled guideline'}{detail.issuing_body ? ` • ${detail.issuing_body}` : ''}</p>
                   </div>
                   <div className="flex gap-2">
                     {canEdit && <button onClick={handleEditDraft} disabled={isPreparingDraft} className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-3 py-2 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">{isPreparingDraft ? 'Preparing...' : 'Edit checklist draft'}</button>}
-                    {detail.source_url ? <a href={detail.source_url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">{getSourceActionLabel(detail.source_kind)}</a> : <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-400">Source link can be added later</span>}
+                    {detail.source_url ? <a href={detail.source_url} target="_blank" rel="noopener noreferrer" className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">{getSourceActionLabel(detail.source_kind)}</a> : <span className="rounded-xl border border-cyan-500/15 bg-cyan-950/[0.08] px-3 py-2 text-xs font-semibold text-slate-400">Source link can be added later</span>}
                   </div>
                 </div>
                 {detailSections.length ? (
-                  <div className="sticky top-3 z-10 space-y-2">
-                    <div className="inline-flex rounded-full border border-cyan-400/20 bg-slate-950/85 px-3 py-1.5 text-[11px] font-semibold text-cyan-100 shadow-[0_10px_30px_rgba(2,132,199,0.12)] backdrop-blur">
-                      {detailSections.find((section) => section.id === activeSectionId)?.label || detailSections[0]?.label || 'Section'}
-                    </div>
-                    <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-950/85 p-2 shadow-[0_10px_30px_rgba(15,23,42,0.22)] backdrop-blur">
+                    <div ref={sectionNavRef} className="sticky top-3 z-10 rounded-2xl border border-white/5 bg-[#101a27]/90 p-2 shadow-[0_10px_30px_rgba(15,23,42,0.22)] backdrop-blur">
+                    <div className="flex items-center gap-2">
                       <label className="min-w-0 flex-1">
                         <span className="sr-only">Jump to section</span>
                         <select
                           value={activeSectionId || detailSections[0]?.id || ''}
                           onChange={(event) => scrollToSection(event.target.value)}
-                          className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35"
+                            className="w-full rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/28"
                           aria-label="Jump to section"
                         >
                           {detailSections.map((section) => (
@@ -1184,100 +1344,15 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = ({ onB
                     </div>
                   </div>
                 ) : null}
-                {detail.tldr_md ? <section id="section-quick-summary" ref={bindSectionRef('section-quick-summary')} className="scroll-mt-24 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4"><div className="mb-3 flex items-center gap-2"><span className="material-icons text-[18px] text-emerald-300">bolt</span><h3 className="text-sm font-semibold text-emerald-100">Quick Summary</h3></div><div className="space-y-3">{renderSummaryBlocks(detail.tldr_md)}</div></section> : null}
-                {detail.reporting_takeaways.length ? <section id="section-reporting-takeaways" ref={bindSectionRef('section-reporting-takeaways')} className="scroll-mt-24 space-y-3"><div className="flex items-center gap-2"><span className="material-icons text-[18px] text-cyan-300">assignment</span><h3 className="text-sm font-semibold text-white">Reporting takeaways</h3></div>{renderQuickList(detail.reporting_takeaways, 'cyan')}</section> : null}
-                {detail.reporting_red_flags.length ? <section id="section-red-flags" ref={bindSectionRef('section-red-flags')} className="scroll-mt-24 space-y-3"><div className="flex items-center gap-2"><span className="material-icons text-[18px] text-amber-300">warning</span><h3 className="text-sm font-semibold text-white">Red flags</h3></div>{renderQuickList(detail.reporting_red_flags, 'amber')}</section> : null}
-                {detail.suggested_report_phrases.length ? <section id="section-report-phrases" ref={bindSectionRef('section-report-phrases')} className="scroll-mt-24 space-y-3"><div className="flex items-center gap-2"><span className="material-icons text-[18px] text-emerald-300">edit_note</span><h3 className="text-sm font-semibold text-white">Suggested report phrases</h3></div>{renderQuickList(detail.suggested_report_phrases, 'emerald')}</section> : null}
-                <section id="section-rich-summary" ref={bindSectionRef('section-rich-summary')} className="scroll-mt-24 rounded-2xl border border-white/8 bg-white/[0.03] p-4"><div className="mb-3 flex items-center gap-2"><span className="material-icons text-[18px] text-cyan-300">article</span><h3 className="text-sm font-semibold text-white">Rich summary</h3></div><div className="space-y-3">{renderSummaryBlocks(detail.rich_summary_md)}</div></section>
-                <div id="section-checklist" ref={bindSectionRef('section-checklist')} className="scroll-mt-24">
-                  <ChecklistSection items={detail.checklist_items} />
-                </div>
-                {detail.parse_notes ? <section id="section-notes" ref={bindSectionRef('section-notes')} className="scroll-mt-24 rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-4"><div className="mb-2 flex items-center gap-2"><span className="material-icons text-[18px] text-amber-300">info</span><h3 className="text-sm font-semibold text-amber-100">Notes / caveats</h3></div><p className="text-sm leading-6 text-amber-50/85">{detail.parse_notes}</p></section> : null}
+                {detail.reporting_takeaways.length ? <section ref={bindSectionContainerRef('section-reporting-takeaways')} className="space-y-3"><div id="section-reporting-takeaways" ref={bindSectionRef('section-reporting-takeaways')} className="flex scroll-mt-24 items-center gap-2"><span className="material-icons text-[18px] text-cyan-300">assignment</span><h3 className="text-sm font-semibold text-white">Reporting takeaways</h3></div>{renderQuickList(detail.reporting_takeaways, 'cyan')}</section> : null}
+                {detail.reporting_red_flags.length ? <section ref={bindSectionContainerRef('section-red-flags')} className="space-y-3"><div id="section-red-flags" ref={bindSectionRef('section-red-flags')} className="flex scroll-mt-24 items-center gap-2"><span className="material-icons text-[18px] text-amber-300">warning</span><h3 className="text-sm font-semibold text-white">Red flags</h3></div>{renderQuickList(detail.reporting_red_flags, 'amber')}</section> : null}
+                {detail.suggested_report_phrases.length ? <section ref={bindSectionContainerRef('section-report-phrases')} className="space-y-3"><div id="section-report-phrases" ref={bindSectionRef('section-report-phrases')} className="flex scroll-mt-24 items-center gap-2"><span className="material-icons text-[18px] text-emerald-300">edit_note</span><h3 className="text-sm font-semibold text-white">Suggested report phrases</h3></div>{renderQuickList(detail.suggested_report_phrases, 'emerald')}</section> : null}
+                <section ref={bindSectionContainerRef('section-rich-summary')} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4"><div id="section-rich-summary" ref={bindSectionRef('section-rich-summary')} className="mb-3 flex scroll-mt-24 items-center gap-2"><span className="material-icons text-[18px] text-cyan-300">article</span><h3 className="text-sm font-semibold text-white">Rich summary</h3></div><div className="space-y-3">{renderSummaryBlocks(detail.rich_summary_md)}</div></section>
+                <ChecklistSection sections={checklistSections} bindSectionRef={bindSectionRef} bindSectionContainerRef={bindSectionContainerRef} />
+                {detail.parse_notes ? <section ref={bindSectionContainerRef('section-notes')} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4"><div id="section-notes" ref={bindSectionRef('section-notes')} className="mb-2 flex scroll-mt-24 items-center gap-2"><span className="material-icons text-[18px] text-amber-300">info</span><h3 className="text-sm font-semibold text-amber-100">Notes / caveats</h3></div><p className="text-sm leading-6 text-amber-50/85">{detail.parse_notes}</p></section> : null}
               </div>
             )
           ) : <EmptyState compact icon="fact_check" title="Select a pathology" description="Choose a search result to view the latest published checklist and summary." />}
-        </section>
-
-        <section className="rounded-3xl border border-white/8 bg-slate-950/50 p-4 backdrop-blur-sm">
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Suggest a topic or file</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">Request a pathology topic, PDF source, or guideline update you want added to the checklist library.</p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-300">Request type</span>
-                <select value={requestForm.request_type} onChange={(event) => setRequestForm((prev) => ({ ...prev, request_type: event.target.value as PathologyGuidelineRequestType }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35">
-                  <option value="topic">Topic suggestion</option>
-                  <option value="pdf_source">PDF source suggestion</option>
-                  <option value="guideline_update">Guideline update</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-xs font-medium text-slate-300">Title</span>
-                <input value={requestForm.title} onChange={(event) => setRequestForm((prev) => ({ ...prev, title: event.target.value }))} placeholder="Ex: Pediatric intussusception imaging checklist" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
-              </label>
-            </div>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-300">Source URL</span>
-              <input value={requestForm.source_url} onChange={(event) => setRequestForm((prev) => ({ ...prev, source_url: event.target.value }))} placeholder="Optional PDF or source link" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-slate-300">Why should this be added?</span>
-              <textarea value={requestForm.description} onChange={(event) => setRequestForm((prev) => ({ ...prev, description: event.target.value }))} rows={4} placeholder="Optional context, clinical use case, or why the file would help residents." className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35" />
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={handleSubmitRequest} disabled={isSubmittingRequest} className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60">{isSubmittingRequest ? 'Submitting...' : 'Submit request'}</button>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{canEdit ? 'Request queue' : 'Your requests'}</h3>
-              {isLoadingRequests ? (
-                <LoadingState compact title="Loading requests..." />
-              ) : requests.length ? (
-                requests.map((request) => (
-                  <div key={request.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100">{getRequestTypeLabel(request.request_type)}</span>
-                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">{getRequestStatusLabel(request.status)}</span>
-                          <span className="text-xs text-slate-500">{formatDateLabel(request.created_at)}</span>
-                        </div>
-                        <p className="mt-2 text-sm font-semibold text-white">{request.title}</p>
-                        {request.description ? <p className="mt-1 text-xs leading-5 text-slate-400">{request.description}</p> : null}
-                        {request.source_url ? <a href={request.source_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">Open suggested source</a> : null}
-                        {!canEdit && request.review_notes ? <p className="mt-2 text-xs leading-5 text-amber-100/80">{request.review_notes}</p> : null}
-                      </div>
-                    </div>
-                    {canEdit ? (
-                      <div className="mt-3 space-y-3 border-t border-white/8 pt-3">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <label className="block">
-                            <span className="mb-1 block text-xs font-medium text-slate-300">Status</span>
-                            <select value={requestStatusDrafts[request.id] || request.status} onChange={(event) => setRequestStatusDrafts((prev) => ({ ...prev, [request.id]: event.target.value as PathologyGuidelineRequestStatus }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35">
-                              <option value="pending">Pending</option>
-                              <option value="reviewed">Reviewed</option>
-                              <option value="approved">Approved</option>
-                              <option value="rejected">Rejected</option>
-                              <option value="completed">Completed</option>
-                            </select>
-                          </label>
-                        </div>
-                        <label className="block">
-                          <span className="mb-1 block text-xs font-medium text-slate-300">Review notes</span>
-                          <textarea value={requestNotesDrafts[request.id] || ''} onChange={(event) => setRequestNotesDrafts((prev) => ({ ...prev, [request.id]: event.target.value }))} rows={3} placeholder="Optional editor notes for triage or feedback." className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
-                        </label>
-                        <button onClick={() => handleUpdateRequest(request.id)} disabled={updatingRequestId === request.id} className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">{updatingRequestId === request.id ? 'Saving...' : 'Save review'}</button>
-                      </div>
-                    ) : null}
-                  </div>
-                ))
-              ) : (
-                <EmptyState compact icon="forum" title="No requests yet" description={canEdit ? 'User suggestions and editor notes will appear here.' : 'Submit a topic or file request and it will appear here for tracking.'} />
-              )}
-            </div>
-          </div>
         </section>
 
         {(canEdit || isRoleLoading) && (
