@@ -1,6 +1,11 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census' | 'pathology-checklists';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
+export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
+export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
+export type PathologyGuidelineVersionOrigin = 'pdf_json_import' | 'manual_edit' | 'drive_sync' | 'draft_clone';
+export type PathologyGuidelineRequestType = 'topic' | 'pdf_source' | 'guideline_update';
+export type PathologyGuidelineRequestStatus = 'pending' | 'reviewed' | 'approved' | 'rejected' | 'completed';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -248,6 +253,150 @@ export interface ProfilePrivateNote {
 }
 
 export type NoteSaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
+
+export interface PathologyChecklistItem {
+  id: string;
+  label: string;
+  section?: string | null;
+  order: number;
+  notes?: string | null;
+}
+
+export interface PathologyGuidelineListItem {
+  guideline_id: string;
+  slug: string;
+  pathology_name: string;
+  specialty?: string | null;
+  synonyms: string[];
+  keywords: string[];
+  source_title?: string | null;
+  issuing_body?: string | null;
+  version_label?: string | null;
+  effective_date?: string | null;
+  synced_at?: string | null;
+  published_at?: string | null;
+  source_kind?: PathologyGuidelineSourceKind;
+}
+
+export interface PathologyGuidelineDetail extends PathologyGuidelineListItem {
+  source_url: string;
+  google_drive_url: string;
+  tldr_md: string;
+  rich_summary_md: string;
+  reporting_takeaways: string[];
+  reporting_red_flags: string[];
+  suggested_report_phrases: string[];
+  checklist_items: PathologyChecklistItem[];
+  parse_notes?: string | null;
+  raw_text_excerpt?: string | null;
+}
+
+export interface PathologyGuidelineVersion {
+  id: string;
+  guideline_id: string;
+  version_label?: string | null;
+  effective_date?: string | null;
+  sync_status: GuidelineSyncStatus;
+  origin: PathologyGuidelineVersionOrigin;
+  source_revision?: string | null;
+  source_title?: string | null;
+  issuing_body?: string | null;
+  source_url: string;
+  tldr_md: string;
+  rich_summary_md: string;
+  reporting_takeaways: string[];
+  reporting_red_flags: string[];
+  suggested_report_phrases: string[];
+  checklist_items: PathologyChecklistItem[];
+  parse_notes?: string | null;
+  raw_text_excerpt?: string | null;
+  synced_at: string;
+  published_at?: string | null;
+}
+
+export interface EditableDraftPatch {
+  version_label?: string | null;
+  effective_date?: string | null;
+  source_title?: string | null;
+  issuing_body?: string | null;
+  tldr_md?: string;
+  rich_summary_md?: string;
+  reporting_takeaways?: string[];
+  reporting_red_flags?: string[];
+  suggested_report_phrases?: string[];
+  checklist_items?: PathologyChecklistItem[];
+  parse_notes?: string | null;
+}
+
+export interface PathologyGuidelineImportPayload {
+  filename?: string | null;
+  slug?: string | null;
+  pathology_name: string;
+  specialty?: string | null;
+  synonyms: string[];
+  keywords: string[];
+  source_title?: string | null;
+  issuing_body?: string | null;
+  version_label?: string | null;
+  effective_date?: string | null;
+  tldr_md?: string | null;
+  rich_summary_md: string;
+  reporting_takeaways?: string[];
+  reporting_red_flags?: string[];
+  suggested_report_phrases?: string[];
+  checklist_items: PathologyChecklistItem[];
+  parse_notes?: string | null;
+}
+
+export interface PathologyGuidelineSourceInput {
+  slug: string;
+  pathology_name: string;
+  specialty?: string | null;
+  synonyms?: string[];
+  keywords?: string[];
+  source_url: string;
+  source_kind: PathologyGuidelineSourceKind;
+  google_drive_url: string;
+  google_drive_file_id: string;
+  source_title?: string | null;
+  issuing_body?: string | null;
+  is_active?: boolean;
+}
+
+export interface PathologyGuidelineSource extends PathologyGuidelineSourceInput {
+  id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PathologyGuidelineRequest {
+  id: string;
+  created_by: string;
+  request_type: PathologyGuidelineRequestType;
+  title: string;
+  description?: string | null;
+  source_url?: string | null;
+  status: PathologyGuidelineRequestStatus;
+  review_notes?: string | null;
+  fulfilled_guideline_id?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PathologyGuidelineRequestInput {
+  request_type: PathologyGuidelineRequestType;
+  title: string;
+  description?: string | null;
+  source_url?: string | null;
+}
+
+export interface PathologyGuidelineRequestUpdate {
+  status?: PathologyGuidelineRequestStatus;
+  review_notes?: string | null;
+  fulfilled_guideline_id?: string | null;
+}
 
 
 

@@ -25,3 +25,10 @@ export const normalizeUserRole = (role?: string | null): UserRole => {
   if (normalized === 'fellow') return 'fellow';
   return 'resident';
 };
+
+export const PATHOLOGY_CHECKLIST_EDITOR_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
+
+export const canEditPathologyChecklists = (role?: UserRole | null): boolean => {
+  if (!role) return false;
+  return PATHOLOGY_CHECKLIST_EDITOR_ROLES.includes(role);
+};
