@@ -47,7 +47,7 @@ const NEW_BUTTON_STYLES: Record<string, { colorClass: string; bgClass: string; b
     borderClass: 'border-purple-500/20',
     shadowClass: 'shadow-[0_0_15px_rgba(168,85,247,0.2)]',
   },
-  "Resident Hub": {
+  "RESI HQ": {
     colorClass: 'text-blue-400',
     bgClass: 'bg-blue-500/10',
     borderClass: 'border-blue-500/20',
@@ -62,7 +62,7 @@ const BUTTON_LABELS: Record<string, string> = {
   Announcements: 'News',
   Calendar: 'Calendar',
   Quiz: 'Quiz',
-  "Resident Hub": 'Resident Hub',
+  "RESI HQ": 'RESI HQ',
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
@@ -73,7 +73,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   const [hoveredActionIndex, setHoveredActionIndex] = useState<number | null>(null);
   const [radius, setRadius] = useState(135);
 
-  const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "Resident Hub"];
+  const buttonOrder = ['Upload Case', 'Case Library', 'Announcements', 'Calendar', 'Quiz', "RESI HQ"];
   const orderedActions = [...QUICK_ACTIONS].sort((a, b) => buttonOrder.indexOf(a.label) - buttonOrder.indexOf(b.label));
 
   useEffect(() => {

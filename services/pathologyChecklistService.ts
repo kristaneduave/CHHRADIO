@@ -1,5 +1,6 @@
 import {
   EditableDraftPatch,
+  PathologyGuidelineContentType,
   PathologyGuidelineImportPayload,
   PathologyChecklistItem,
   PathologyGuidelineDetail,
@@ -9,6 +10,19 @@ import {
   PathologyGuidelineVersion,
 } from '../types';
 import { supabase } from './supabase';
+
+const QUERY_SYNONYMS: Record<string, string[]> = {
+  renal: ['kidney'],
+  kidney: ['renal'],
+  pulmonary: ['lung'],
+  lung: ['pulmonary'],
+  hepatic: ['liver'],
+  liver: ['hepatic'],
+  mass: ['lesion'],
+  lesion: ['mass'],
+};
+
+const DEFAULT_TOPIC = 'General reporting pearls';
 
 const normalizeTokens = (value: string) =>
   value
@@ -26,6 +40,11 @@ const mapStringArray = (value: unknown): string[] => {
   return Array.from(new Set(value.map((item) => String(item || '').trim()).filter(Boolean)));
 };
 
+const normalizeContentType = (value: unknown): PathologyGuidelineContentType => {
+  if (value === 'guideline' || value === 'review') return value;
+  return 'checklist';
+};
+
 const mapChecklistItems = (value: unknown): PathologyChecklistItem[] => {
   if (!Array.isArray(value)) return [];
 
@@ -39,6 +58,12 @@ const mapChecklistItems = (value: unknown): PathologyChecklistItem[] => {
     }))
     .filter((item) => item.label)
     .sort((left, right) => left.order - right.order);
+};
+
+const getPrimaryTopic = (row: any) => {
+  const explicit = row.primary_topic ? String(row.primary_topic).trim() : '';
+  const fallback = row.specialty ? String(row.specialty).trim() : '';
+  return explicit || fallback || DEFAULT_TOPIC;
 };
 
 const mapListRow = (row: any): PathologyGuidelineListItem => ({
@@ -55,6 +80,17 @@ const mapListRow = (row: any): PathologyGuidelineListItem => ({
   synced_at: row.synced_at ? String(row.synced_at) : null,
   published_at: row.published_at ? String(row.published_at) : null,
   source_kind: row.source_kind || 'google_drive',
+  primary_topic: getPrimaryTopic(row),
+  secondary_topics: uniqueStrings(row.secondary_topics),
+  clinical_tags: uniqueStrings(row.clinical_tags),
+  anatomy_terms: uniqueStrings(row.anatomy_terms),
+  problem_terms: uniqueStrings(row.problem_terms),
+  content_type: normalizeContentType(row.content_type),
+  is_featured: Boolean(row.is_featured),
+  search_priority: Math.max(0, Number(row.search_priority) || 0),
+  related_guideline_slugs: uniqueStrings(row.related_guideline_slugs),
+  match_reason: row.match_reason ? String(row.match_reason) : null,
+  tldr_md: row.tldr_md ? String(row.tldr_md) : null,
 });
 
 const mapDetailRow = (row: any): PathologyGuidelineDetail => ({
@@ -108,34 +144,118 @@ const buildSourceDefaults = (input: PathologyGuidelineSourceInput) => {
   };
 };
 
+const expandQueryTokens = (tokens: string[]) =>
+  Array.from(
+    new Set(
+      tokens.flatMap((token) => [token, ...(QUERY_SYNONYMS[token] || [])]),
+    ),
+  );
+
+const getSearchFields = (item: PathologyGuidelineListItem) => ({
+  pathologyName: item.pathology_name.toLowerCase(),
+  synonyms: item.synonyms.map((entry) => entry.toLowerCase()),
+  anatomyTerms: item.anatomy_terms.map((entry) => entry.toLowerCase()),
+  problemTerms: item.problem_terms.map((entry) => entry.toLowerCase()),
+  clinicalTags: item.clinical_tags.map((entry) => entry.toLowerCase()),
+  keywords: item.keywords.map((entry) => entry.toLowerCase()),
+  secondaryTopics: item.secondary_topics.map((entry) => entry.toLowerCase()),
+  sourceTitle: (item.source_title || '').toLowerCase(),
+  issuingBody: (item.issuing_body || '').toLowerCase(),
+  specialty: (item.specialty || '').toLowerCase(),
+  primaryTopic: (item.primary_topic || '').toLowerCase(),
+});
+
+const formatMatchReason = (label: string, value?: string | null) =>
+  value ? `${label}: ${value}` : label;
+
 const scoreGuideline = (item: PathologyGuidelineListItem, query: string) => {
   const normalizedQuery = query.trim().toLowerCase();
-  if (!normalizedQuery) return 0;
-
-  const pathologyName = item.pathology_name.toLowerCase();
-  if (pathologyName === normalizedQuery) return 1000;
-  if (pathologyName.startsWith(normalizedQuery)) return 800;
-
-  const haystacks = [
-    ...item.synonyms,
-    ...item.keywords,
-    item.issuing_body || '',
-    item.source_title || '',
-    item.specialty || '',
-  ].map((entry) => entry.toLowerCase());
-
-  if (haystacks.includes(normalizedQuery)) return 700;
-
-  const queryTokens = normalizeTokens(query);
-  const allTokens = normalizeTokens([item.pathology_name, ...item.synonyms, ...item.keywords, item.issuing_body || '', item.source_title || ''].join(' '));
-
-  let score = pathologyName.includes(normalizedQuery) ? 500 : 0;
-  for (const token of queryTokens) {
-    if (allTokens.includes(token)) score += 75;
-    else if (allTokens.some((candidate) => candidate.includes(token))) score += 30;
+  if (!normalizedQuery) {
+    return {
+      score: item.search_priority,
+      matchReason: null,
+    };
   }
 
-  return score;
+  const fields = getSearchFields(item);
+  const exactSynonym = fields.synonyms.find((entry) => entry === normalizedQuery);
+  const exactClinicalTag = fields.clinicalTags.find((entry) => entry === normalizedQuery);
+  const queryTokens = expandQueryTokens(normalizeTokens(normalizedQuery));
+  const anatomyHit = queryTokens.find((token) => fields.anatomyTerms.includes(token));
+  const problemHit = queryTokens.find((token) => fields.problemTerms.includes(token));
+  const supportHaystacks = [
+    ...fields.keywords,
+    ...fields.secondaryTopics,
+    fields.sourceTitle,
+    fields.issuingBody,
+    fields.specialty,
+    fields.primaryTopic,
+  ].filter(Boolean);
+
+  let score = item.search_priority * 5;
+  let matchReason: string | null = null;
+
+  if (fields.pathologyName === normalizedQuery) {
+    return { score: 1000 + score, matchReason: formatMatchReason('Matched pathology', item.pathology_name) };
+  }
+
+  if (fields.pathologyName.startsWith(normalizedQuery)) {
+    score += 800;
+    matchReason = matchReason || formatMatchReason('Starts with pathology', item.pathology_name);
+  } else if (exactSynonym) {
+    score += 750;
+    matchReason = matchReason || formatMatchReason('Matched synonym', exactSynonym);
+  }
+
+  if (anatomyHit && problemHit) {
+    score += 700;
+    matchReason = matchReason || formatMatchReason('Matched anatomy and problem', `${anatomyHit} + ${problemHit}`);
+  }
+
+  if (exactClinicalTag) {
+    score += 650;
+    matchReason = matchReason || formatMatchReason('Matched tag', exactClinicalTag);
+  }
+
+  if (fields.pathologyName.includes(normalizedQuery)) {
+    score += 500;
+    matchReason = matchReason || formatMatchReason('Matched pathology', item.pathology_name);
+  }
+
+  const weightedArrays = [
+    { values: fields.synonyms, exactWeight: 90, partialWeight: 40, label: 'Matched synonym' },
+    { values: fields.anatomyTerms, exactWeight: 90, partialWeight: 40, label: 'Matched anatomy' },
+    { values: fields.problemTerms, exactWeight: 90, partialWeight: 40, label: 'Matched problem' },
+    { values: fields.clinicalTags, exactWeight: 75, partialWeight: 30, label: 'Matched tag' },
+    { values: fields.keywords, exactWeight: 55, partialWeight: 25, label: 'Matched keyword' },
+  ];
+
+  queryTokens.forEach((token) => {
+    weightedArrays.forEach(({ values, exactWeight, partialWeight, label }) => {
+      if (values.includes(token)) {
+        score += exactWeight;
+        matchReason = matchReason || formatMatchReason(label, token);
+      } else if (values.some((entry) => entry.includes(token))) {
+        score += partialWeight;
+        matchReason = matchReason || formatMatchReason(label, token);
+      }
+    });
+
+    supportHaystacks.forEach((value) => {
+      if (value === token) {
+        score += 20;
+        matchReason = matchReason || formatMatchReason('Matched source metadata', token);
+      } else if (value.includes(token)) {
+        score += 10;
+        matchReason = matchReason || formatMatchReason('Matched source metadata', token);
+      }
+    });
+  });
+
+  return {
+    score,
+    matchReason,
+  };
 };
 
 export const extractGoogleDriveFileId = (url: string) => {
@@ -155,13 +275,22 @@ export const extractGoogleDriveFileId = (url: string) => {
 };
 
 export const getCurrentPathologyGuidelines = async (): Promise<PathologyGuidelineListItem[]> => {
-  const { data, error } = await supabase
+  const primaryQuery = await supabase
     .from('pathology_guideline_current')
-    .select('guideline_id,slug,pathology_name,specialty,synonyms,keywords,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind')
+    .select('guideline_id,slug,pathology_name,specialty,synonyms,keywords,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,content_type,is_featured,search_priority,related_guideline_slugs,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md')
     .order('pathology_name', { ascending: true });
 
-  if (error) throw error;
-  return (data || []).map(mapListRow);
+  if (!primaryQuery.error) {
+    return (primaryQuery.data || []).map(mapListRow);
+  }
+
+  const fallbackQuery = await supabase
+    .from('pathology_guideline_current')
+    .select('guideline_id,slug,pathology_name,specialty,synonyms,keywords,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md')
+    .order('pathology_name', { ascending: true });
+
+  if (fallbackQuery.error) throw fallbackQuery.error;
+  return (fallbackQuery.data || []).map(mapListRow);
 };
 
 export const searchPathologyGuidelines = async (query: string): Promise<PathologyGuidelineListItem[]> => {
@@ -169,13 +298,112 @@ export const searchPathologyGuidelines = async (query: string): Promise<Patholog
   const trimmed = query.trim();
 
   if (!trimmed) {
-    return guidelines.slice(0, 12);
+    return guidelines
+      .sort((left, right) => {
+        const featuredOrder = Number(right.is_featured) - Number(left.is_featured);
+        if (featuredOrder !== 0) return featuredOrder;
+        const priorityOrder = right.search_priority - left.search_priority;
+        if (priorityOrder !== 0) return priorityOrder;
+        return left.pathology_name.localeCompare(right.pathology_name);
+      });
   }
 
   return guidelines
-    .map((item) => ({ item, score: scoreGuideline(item, trimmed) }))
+    .map((item) => {
+      const { score, matchReason } = scoreGuideline(item, trimmed);
+      return { ...item, score, match_reason: matchReason };
+    })
     .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.item.pathology_name.localeCompare(right.item.pathology_name))
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.pathology_name.localeCompare(right.pathology_name);
+    })
+    .map(({ score: _score, ...item }) => item);
+};
+
+export const getRadioGraphicsTopicHubs = async () => {
+  const guidelines = await getCurrentPathologyGuidelines();
+  const grouped = guidelines.reduce<Record<string, PathologyGuidelineListItem[]>>((acc, item) => {
+    const key = item.primary_topic || DEFAULT_TOPIC;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped)
+    .map(([topic, items]) => {
+      const sortedItems = [...items].sort((left, right) => {
+        const featuredOrder = Number(right.is_featured) - Number(left.is_featured);
+        if (featuredOrder !== 0) return featuredOrder;
+        const priorityOrder = right.search_priority - left.search_priority;
+        if (priorityOrder !== 0) return priorityOrder;
+        return left.pathology_name.localeCompare(right.pathology_name);
+      });
+
+      const tags = Array.from(
+        new Set(sortedItems.flatMap((item) => [...item.clinical_tags, ...item.problem_terms]).filter(Boolean)),
+      ).slice(0, 4);
+
+      return {
+        id: topic.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+        topic,
+        count: sortedItems.length,
+        tags,
+        featuredItems: sortedItems.slice(0, 3),
+      };
+    })
+    .sort((left, right) => left.topic.localeCompare(right.topic));
+};
+
+export const getFeaturedPathologyGuidelines = async (): Promise<PathologyGuidelineListItem[]> => {
+  const guidelines = await getCurrentPathologyGuidelines();
+  return guidelines
+    .filter((item) => item.is_featured)
+    .sort((left, right) => {
+      const priorityOrder = right.search_priority - left.search_priority;
+      if (priorityOrder !== 0) return priorityOrder;
+      return left.pathology_name.localeCompare(right.pathology_name);
+    });
+};
+
+export const getRelatedPathologyGuidelines = async (current: PathologyGuidelineDetail): Promise<PathologyGuidelineListItem[]> => {
+  const guidelines = await getCurrentPathologyGuidelines();
+  const candidates = guidelines.filter((item) => item.guideline_id !== current.guideline_id);
+
+  const explicit = candidates.filter((item) => current.related_guideline_slugs.includes(item.slug));
+  if (explicit.length) {
+    return explicit.slice(0, 6);
+  }
+
+  const currentTerms = new Set([
+    current.primary_topic,
+    ...current.secondary_topics,
+    ...current.clinical_tags,
+    ...current.anatomy_terms,
+    ...current.problem_terms,
+  ].map((entry) => entry.toLowerCase()).filter(Boolean));
+
+  return candidates
+    .map((item) => {
+      const comparableTerms = [
+        item.primary_topic,
+        ...item.secondary_topics,
+        ...item.clinical_tags,
+        ...item.anatomy_terms,
+        ...item.problem_terms,
+      ].map((entry) => entry.toLowerCase());
+      const overlap = comparableTerms.filter((entry) => currentTerms.has(entry)).length;
+      return { item, overlap };
+    })
+    .filter((entry) => entry.overlap > 0)
+    .sort((left, right) => {
+      if (right.overlap !== left.overlap) return right.overlap - left.overlap;
+      if (right.item.search_priority !== left.item.search_priority) {
+        return right.item.search_priority - left.item.search_priority;
+      }
+      return left.item.pathology_name.localeCompare(right.item.pathology_name);
+    })
+    .slice(0, 6)
     .map((entry) => entry.item);
 };
 
@@ -198,6 +426,15 @@ export const createPathologyGuidelineSource = async (input: PathologyGuidelineSo
     specialty: input.specialty?.trim() || null,
     synonyms: uniqueStrings(input.synonyms),
     keywords: uniqueStrings(input.keywords),
+    primary_topic: input.primary_topic?.trim() || null,
+    secondary_topics: uniqueStrings(input.secondary_topics),
+    clinical_tags: uniqueStrings(input.clinical_tags),
+    anatomy_terms: uniqueStrings(input.anatomy_terms),
+    problem_terms: uniqueStrings(input.problem_terms),
+    content_type: input.content_type || 'checklist',
+    is_featured: Boolean(input.is_featured),
+    search_priority: Math.max(0, Number(input.search_priority) || 0),
+    related_guideline_slugs: uniqueStrings(input.related_guideline_slugs),
     ...sourceDefaults,
     source_title: input.source_title?.trim() || null,
     issuing_body: input.issuing_body?.trim() || null,
@@ -238,6 +475,15 @@ export const getPathologyGuidelineSource = async (id: string): Promise<Pathology
     source_title: data.source_title ? String(data.source_title) : null,
     issuing_body: data.issuing_body ? String(data.issuing_body) : null,
     is_active: Boolean(data.is_active ?? true),
+    primary_topic: data.primary_topic ? String(data.primary_topic) : null,
+    secondary_topics: uniqueStrings(data.secondary_topics),
+    clinical_tags: uniqueStrings(data.clinical_tags),
+    anatomy_terms: uniqueStrings(data.anatomy_terms),
+    problem_terms: uniqueStrings(data.problem_terms),
+    content_type: normalizeContentType(data.content_type),
+    is_featured: Boolean(data.is_featured),
+    search_priority: Math.max(0, Number(data.search_priority) || 0),
+    related_guideline_slugs: uniqueStrings(data.related_guideline_slugs),
     created_at: data.created_at ? String(data.created_at) : undefined,
     updated_at: data.updated_at ? String(data.updated_at) : undefined,
   };
@@ -255,12 +501,21 @@ export const updatePathologyGuidelineSource = async (
     source_kind: patch.source_kind || 'pdf',
     google_drive_url: patch.google_drive_url || patch.source_url || '',
     google_drive_file_id: patch.google_drive_file_id || '',
-  });
+  } as PathologyGuidelineSourceInput);
   if (typeof patch.slug === 'string') payload.slug = patch.slug.trim();
   if (typeof patch.pathology_name === 'string') payload.pathology_name = patch.pathology_name.trim();
   if (typeof patch.specialty === 'string' || patch.specialty === null) payload.specialty = patch.specialty?.trim() || null;
   if (Array.isArray(patch.synonyms)) payload.synonyms = uniqueStrings(patch.synonyms);
   if (Array.isArray(patch.keywords)) payload.keywords = uniqueStrings(patch.keywords);
+  if (typeof patch.primary_topic === 'string' || patch.primary_topic === null) payload.primary_topic = patch.primary_topic?.trim() || null;
+  if (Array.isArray(patch.secondary_topics)) payload.secondary_topics = uniqueStrings(patch.secondary_topics);
+  if (Array.isArray(patch.clinical_tags)) payload.clinical_tags = uniqueStrings(patch.clinical_tags);
+  if (Array.isArray(patch.anatomy_terms)) payload.anatomy_terms = uniqueStrings(patch.anatomy_terms);
+  if (Array.isArray(patch.problem_terms)) payload.problem_terms = uniqueStrings(patch.problem_terms);
+  if (typeof patch.content_type === 'string') payload.content_type = normalizeContentType(patch.content_type);
+  if (typeof patch.is_featured === 'boolean') payload.is_featured = patch.is_featured;
+  if (typeof patch.search_priority === 'number') payload.search_priority = Math.max(0, Math.trunc(patch.search_priority));
+  if (Array.isArray(patch.related_guideline_slugs)) payload.related_guideline_slugs = uniqueStrings(patch.related_guideline_slugs);
   if (typeof patch.source_url === 'string' || typeof patch.google_drive_url === 'string') payload.source_url = mergedSourceDefaults.source_url;
   if (typeof patch.source_kind === 'string') payload.source_kind = mergedSourceDefaults.source_kind;
   if (typeof patch.google_drive_url === 'string' || typeof patch.source_kind === 'string') payload.google_drive_url = mergedSourceDefaults.google_drive_url;

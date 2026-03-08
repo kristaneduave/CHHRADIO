@@ -6,6 +6,7 @@ export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
 export type PathologyGuidelineVersionOrigin = 'pdf_json_import' | 'manual_edit' | 'drive_sync' | 'draft_clone';
 export type PathologyGuidelineRequestType = 'topic' | 'pdf_source' | 'guideline_update';
 export type PathologyGuidelineRequestStatus = 'pending' | 'reviewed' | 'approved' | 'rejected' | 'completed';
+export type PathologyGuidelineContentType = 'checklist' | 'guideline' | 'review';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -276,6 +277,17 @@ export interface PathologyGuidelineListItem {
   synced_at?: string | null;
   published_at?: string | null;
   source_kind?: PathologyGuidelineSourceKind;
+  primary_topic: string | null;
+  secondary_topics: string[];
+  clinical_tags: string[];
+  anatomy_terms: string[];
+  problem_terms: string[];
+  content_type: PathologyGuidelineContentType;
+  is_featured: boolean;
+  search_priority: number;
+  related_guideline_slugs: string[];
+  match_reason?: string | null;
+  tldr_md?: string | null;
 }
 
 export interface PathologyGuidelineDetail extends PathologyGuidelineListItem {
@@ -361,6 +373,15 @@ export interface PathologyGuidelineSourceInput {
   source_title?: string | null;
   issuing_body?: string | null;
   is_active?: boolean;
+  primary_topic?: string | null;
+  secondary_topics?: string[];
+  clinical_tags?: string[];
+  anatomy_terms?: string[];
+  problem_terms?: string[];
+  content_type?: PathologyGuidelineContentType;
+  is_featured?: boolean;
+  search_priority?: number;
+  related_guideline_slugs?: string[];
 }
 
 export interface PathologyGuidelineSource extends PathologyGuidelineSourceInput {

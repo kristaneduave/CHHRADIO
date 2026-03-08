@@ -379,7 +379,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
     <button
       onClick={onBack}
       className="h-10 w-10 rounded-full border border-white/10 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
-      aria-label="Back to Resident Hub"
+      aria-label="Back to Resident HQ"
     >
       <span className="material-icons text-[20px]">arrow_back</span>
     </button>

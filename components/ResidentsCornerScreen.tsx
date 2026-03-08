@@ -412,7 +412,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             <div className="max-w-md mx-auto space-y-6">
                 {/* Header Section */}
                 <div className="mb-4">
-                    <h1 className="text-3xl font-bold text-white mb-2">Resident Hub</h1>
+                    <h1 className="text-3xl font-bold text-white mb-2">Resident HQ</h1>
                 </div>
                 {/* Unified Quick Actions & Tools Section - Compact Design */}
                 <section className="mb-6">
