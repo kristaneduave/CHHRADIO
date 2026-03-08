@@ -119,10 +119,10 @@ const LiveMapCanvasPanel: React.FC<LiveMapCanvasPanelProps> = ({
   }
 
   return (
-    <div className={`grid grid-cols-1 ${expandedFloorId ? '' : 'xl:grid-cols-2'} gap-4 md:gap-6 h-full min-h-[700px] xl:min-h-0`}>
+    <div className={`grid grid-cols-1 ${expandedFloorId ? '' : 'xl:grid-cols-2'} gap-0 sm:gap-4 md:gap-6 h-full min-h-0`}>
       {displayedFloors.map((floor) => (
-        <div key={floor.id} className="flex flex-col h-full bg-[#0a0f18]/60 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.5)] backdrop-blur-2xl rounded-2xl border border-white/5 overflow-hidden transition-all duration-300">
-          <div className="px-4 py-3 bg-gradient-to-r from-black/20 to-transparent border-b border-white/5 flex items-center justify-between">
+        <div key={floor.id} className="flex flex-col h-full bg-black sm:bg-[#0a0f18]/60 shadow-[0_4px_24px_-10px_rgba(0,0,0,0.5)] sm:backdrop-blur-2xl rounded-none sm:rounded-2xl border-none sm:border border-white/5 overflow-hidden transition-all duration-300">
+          <div className="hidden sm:flex px-4 py-3 bg-gradient-to-r from-black/20 to-transparent border-b border-white/5 flex items-center justify-between">
             <div className="min-w-0 flex items-center gap-2">
               <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300 flex items-center gap-2 min-w-0">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0"></span>
@@ -192,13 +192,20 @@ const LiveMapCanvasPanel: React.FC<LiveMapCanvasPanelProps> = ({
               )}
             </div>
           </div>
-          <div className="flex-1 relative min-h-[320px] bg-white/[0.03] p-4 flex items-center justify-center">
-            <MapViewer
-              floor={floor}
-              workstations={filteredWorkstationsByFloor.get(floor.id) || []}
-              selectedWorkstationId={myOccupiedWorkstation?.id}
-              onPinClick={onPinClick}
-            />
+          <div className="flex-1 relative h-full min-h-0 bg-transparent sm:bg-white/[0.03] flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-hidden flex items-center justify-center text-center p-0 sm:p-4">
+              <div className="w-full h-full max-w-full max-h-full text-left sm:shadow-inner flex items-center justify-center bg-black">
+                {console.log('[LiveMapCanvasPanel] Rendering MapViewer for floor', floor.name, 'with players:', floorUsersById.get(floor.id)?.length)}
+                <MapViewer
+                  floor={floor}
+                  workstations={filteredWorkstationsByFloor.get(floor.id) || []}
+                  selectedWorkstationId={myOccupiedWorkstation?.id}
+                  players={floorUsersById.get(floor.id) || []}
+                  onPinClick={onPinClick}
+                  onSetAreaPresence={onSetAreaPresence}
+                />
+              </div>
+            </div>
           </div>
         </div>
       ))}

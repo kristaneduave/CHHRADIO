@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Screen, ScreenMeta } from '../types';
 import { AnimatePresence, motion } from 'framer-motion';
 import { triggerHaptic } from '../utils/haptics';
+
+export const LayoutScrollContext = React.createContext<HTMLElement | null>(null);
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -12,8 +14,13 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unreadNotificationsCount = 0 }) => {
   const mainRef = useRef<HTMLElement>(null);
+  const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const isDesktopWideScreen = activeScreen === 'calendar' || activeScreen === 'live-map';
   const hideBottomNav = activeScreen === 'monthly-census';
+
+  useEffect(() => {
+    setScrollContainer(mainRef.current);
+  }, []);
 
   useEffect(() => {
     // Prevent carrying scroll position across tabs on mobile.
@@ -46,75 +53,77 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unre
   const navItems: (ScreenMeta & { outlineIcon: string })[] = [
     { screen: 'dashboard', label: 'Home', icon: 'home', outlineIcon: 'home' },
     { screen: 'newsfeed', label: 'Newsfeed', icon: 'newspaper', outlineIcon: 'newspaper' },
+    { screen: 'pathology-checklists', label: 'Pathology', icon: 'fact_check', outlineIcon: 'fact_check' },
     { screen: 'live-map', label: 'Live Map', icon: 'map', outlineIcon: 'map' },
     { screen: 'profile', label: 'Profile', icon: 'person', outlineIcon: 'person' },
   ];
 
   return (
-    <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary">
-      <main
-        ref={mainRef}
-        className={`relative z-10 mx-auto w-full flex-[1_1_0%] flex flex-col overflow-y-auto overflow-x-hidden ${isDesktopWideScreen ? 'max-w-md lg:max-w-7xl' : 'max-w-md'
-          }`}
-      >
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeScreen}
-            initial={{ opacity: 0, scale: 0.98, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98, y: -10 }}
-            transition={{ duration: 0.15, ease: "easeOut" }}
-            className="flex-1 flex flex-col w-full min-h-full"
-          >
-            {children}
-          </motion.div>
-        </AnimatePresence>
-      </main>
+    <LayoutScrollContext.Provider value={scrollContainer}>
+      <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary">
+        <main
+          ref={mainRef}
+          className={`relative z-10 mx-auto w-full flex-[1_1_0%] flex flex-col overflow-y-auto overflow-x-hidden ${isDesktopWideScreen ? 'max-w-md lg:max-w-7xl' : 'max-w-md'
+            }`}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeScreen}
+              initial={{ opacity: 0, scale: 0.98, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: -10 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="flex-1 flex flex-col w-full min-h-full"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
 
-      {/* Navigation */}
-      {!hideBottomNav && (
-        <nav className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none px-4 flex justify-center pb-[env(safe-area-inset-bottom)]">
-          <div className="relative pointer-events-auto bg-[#1a232f] shadow-2xl shadow-[#040810] border border-[#2a3441] rounded-full py-1.5 px-3">
-            <div className="flex items-center gap-1.5">
-              {navItems.map((item) => {
-                const isActive = activeScreen === item.screen;
-                return (
-                  <button
-                    key={item.screen}
-                    onClick={() => {
-                      setScreen(item.screen);
-                      triggerHaptic('light');
-                    }}
-                    className={`flex flex-col items-center justify-center w-[60px] h-[50px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full ${isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    aria-label={`Open ${item.label}`}
-                  >
-                    <div className="relative flex flex-col items-center justify-center">
-                      <div className="relative">
-                        <span
-                          className="material-icons transition-all duration-300 text-[26px]"
-                        >
-                          {isActive ? item.icon : item.outlineIcon}
-                        </span>
-
-                        {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+        {!hideBottomNav && (
+          <nav className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none px-4 flex justify-center pb-[env(safe-area-inset-bottom)]">
+            <div className="relative pointer-events-auto bg-[#1a232f] shadow-2xl shadow-[#040810] border border-[#2a3441] rounded-full py-1.5 px-3">
+              <div className="flex items-center gap-1">
+                {navItems.map((item) => {
+                  const isActive = activeScreen === item.screen;
+                  return (
+                    <button
+                      key={item.screen}
+                      onClick={() => {
+                        setScreen(item.screen);
+                        triggerHaptic('light');
+                      }}
+                      className={`flex flex-col items-center justify-center w-[54px] h-[48px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full ${isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      aria-label={`Open ${item.label}`}
+                    >
+                      <div className="relative flex flex-col items-center justify-center">
+                        <div className="relative">
                           <span
-                            className={`absolute -top-1 -right-2 min-w-[18px] h-[16px] px-1 flex items-center justify-center rounded-[8px] bg-[#f23b55] text-[9px] font-black tracking-tight text-white shadow-sm shadow-black/30 z-10`}
-                            style={{ lineHeight: 1 }}
+                            className="material-icons transition-all duration-300 text-[26px]"
                           >
-                            {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                            {isActive ? item.icon : item.outlineIcon}
                           </span>
-                        )}
+
+                          {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+                            <span
+                              className={`absolute -top-1 -right-2 min-w-[18px] h-[16px] px-1 flex items-center justify-center rounded-[8px] bg-[#f23b55] text-[9px] font-black tracking-tight text-white shadow-sm shadow-black/30 z-10`}
+                              style={{ lineHeight: 1 }}
+                            >
+                              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </nav>
-      )}
-    </div>
+          </nav>
+        )}
+      </div>
+    </LayoutScrollContext.Provider>
   );
 };
 

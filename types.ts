@@ -372,6 +372,8 @@ export interface PathologyGuidelineSource extends PathologyGuidelineSourceInput 
 export interface PathologyGuidelineRequest {
   id: string;
   created_by: string;
+  requester_name?: string | null;
+  requester_username?: string | null;
   request_type: PathologyGuidelineRequestType;
   title: string;
   description?: string | null;

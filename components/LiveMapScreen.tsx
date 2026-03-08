@@ -82,6 +82,7 @@ const LiveMapScreen: React.FC = () => {
     const [moderationActions, setModerationActions] = useState<LiveMapModerationAction[]>([]);
     const [isModerationLoading, setIsModerationLoading] = useState(false);
     const [moderationError, setModerationError] = useState<string | null>(null);
+    const [isModeratorActionsExpanded, setIsModeratorActionsExpanded] = useState(false);
     const [isDocumentVisible, setIsDocumentVisible] = useState(
         typeof document === 'undefined' ? true : !document.hidden,
     );
@@ -848,65 +849,102 @@ const LiveMapScreen: React.FC = () => {
                         onPerfSample={handlePerfSample}
                     />
 
-                    <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 bg-transparent scrollbar-hide">
+                    <div className="flex-1 overflow-y-auto p-0 sm:p-4 md:p-6 bg-transparent scrollbar-hide flex flex-col">
 
-                        {isModerator ? (
-                            <div className="xl:hidden mb-3 rounded-2xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Recent Moderator Actions</p>
-                                    <button
-                                        onClick={() => void refreshModerationActions()}
-                                        className="text-[11px] text-primary-light hover:text-primary"
-                                    >
-                                        Refresh
-                                    </button>
+                        <div className="h-[75vh] xl:h-auto xl:flex-1 flex flex-col min-h-[400px] sm:min-h-[500px] shrink-0">
+                            <LiveMapCanvasPanel
+                                error={error}
+                                loading={loading}
+                                floors={floors}
+                                expandedFloorId={expandedFloorId}
+                                filteredWorkstations={filteredWorkstations}
+                                visibleWorkstationCountByFloorId={visibleWorkstationCountByFloorId}
+                                totalWorkstationCountByFloorId={totalWorkstationCountByFloorId}
+                                floorUsersById={floorUsersById}
+                                myLivePlayer={myLivePlayer}
+                                hydratedPlayers={hydratedPlayers}
+                                currentUserId={currentUserId}
+                                myOccupiedWorkstation={myOccupiedWorkstation}
+                                onPinClick={handlePinClick}
+                                onSetAreaPresence={handleSetAreaPresence}
+                                onCheckCurrentUserOccupancy={handleCheckCurrentUserOccupancy}
+                                onRequestReleaseAndMove={setPendingReleaseIntent}
+                                onToggleExpandedFloor={handleToggleExpandedFloor}
+                                onPerfSample={handlePerfSample}
+                            />
+                        </div>
+
+                        <div className="xl:hidden mt-4 mx-3 sm:mx-0 flex flex-col gap-4 pb-20 shrink-0">
+                            <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3 shadow-inner">
+                                <div className="flex items-center gap-2">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.8)]"></span>
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-200 uppercase tracking-widest">{onlineUsers.length} Online</span>
                                 </div>
-                                {isModerationLoading ? (
-                                    <p className="text-xs text-slate-400">Loading moderation history...</p>
-                                ) : null}
-                                {moderationError ? (
-                                    <p className="text-xs text-rose-300">{moderationError}</p>
-                                ) : null}
-                                {!isModerationLoading && !moderationError && moderationActions.length === 0 ? (
-                                    <p className="text-xs text-slate-500">No moderation actions recorded yet.</p>
-                                ) : null}
-                                {!isModerationLoading && !moderationError && moderationActions.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {moderationActions.slice(0, 6).map((action) => (
-                                            <div key={action.id} className="rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
-                                                <p className="text-[11px] text-slate-200">
-                                                    <span className="font-semibold text-white">{action.actor_display_name}</span>{' '}
-                                                    removed <span className="font-semibold text-white">{action.target_display_name}</span>
-                                                </p>
-                                                <p className="text-[10px] text-slate-400 mt-0.5">
-                                                    {formatModerationTime(action.created_at)} - presence {action.cleared_presence_count}, sessions {action.released_workstation_count}
-                                                </p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : null}
+                                <button
+                                    onClick={() => setIsOnlineModalOpen(true)}
+                                    className="text-[10px] font-bold uppercase tracking-widest text-cyan-400 px-2.5 py-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors"
+                                >
+                                    View All
+                                </button>
                             </div>
-                        ) : null}
-                        <LiveMapCanvasPanel
-                            error={error}
-                            loading={loading}
-                            floors={floors}
-                            expandedFloorId={expandedFloorId}
-                            filteredWorkstations={filteredWorkstations}
-                            visibleWorkstationCountByFloorId={visibleWorkstationCountByFloorId}
-                            totalWorkstationCountByFloorId={totalWorkstationCountByFloorId}
-                            floorUsersById={floorUsersById}
-                            myLivePlayer={myLivePlayer}
-                            hydratedPlayers={hydratedPlayers}
-                            currentUserId={currentUserId}
-                            myOccupiedWorkstation={myOccupiedWorkstation}
-                            onPinClick={handlePinClick}
-                            onSetAreaPresence={handleSetAreaPresence}
-                            onCheckCurrentUserOccupancy={handleCheckCurrentUserOccupancy}
-                            onRequestReleaseAndMove={setPendingReleaseIntent}
-                            onToggleExpandedFloor={handleToggleExpandedFloor}
-                            onPerfSample={handlePerfSample}
-                        />
+
+                            {isModerator ? (
+                                <div className="rounded-xl border border-white/10 bg-black/40 shadow-inner overflow-hidden">
+                                    <button
+                                        onClick={() => setIsModeratorActionsExpanded(!isModeratorActionsExpanded)}
+                                        className="w-full flex items-center justify-between p-3 bg-white/[0.02] hover:bg-white/[0.05] transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <span className={`material-icons text-[16px] text-slate-400 transition-transform duration-200 ${isModeratorActionsExpanded ? 'rotate-180' : ''}`}>
+                                                expand_more
+                                            </span>
+                                            <p className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                                                Recent Moderator Actions {moderationActions.length > 0 ? `(${moderationActions.length})` : ''}
+                                            </p>
+                                        </div>
+                                        <span
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                void refreshModerationActions();
+                                            }}
+                                            className="text-[10px] font-bold uppercase tracking-widest text-sky-400 px-2.5 py-1 rounded-lg border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 transition-colors"
+                                        >
+                                            Refresh
+                                        </span>
+                                    </button>
+
+                                    <div className={`transition-all duration-300 ease-in-out ${isModeratorActionsExpanded ? 'max-h-[500px] opacity-100 p-3 border-t border-white/5' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+                                        {isModerationLoading ? (
+                                            <p className="text-xs text-slate-400">Loading moderation history...</p>
+                                        ) : null}
+                                        {moderationError ? (
+                                            <p className="text-xs text-rose-300">{moderationError}</p>
+                                        ) : null}
+                                        {!isModerationLoading && !moderationError && moderationActions.length === 0 ? (
+                                            <p className="text-xs text-slate-500">No moderation actions recorded yet.</p>
+                                        ) : null}
+                                        {!isModerationLoading && !moderationError && moderationActions.length > 0 ? (
+                                            <div className="space-y-2">
+                                                {moderationActions.slice(0, 6).map((action) => (
+                                                    <div key={action.id} className="rounded-lg border border-white/5 bg-[#0a0f18]/80 px-2.5 py-2">
+                                                        <p className="text-[11px] text-slate-200">
+                                                            <span className="font-semibold text-white">{action.actor_display_name}</span>{' '}
+                                                            removed <span className="font-semibold text-white">{action.target_display_name}</span>
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                                                            {formatModerationTime(action.created_at)} - presence {action.cleared_presence_count}, sessions {action.released_workstation_count}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
 

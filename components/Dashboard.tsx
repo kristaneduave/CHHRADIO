@@ -112,48 +112,60 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
       >
         <div className="absolute inset-0 border-[2px] border-red-500/40" />
       </div>
-      <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0">
+      <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0 w-full overflow-hidden">
         <motion.h1
           initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
-          animate={{
-            x: [0, -4, 4, -2, 2, 0],
+          animate={isLogoSyncing ? {
+            x: [0, -25, 35, -15, 40, -10, 20, 0],
             filter: [
               'drop-shadow(0 0 0 transparent)',
-              'drop-shadow(4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-4px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(4px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(2px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-2px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-1px 0 0 rgba(239, 68, 68, 1)) drop-shadow(1px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-25px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(35px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-15px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(40px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-10px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(20px 0 0 rgba(34, 211, 238, 1))',
               'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
             ]
+          } : {
+            x: 0,
+            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
           }}
-          transition={{
-            duration: 0.5,
+          transition={isLogoSyncing ? {
+            duration: 0.35,
             ease: "linear",
-            times: [0, 0.2, 0.4, 0.6, 0.8, 1]
-          }}
+            times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
+            repeat: Infinity
+          } : { duration: 0.1 }}
           className="text-5xl sm:text-6xl font-black text-white uppercase leading-none tracking-[0.1em] select-none"
         >
           RADCORE
         </motion.h1>
         <motion.p
           initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
-          animate={{
-            x: [0, 6, -6, 3, -3, 0],
+          animate={isLogoSyncing ? {
+            x: [0, 30, -40, 20, -25, 15, -30, 0],
             filter: [
               'drop-shadow(0 0 0 transparent)',
-              'drop-shadow(-4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(4px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(4px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-4px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-2px 0 0 rgba(239, 68, 68, 1)) drop-shadow(2px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(1px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-1px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(25px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-35px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(15px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-40px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(-10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(10px 0 0 rgba(34, 211, 238, 1))',
+              'drop-shadow(20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-20px 0 0 rgba(34, 211, 238, 1))',
               'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' /* matches default drop-shadow-md */
             ]
+          } : {
+            x: 0,
+            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))'
           }}
-          transition={{
-            duration: 0.5,
-            delay: 0.1, /* slight offset for visual cascade */
+          transition={isLogoSyncing ? {
+            duration: 0.35,
+            delay: 0.05, /* slight offset for visual cascade */
             ease: "linear",
-            times: [0, 0.2, 0.4, 0.6, 0.8, 1]
-          }}
+            times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
+            repeat: Infinity
+          } : { duration: 0.1 }}
           className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 mt-2 select-none"
         >
           CHH Radiology Residency Portal
@@ -162,39 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
 
       <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 overflow-y-auto w-[100vw] overflow-x-hidden">
         <div className="relative w-[320px] h-[320px] flex items-center justify-center mb-8">
-
-          {/* Neural Network SVG Connecting Lines */}
-          <svg className="absolute inset-0 m-auto w-[320px] h-[320px] pointer-events-none z-10" style={{ overflow: 'visible' }}>
-            {orderedActions.map((action, index) => {
-              const angle = (index * (360 / orderedActions.length)) - 90;
-              const angleInRad = (angle * Math.PI) / 180;
-              const targetX = 160 + Math.cos(angleInRad) * radius;
-              const targetY = 160 + Math.sin(angleInRad) * radius;
-
-              const isHovered = hoveredActionIndex === index;
-              const style = NEW_BUTTON_STYLES[action.label];
-              const strokeClass = (style?.colorClass || 'text-slate-300').replace('text-', 'stroke-');
-
-              // Calculate SVG Start Point (Outside Central Logo: ~54px Radius)
-              const startRadius = 54;
-              const startX = 160 + Math.cos(angleInRad) * startRadius;
-              const startY = 160 + Math.sin(angleInRad) * startRadius;
-
-              // Calculate SVG End Point (Before Orbital Button: ~28px smaller than orbit radius)
-              const endRadius = radius - 28;
-              const endX = 160 + Math.cos(angleInRad) * endRadius;
-              const endY = 160 + Math.sin(angleInRad) * endRadius;
-
-              return (
-                <line
-                  key={`line-${action.label}`}
-                  x1={startX} y1={startY} x2={endX} y2={endY}
-                  strokeDasharray="2 4"
-                  className={`transition-all duration-300 ${isHovered ? `${strokeClass} stroke-[1.5px] opacity-40 drop-shadow-[0_0_4px_rgba(255,255,255,0.2)]` : 'stroke-white/5 stroke-[1px] opacity-10'}`}
-                />
-              )
-            })}
-          </svg>
 
           <button
             onClick={() => {
@@ -209,14 +188,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
                 }, 2500);
               }
             }}
-            className="peer absolute inset-0 m-auto w-[120px] h-[120px] flex flex-col items-center justify-center z-50 outline-none transition-all duration-200 cursor-pointer select-none rounded-full group"
+            className={`peer absolute inset-0 m-auto w-[120px] h-[120px] flex flex-col items-center justify-center z-50 outline-none transition-all duration-200 cursor-pointer select-none rounded-full group`}
             style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
           >
+            <div className={`absolute inset-0 bg-primary/10 rounded-full blur-[20px] transition-opacity duration-1000 ${isLogoSyncing ? 'opacity-0' : 'opacity-40 group-hover:opacity-70 group-hover:animate-pulse'}`} />
             <img
               src="/logo-radcore.svg"
               alt="CHH RadCore logo"
               draggable={false}
-              className={`h-[116px] w-[116px] object-contain transition-all duration-300 pointer-events-none select-none z-50 group-active:brightness-150 group-active:animate-glitch group-active:scale-[0.98] ${isLogoSyncing ? 'animate-glitch brightness-150' : 'drop-shadow-[0_0_10px_rgba(255,255,255,0.1)]'}`}
+              className={`h-[116px] w-[116px] object-contain transition-all duration-300 pointer-events-none select-none z-50 group-active:brightness-150 group-active:animate-glitch group-active:scale-[0.98] ${isLogoSyncing ? 'animate-glitch brightness-150' : 'drop-shadow-[0_0_15px_rgba(255,255,255,0.15)] group-hover:drop-shadow-[0_0_25px_rgba(255,255,255,0.4)]'}`}
             />
           </button>
 
@@ -272,6 +252,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(20px) scale(0.9); }
           to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes drawPath {
+          to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes levitate {
+          0% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+          100% { transform: translateY(0); }
         }
 
         @keyframes glitch {

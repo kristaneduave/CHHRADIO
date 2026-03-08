@@ -23,6 +23,13 @@ type PathologyGuidelineRequestRow = {
   updated_at: string;
 };
 
+type ProfileLookupRow = {
+  id: string;
+  full_name: string | null;
+  username: string | null;
+  nickname?: string | null;
+};
+
 const normalizeRequestType = (value: unknown): PathologyGuidelineRequestType => {
   const requestType = String(value || '').toLowerCase();
   if (requestType === 'pdf_source' || requestType === 'guideline_update') return requestType;
@@ -37,9 +44,14 @@ const normalizeRequestStatus = (value: unknown): PathologyGuidelineRequestStatus
   return 'pending';
 };
 
-const mapRow = (row: PathologyGuidelineRequestRow): PathologyGuidelineRequest => ({
+const mapRow = (
+  row: PathologyGuidelineRequestRow,
+  requester?: { requester_name: string | null; requester_username: string | null },
+): PathologyGuidelineRequest => ({
   id: row.id,
   created_by: row.created_by,
+  requester_name: requester?.requester_name || null,
+  requester_username: requester?.requester_username || null,
   request_type: normalizeRequestType(row.request_type),
   title: row.title,
   description: row.description,
@@ -80,7 +92,25 @@ export const listPathologyGuidelineRequests = async (): Promise<PathologyGuideli
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return ((data || []) as PathologyGuidelineRequestRow[]).map(mapRow);
+  const rows = (data || []) as PathologyGuidelineRequestRow[];
+  const requesterIds = Array.from(new Set(rows.map((row) => row.created_by).filter(Boolean)));
+  const profileById = new Map<string, { requester_name: string | null; requester_username: string | null }>();
+
+  if (requesterIds.length) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, nickname')
+      .in('id', requesterIds);
+
+    ((profiles || []) as ProfileLookupRow[]).forEach((profile) => {
+      profileById.set(profile.id, {
+        requester_name: profile.nickname || profile.full_name || profile.username || 'Unknown requester',
+        requester_username: profile.username || null,
+      });
+    });
+  }
+
+  return rows.map((row) => mapRow(row, profileById.get(row.created_by)));
 };
 
 export const updatePathologyGuidelineRequest = async (
@@ -100,6 +130,15 @@ export const updatePathologyGuidelineRequest = async (
   const { error } = await supabase
     .from('pathology_guideline_requests')
     .update(payload)
+    .eq('id', id);
+
+  if (error) throw error;
+};
+
+export const deletePathologyGuidelineRequest = async (id: string): Promise<void> => {
+  const { error } = await supabase
+    .from('pathology_guideline_requests')
+    .delete()
     .eq('id', id);
 
   if (error) throw error;

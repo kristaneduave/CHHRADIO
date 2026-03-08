@@ -553,78 +553,76 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
   return (
     <div className="px-6 pt-8 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
-      {/* Resident Identity Header Card */}
-      <div className="flex flex-col items-center text-center bg-[#0a0f18]/80 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-6 pt-8 shadow-[0_0_40px_-10px_rgba(0,0,0,0.8)] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 blur-[60px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
-        <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 blur-[50px] rounded-full pointer-events-none transform translate-y-1/2 -translate-x-1/2" />
+      <div className="relative mb-5 group cursor-pointer z-10" onClick={() => fileInputRef.current?.click()}>
+        {/* Dynamic Avatar Ring Animation */}
+        <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-primary via-purple-500 to-sky-400 opacity-40 group-hover:opacity-70 blur-[8px] transition-all duration-500 animate-[spin_4s_linear_infinite]" />
+        <div className="absolute -inset-[3px] rounded-full bg-gradient-to-bl from-primary via-blue-500 to-transparent border border-white/20 opacity-60 animate-[spin_8s_linear_infinite_reverse]" />
 
-        <div className="relative mb-5 group cursor-pointer z-10" onClick={() => fileInputRef.current?.click()}>
-          <div className="absolute -inset-1 bg-gradient-to-tr from-primary to-blue-600 rounded-full blur opacity-25 group-hover:opacity-50 transition-opacity"></div>
-          <div className="relative w-24 h-24 rounded-full p-1 border border-white/10 glass-card-enhanced overflow-hidden shadow-2xl">
-            <img
-              src={profile.avatar_url || PROFILE_IMAGE}
-              alt="Profile"
-              className="w-full h-full rounded-full object-cover shadow-inner group-hover:opacity-50 transition-all"
-            />
-            {/* Overlay Icon */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="material-icons text-white drop-shadow-lg text-2xl">photo_camera</span>
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-[#0a0f18] text-primary flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-primary/30 group-hover:border-primary/60 transition-colors">
-              <span className="text-[11px] font-black uppercase tracking-wider">{profile.year_level || 'R1'}</span>
-            </div>
-          </div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleAvatarUpload}
-            className="hidden"
-            accept="image/*"
+        <div className="relative w-24 h-24 rounded-full p-1 border border-white/10 glass-card-enhanced overflow-hidden shadow-2xl bg-[#0a0f18] z-10">
+          <img
+            src={profile.avatar_url || PROFILE_IMAGE}
+            alt="Profile"
+            className="w-full h-full rounded-full object-cover shadow-inner group-hover:opacity-50 transition-all group-hover:scale-105 duration-300"
           />
+          {/* Overlay Icon */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="material-icons text-white drop-shadow-lg text-2xl">photo_camera</span>
+          </div>
+        </div>
+        <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-[#0a0f18] text-primary flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.6)] border border-primary/40 group-hover:border-primary/80 transition-colors z-20 animate-pulse">
+          <span className="text-[11px] font-black uppercase tracking-wider">{profile.year_level || 'R1'}</span>
         </div>
 
-        {/* View Mode Header */}
-        {!isEditing && (
-          <div className="z-10 w-full mb-2">
-            <h1 className="text-[22px] font-extrabold text-white tracking-tight leading-tight">{profile.full_name || 'Doctor'}</h1>
-            <p className="text-primary text-[11px] font-black uppercase tracking-[0.2em] mb-3 mt-1 opacity-90">
-              {profile.year_level || 'Resident'} • {profile.specialty}
-            </p>
-            <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.motto || profile.bio || 'No motto equipped.'}"</p>
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleAvatarUpload}
+          className="hidden"
+          accept="image/*"
+        />
+      </div>
 
-            {/* Badges Display */}
-            <ResidentBadges activeBadges={activeBadges} />
+      {/* View Mode Header */}
+      {!isEditing && (
+        <div className="z-10 w-full mb-2">
+          <h1 className="text-[22px] font-extrabold text-white tracking-tight leading-tight">{profile.full_name || 'Doctor'}</h1>
+          <p className="text-primary text-[11px] font-black uppercase tracking-[0.2em] mb-3 mt-1 opacity-90">
+            {profile.year_level || 'Resident'} • {profile.specialty}
+          </p>
+          <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.motto || profile.bio || 'No motto equipped.'}"</p>
 
-            {/* Stats Row */}
-            <div className="flex justify-center gap-8 pt-5 border-t border-white/5 pb-1">
-              <div className="text-center group">
-                <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Total Cases</span>
-              </div>
-              <div className="text-center group">
-                <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.filter(c => c.status === 'published').length}</span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Published</span>
-              </div>
+          {/* Badges Display */}
+          <ResidentBadges activeBadges={activeBadges} />
+
+          {/* Stats Row */}
+          <div className="flex justify-center gap-8 pt-5 border-t border-white/5 pb-1">
+            <div className="text-center group">
+              <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Total Cases</span>
+            </div>
+            <div className="text-center group">
+              <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.filter(c => c.status === 'published').length}</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Published</span>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Edit Form */}
-        {isEditing && (
-          <ProfileEditor
-            profile={profile}
-            handleChange={handleChange}
-            handleRerollAvatar={handleRerollAvatar}
-            nicknameError={nicknameError}
-          />
-        )}
+      {/* Edit Form */}
+      {isEditing && (
+        <ProfileEditor
+          profile={profile}
+          handleChange={handleChange}
+          handleRerollAvatar={handleRerollAvatar}
+          nicknameError={nicknameError}
+        />
+      )}
 
-        {message && (
-          <div className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold z-10 ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-            {message.text}
-          </div>
-        )}
-      </div>
+      {message && (
+        <div className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold z-10 ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+          {message.text}
+        </div>
+      )}
 
       {/* Settings Block */}
       <div>
@@ -711,10 +709,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
           </div>
         </div>
-      </div>
+      </div >
 
       {/* My Notes Section */}
-      <div>
+      < div >
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">My Notes</h2>
           <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Private to your account</span>
@@ -769,10 +767,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
             </>
           )}
         </div>
-      </div>
+      </div >
 
       {/* My Cases Section */}
-      <MyCaseLibrary
+      < MyCaseLibrary
         loadingCases={loadingCases}
         myCases={myCases}
         onViewCase={onViewCase}
@@ -781,7 +779,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       />
 
       {/* Hidden News Section */}
-      <div>
+      < div >
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">Hidden News</h2>
           {(hiddenAnnouncements.length > 0 || hiddenNotifications.length > 0) && (
@@ -795,57 +793,59 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           )}
         </div>
 
-        {loadingHiddenAnnouncements ? (
-          <div className="text-center py-6 text-slate-500 text-xs">Loading hidden news...</div>
-        ) : hiddenAnnouncements.length === 0 && hiddenNotifications.length === 0 ? (
-          <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-5 rounded-[2rem] border border-white/10 text-center">
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No hidden news.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {hiddenAnnouncements.map((item) => (
-              <div
-                key={item.id}
-                className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-extrabold text-white truncate tracking-wide">{item.title}</p>
-                  <p className="text-[9px] font-bold text-slate-500 truncate uppercase mt-0.5 tracking-wider">By {item.author} • {item.date}</p>
-                </div>
-                <button
-                  onClick={() => handleUnhideAnnouncement(item.id)}
-                  disabled={unhidingAnnouncementId === item.id}
-                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+        {
+          loadingHiddenAnnouncements ? (
+            <div className="text-center py-6 text-slate-500 text-xs">Loading hidden news...</div>
+          ) : hiddenAnnouncements.length === 0 && hiddenNotifications.length === 0 ? (
+            <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-5 rounded-[2rem] border border-white/10 text-center">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No hidden news.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {hiddenAnnouncements.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
                 >
-                  {unhidingAnnouncementId === item.id ? 'Restoring...' : 'Unhide'}
-                </button>
-              </div>
-            ))}
-            {hiddenNotifications.map((item) => (
-              <div
-                key={`notif-${item.id}`}
-                className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-extrabold text-white truncate tracking-wide">
-                    {(item.type || 'Notification').replace(/[_-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} by {item.actorName || 'Hospital Staff'}
-                  </p>
-                  <p className="text-[9px] font-bold text-slate-500 truncate uppercase mt-0.5 tracking-wider">
-                    {new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-extrabold text-white truncate tracking-wide">{item.title}</p>
+                    <p className="text-[9px] font-bold text-slate-500 truncate uppercase mt-0.5 tracking-wider">By {item.author} • {item.date}</p>
+                  </div>
+                  <button
+                    onClick={() => handleUnhideAnnouncement(item.id)}
+                    disabled={unhidingAnnouncementId === item.id}
+                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {unhidingAnnouncementId === item.id ? 'Restoring...' : 'Unhide'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleUnhideNotification(item.id)}
-                  disabled={unhidingNotificationId === item.id}
-                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+              ))}
+              {hiddenNotifications.map((item) => (
+                <div
+                  key={`notif-${item.id}`}
+                  className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
                 >
-                  {unhidingNotificationId === item.id ? 'Restoring...' : 'Unhide'}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] font-extrabold text-white truncate tracking-wide">
+                      {(item.type || 'Notification').replace(/[_-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} by {item.actorName || 'Hospital Staff'}
+                    </p>
+                    <p className="text-[9px] font-bold text-slate-500 truncate uppercase mt-0.5 tracking-wider">
+                      {new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleUnhideNotification(item.id)}
+                    disabled={unhidingNotificationId === item.id}
+                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    {unhidingNotificationId === item.id ? 'Restoring...' : 'Unhide'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div >
 
       {/* Delete Confirmation Modal */}
       {
@@ -887,7 +887,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           <AdminUserManagement onClose={() => setShowAdminPanel(false)} />
         )
       }
-    </div>
+    </div >
   );
 };
 

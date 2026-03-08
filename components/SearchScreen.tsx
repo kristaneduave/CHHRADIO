@@ -513,7 +513,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
           </div>
 
           {showSuggestions ? (
-            <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
               {suggestions.map((p) => {
                 const typeMeta = getSubmissionTypeMeta(p.submission_type);
                 return (
@@ -540,6 +540,40 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
               })}
             </div>
           ) : null}
+        </div>
+
+        {/* Quick Filters */}
+        <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 mb-2 -mx-6 px-6 relative z-30">
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, datePreset: '7d', submissionType: '', specialty: '' }))}
+            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.datePreset === '7d' && !filters.submissionType && !filters.specialty ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(13,162,231,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+          >
+            Last 7 Days
+          </button>
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'interesting_case', datePreset: 'all', specialty: '' }))}
+            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'interesting_case' ? 'bg-sky-500 text-white border-sky-500 shadow-[0_0_15px_rgba(56,189,248,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+          >
+            Interesting
+          </button>
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'rare_pathology', datePreset: 'all', specialty: '' }))}
+            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'rare_pathology' ? 'bg-rose-500 text-white border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+          >
+            Rare
+          </button>
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'aunt_minnie', datePreset: 'all', specialty: '' }))}
+            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'aunt_minnie' ? 'bg-amber-500 text-white border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+          >
+            Aunt Minnie
+          </button>
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, specialty: 'Neuroradiology', submissionType: '', datePreset: 'all' }))}
+            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.specialty === 'Neuroradiology' ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(13,162,231,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
+          >
+            Neuro
+          </button>
         </div>
 
         {showFilters ? (
