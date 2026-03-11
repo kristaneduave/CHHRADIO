@@ -2,7 +2,7 @@ import {
   EditableDraftPatch,
   PathologyGuidelineContentType,
   PathologyGuidelineImportPayload,
-  PathologyChecklistItem,
+  ArticleLibraryChecklistItem,
   PathologyGuidelineDetail,
   PathologyGuidelineListItem,
   PathologyGuidelineSource,
@@ -37,6 +37,16 @@ const QUERY_SYNONYMS: Record<string, string[]> = {
 };
 
 const DEFAULT_TOPIC = 'General reporting pearls';
+const CURRENT_GUIDELINE_LIST_SELECT = 'guideline_id,slug,pathology_name,specialty,synonyms,keywords,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,content_type,is_featured,search_priority,related_guideline_slugs,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md';
+const CURRENT_GUIDELINE_LANDING_SELECT = 'guideline_id,slug,pathology_name,specialty,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,is_featured,search_priority,effective_date,published_at,source_kind,tldr_md';
+const CURRENT_GUIDELINE_FALLBACK_SELECT = 'guideline_id,slug,pathology_name,specialty,synonyms,keywords,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md';
+const CURRENT_GUIDELINE_DETAIL_SELECT = 'guideline_id,slug,pathology_name,specialty,synonyms,keywords,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,content_type,is_featured,search_priority,related_guideline_slugs,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md,source_url,google_drive_url,rich_summary_md,reporting_takeaways,reporting_red_flags,suggested_report_phrases,checklist_items,parse_notes,raw_text_excerpt';
+const PATHOLOGY_GUIDELINE_SOURCE_SELECT = 'id,slug,pathology_name,specialty,synonyms,keywords,source_url,source_kind,google_drive_url,google_drive_file_id,source_title,issuing_body,is_active,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,content_type,is_featured,search_priority,related_guideline_slugs,created_at,updated_at';
+
+let currentGuidelineLibraryCache: PathologyGuidelineListItem[] | null = null;
+let currentGuidelineLibraryPromise: Promise<PathologyGuidelineListItem[]> | null = null;
+let currentGuidelineLandingCache: PathologyGuidelineListItem[] | null = null;
+let currentGuidelineLandingPromise: Promise<PathologyGuidelineListItem[]> | null = null;
 
 const normalizeTokens = (value: string) =>
   value
@@ -59,7 +69,7 @@ const normalizeContentType = (value: unknown): PathologyGuidelineContentType => 
   return 'checklist';
 };
 
-const mapChecklistItems = (value: unknown): PathologyChecklistItem[] => {
+const mapChecklistItems = (value: unknown): ArticleLibraryChecklistItem[] => {
   if (!Array.isArray(value)) return [];
 
   return value
@@ -143,6 +153,53 @@ const mapVersionRow = (row: any): PathologyGuidelineVersion => ({
   synced_at: String(row.synced_at),
   published_at: row.published_at ? String(row.published_at) : null,
 });
+
+export const invalidatePathologyGuidelineLibraryCache = () => {
+  currentGuidelineLibraryCache = null;
+  currentGuidelineLibraryPromise = null;
+  currentGuidelineLandingCache = null;
+  currentGuidelineLandingPromise = null;
+};
+
+export const getPathologyGuidelineLandingSnapshot = async (): Promise<PathologyGuidelineListItem[]> => {
+  if (currentGuidelineLibraryCache) {
+    return currentGuidelineLibraryCache;
+  }
+
+  if (currentGuidelineLandingCache) {
+    return currentGuidelineLandingCache;
+  }
+
+  if (currentGuidelineLandingPromise) {
+    return currentGuidelineLandingPromise;
+  }
+
+  currentGuidelineLandingPromise = (async () => {
+    const rpcResult = await supabase.rpc('get_radiographics_landing_snapshot');
+
+    if (!rpcResult.error && Array.isArray(rpcResult.data)) {
+      currentGuidelineLandingCache = rpcResult.data.map(mapListRow);
+      return currentGuidelineLandingCache;
+    }
+
+    const { data, error } = await supabase
+      .from('pathology_guideline_current')
+      .select(CURRENT_GUIDELINE_LANDING_SELECT)
+      .order('pathology_name', { ascending: true });
+
+    if (error) {
+      throw rpcResult.error || error;
+    }
+    currentGuidelineLandingCache = (data || []).map(mapListRow);
+    return currentGuidelineLandingCache;
+  })();
+
+  try {
+    return await currentGuidelineLandingPromise;
+  } finally {
+    currentGuidelineLandingPromise = null;
+  }
+};
 
 const buildSourceDefaults = (input: PathologyGuidelineSourceInput) => {
   const sourceKind = input.source_kind || 'pdf';
@@ -312,22 +369,42 @@ export const extractGoogleDriveFileId = (url: string) => {
 };
 
 export const getCurrentPathologyGuidelines = async (): Promise<PathologyGuidelineListItem[]> => {
-  const primaryQuery = await supabase
-    .from('pathology_guideline_current')
-    .select('guideline_id,slug,pathology_name,specialty,synonyms,keywords,primary_topic,secondary_topics,clinical_tags,anatomy_terms,problem_terms,content_type,is_featured,search_priority,related_guideline_slugs,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md')
-    .order('pathology_name', { ascending: true });
-
-  if (!primaryQuery.error) {
-    return (primaryQuery.data || []).map(mapListRow);
+  if (currentGuidelineLibraryCache) {
+    return currentGuidelineLibraryCache;
   }
 
-  const fallbackQuery = await supabase
-    .from('pathology_guideline_current')
-    .select('guideline_id,slug,pathology_name,specialty,synonyms,keywords,source_title,issuing_body,version_label,effective_date,synced_at,published_at,source_kind,tldr_md')
-    .order('pathology_name', { ascending: true });
+  if (currentGuidelineLibraryPromise) {
+    return currentGuidelineLibraryPromise;
+  }
 
-  if (fallbackQuery.error) throw fallbackQuery.error;
-  return (fallbackQuery.data || []).map(mapListRow);
+  currentGuidelineLibraryPromise = (async () => {
+    const primaryQuery = await supabase
+      .from('pathology_guideline_current')
+      .select(CURRENT_GUIDELINE_LIST_SELECT)
+      .order('pathology_name', { ascending: true });
+
+    if (!primaryQuery.error) {
+      currentGuidelineLibraryCache = (primaryQuery.data || []).map(mapListRow);
+      currentGuidelineLandingCache = currentGuidelineLibraryCache;
+      return currentGuidelineLibraryCache;
+    }
+
+    const fallbackQuery = await supabase
+      .from('pathology_guideline_current')
+      .select(CURRENT_GUIDELINE_FALLBACK_SELECT)
+      .order('pathology_name', { ascending: true });
+
+    if (fallbackQuery.error) throw fallbackQuery.error;
+    currentGuidelineLibraryCache = (fallbackQuery.data || []).map(mapListRow);
+    currentGuidelineLandingCache = currentGuidelineLibraryCache;
+    return currentGuidelineLibraryCache;
+  })();
+
+  try {
+    return await currentGuidelineLibraryPromise;
+  } finally {
+    currentGuidelineLibraryPromise = null;
+  }
 };
 
 export const searchPathologyGuidelines = async (query: string): Promise<PathologyGuidelineListItem[]> => {
@@ -358,7 +435,7 @@ export const searchPathologyGuidelines = async (query: string): Promise<Patholog
     .map(({ score: _score, ...item }) => item);
 };
 
-export const getRadioGraphicsTopicHubs = async () => {
+export const getArticleLibraryTopicHubs = async () => {
   const guidelines = await getCurrentPathologyGuidelines();
   const grouped = guidelines.reduce<Record<string, PathologyGuidelineListItem[]>>((acc, item) => {
     const key = item.primary_topic || DEFAULT_TOPIC;
@@ -403,8 +480,11 @@ export const getFeaturedPathologyGuidelines = async (): Promise<PathologyGuideli
     });
 };
 
-export const getRelatedPathologyGuidelines = async (current: PathologyGuidelineDetail): Promise<PathologyGuidelineListItem[]> => {
-  const guidelines = await getCurrentPathologyGuidelines();
+export const getRelatedPathologyGuidelines = async (
+  current: PathologyGuidelineDetail,
+  libraryOverride?: PathologyGuidelineListItem[],
+): Promise<PathologyGuidelineListItem[]> => {
+  const guidelines = libraryOverride || await getCurrentPathologyGuidelines();
   const candidates = guidelines.filter((item) => item.guideline_id !== current.guideline_id);
 
   const explicit = candidates.filter((item) => current.related_guideline_slugs.includes(item.slug));
@@ -447,7 +527,7 @@ export const getRelatedPathologyGuidelines = async (current: PathologyGuidelineD
 export const getPathologyGuidelineDetail = async (slug: string): Promise<PathologyGuidelineDetail | null> => {
   const { data, error } = await supabase
     .from('pathology_guideline_current')
-    .select('*')
+    .select(CURRENT_GUIDELINE_DETAIL_SELECT)
     .eq('slug', slug)
     .maybeSingle();
 
@@ -485,13 +565,14 @@ export const createPathologyGuidelineSource = async (input: PathologyGuidelineSo
     .single();
 
   if (error) throw error;
+  invalidatePathologyGuidelineLibraryCache();
   return { id: String(data.id) };
 };
 
 export const getPathologyGuidelineSource = async (id: string): Promise<PathologyGuidelineSource | null> => {
   const { data, error } = await supabase
     .from('pathology_guidelines')
-    .select('*')
+    .select(PATHOLOGY_GUIDELINE_SOURCE_SELECT)
     .eq('id', id)
     .maybeSingle();
 
@@ -529,7 +610,7 @@ export const getPathologyGuidelineSource = async (id: string): Promise<Pathology
 export const getPathologyGuidelineSourceBySlug = async (slug: string): Promise<PathologyGuidelineSource | null> => {
   const { data, error } = await supabase
     .from('pathology_guidelines')
-    .select('*')
+    .select(PATHOLOGY_GUIDELINE_SOURCE_SELECT)
     .eq('slug', slug)
     .maybeSingle();
 
@@ -601,6 +682,7 @@ export const updatePathologyGuidelineSource = async (
 
   const { error } = await supabase.from('pathology_guidelines').update(payload).eq('id', id);
   if (error) throw error;
+  invalidatePathologyGuidelineLibraryCache();
 };
 
 export const syncPathologyGuideline = async (guidelineId: string) => {
@@ -609,6 +691,7 @@ export const syncPathologyGuideline = async (guidelineId: string) => {
   });
 
   if (error) throw error;
+  invalidatePathologyGuidelineLibraryCache();
   return data as {
     versionId: string;
     status: 'draft' | 'failed' | 'published';
@@ -616,7 +699,7 @@ export const syncPathologyGuideline = async (guidelineId: string) => {
     sourceTitle: string | null;
     effectiveDate: string | null;
     richSummary: string;
-    checklistItems: PathologyChecklistItem[];
+    checklistItems: ArticleLibraryChecklistItem[];
     parseNotes?: string | null;
   };
 };
@@ -759,12 +842,14 @@ export const importPathologyGuidelineVersion = async (
     .single();
 
   if (error) throw error;
+  invalidatePathologyGuidelineLibraryCache();
   return mapVersionRow(data);
 };
 
 export const publishPathologyGuidelineVersion = async (versionId: string): Promise<void> => {
   const { error } = await supabase.rpc('publish_pathology_guideline_version', { p_version_id: versionId });
   if (error) throw error;
+  invalidatePathologyGuidelineLibraryCache();
 };
 
 export const deletePathologyGuidelineDraft = async (versionId: string): Promise<void> => {

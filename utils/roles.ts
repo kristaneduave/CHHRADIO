@@ -26,9 +26,9 @@ export const normalizeUserRole = (role?: string | null): UserRole => {
   return 'resident';
 };
 
-export const PATHOLOGY_CHECKLIST_EDITOR_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
+export const ARTICLE_LIBRARY_EDITOR_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
 
-export const canEditPathologyChecklists = (role?: UserRole | null): boolean => {
+export const canEditArticleLibrary = (role?: UserRole | null): boolean => {
   if (!role) return false;
-  return PATHOLOGY_CHECKLIST_EDITOR_ROLES.includes(role);
+  return ARTICLE_LIBRARY_EDITOR_ROLES.includes(role);
 };

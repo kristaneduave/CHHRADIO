@@ -16,7 +16,6 @@ const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
     onOpenMonthlyCensus?: () => void;
-    onOpenPathologyChecklists?: () => void;
     onOpenResidentEndorsements?: () => void;
 }
 
@@ -25,7 +24,7 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
-const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenPathologyChecklists, onOpenResidentEndorsements }) => {
+const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenResidentEndorsements }) => {
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -447,20 +446,6 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             <div className="flex-1 min-w-0">
                                 <h3 className="text-xs font-bold text-violet-200 group-hover:text-white transition-colors truncate">Search Radiopaedia</h3>
                                 <p className="text-[9px] text-violet-100/70 mt-0.5 truncate">Quick case lookup</p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => onOpenPathologyChecklists?.()}
-                            className="w-full text-left rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-cyan-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-300 group-hover:scale-110 transition-transform shadow-inner border border-cyan-500/30">
-                                <span className="material-icons text-[16px]">fact_check</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-cyan-200 group-hover:text-white transition-colors truncate">Pathology Checklists</h3>
-                                <p className="text-[9px] text-cyan-100/70 mt-0.5 truncate">Guideline-based review</p>
                             </div>
                         </button>
 

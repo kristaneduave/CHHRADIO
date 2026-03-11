@@ -9,10 +9,11 @@ interface LayoutProps {
   children: React.ReactNode;
   activeScreen: Screen;
   setScreen: (screen: Screen) => void;
+  prefetchScreen?: (screen: Screen) => void;
   unreadNotificationsCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unreadNotificationsCount = 0 }) => {
+const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, prefetchScreen, unreadNotificationsCount = 0 }) => {
   const mainRef = useRef<HTMLElement>(null);
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const isDesktopWideScreen = activeScreen === 'calendar' || activeScreen === 'live-map';
@@ -53,7 +54,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unre
   const navItems: (ScreenMeta & { outlineIcon: string })[] = [
     { screen: 'dashboard', label: 'Home', icon: 'home', outlineIcon: 'home' },
     { screen: 'newsfeed', label: 'Newsfeed', icon: 'newspaper', outlineIcon: 'newspaper' },
-    { screen: 'pathology-checklists', label: 'Pathology', icon: 'fact_check', outlineIcon: 'fact_check' },
+    { screen: 'article-library', label: 'Articles', icon: 'fact_check', outlineIcon: 'fact_check' },
     { screen: 'live-map', label: 'Live Map', icon: 'map', outlineIcon: 'map' },
     { screen: 'profile', label: 'Profile', icon: 'person', outlineIcon: 'person' },
   ];
@@ -93,6 +94,9 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, unre
                         setScreen(item.screen);
                         triggerHaptic('light');
                       }}
+                      onMouseEnter={() => prefetchScreen?.(item.screen)}
+                      onFocus={() => prefetchScreen?.(item.screen)}
+                      onTouchStart={() => prefetchScreen?.(item.screen)}
                       className={`flex flex-col items-center justify-center w-[54px] h-[48px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full ${isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
                         }`}
                       aria-label={`Open ${item.label}`}

@@ -1,6 +1,6 @@
 ﻿import re
 
-with open('components/PathologyChecklistScreen.tsx', 'r', encoding='utf-8', errors='ignore') as f:
+with open('components/ArticleLibraryScreen.tsx', 'r', encoding='utf-8', errors='ignore') as f:
     content = f.read()
 
 # Replace icons
@@ -43,7 +43,7 @@ new_inner_div = '''            {hub.count > 0 && (
 
 content = content.replace(old_inner_div, new_inner_div)
 
-with open('components/PathologyChecklistScreen.tsx', 'w', encoding='utf-8') as f:
+with open('components/ArticleLibraryScreen.tsx', 'w', encoding='utf-8') as f:
     f.write(content)
 
 print("Done")

@@ -14,6 +14,7 @@ import {
   SNAPSHOT_BASELINE_STORAGE_KEY,
   markSnapshotSectionsSeenForScreen,
 } from './services/dashboardSnapshotService';
+import { getPathologyGuidelineLandingSnapshot } from './services/articleLibraryService';
 import { prefetchGenerateCasePDF } from './services/pdfServiceLoader';
 import { fetchUnreadNotificationsCount, subscribeToNotifications } from './services/newsfeedService';
 import { createAppPresenceTracker } from './services/newsfeedPresenceService';
@@ -37,7 +38,7 @@ const TRACKABLE_SCREENS: Screen[] = [
   'upload',
   'quiz',
   'residents-corner',
-  'pathology-checklists',
+  'article-library',
   'resident-endorsements',
   'profile',
 ];
@@ -51,7 +52,7 @@ const AnnouncementsScreen = lazy(() => import('./components/AnnouncementsScreen'
 const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
 const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
 const ResidentEndorsementsScreen = lazy(() => import('./components/ResidentEndorsementsScreen'));
-const PathologyChecklistScreen = lazy(() => import('./components/PathologyChecklistScreen'));
+const ArticleLibraryScreen = lazy(() => import('./components/ArticleLibraryScreen'));
 const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
 const LiveMapScreen = lazy(() => import('./components/LiveMapScreen'));
 const MonthlyCensusPage = lazy(() => import('./components/MonthlyCensusPage'));
@@ -70,6 +71,7 @@ const App: React.FC = () => {
     return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
   });
   const hasPrefetchedPdfRef = useRef(false);
+  const articleLibraryPrefetchPromiseRef = useRef<Promise<void> | null>(null);
 
   if (!isSupabaseConfigured) {
     return (
@@ -259,6 +261,21 @@ const App: React.FC = () => {
     navigateToScreen('upload');
   };
 
+  const prefetchScreen = (screen: Screen) => {
+    if (screen !== 'article-library' || articleLibraryPrefetchPromiseRef.current) return;
+
+    articleLibraryPrefetchPromiseRef.current = (async () => {
+      try {
+        await Promise.all([
+          import('./components/ArticleLibraryScreen'),
+          getPathologyGuidelineLandingSnapshot().then(() => undefined),
+        ]);
+      } catch (error) {
+        console.error('Failed to prefetch Article Library:', error);
+      }
+    })();
+  };
+
   const renderScreen = () => {
     switch (currentScreen) {
       case 'dashboard':
@@ -333,12 +350,11 @@ const App: React.FC = () => {
         return (
           <ResidentsCornerScreen
             onOpenMonthlyCensus={() => navigateToScreen('monthly-census')}
-            onOpenPathologyChecklists={() => navigateToScreen('pathology-checklists')}
             onOpenResidentEndorsements={() => navigateToScreen('resident-endorsements')}
           />
         );
-      case 'pathology-checklists':
-        return <PathologyChecklistScreen onBack={() => navigateToScreen('residents-corner')} />;
+      case 'article-library':
+        return <ArticleLibraryScreen />;
       case 'resident-endorsements':
         return <ResidentEndorsementsScreen onBack={() => navigateToScreen('residents-corner')} />;
       case 'monthly-census':
@@ -380,11 +396,12 @@ const App: React.FC = () => {
 
   return (
     <>
-      <Layout
-        activeScreen={currentScreen}
-        setScreen={navigateToScreen}
-        unreadNotificationsCount={unreadNotificationsCount}
-      >
+    <Layout
+      activeScreen={currentScreen}
+      setScreen={navigateToScreen}
+      prefetchScreen={prefetchScreen}
+      unreadNotificationsCount={unreadNotificationsCount}
+    >
         <Suspense fallback={<LoadingState title="Loading module..." compact />}>
           {renderScreen()}
         </Suspense>

@@ -1,36 +1,42 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import PathologyChecklistScreen from './PathologyChecklistScreen';
+import ArticleLibraryScreen from './ArticleLibraryScreen';
 
-const serviceMocks = vi.hoisted(() => ({
-  getCurrentPathologyGuidelines: vi.fn(),
-  getFeaturedPathologyGuidelines: vi.fn(),
-  getGuidelineDraftVersions: vi.fn(),
-  getLatestEditableDraft: vi.fn(),
-  getPathologyGuidelineDetail: vi.fn(),
-  getPathologyGuidelineSource: vi.fn(),
-  getPathologyGuidelineSourceBySlug: vi.fn(),
-  getRadioGraphicsTopicHubs: vi.fn(),
-  getRelatedPathologyGuidelines: vi.fn(),
-  searchPathologyGuidelines: vi.fn(),
-  createPathologyGuidelineDraftFromCurrent: vi.fn(),
-  createPathologyGuidelineSource: vi.fn(),
-  importPathologyGuidelineVersion: vi.fn(),
-  publishPathologyGuidelineVersion: vi.fn(),
-  syncPathologyGuideline: vi.fn(),
-  updatePathologyGuidelineDraft: vi.fn(),
-  updatePathologyGuidelineSource: vi.fn(),
+const { serviceMocks, requestServiceMocks, mockProfileRole } = vi.hoisted(() => ({
+  serviceMocks: {
+    getCurrentPathologyGuidelines: vi.fn(),
+    getPathologyGuidelineLandingSnapshot: vi.fn(),
+    getFeaturedPathologyGuidelines: vi.fn(),
+    getGuidelineDraftVersions: vi.fn(),
+    getLatestEditableDraft: vi.fn(),
+    listPathologyGuidelineDrafts: vi.fn(),
+    getPathologyGuidelineDetail: vi.fn(),
+    getPathologyGuidelineSource: vi.fn(),
+    getPathologyGuidelineSourceBySlug: vi.fn(),
+    getArticleLibraryTopicHubs: vi.fn(),
+    getRelatedPathologyGuidelines: vi.fn(),
+    searchPathologyGuidelines: vi.fn(),
+    createPathologyGuidelineDraftFromCurrent: vi.fn(),
+    createPathologyGuidelineSource: vi.fn(),
+    importPathologyGuidelineVersion: vi.fn(),
+    publishPathologyGuidelineVersion: vi.fn(),
+    syncPathologyGuideline: vi.fn(),
+    updatePathologyGuidelineDraft: vi.fn(),
+    updatePathologyGuidelineSource: vi.fn(),
+  },
+  requestServiceMocks: {
+    createPathologyGuidelineRequest: vi.fn(),
+    deletePathologyGuidelineRequest: vi.fn(),
+    listPathologyGuidelineRequests: vi.fn(async () => []),
+    updatePathologyGuidelineRequest: vi.fn(),
+  },
+  mockProfileRole: {
+    value: 'admin',
+  },
 }));
 
-const requestServiceMocks = vi.hoisted(() => ({
-  createPathologyGuidelineRequest: vi.fn(),
-  deletePathologyGuidelineRequest: vi.fn(),
-  listPathologyGuidelineRequests: vi.fn(async () => []),
-  updatePathologyGuidelineRequest: vi.fn(),
-}));
-
-vi.mock('../services/pathologyChecklistService', () => serviceMocks);
+vi.mock('../services/articleLibraryService', () => serviceMocks);
 vi.mock('../services/pathologyGuidelineRequestService', () => requestServiceMocks);
 vi.mock('../utils/toast', () => ({
   toastError: vi.fn(),
@@ -45,7 +51,7 @@ vi.mock('../services/supabase', () => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          maybeSingle: vi.fn(async () => ({ data: { role: 'admin' } })),
+          maybeSingle: vi.fn(async () => ({ data: { role: mockProfileRole.value } })),
         })),
       })),
     })),
@@ -122,16 +128,25 @@ const setDesktopDetailMode = (matches: boolean) => {
   });
 };
 
+const selectChestTopic = async () => {
+  fireEvent.click(await screen.findByRole('button', { name: /Chest, 1 guide/i }));
+};
+
+const openLungMassArticle = async () => {
+  await selectChestTopic();
+  fireEvent.click((await screen.findAllByRole('button', { name: /lung mass/i }))[0]);
+};
+
 beforeEach(() => {
+  mockProfileRole.value = 'admin';
   setDesktopDetailMode(false);
-  requestServiceMocks.createPathologyGuidelineRequest.mockReset();
-  requestServiceMocks.deletePathologyGuidelineRequest.mockReset();
-  requestServiceMocks.updatePathologyGuidelineRequest.mockReset();
-  requestServiceMocks.listPathologyGuidelineRequests.mockReset();
+  Object.values(serviceMocks).forEach((mockFn) => mockFn.mockReset());
+  Object.values(requestServiceMocks).forEach((mockFn) => mockFn.mockReset());
   requestServiceMocks.listPathologyGuidelineRequests.mockResolvedValue([]);
   serviceMocks.getCurrentPathologyGuidelines.mockResolvedValue([chestItem, generalItem]);
+  serviceMocks.getPathologyGuidelineLandingSnapshot.mockResolvedValue([chestItem, generalItem]);
   serviceMocks.getFeaturedPathologyGuidelines.mockResolvedValue([chestItem]);
-  serviceMocks.getRadioGraphicsTopicHubs.mockResolvedValue([]);
+  serviceMocks.getArticleLibraryTopicHubs.mockResolvedValue([]);
   serviceMocks.searchPathologyGuidelines.mockResolvedValue([chestItem]);
   serviceMocks.getPathologyGuidelineDetail.mockResolvedValue({
     ...chestItem,
@@ -149,13 +164,25 @@ beforeEach(() => {
   serviceMocks.getPathologyGuidelineSource.mockResolvedValue(null);
   serviceMocks.getPathologyGuidelineSourceBySlug.mockResolvedValue(null);
   serviceMocks.getGuidelineDraftVersions.mockResolvedValue([]);
+  serviceMocks.listPathologyGuidelineDrafts.mockResolvedValue([]);
+  serviceMocks.getFeaturedPathologyGuidelines.mockResolvedValue([chestItem]);
 });
 
-describe('PathologyChecklistScreen', () => {
-  it('keeps quick chips hidden by default, reveals them on focus, and still fills search from a chip', async () => {
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+describe('ArticleLibraryScreen', () => {
+  it('loads the library once on mount and derives landing content without a featured fetch', async () => {
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalledTimes(1));
+    expect(serviceMocks.getCurrentPathologyGuidelines).not.toHaveBeenCalled();
+    expect(serviceMocks.getFeaturedPathologyGuidelines).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Chest, 1 guide/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose a subspecialty' })).not.toBeInTheDocument();
+  });
+
+  it('keeps quick chips hidden by default, reveals them on focus, and still fills search from a chip', async () => {
+    render(<ArticleLibraryScreen />);
+
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     expect(screen.getAllByText('Chest').length).toBeGreaterThan(0);
     expect(screen.getAllByText('General & Other').length).toBeGreaterThan(0);
     expect(screen.getByText('Requests')).toBeInTheDocument();
@@ -164,13 +191,14 @@ describe('PathologyChecklistScreen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New article' }));
 
-    expect(screen.getByRole('heading', { name: 'New article' })).toBeInTheDocument();
-    expect(screen.getByText('Paste or upload checklist JSON, then add the article title and source link.')).toBeInTheDocument();
-    expect(screen.getByText('Import checklist JSON')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'New article' })).toBeInTheDocument();
+    expect(await screen.findByText('Paste or upload checklist JSON, then add the article title and source link.')).toBeInTheDocument();
+    expect(await screen.findByText('Import checklist JSON')).toBeInTheDocument();
 
     const searchInput = screen.getByPlaceholderText('Search pathology, syndrome, or keyword...');
     fireEvent.focus(searchInput);
 
+    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Mass')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Mass'));
@@ -187,11 +215,11 @@ describe('PathologyChecklistScreen', () => {
     requestServiceMocks.createPathologyGuidelineRequest.mockResolvedValue(undefined);
     requestServiceMocks.listPathologyGuidelineRequests.mockResolvedValue([]);
 
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
 
-    expect(screen.queryByText('Suggest a topic, file, or update for the RadioGraphics library.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Suggest a topic, file, or update for the Article Library.')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open request topic form' }));
 
@@ -208,15 +236,45 @@ describe('PathologyChecklistScreen', () => {
       description: 'Please add a quick-reference guide.',
       source_url: 'https://example.com',
     }));
-    await waitFor(() => expect(screen.queryByText('Suggest a topic, file, or update for the RadioGraphics library.')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Suggest a topic, file, or update for the Article Library.')).not.toBeInTheDocument());
+  });
+
+  it('defers request history loading for non-editors until the request drawer is opened', async () => {
+    mockProfileRole.value = 'resident';
+    requestServiceMocks.listPathologyGuidelineRequests.mockResolvedValue([
+      {
+        id: 'r-1',
+        request_type: 'topic',
+        status: 'pending',
+        created_at: '2026-03-10T00:00:00Z',
+        title: 'Pancreatic cyst follow-up',
+        description: null,
+        source_url: null,
+        review_notes: null,
+        requester_name: 'User',
+        requester_username: 'user',
+        created_by: 'u-1',
+      },
+    ]);
+
+    render(<ArticleLibraryScreen />);
+
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    expect(requestServiceMocks.listPathologyGuidelineRequests).not.toHaveBeenCalled();
+    expect(screen.getByText('Requests load on demand')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open request topic form' }));
+
+    await waitFor(() => expect(requestServiceMocks.listPathologyGuidelineRequests).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Pancreatic cyst follow-up')).toBeInTheDocument();
   });
 
   it('opens guide detail in a mobile full-screen sheet', async () => {
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
 
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await openLungMassArticle();
 
     const dialog = await screen.findByRole('dialog', { name: 'Guide details' });
     expect(within(dialog).queryByText('RadioGraphics guide')).not.toBeInTheDocument();
@@ -224,7 +282,7 @@ describe('PathologyChecklistScreen', () => {
     expect(within(dialog).getAllByRole('heading', { name: 'Lung Mass' })).toHaveLength(1);
     expect(within(dialog).getAllByRole('link', { name: /Read full article|Open full article/i }).length).toBeGreaterThan(0);
     expect(within(dialog).queryByText('Pulmonary mass reporting checklist.')).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('heading', { name: 'Article controls' })).toBeInTheDocument();
+    expect(await within(dialog).findByRole('heading', { name: 'Article controls' })).toBeInTheDocument();
     expect(within(dialog).queryByText('Edit checklist draft')).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('heading', { name: 'Quick Summary' })).not.toBeInTheDocument();
     expect(within(dialog).queryByRole('heading', { name: 'Reference source' })).not.toBeInTheDocument();
@@ -238,11 +296,11 @@ describe('PathologyChecklistScreen', () => {
 
   it('opens guide detail in a centered modal on desktop', async () => {
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
 
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
     const dialog = await screen.findByRole('dialog', { name: 'Guide details' });
@@ -266,9 +324,9 @@ describe('PathologyChecklistScreen', () => {
 
   it('does not auto-open the first search result before the user clicks it', async () => {
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     serviceMocks.getPathologyGuidelineDetail.mockClear();
 
     fireEvent.change(screen.getByPlaceholderText('Search pathology, syndrome, or keyword...'), {
@@ -279,14 +337,14 @@ describe('PathologyChecklistScreen', () => {
     expect(serviceMocks.getPathologyGuidelineDetail).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Guide details' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /lung mass/i }));
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
     expect(await screen.findByRole('dialog', { name: 'Guide details' })).toBeInTheDocument();
   });
 
   it('hides an article for privileged users from the bottom control panel', async () => {
-    serviceMocks.getPathologyGuidelineSource.mockResolvedValueOnce({
+    serviceMocks.getPathologyGuidelineSource.mockResolvedValue({
       id: 'g-1',
       slug: 'lung-mass',
       pathology_name: 'Lung Mass',
@@ -315,19 +373,22 @@ describe('PathologyChecklistScreen', () => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    fireEvent.click(screen.getByRole('button', { name: 'Hide article' }));
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineSource).toHaveBeenCalledWith('g-1'));
+    const hideButton = await screen.findByRole('button', { name: 'Hide article' });
+    await waitFor(() => expect(hideButton).toBeEnabled());
+    fireEvent.click(hideButton);
 
     await waitFor(() => expect(serviceMocks.updatePathologyGuidelineSource).toHaveBeenCalledWith('g-1', { is_active: false }));
   });
 
   it('restores a hidden article for privileged users from the bottom control panel', async () => {
-    serviceMocks.getPathologyGuidelineSource.mockResolvedValueOnce({
+    serviceMocks.getPathologyGuidelineSource.mockResolvedValue({
       id: 'g-1',
       slug: 'lung-mass',
       pathology_name: 'Lung Mass',
@@ -355,13 +416,16 @@ describe('PathologyChecklistScreen', () => {
     });
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore article' }));
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineSource).toHaveBeenCalledWith('g-1'));
+    const restoreButton = await screen.findByRole('button', { name: 'Restore article' });
+    await waitFor(() => expect(restoreButton).toBeEnabled());
+    fireEvent.click(restoreButton);
 
     await waitFor(() => expect(serviceMocks.updatePathologyGuidelineSource).toHaveBeenCalledWith('g-1', { is_active: true }));
   });
@@ -398,21 +462,20 @@ describe('PathologyChecklistScreen', () => {
       .mockResolvedValueOnce({ ...incompleteActiveSource, source_url: 'https://example.com/full-article.pdf' });
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    fireEvent.click(screen.getByRole('button', { name: 'Manage' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage' }));
     fireEvent.change(screen.getByLabelText('Source URL'), { target: { value: 'https://example.com/full-article.pdf' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save source' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save source' }));
 
     await waitFor(() => expect(serviceMocks.updatePathologyGuidelineSource).toHaveBeenCalledWith(
       'g-1',
       expect.objectContaining({
         is_active: true,
-        primary_topic: null,
         source_url: 'https://example.com/full-article.pdf',
       }),
     ));
@@ -420,13 +483,13 @@ describe('PathologyChecklistScreen', () => {
 
   it('prefills the new-source form from the current article instead of resetting to empty fields', async () => {
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    fireEvent.click(screen.getByRole('button', { name: 'New source' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New source' }));
 
     expect(screen.getByLabelText('Pathology name')).toHaveValue('Lung Mass');
     expect(screen.getByLabelText('Slug')).toHaveValue('lung-mass');
@@ -465,15 +528,15 @@ describe('PathologyChecklistScreen', () => {
       .mockResolvedValueOnce({ ...existingSource, source_url: 'https://example.com/updated.pdf' });
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    fireEvent.click(screen.getByRole('button', { name: 'New source' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'New source' }));
     fireEvent.change(screen.getByLabelText('Source URL'), { target: { value: 'https://example.com/updated.pdf' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save source' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save source' }));
 
     await waitFor(() => expect(serviceMocks.updatePathologyGuidelineSource).toHaveBeenCalledWith(
       'g-1',
@@ -518,12 +581,14 @@ describe('PathologyChecklistScreen', () => {
       source_title: 'Multisystem Imaging Manifestations of Fibromuscular Dysplasia',
     });
 
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByLabelText('Pathology name'), { target: { value: 'Fibromuscular dysplasia (FMD)' } });
     fireEvent.change(screen.getByLabelText('Source title'), { target: { value: 'Multisystem Imaging Manifestations of Fibromuscular Dysplasia' } });
+    fireEvent.click(screen.getByRole('button', { name: /More settings/i }));
     fireEvent.change(screen.getByLabelText('Slug'), { target: { value: 'fibromuscular-dysplasia-multisystem-imaging-manifestations' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save article text/link' }));
 
@@ -593,10 +658,11 @@ describe('PathologyChecklistScreen', () => {
     serviceMocks.importPathologyGuidelineVersion.mockResolvedValueOnce(createdDraft);
     serviceMocks.getGuidelineDraftVersions.mockResolvedValueOnce([createdDraft]);
 
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByPlaceholderText('{"pathology_name":"Appendicitis","rich_summary_md":"...","checklist_items":[...]}'), {
       target: {
         value: JSON.stringify({
@@ -681,10 +747,11 @@ describe('PathologyChecklistScreen', () => {
     serviceMocks.getGuidelineDraftVersions.mockResolvedValueOnce([]);
     serviceMocks.publishPathologyGuidelineVersion.mockResolvedValueOnce(undefined);
 
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByPlaceholderText('{"pathology_name":"Appendicitis","rich_summary_md":"...","checklist_items":[...]}'), {
       target: {
         value: JSON.stringify({
@@ -712,7 +779,7 @@ describe('PathologyChecklistScreen', () => {
   });
 
   it('shows background only for overflow summary paragraphs', async () => {
-    serviceMocks.getPathologyGuidelineDetail.mockResolvedValueOnce({
+    serviceMocks.getPathologyGuidelineDetail.mockResolvedValue({
       ...chestItem,
       source_url: 'https://example.com/lung-mass.pdf',
       google_drive_url: '',
@@ -726,20 +793,20 @@ describe('PathologyChecklistScreen', () => {
     });
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    expect(screen.getByRole('heading', { name: 'Background and nuances' })).toBeInTheDocument();
-    expect(screen.getByText('Paragraph one.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Background and nuances' })).toBeInTheDocument();
+    expect(await screen.findByText('Paragraph one.')).toBeInTheDocument();
     expect(screen.getByText('Paragraph two.')).toBeInTheDocument();
     expect(screen.getByText('Paragraph three.')).toBeInTheDocument();
   });
 
   it('strips inline markdown markers from summary paragraphs', async () => {
-    serviceMocks.getPathologyGuidelineDetail.mockResolvedValueOnce({
+    serviceMocks.getPathologyGuidelineDetail.mockResolvedValue({
       ...chestItem,
       source_url: 'https://example.com/lung-mass.pdf',
       google_drive_url: '',
@@ -753,13 +820,13 @@ describe('PathologyChecklistScreen', () => {
     });
 
     setDesktopDetailMode(true);
-    render(<PathologyChecklistScreen onBack={() => {}} />);
+    render(<ArticleLibraryScreen />);
 
-    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
-    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
+    await openLungMassArticle();
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
-    expect(screen.getByText(/Focal FMD differs from multifocal FMD\./i)).toBeInTheDocument();
+    await waitFor(() => expect(document.body).toHaveTextContent(/Focal FMD.*multifocal FMD/i));
     expect(screen.queryByText(/\*\*Focal FMD\*\*/)).not.toBeInTheDocument();
   });
 });

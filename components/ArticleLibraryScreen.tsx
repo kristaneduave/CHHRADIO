@@ -1,5 +1,4 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { Suspense, lazy, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import EmptyState from './EmptyState';
 import LoadingState from './LoadingState';
 import TopRightCreateAction from './TopRightCreateAction';
@@ -10,7 +9,7 @@ import {
   createPathologyGuidelineSource,
   getCurrentPathologyGuidelines,
   deletePathologyGuidelineDraft,
-  getFeaturedPathologyGuidelines,
+  getPathologyGuidelineLandingSnapshot,
   getGuidelineDraftVersions,
   getLatestEditableDraft,
   listPathologyGuidelineDrafts,
@@ -25,7 +24,7 @@ import {
   updatePathologyGuidelineDraft,
   updatePathologyGuidelineSource,
   type PathologyGuidelineDraftListItem,
-} from '../services/pathologyChecklistService';
+} from '../services/articleLibraryService';
 import {
   createPathologyGuidelineRequest,
   deletePathologyGuidelineRequest,
@@ -34,7 +33,7 @@ import {
 } from '../services/pathologyGuidelineRequestService';
 import {
   EditableDraftPatch,
-  PathologyChecklistItem,
+  ArticleLibraryChecklistItem,
   PathologyGuidelineDetail,
   PathologyGuidelineImportPayload,
   PathologyGuidelineListItem,
@@ -47,12 +46,15 @@ import {
   PathologyGuidelineContentType,
   UserRole,
 } from '../types';
-import { canEditPathologyChecklists, normalizeUserRole } from '../utils/roles';
+import { canEditArticleLibrary, normalizeUserRole } from '../utils/roles';
 import { toastError, toastInfo, toastSuccess } from '../utils/toast';
 
-interface PathologyChecklistScreenProps {
-  onBack: () => void;
-}
+const ArticleLibraryRequestDrawer = lazy(() => import('./article-library/ArticleLibraryRequestDrawer'));
+const ArticleLibraryDetailOverlay = lazy(() => import('./article-library/ArticleLibraryDetailOverlay'));
+const ArticleLibraryDetailPanel = lazy(() => import('./article-library/ArticleLibraryDetailPanel'));
+const ArticleLibraryDraftsSection = lazy(() => import('./article-library/ArticleLibraryDraftsSection'));
+const ArticleLibraryEditorPanel = lazy(() => import('./article-library/ArticleLibraryEditorPanel'));
+const ArticleLibraryRequestsSection = lazy(() => import('./article-library/ArticleLibraryRequestsSection'));
 
 interface SourceFormState {
   slug: string;
@@ -97,7 +99,7 @@ interface GroupedChecklistSection {
   icon: string;
   description: string;
   accent: 'cyan' | 'amber' | 'emerald';
-  items: PathologyChecklistItem[];
+  items: ArticleLibraryChecklistItem[];
 }
 
 interface CanonicalGuideSectionMeta {
@@ -109,7 +111,7 @@ interface CanonicalGuideSectionMeta {
   aliases: string[];
 }
 
-interface RadioGraphicsTopicHub {
+interface ArticleLibraryTopicHub {
   id: string;
   topic: string;
   icon: string;
@@ -130,35 +132,18 @@ interface RadioGraphicsTopicHub {
   };
 }
 
-interface RadioGraphicsSearchMatchReason {
+interface ArticleLibrarySearchMatchReason {
   label: string;
 }
 
-interface RadioGraphicsBrowseSection {
+interface ArticleLibraryBrowseSection {
   id: string;
   title: string;
   description: string;
   items: PathologyGuidelineListItem[];
 }
 
-interface RadioGraphicsDetailPanelProps {
-  activeSectionId: string | null;
-  articleControls?: React.ReactNode;
-  activeTopic: string | null;
-  bindSectionContainerRef: (sectionId: string) => (node: HTMLElement | null) => void;
-  bindSectionRef: (sectionId: string) => (node: HTMLElement | null) => void;
-  canEdit: boolean;
-  checklistSections: GroupedChecklistSection[];
-  detail: PathologyGuidelineDetail | null;
-  detailSections: ChecklistDetailSection[];
-  handleEditDraft: () => void;
-  handleSelectItem: (item: PathologyGuidelineListItem) => void;
-  isLoadingDetail: boolean;
-  isPreparingDraft: boolean;
-  relatedGuidelines: PathologyGuidelineListItem[];
-}
-
-interface RadioGraphicsSearchBarProps {
+interface ArticleLibrarySearchBarProps {
   query: string;
   onQueryChange: (value: string) => void;
   onClear: () => void;
@@ -168,14 +153,14 @@ interface RadioGraphicsSearchBarProps {
   onBlur: () => void;
 }
 
-interface RadioGraphicsQuickChipsProps {
+interface ArticleLibraryQuickChipsProps {
   query: string;
   visible: boolean;
   chips: string[];
   onSelectChip: (chip: string) => void;
 }
 
-interface RadioGraphicsRequestDrawerProps {
+interface ArticleLibraryRequestDrawerProps {
   open: boolean;
   requestForm: RequestFormState;
   setRequestForm: React.Dispatch<React.SetStateAction<RequestFormState>>;
@@ -194,6 +179,33 @@ const QUICK_SEARCH_CHIPS = [
 ];
 
 const DESKTOP_DETAIL_MEDIA_QUERY = '(min-width: 1400px)';
+const PERF_ENABLED = import.meta.env.DEV;
+const PERF_MARKS = {
+  screenMount: 'radiographics-screen-mount',
+  libraryFetchStart: 'radiographics-library-fetch-start',
+  libraryFetchEnd: 'radiographics-library-fetch-end',
+  firstReady: 'radiographics-first-ready',
+  detailOpenStart: 'radiographics-detail-open-start',
+  detailOpenEnd: 'radiographics-detail-open-end',
+} as const;
+
+const markPerformance = (mark: string) => {
+  if (!PERF_ENABLED || typeof performance === 'undefined') return;
+  performance.mark(mark);
+};
+
+const measurePerformance = (name: string, startMark: string, endMark: string) => {
+  if (!PERF_ENABLED || typeof performance === 'undefined') return;
+  try {
+    performance.measure(name, startMark, endMark);
+    const entry = performance.getEntriesByName(name).at(-1);
+    if (entry) {
+      console.info(`[Article Library perf] ${name}: ${Math.round(entry.duration)}ms`);
+    }
+  } catch {
+    // Ignore missing marks in development instrumentation.
+  }
+};
 
 const getIsDesktopDetail = () =>
   typeof window !== 'undefined' &&
@@ -570,7 +582,7 @@ const getTrainingHubIdForItem = (item: PathologyGuidelineListItem) => {
 const getTrainingHubDefinition = (hubId: string) =>
   CURATED_TRAINING_HUBS.find((hub) => hub.id === hubId) || CURATED_TRAINING_HUBS[CURATED_TRAINING_HUBS.length - 1];
 
-const buildCuratedTopicHubs = (items: PathologyGuidelineListItem[]): RadioGraphicsTopicHub[] =>
+const buildCuratedTopicHubs = (items: PathologyGuidelineListItem[]): ArticleLibraryTopicHub[] =>
   CURATED_TRAINING_HUBS.map((hub) => {
     const hubItems = items
       .filter((item) => getTrainingHubIdForItem(item) === hub.id)
@@ -630,7 +642,7 @@ const getCanonicalGuideSectionMeta = (value?: string | null): CanonicalGuideSect
 };
 
 
-const normalizeChecklistItemsForSave = (items: PathologyChecklistItem[]) =>
+const normalizeChecklistItemsForSave = (items: ArticleLibraryChecklistItem[]) =>
   items
     .map((item, index) => ({
       id: item.id.trim(),
@@ -641,7 +653,7 @@ const normalizeChecklistItemsForSave = (items: PathologyChecklistItem[]) =>
     }))
     .sort((left, right) => left.order - right.order);
 
-const groupChecklistItems = (items: PathologyChecklistItem[]): GroupedChecklistSection[] => {
+const groupChecklistItems = (items: ArticleLibraryChecklistItem[]): GroupedChecklistSection[] => {
   const grouped = items.reduce((acc, item) => {
     const sectionMeta = getCanonicalGuideSectionMeta(item.section);
     if (!acc[sectionMeta.key]) {
@@ -649,7 +661,7 @@ const groupChecklistItems = (items: PathologyChecklistItem[]): GroupedChecklistS
     }
     acc[sectionMeta.key].items.push(item);
     return acc;
-  }, {} as Record<string, { meta: CanonicalGuideSectionMeta; items: PathologyChecklistItem[] }>);
+  }, {} as Record<string, { meta: CanonicalGuideSectionMeta; items: ArticleLibraryChecklistItem[] }>);
 
   return Object.values(grouped).map(({ meta, items: sectionItems }) => {
     const dedupedItems = Array.from(new Map(
@@ -754,7 +766,7 @@ const inferPrimaryTopic = (values: {
   return 'General reporting pearls';
 };
 
-const createCanonicalChecklistItemsForImport = (items: PathologyChecklistItem[]) =>
+const createCanonicalChecklistItemsForImport = (items: ArticleLibraryChecklistItem[]) =>
   normalizeChecklistItemsForSave(items).map((item) => {
     const meta = getCanonicalGuideSectionMeta(item.section);
     return {
@@ -763,7 +775,7 @@ const createCanonicalChecklistItemsForImport = (items: PathologyChecklistItem[])
     };
   });
 
-const collectDerivedStructuredContent = (items: PathologyChecklistItem[]) => {
+const collectDerivedStructuredContent = (items: ArticleLibraryChecklistItem[]) => {
   const grouped = items.reduce((acc, item) => {
     const meta = getCanonicalGuideSectionMeta(item.section);
     const content = normalizeImportedParagraph([item.label, item.notes || ''].filter(Boolean).join('. '));
@@ -812,7 +824,7 @@ const validateImportPayload = (raw: string): { payload: PathologyGuidelineImport
     const parsed = JSON.parse(raw);
     const errors: string[] = [];
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return { payload: null, errors: ['JSON must be an object.'] };
-    const checklistItems = Array.isArray(parsed.checklist_items) ? createCanonicalChecklistItemsForImport(parsed.checklist_items as PathologyChecklistItem[]) : [];
+    const checklistItems = Array.isArray(parsed.checklist_items) ? createCanonicalChecklistItemsForImport(parsed.checklist_items as ArticleLibraryChecklistItem[]) : [];
     if (!String(parsed.pathology_name || '').trim()) errors.push('pathology_name is required.');
     if (!String(parsed.tldr_md || '').trim() && !String(parsed.rich_summary_md || '').trim()) errors.push('tldr_md or rich_summary_md is required.');
     if (!String(parsed.rich_summary_md || '').trim()) errors.push('rich_summary_md is required.');
@@ -858,10 +870,10 @@ const validateImportPayload = (raw: string): { payload: PathologyGuidelineImport
   }
 };
 
-const getMatchReason = (item: PathologyGuidelineListItem): RadioGraphicsSearchMatchReason | null => (item.match_reason ? { label: item.match_reason } : null);
+const getMatchReason = (item: PathologyGuidelineListItem): ArticleLibrarySearchMatchReason | null => (item.match_reason ? { label: item.match_reason } : null);
 
 const TopicHubGrid: React.FC<{
-  hubs: RadioGraphicsTopicHub[];
+  hubs: ArticleLibraryTopicHub[];
   activeTopic: string | null;
   onSelectTopic: (topic: string) => void;
 }> = ({
@@ -960,171 +972,7 @@ const ReferenceSourceSection: React.FC<{ detail: PathologyGuidelineDetail }> = (
   );
 };
 
-const RelatedGuidelinesSection: React.FC<{
-  items: PathologyGuidelineListItem[];
-  onSelectItem: (item: PathologyGuidelineListItem) => void;
-}> = ({
-  items,
-  onSelectItem,
-}) => {
-    if (!items.length) return null;
-    return (
-      <section className="space-y-3">
-        <div className="flex items-center gap-2">
-          <span className="material-icons text-[18px] text-cyan-300">hub</span>
-          <h3 className="text-sm font-semibold text-white">Related guidelines</h3>
-        </div>
-        <div className="grid grid-cols-1 gap-3">
-          {items.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={false} onClick={() => onSelectItem(item)} variant="browse" />)}
-        </div>
-      </section>
-    );
-  };
-
-const ChecklistSection: React.FC<{
-  sections: GroupedChecklistSection[];
-  bindSectionRef: (sectionId: string) => (node: HTMLElement | null) => void;
-  bindSectionContainerRef: (sectionId: string) => (node: HTMLElement | null) => void;
-}> = ({
-  sections,
-  bindSectionRef,
-  bindSectionContainerRef,
-}) => (
-    <div className="space-y-3">
-      {sections.map((section) => (
-        <section key={section.id} ref={bindSectionContainerRef(section.id)} className="scroll-mt-24 rounded-2xl border border-white/[0.05] bg-white/[0.025] p-4 backdrop-blur-md">
-          <div id={section.id} ref={bindSectionRef(section.id)} className="mb-2 flex scroll-mt-24 items-center gap-2">
-            <span className={`material-icons text-[18px] ${section.accent === 'amber' ? 'text-amber-300' : section.accent === 'emerald' ? 'text-emerald-300' : 'text-cyan-300'}`}>{section.icon}</span>
-            <h3 className="text-sm font-semibold text-white">{section.label}</h3>
-          </div>
-          <p className="mb-3 text-xs leading-5 text-slate-400">{section.description}</p>
-          <div className="space-y-2">
-            {section.items.map((item) => (
-              <div key={item.id} className="rounded-xl border border-white/[0.05] bg-white/[0.02] p-3">
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border ${section.accent === 'amber' ? 'border-amber-400/35 bg-amber-500/10' : section.accent === 'emerald' ? 'border-emerald-400/35 bg-emerald-500/10' : 'border-cyan-400/40 bg-cyan-500/10'}`}>
-                    <span className={`material-icons text-[14px] ${section.accent === 'amber' ? 'text-amber-200' : section.accent === 'emerald' ? 'text-emerald-200' : 'text-cyan-200'}`}>done</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-100">{item.label}</p>
-                    {item.notes ? <p className="mt-1 text-xs leading-5 text-slate-400">{item.notes}</p> : null}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-
-const RadioGraphicsDetailPanel: React.FC<RadioGraphicsDetailPanelProps> = ({
-  activeSectionId,
-  articleControls,
-  activeTopic,
-  bindSectionContainerRef,
-  bindSectionRef,
-  canEdit,
-  checklistSections,
-  detail,
-  detailSections,
-  handleEditDraft,
-  handleSelectItem,
-  isLoadingDetail,
-  isPreparingDraft,
-  relatedGuidelines,
-}) => {
-  const summaryParagraphs = normalizeImportedSummary(detail?.rich_summary_md || '');
-  const kicker = normalizeImportedParagraph(detail?.tldr_md || '');
-  const heroSummaryParagraphs = summaryParagraphs.length ? summaryParagraphs.slice(0, 2) : kicker ? [kicker] : [];
-  const overflowSummaryParagraphs = summaryParagraphs.length > 2 ? summaryParagraphs.slice(2) : [];
-  const showBackgroundSection = overflowSummaryParagraphs.length > 0;
-
-  return (
-    <section className="glass-card-enhanced rounded-3xl p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-      {isLoadingDetail ? (
-        <LoadingState compact title="Loading checklist detail..." />
-      ) : detail ? (
-        <div className="space-y-3">
-          <div className="rounded-3xl border border-white/[0.05] bg-white/[0.025] p-5 backdrop-blur-md">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0 flex-1">
-                {heroSummaryParagraphs.length ? (
-                  <div className="space-y-3">
-                    {heroSummaryParagraphs.map((paragraph, index) => (
-                      <p key={`${index}-${paragraph.slice(0, 24)}`} className="text-sm leading-7 text-slate-300">
-                        {paragraph}
-                      </p>
-                    ))}
-                  </div>
-                ) : null}
-                {detail.clinical_tags.length || detail.problem_terms.length ? (
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {[...detail.clinical_tags, ...detail.problem_terms].slice(0, 8).map((tag, index) => (
-                      <span key={`${tag}-${index}`} className="rounded-full border border-white/[0.04] bg-white/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <ChecklistSection
-              sections={checklistSections}
-              bindSectionRef={bindSectionRef}
-              bindSectionContainerRef={bindSectionContainerRef}
-            />
-
-            {showBackgroundSection ? (
-              <section ref={bindSectionContainerRef('section-rich-summary')} className="rounded-2xl border border-white/[0.05] bg-white/[0.025] p-4 backdrop-blur-md">
-                <div id="section-rich-summary" ref={bindSectionRef('section-rich-summary')} className="mb-2 flex scroll-mt-24 items-center gap-2">
-                  <span className="material-icons text-[18px] text-cyan-300">article</span>
-                  <h3 className="text-sm font-semibold text-white">Background and nuances</h3>
-                </div>
-                <div className="space-y-2">
-                  {overflowSummaryParagraphs.map((paragraph, index) => (
-                    <p key={`${index}-${paragraph.slice(0, 24)}`} className="text-sm leading-6 text-slate-200">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <div ref={bindSectionContainerRef('section-related-guidelines')}>
-              <div id="section-related-guidelines" ref={bindSectionRef('section-related-guidelines')} className="scroll-mt-24" />
-              <RelatedGuidelinesSection items={relatedGuidelines} onSelectItem={handleSelectItem} />
-            </div>
-
-            {detail.parse_notes ? (
-              <section ref={bindSectionContainerRef('section-notes')} className="rounded-2xl border border-white/[0.05] bg-white/[0.025] p-4 backdrop-blur-md">
-                <div id="section-notes" ref={bindSectionRef('section-notes')} className="mb-2 flex scroll-mt-24 items-center gap-2">
-                  <span className="material-icons text-[18px] text-amber-300">info</span>
-                  <h3 className="text-sm font-semibold text-amber-100">Notes / caveats</h3>
-                </div>
-                <p className="text-sm leading-6 text-amber-50/85">{detail.parse_notes}</p>
-              </section>
-            ) : null}
-
-            {articleControls}
-          </div>
-        </div>
-      ) : (
-        <EmptyState
-          compact
-          icon="fact_check"
-          title={activeTopic ? `Choose a ${activeTopic} guide` : 'Choose a pathology'}
-          description={activeTopic ? 'Select a curated result to view the latest published checklist and summary.' : 'Choose a topic or guide to begin.'}
-        />
-      )}
-    </section>
-  );
-};
-
-const RadioGraphicsSearchBar: React.FC<RadioGraphicsSearchBarProps> = ({
+const ArticleLibrarySearchBar: React.FC<ArticleLibrarySearchBarProps> = ({
   query,
   onQueryChange,
   onClear,
@@ -1144,7 +992,7 @@ const RadioGraphicsSearchBar: React.FC<RadioGraphicsSearchBarProps> = ({
       onBlur={onBlur}
       placeholder="Search pathology, syndrome, or keyword..."
       className="h-10 w-full rounded-xl border-0 bg-transparent pl-[2.75rem] pr-[5.75rem] text-[13px] font-bold text-white placeholder:text-slate-500 focus:outline-none focus:ring-0"
-      aria-label="Search RadioGraphics"
+      aria-label="Search Article Library"
     />
     {query ? (
       <button
@@ -1171,7 +1019,7 @@ const RadioGraphicsSearchBar: React.FC<RadioGraphicsSearchBarProps> = ({
   </div>
 );
 
-const RadioGraphicsQuickChips: React.FC<RadioGraphicsQuickChipsProps> = ({
+const ArticleLibraryQuickChips: React.FC<ArticleLibraryQuickChipsProps> = ({
   query,
   visible,
   chips,
@@ -1199,75 +1047,14 @@ const RadioGraphicsQuickChips: React.FC<RadioGraphicsQuickChipsProps> = ({
   );
 };
 
-const RadioGraphicsRequestDrawer: React.FC<RadioGraphicsRequestDrawerProps> = ({
-  open,
-  requestForm,
-  setRequestForm,
-  onSubmit,
-  isSubmitting,
-}) => {
-  if (!open) return null;
-
-  return (
-    <div className="mt-2 rounded-3xl border border-white/10 bg-[#08121d]/90 p-4 shadow-2xl backdrop-blur-md">
-      <div className="space-y-1">
-        <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Request a topic</h2>
-        <p className="text-xs leading-5 text-slate-400">Suggest a topic, file, or update for the RadioGraphics library.</p>
-      </div>
-      <div className="mt-4 space-y-4">
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-300">Title</span>
-          <input
-            value={requestForm.title}
-            onChange={(event) => setRequestForm((prev) => ({ ...prev, title: event.target.value }))}
-            placeholder="What do you want added?"
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-300">Link</span>
-          <input
-            value={requestForm.source_url}
-            onChange={(event) => setRequestForm((prev) => ({ ...prev, source_url: event.target.value }))}
-            placeholder="Optional source link"
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35"
-          />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium text-slate-300">Note</span>
-          <textarea
-            value={requestForm.description}
-            onChange={(event) => setRequestForm((prev) => ({ ...prev, description: event.target.value }))}
-            rows={3}
-            placeholder="Optional context"
-            className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/35"
-          />
-        </label>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">Track request status in the Requests section below.</p>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={isSubmitting}
-            className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? 'Sending...' : 'Send request'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => {
+const ArticleLibraryScreen: React.FC = () => {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [results, setResults] = useState<PathologyGuidelineListItem[]>([]);
+  const [landingItems, setLandingItems] = useState<PathologyGuidelineListItem[]>([]);
   const [libraryItems, setLibraryItems] = useState<PathologyGuidelineListItem[]>([]);
-  const [topicHubs, setTopicHubs] = useState<RadioGraphicsTopicHub[]>([]);
-  const [featuredGuidelines, setFeaturedGuidelines] = useState<PathologyGuidelineListItem[]>([]);
-  const [recentGuidelines, setRecentGuidelines] = useState<PathologyGuidelineListItem[]>([]);
+  const [topicHubs, setTopicHubs] = useState<ArticleLibraryTopicHub[]>([]);
   const [editorDrafts, setEditorDrafts] = useState<PathologyGuidelineDraftListItem[]>([]);
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
   const [activeBrowseTag, setActiveBrowseTag] = useState<string | null>(null);
@@ -1321,7 +1108,8 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   const [importCategoryOverride, setImportCategoryOverride] = useState<string>('');
   const [requestForm, setRequestForm] = useState<RequestFormState>(DEFAULT_REQUEST_FORM);
   const [requests, setRequests] = useState<PathologyGuidelineRequest[]>([]);
-  const [isLoadingRequests, setIsLoadingRequests] = useState(true);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [hasLoadedRequests, setHasLoadedRequests] = useState(false);
   const [isLoadingDrafts, setIsLoadingDrafts] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [requestStatusDrafts, setRequestStatusDrafts] = useState<Record<string, PathologyGuidelineRequestStatus>>({});
@@ -1334,14 +1122,23 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const sectionContainerRefs = useRef<Record<string, HTMLElement | null>>({});
   const sectionNavRef = useRef<HTMLDivElement | null>(null);
+  const fullLibraryLoadPromiseRef = useRef<Promise<PathologyGuidelineListItem[]> | null>(null);
+  const requestsLoadPromiseRef = useRef<Promise<void> | null>(null);
+  const hasMeasuredFirstReadyRef = useRef(false);
+  const hasScheduledRequestPrefetchRef = useRef(false);
   const scrollContainer = useContext(LayoutScrollContext);
   const [mobileDetailScrollNode, setMobileDetailScrollNode] = useState<HTMLDivElement | null>(null);
   const [desktopDetailScrollNode, setDesktopDetailScrollNode] = useState<HTMLDivElement | null>(null);
 
-  const canEdit = canEditPathologyChecklists(currentUserRole);
+  const canEdit = canEditArticleLibrary(currentUserRole);
   const canSyncFromDrive = form.source_kind === 'google_drive' && !!form.google_drive_file_id.trim();
   const detailScrollContainer = isDesktopDetail ? desktopDetailScrollNode : mobileDetailScrollNode;
   const showQuickChips = isSearchFocused || query.trim().length > 0;
+  const browseItems = libraryItems.length ? libraryItems : landingItems;
+
+  useEffect(() => {
+    markPerformance(PERF_MARKS.screenMount);
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 220);
@@ -1404,25 +1201,44 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     };
   }, []);
 
+  const applyLibraryCollections = (items: PathologyGuidelineListItem[]) => {
+    setTopicHubs(buildCuratedTopicHubs(items));
+  };
+
+  const hydrateFullLibrary = async () => {
+    if (fullLibraryLoadPromiseRef.current) {
+      return fullLibraryLoadPromiseRef.current;
+    }
+
+    const loadPromise = (async () => {
+      const allItems = await getCurrentPathologyGuidelines();
+      setLibraryItems(allItems);
+      setLandingItems(allItems);
+      applyLibraryCollections(allItems);
+      return allItems;
+    })();
+
+    fullLibraryLoadPromiseRef.current = loadPromise;
+    try {
+      return await loadPromise;
+    } finally {
+      fullLibraryLoadPromiseRef.current = null;
+    }
+  };
+
   const loadLibraryCollections = async () => {
     setIsLoadingLibrary(true);
+    markPerformance(PERF_MARKS.libraryFetchStart);
     try {
-      const [allItems, featured] = await Promise.all([
-        getCurrentPathologyGuidelines(),
-        getFeaturedPathologyGuidelines(),
-      ]);
-      setLibraryItems(allItems);
-      setTopicHubs(buildCuratedTopicHubs(allItems));
-      setFeaturedGuidelines(featured);
-      setRecentGuidelines(
-        [...allItems]
-          .sort((left, right) => (right.published_at || right.effective_date || '').localeCompare(left.published_at || left.effective_date || ''))
-          .slice(0, 6),
-      );
+      const initialItems = await getPathologyGuidelineLandingSnapshot();
+      setLandingItems(initialItems);
+      applyLibraryCollections(initialItems);
     } catch (error) {
-      console.error('Failed to load RadioGraphics library:', error);
+      console.error('Failed to load Article Library:', error);
       toastError('Unable to load pathology checklists', 'Confirm the pathology guideline migrations have been applied.');
     } finally {
+      markPerformance(PERF_MARKS.libraryFetchEnd);
+      measurePerformance('library-fetch', PERF_MARKS.libraryFetchStart, PERF_MARKS.libraryFetchEnd);
       setIsLoadingLibrary(false);
     }
   };
@@ -1432,26 +1248,18 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   }, []);
 
   useEffect(() => {
-    let active = true;
-    const loadRequests = async () => {
-      setIsLoadingRequests(true);
-      try {
-        const nextRequests = await listPathologyGuidelineRequests();
-        if (!active) return;
-        setRequests(nextRequests);
-        setRequestStatusDrafts(nextRequests.reduce<Record<string, PathologyGuidelineRequestStatus>>((acc, request) => ({ ...acc, [request.id]: request.status }), {}));
-        setRequestNotesDrafts(nextRequests.reduce<Record<string, string>>((acc, request) => ({ ...acc, [request.id]: request.review_notes || '' }), {}));
-      } catch (error) {
-        console.error('Failed to load pathology checklist requests:', error);
-      } finally {
-        if (active) setIsLoadingRequests(false);
-      }
-    };
-    loadRequests().catch((error) => console.error(error));
-    return () => {
-      active = false;
-    };
-  }, [canEdit]);
+    if (isLoadingLibrary || libraryItems.length || !isSearchFocused) return;
+    hydrateFullLibrary().catch((error) => {
+      console.error('Failed to hydrate Article Library after search focus:', error);
+    });
+  }, [isLoadingLibrary, isSearchFocused, libraryItems.length]);
+
+  useEffect(() => {
+    if (isLoadingLibrary || libraryItems.length || !activeTopic) return;
+    hydrateFullLibrary().catch((error) => {
+      console.error('Failed to hydrate Article Library after topic selection:', error);
+    });
+  }, [activeTopic, isLoadingLibrary, libraryItems.length]);
 
   const loadEditorDrafts = async () => {
     if (!canEdit) {
@@ -1473,6 +1281,65 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     loadEditorDrafts().catch((error) => console.error(error));
   }, [canEdit]);
 
+  const loadRequests = async () => {
+    if (requestsLoadPromiseRef.current) {
+      await requestsLoadPromiseRef.current;
+      return;
+    }
+
+    const requestPromise = (async () => {
+      setIsLoadingRequests(true);
+      try {
+        const nextRequests = await listPathologyGuidelineRequests();
+        setRequests(nextRequests);
+        setRequestStatusDrafts(nextRequests.reduce<Record<string, PathologyGuidelineRequestStatus>>((acc, request) => ({ ...acc, [request.id]: request.status }), {}));
+        setRequestNotesDrafts(nextRequests.reduce<Record<string, string>>((acc, request) => ({ ...acc, [request.id]: request.review_notes || '' }), {}));
+        setHasLoadedRequests(true);
+      } catch (error) {
+        console.error('Failed to load pathology checklist requests:', error);
+      } finally {
+        setIsLoadingRequests(false);
+      }
+    })();
+
+    requestsLoadPromiseRef.current = requestPromise;
+    try {
+      await requestPromise;
+    } finally {
+      requestsLoadPromiseRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!canEdit || isLoadingLibrary || hasScheduledRequestPrefetchRef.current) return;
+    hasScheduledRequestPrefetchRef.current = true;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+    const startLoad = () => {
+      loadRequests().catch((error) => console.error(error));
+    };
+
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(() => {
+        startLoad();
+      });
+    } else {
+      timeoutId = setTimeout(() => {
+        startLoad();
+      }, 250);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined' && idleId !== null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [canEdit, isLoadingLibrary]);
+
   useEffect(() => {
     let active = true;
     const runSearch = async () => {
@@ -1485,6 +1352,9 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
       }
       setIsLoadingResults(true);
       try {
+        if (!libraryItems.length) {
+          await hydrateFullLibrary();
+        }
         const next = await searchPathologyGuidelines(debouncedQuery);
         if (active) setResults(next);
       } catch (error) {
@@ -1510,24 +1380,24 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     if (!activeTopic) return [];
     return Array.from(
       new Set(
-        libraryItems
+        browseItems
           .filter((item) => getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic === activeTopic)
           .flatMap((item) => [...item.clinical_tags, ...item.problem_terms])
           .filter(Boolean),
       ),
     ).slice(0, 8);
-  }, [activeTopic, libraryItems]);
+  }, [activeTopic, browseItems]);
 
   const displayResults = useMemo(() => {
     if (debouncedQuery.trim()) return results;
     if (!activeTopic) return [];
-    return libraryItems
+    return browseItems
       .filter((item) => getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic === activeTopic)
       .filter((item) => !activeBrowseTag || [...item.clinical_tags, ...item.problem_terms].includes(activeBrowseTag))
       .sort((left, right) => Number(right.is_featured) - Number(left.is_featured) || right.search_priority - left.search_priority || left.pathology_name.localeCompare(right.pathology_name));
-  }, [activeBrowseTag, activeTopic, debouncedQuery, libraryItems, results]);
+  }, [activeBrowseTag, activeTopic, browseItems, debouncedQuery, results]);
 
-  const browseSections = useMemo<RadioGraphicsBrowseSection[]>(() => {
+  const browseSections = useMemo<ArticleLibraryBrowseSection[]>(() => {
     if (!activeTopic || debouncedQuery.trim()) return [];
     if (!displayResults.length) return [];
     return [
@@ -1536,25 +1406,21 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     ].filter((section) => section.items.length);
   }, [activeHub?.activeDescription, activeTopic, debouncedQuery, displayResults]);
 
-  const landingGuidelines = useMemo(() => {
-    const seen = new Set<string>();
-    return [...featuredGuidelines, ...recentGuidelines].filter((item) => {
-      if (seen.has(item.guideline_id)) return false;
-      seen.add(item.guideline_id);
-      return true;
-    });
-  }, [featuredGuidelines, recentGuidelines]);
+  useEffect(() => {
+    if (isLoadingLibrary || hasMeasuredFirstReadyRef.current || !topicHubs.length) return;
+    hasMeasuredFirstReadyRef.current = true;
+    markPerformance(PERF_MARKS.firstReady);
+    measurePerformance('time-to-library-ready', PERF_MARKS.screenMount, PERF_MARKS.firstReady);
+  }, [isLoadingLibrary, topicHubs.length]);
 
   useEffect(() => {
-    if (debouncedQuery.trim()) return;
-    if (isDetailDismissed) return;
-    if (!displayResults.length) {
-      return;
-    }
-    if (!selectedItem || !displayResults.some((item) => item.guideline_id === selectedItem.guideline_id)) {
-      setSelectedItem(displayResults[0]);
-    }
-  }, [activeTopic, debouncedQuery, displayResults, isDetailDismissed, selectedItem]);
+    if (!selectedItem) return;
+    if (displayResults.some((item) => item.guideline_id === selectedItem.guideline_id)) return;
+    setSelectedItem(null);
+    setDetail(null);
+    setRelatedGuidelines([]);
+    setIsMobileDetailOpen(false);
+  }, [displayResults, selectedItem]);
 
   useEffect(() => {
     setIsDetailDismissed(false);
@@ -1564,19 +1430,20 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     if (!debouncedQuery.trim()) return;
     setSelectedItem(null);
     setIsMobileDetailOpen(false);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, libraryItems.length]);
 
   useEffect(() => {
     if (!selectedItem) return;
     let active = true;
     const loadDetail = async () => {
       setIsLoadingDetail(true);
+      markPerformance(PERF_MARKS.detailOpenStart);
       try {
         const nextDetail = await getPathologyGuidelineDetail(selectedItem.slug);
         if (!active) return;
         setDetail(nextDetail);
         if (nextDetail) {
-          const nextRelated = await getRelatedPathologyGuidelines(nextDetail);
+          const nextRelated = await getRelatedPathologyGuidelines(nextDetail, browseItems);
           if (active) setRelatedGuidelines(nextRelated);
         } else if (active) {
           setRelatedGuidelines([]);
@@ -1622,14 +1489,18 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
         console.error('Failed to load pathology guideline detail:', error);
         toastError('Unable to load checklist detail', 'Try refreshing the page or selecting another pathology.');
       } finally {
-        if (active) setIsLoadingDetail(false);
+        if (active) {
+          markPerformance(PERF_MARKS.detailOpenEnd);
+          measurePerformance('detail-open', PERF_MARKS.detailOpenStart, PERF_MARKS.detailOpenEnd);
+          setIsLoadingDetail(false);
+        }
       }
     };
     loadDetail().catch((error) => console.error(error));
     return () => {
       active = false;
     };
-  }, [canEdit, selectedItem]);
+  }, [browseItems, canEdit, selectedItem]);
 
   const draftVersions = useMemo(() => versions.filter((version) => version.sync_status !== 'published'), [versions]);
   const checklistSections = useMemo(() => {
@@ -1743,6 +1614,12 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     setQuery('');
     setDebouncedQuery('');
     setActiveBrowseTag(null);
+    setSelectedItem(null);
+    setDetail(null);
+    setRelatedGuidelines([]);
+    setIsMobileDetailOpen(false);
+    setSourceRecord(null);
+    setVersions([]);
     setActiveTopic((prev) => (prev === topic ? null : topic));
   };
 
@@ -1843,10 +1720,17 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   };
 
   const refreshRequests = async () => {
-    const nextRequests = await listPathologyGuidelineRequests();
-    setRequests(nextRequests);
-    setRequestStatusDrafts(nextRequests.reduce<Record<string, PathologyGuidelineRequestStatus>>((acc, request) => ({ ...acc, [request.id]: request.status }), {}));
-    setRequestNotesDrafts(nextRequests.reduce<Record<string, string>>((acc, request) => ({ ...acc, [request.id]: request.review_notes || '' }), {}));
+    await loadRequests();
+  };
+
+  const handleToggleRequestDrawer = () => {
+    setIsRequestDrawerOpen((value) => {
+      const nextOpen = !value;
+      if (nextOpen && !hasLoadedRequests && !isLoadingRequests) {
+        loadRequests().catch((error) => console.error(error));
+      }
+      return nextOpen;
+    });
   };
 
   const loadDraftIntoForm = (draft: PathologyGuidelineVersion) => {
@@ -2157,7 +2041,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     ...prev,
     checklist_items: [...(prev.checklist_items || []), { id: `item-${(prev.checklist_items || []).length + 1}`, label: '', order: (prev.checklist_items || []).length + 1, section: 'Checklist', notes: null }],
   }));
-  const updateChecklistItem = (index: number, patch: Partial<PathologyChecklistItem>) => setDraftForm((prev) => {
+  const updateChecklistItem = (index: number, patch: Partial<ArticleLibraryChecklistItem>) => setDraftForm((prev) => {
     const items = [...(prev.checklist_items || [])];
     items[index] = { ...items[index], ...patch };
     return { ...prev, checklist_items: items };
@@ -2339,7 +2223,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     }
   };
 
-  const renderBrowseSection = (section: RadioGraphicsBrowseSection) => (
+  const renderBrowseSection = (section: ArticleLibraryBrowseSection) => (
     <div key={section.id} className="space-y-1.5">
       {section.title || section.description ? (
         <div>
@@ -2514,23 +2398,33 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   ) : null;
 
 
+  const summaryParagraphs = useMemo(
+    () => normalizeImportedSummary(detail?.rich_summary_md || ''),
+    [detail?.rich_summary_md],
+  );
+  const kicker = useMemo(
+    () => normalizeImportedParagraph(detail?.tldr_md || ''),
+    [detail?.tldr_md],
+  );
+  const heroSummaryParagraphs = summaryParagraphs.length ? summaryParagraphs.slice(0, 2) : kicker ? [kicker] : [];
+  const overflowSummaryParagraphs = summaryParagraphs.length > 2 ? summaryParagraphs.slice(2) : [];
+
   const detailPanel = (
-    <RadioGraphicsDetailPanel
-      activeSectionId={activeSectionId}
-      articleControls={articleControls}
-      activeTopic={activeTopic}
-      bindSectionContainerRef={bindSectionContainerRef}
-      bindSectionRef={bindSectionRef}
-      canEdit={canEdit}
-      checklistSections={checklistSections}
-      detail={detail}
-      detailSections={detailSections}
-      handleEditDraft={handleEditDraft}
-      handleSelectItem={handleSelectItem}
-      isLoadingDetail={isLoadingDetail}
-      isPreparingDraft={isPreparingDraft}
-      relatedGuidelines={relatedGuidelines}
-    />
+    <Suspense fallback={<LoadingState compact title="Loading checklist detail..." />}>
+      <ArticleLibraryDetailPanel
+        articleControls={articleControls}
+        activeTopic={activeTopic}
+        bindSectionContainerRef={bindSectionContainerRef}
+        bindSectionRef={bindSectionRef}
+        checklistSections={checklistSections}
+        detail={detail}
+        heroSummaryParagraphs={heroSummaryParagraphs}
+        overflowSummaryParagraphs={overflowSummaryParagraphs}
+        handleSelectItem={handleSelectItem}
+        isLoadingDetail={isLoadingDetail}
+        relatedGuidelines={relatedGuidelines}
+      />
+    </Suspense>
   );
 
   const detailTitle = detail?.pathology_name || selectedItem?.pathology_name || '';
@@ -2545,7 +2439,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
     <div className="min-h-full bg-app px-6 pb-40 pt-6">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="flex items-center justify-between gap-3 pt-2">
-          <h1 className="text-3xl font-bold text-white">RadioGraphics</h1>
+          <h1 className="text-3xl font-bold text-white">Article Library</h1>
           {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
             <TopRightCreateAction
               label="New article"
@@ -2559,7 +2453,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
         </header>
 
         <section className="space-y-3">
-          <RadioGraphicsSearchBar
+          <ArticleLibrarySearchBar
             query={query}
             onQueryChange={(value) => {
               setQuery(value);
@@ -2570,7 +2464,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
             }}
             onClear={() => setQuery('')}
             isRequestDrawerOpen={isRequestDrawerOpen}
-            onToggleRequestDrawer={() => setIsRequestDrawerOpen((value) => !value)}
+            onToggleRequestDrawer={handleToggleRequestDrawer}
             onFocus={() => setIsSearchFocused(true)}
             onBlur={() => {
               if (!query.trim()) {
@@ -2578,19 +2472,21 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
               }
             }}
           />
-          <RadioGraphicsQuickChips
+          <ArticleLibraryQuickChips
             query={query}
             visible={showQuickChips}
             chips={QUICK_SEARCH_CHIPS}
             onSelectChip={handleSelectQuickChip}
           />
-          <RadioGraphicsRequestDrawer
-            open={isRequestDrawerOpen}
-            requestForm={requestForm}
-            setRequestForm={setRequestForm}
-            onSubmit={handleSubmitRequest}
-            isSubmitting={isSubmittingRequest}
-          />
+          <Suspense fallback={null}>
+            <ArticleLibraryRequestDrawer
+              open={isRequestDrawerOpen}
+              requestForm={requestForm}
+              setRequestForm={setRequestForm}
+              onSubmit={handleSubmitRequest}
+              isSubmitting={isSubmittingRequest}
+            />
+          </Suspense>
         </section>
 
         <div className="space-y-6">
@@ -2605,12 +2501,12 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
                     </div>
                     <button type="button" onClick={() => setQuery('')} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]">Clear</button>
                   </div>
-                  {isLoadingResults ? <LoadingState compact title="Searching RadioGraphics..." /> : displayResults.length ? <div className="flex flex-col gap-2">{displayResults.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={item.guideline_id === selectedItem?.guideline_id} onClick={() => handleSelectItem(item)} topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic} />)}</div> : <EmptyState compact icon="rule" title="No pathology matched that search term" description="Try a broader pathology name, synonym, or keyword." />}
+                  {isLoadingResults ? <LoadingState compact title="Searching Article Library..." /> : displayResults.length ? <div className="flex flex-col gap-2">{displayResults.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={item.guideline_id === selectedItem?.guideline_id} onClick={() => handleSelectItem(item)} topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic} />)}</div> : <EmptyState compact icon="rule" title="No pathology matched that search term" description="Try a broader pathology name, synonym, or keyword." />}
                 </div>
               ) : (
                 <div className="space-y-3">
                   {/* 'All topics' button removed for mobile-first layout */}
-                  {isLoadingLibrary ? <LoadingState compact title="Loading RadioGraphics library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
+                  {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
                   {activeTopic ? (
                     <div className="space-y-3">
                       <div>
@@ -2625,22 +2521,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
                         }))}
                       </div>
                     </div>
-                  ) : (
-                    landingGuidelines.length ? (
-                      <div className="flex flex-col gap-2">
-                        {landingGuidelines.map((item) => (
-                          <GuidelineResultCard
-                            key={item.guideline_id}
-                            item={item}
-                            active={item.guideline_id === selectedItem?.guideline_id}
-                            onClick={() => handleSelectItem(item)}
-                            variant="browse"
-                            topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic}
-                          />
-                        ))}
-                      </div>
-                    ) : null
-                  )}
+                  ) : null}
                 </div>
               )}
             </section>
@@ -2648,357 +2529,110 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
         </div>
 
         {!isRoleLoading && canEdit ? (
+          <Suspense fallback={null}>
+            <ArticleLibraryDraftsSection
+              isLoadingDrafts={isLoadingDrafts}
+              editorDrafts={editorDrafts}
+              deletingDraftVersionId={deletingDraftVersionId}
+              onOpenDraft={handleOpenDraftEntry}
+              onDeleteDraft={handleDeleteDraft}
+              getOriginLabel={getOriginLabel}
+              formatDateLabel={formatDateLabel}
+              getSourceKindLabel={getSourceKindLabel}
+            />
+          </Suspense>
+        ) : null}
+
+        <Suspense fallback={(
           <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
             <div className="space-y-4">
               <div>
-                <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Unpublished drafts</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-400">Editor-only drafts imported or edited but not yet published.</p>
+                <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Requests</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-400">{canEdit ? 'Review and manage incoming library requests.' : 'Track what you asked to be added or updated.'}</p>
               </div>
-              {isLoadingDrafts ? <LoadingState compact title="Loading drafts..." /> : editorDrafts.length ? (
-                <div className="space-y-3">
-                  {editorDrafts.map((draft) => (
-                    <div key={draft.version_id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-100">Draft</span>
-                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">{getOriginLabel(draft.origin)}</span>
-                            <span className="text-xs text-slate-500">{formatDateLabel(draft.synced_at)}</span>
-                          </div>
-                          <p className="mt-2 text-sm font-semibold text-white">{draft.pathology_name}</p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-slate-500">{draft.primary_topic || 'General reporting pearls'} ?{getSourceKindLabel(draft.source_kind)}</p>
-                          {draft.source_title ? <p className="mt-2 text-xs leading-5 text-slate-400">{draft.source_title}</p> : null}
-                          {draft.parse_notes ? <p className="mt-2 text-xs leading-5 text-amber-100/80">{draft.parse_notes}</p> : null}
-                          {!draft.is_active ? <p className="mt-2 text-[11px] uppercase tracking-[0.16em] text-rose-200/80">Source is hidden</p> : null}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button onClick={() => handleOpenDraftEntry(draft)} className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
-                            Open draft
-                          </button>
-                          <button onClick={() => handleDeleteDraft(draft.version_id)} disabled={deletingDraftVersionId === draft.version_id} className="rounded-xl border border-rose-400/16 bg-rose-500/[0.08] px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/[0.12] disabled:cursor-not-allowed disabled:opacity-60">
-                            {deletingDraftVersionId === draft.version_id ? 'Deleting...' : 'Delete'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : <EmptyState compact icon="edit_note" title="No unpublished drafts" description="JSON imports and manual edits will appear here until published." />}
             </div>
           </section>
+        )}>
+          <ArticleLibraryRequestsSection
+            canEdit={canEdit}
+            currentUserId={currentUserId}
+            requests={requests}
+            isLoadingRequests={isLoadingRequests}
+            hasLoadedRequests={hasLoadedRequests}
+            requestStatusDrafts={requestStatusDrafts}
+            requestNotesDrafts={requestNotesDrafts}
+            deletingRequestId={deletingRequestId}
+            updatingRequestId={updatingRequestId}
+            setRequestStatusDrafts={setRequestStatusDrafts}
+            setRequestNotesDrafts={setRequestNotesDrafts}
+            handleDeleteRequest={handleDeleteRequest}
+            handleUpdateRequest={handleUpdateRequest}
+            getRequestTypeLabel={getRequestTypeLabel}
+            getRequestStatusLabel={getRequestStatusLabel}
+            formatDateLabel={formatDateLabel}
+          />
+        </Suspense>
+
+        {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
+          <Suspense fallback={null}>
+            <ArticleLibraryEditorPanel
+              open={isLibraryControlPanelOpen}
+              importCategoryOverride={importCategoryOverride}
+              setImportCategoryOverride={setImportCategoryOverride}
+              importMode={importMode}
+              setImportMode={setImportMode}
+              handleImportFile={handleImportFile}
+              rawImportJson={rawImportJson}
+              setRawImportJson={setRawImportJson}
+              setValidatedImportPayload={setValidatedImportPayload}
+              setImportValidationErrors={setImportValidationErrors}
+              setImportWarnings={setImportWarnings}
+              importValidationErrors={importValidationErrors}
+              importWarnings={importWarnings}
+              handleValidateImportJson={handleValidateImportJson}
+              handleImportJson={handleImportJson}
+              isImportingJson={isImportingJson}
+              validatedImportPayload={validatedImportPayload}
+              handlePublishImportedJson={handlePublishImportedJson}
+              isPublishingImportedJson={isPublishingImportedJson}
+              importFileName={importFileName}
+              form={form}
+              setForm={setForm}
+              makeSlug={makeSlug}
+              isLibraryMetadataExpanded={isLibraryMetadataExpanded}
+              setIsLibraryMetadataExpanded={setIsLibraryMetadataExpanded}
+              handleSaveSource={handleSaveSource}
+              isSavingSource={isSavingSource}
+              openLibraryNewArticlePanel={openLibraryNewArticlePanel}
+              closePanel={() => { setIsLibraryControlPanelOpen(false); setImportCategoryOverride(''); }}
+            />
+          </Suspense>
         ) : null}
 
-        <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Requests</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-400">{canEdit ? 'Review and manage incoming library requests.' : 'Track what you asked to be added or updated.'}</p>
-            </div>
-            <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{canEdit ? 'Incoming requests' : 'Your requests'}</h3>
-              {isLoadingRequests ? <LoadingState compact title="Loading requests..." /> : requests.length ? requests.map((request) => <div key={request.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-100">{getRequestTypeLabel(request.request_type)}</span><span className="rounded-full border border-white/5 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-300">{getRequestStatusLabel(request.status)}</span><span className="text-xs text-slate-500">{formatDateLabel(request.created_at)}</span></div><p className="mt-2 text-[11px] uppercase tracking-[0.14em] text-slate-500">Requested by {request.requester_name || request.requester_username || 'Unknown requester'}</p><p className="mt-2 text-sm font-semibold text-white">{request.title}</p>{request.description ? <p className="mt-1 text-xs leading-5 text-slate-400">{request.description}</p> : null}{request.source_url ? <a href={request.source_url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-xs font-medium text-cyan-200 hover:text-cyan-100">Open link</a> : null}{!canEdit && request.review_notes ? <p className="mt-2 text-xs leading-5 text-amber-100/80">{request.review_notes}</p> : null}</div>{(canEdit || request.created_by === currentUserId) ? <button onClick={() => handleDeleteRequest(request.id)} disabled={deletingRequestId === request.id} className="rounded-xl border border-rose-400/16 bg-rose-500/[0.08] px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/[0.12] disabled:cursor-not-allowed disabled:opacity-60">{deletingRequestId === request.id ? 'Deleting...' : 'Delete'}</button> : null}</div>{canEdit ? <div className="mt-3 space-y-3 border-t border-white/5 pt-3"><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><label className="block"><span className="mb-1 block text-xs font-medium text-slate-300">Status</span><select value={requestStatusDrafts[request.id] || request.status} onChange={(event) => setRequestStatusDrafts((prev) => ({ ...prev, [request.id]: event.target.value as PathologyGuidelineRequestStatus }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35"><option value="pending">Pending</option><option value="reviewed">Reviewed</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option></select></label></div><label className="block"><span className="mb-1 block text-xs font-medium text-slate-300">Review note</span><textarea value={requestNotesDrafts[request.id] || ''} onChange={(event) => setRequestNotesDrafts((prev) => ({ ...prev, [request.id]: event.target.value }))} rows={3} placeholder="Optional note" className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" /></label><button onClick={() => handleUpdateRequest(request.id)} disabled={updatingRequestId === request.id} className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">{updatingRequestId === request.id ? 'Saving...' : 'Save'}</button></div> : null}</div>) : <EmptyState compact icon="forum" title="No requests yet" description={canEdit ? 'Requests will appear here.' : 'Your requests will appear here.'} />}
-            </div>
-          </div>
-        </section>
-
-        {!isRoleLoading && canEdit && !isDetailOverlayVisible && isLibraryControlPanelOpen ? (
-          <div className="fixed inset-x-0 top-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[120] px-3 py-3 xl:inset-auto xl:bottom-6 xl:right-6 xl:px-0 xl:py-0">
-            <section className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-fuchsia-500/15 bg-[#101922]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl xl:mx-0 xl:h-auto xl:w-[24rem] xl:max-w-none">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-fuchsia-200">New article</h2>
-                  <p className="mt-1 text-xs text-slate-400">Paste or upload checklist JSON, then add the article title and source link.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => { setIsLibraryControlPanelOpen(false); setImportCategoryOverride(''); }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-100 transition hover:bg-white/[0.1]"
-                  aria-label="Close article controls"
-                >
-                  <span className="material-icons text-[18px]">close</span>
-                </button>
-              </div>
-              <div className="mt-4 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-                <div className="space-y-3 rounded-2xl border border-cyan-500/15 bg-cyan-950/10 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">Import checklist JSON</h3>
-                      <p className="mt-1 text-xs text-slate-400">Primary workflow for adding a new article. Metadata auto-fills when possible.</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <select
-                        value={importCategoryOverride}
-                        onChange={(e) => setImportCategoryOverride(e.target.value)}
-                        className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-semibold text-slate-300 outline-none focus:border-cyan-400/35"
-                      >
-                        <option value="">Auto-detect category</option>
-                        {["Chest", "Abdomen", "GU / OB-Gyn", "Neuro / Head & Neck", "Musculoskeletal", "Breast", "Pediatrics", "Procedures / IR", "General & Other"].map(topic => (
-                          <option key={topic} value={topic}>{topic}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => setImportMode('paste')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${importMode === 'paste' ? 'border-cyan-400/20 bg-cyan-500/15 text-cyan-100' : 'border-white/10 bg-white/5 text-slate-300'}`}>Paste</button>
-                      <button onClick={() => setImportMode('upload')} className={`rounded-lg border px-3 py-1.5 text-xs font-semibold ${importMode === 'upload' ? 'border-cyan-400/20 bg-cyan-500/15 text-cyan-100' : 'border-white/10 bg-white/5 text-slate-300'}`}>Upload</button>
-                    </div>
-                  </div>
-                  {importMode === 'upload' ? <input type="file" accept=".json,application/json" onChange={handleImportFile} className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-cyan-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-cyan-100" /> : null}
-                  <textarea value={rawImportJson} onChange={(event) => { setRawImportJson(event.target.value); setValidatedImportPayload(null); setImportValidationErrors([]); setImportWarnings([]); }} rows={7} placeholder='{"pathology_name":"Appendicitis","rich_summary_md":"...","checklist_items":[...]}' className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 font-mono text-xs text-white outline-none focus:border-cyan-400/35" />
-                  {!!importValidationErrors.length ? <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-3">{importValidationErrors.map((error) => <p key={error} className="text-xs text-rose-100/90">{error}</p>)}</div> : null}
-                  {!!importWarnings.length ? <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3">{importWarnings.map((warning) => <p key={warning} className="text-xs text-amber-100/90">{warning}</p>)}</div> : null}
-                  <div className="flex flex-wrap gap-2">
-                    <button onClick={handleValidateImportJson} className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15">
-                      {importMode === 'upload' ? 'Recheck JSON' : 'Validate JSON'}
-                    </button>
-                    <button onClick={handleImportJson} disabled={isImportingJson || !validatedImportPayload} className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:opacity-60">
-                      {isImportingJson ? 'Creating...' : 'Create draft from JSON'}
-                    </button>
-                    <button onClick={handlePublishImportedJson} disabled={isPublishingImportedJson || !validatedImportPayload} className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60">
-                      {isPublishingImportedJson ? 'Publishing...' : 'Publish article'}
-                    </button>
-                  </div>
-                  {importFileName ? <p className="text-xs text-slate-500">Loaded file: {importFileName}</p> : null}
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="mb-3">
-                    <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">Article text and link</h3>
-                    <p className="mt-1 text-xs text-slate-500">Keep this minimal. JSON can fill most of the rest.</p>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium text-slate-300">Pathology name</span>
-                      <input value={form.pathology_name} onChange={(event) => setForm((prev) => ({ ...prev, pathology_name: event.target.value, slug: prev.slug || makeSlug(event.target.value) }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium text-slate-300">Source title</span>
-                      <input value={form.source_title} onChange={(event) => setForm((prev) => ({ ...prev, source_title: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-xs font-medium text-slate-300">Source URL</span>
-                      <input value={form.source_url} onChange={(event) => setForm((prev) => ({ ...prev, source_url: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
-                    </label>
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsLibraryMetadataExpanded((value) => !value)}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">More settings</h3>
-                      <p className="mt-1 text-xs text-slate-500">Slug and publish flags. Topic is inferred automatically.</p>
-                    </div>
-                    <span className="material-icons text-[18px] text-slate-500">{isLibraryMetadataExpanded ? 'expand_less' : 'expand_more'}</span>
-                  </button>
-                  {isLibraryMetadataExpanded ? (
-                    <div className="mt-3 space-y-3 border-t border-white/5 pt-3">
-                      <label className="block">
-                        <span className="mb-1 block text-xs font-medium text-slate-300">Slug</span>
-                        <input value={form.slug} onChange={(event) => setForm((prev) => ({ ...prev, slug: event.target.value }))} className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-fuchsia-400/35" />
-                      </label>
-                      <div className="flex flex-wrap gap-4">
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))} className="rounded border-white/10 bg-slate-900/80" />Source is active</label>
-                        <label className="inline-flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={form.is_featured} onChange={(event) => setForm((prev) => ({ ...prev, is_featured: event.target.checked }))} className="rounded border-white/10 bg-slate-900/80" />Featured on landing</label>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button onClick={handleSaveSource} disabled={isSavingSource} className="rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/10 px-4 py-2 text-xs font-semibold text-fuchsia-100 transition hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:opacity-60">
-                    {isSavingSource ? 'Saving...' : 'Save article text/link'}
-                  </button>
-                  <button onClick={openLibraryNewArticlePanel} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-slate-100 transition hover:bg-white/10">
-                    Reset
-                  </button>
-                </div>
-              </div>
-            </section>
-          </div>
-        ) : null}
-
-        {overlayRoot && isDesktopDetail && selectedItem ? createPortal(
-          <div
-            className="fixed inset-0 z-[160] hidden items-center justify-center bg-[#020611]/88 px-6 py-6 backdrop-blur-md xl:flex"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) handleCloseDetail();
-            }}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Guide details"
-              className="relative z-10 flex h-[min(92vh,1040px)] w-[min(1100px,calc(100vw-5rem))] flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#06101a]/[0.985] shadow-[0_36px_110px_rgba(0,0,0,0.62)]"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="relative bg-[#091524]/96 px-6 py-5 shadow-[0_12px_28px_rgba(2,8,18,0.22)] backdrop-blur-xl">
-                <button
-                  type="button"
-                  onClick={handleCloseDetail}
-                  className="absolute right-6 top-5 inline-flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/12 text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                  aria-label="Close guide details"
-                >
-                  <span className="material-icons text-[20px]">close</span>
-                </button>
-                <div className="min-w-0 pr-16">
-                  <h2 className="mx-auto max-w-none whitespace-nowrap text-center text-[1.8rem] font-black leading-[1.06] tracking-[-0.03em] text-white">
-                    {detailTitle}
-                  </h2>
-                  {!isLoadingDetail && detail?.effective_date ? (
-                    <p className="mt-2 text-center text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{formatDateLabel(detail.effective_date)}</p>
-                  ) : null}
-                </div>
-                {detailSections.length ? (
-                  <div ref={sectionNavRef} className="mt-4 flex items-center justify-center gap-3">
-                    {detailSections.length ? (
-                      <label className="min-w-0 flex-[0_1_32%] rounded-xl border border-white/5 bg-black/40 p-[3px] shadow-inner backdrop-blur-md transition focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
-                        <span className="sr-only">Jump to section</span>
-                        <select
-                          value={activeSectionId || detailSections[0]?.id || ''}
-                          onChange={(event) => scrollToSection(event.target.value)}
-                          className="h-[40px] w-full appearance-none rounded-[0.85rem] border-0 bg-transparent px-4 text-[13px] font-bold text-white outline-none focus:ring-0"
-                          aria-label="Jump to section"
-                          style={{ colorScheme: 'dark' }}
-                        >
-                          {detailSections.map((section) => (
-                            <option key={section.id} value={section.id} className="bg-slate-950 text-white">
-                              {section.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    {detailSections.length ? (
-                      <button
-                        onClick={scrollToTopOfDetail}
-                        className="shrink-0 rounded-xl border border-cyan-300/25 bg-cyan-400/12 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                      >
-                        Top
-                      </button>
-                    ) : null}
-                    {hasDetailSource ? (
-                      <a
-                        href={detailSourceHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/12 px-4 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                      >
-                        <span className="material-icons text-[18px]" aria-hidden="true">article</span>
-                        <span>Read full</span>
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/14 bg-cyan-400/[0.05] px-4 py-3 text-sm font-semibold text-cyan-50/45 opacity-70"
-                        aria-label="Read full article"
-                      >
-                        <span className="material-icons text-[18px]" aria-hidden="true">article</span>
-                        <span>Read full</span>
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-              <div ref={setDesktopDetailScrollNode} className="flex-1 overflow-y-auto px-6 pb-6 pt-0">
-                {detailPanel}
-              </div>
-            </div>
-          </div>,
-          overlayRoot,
-        ) : null}
-
-        {overlayRoot && !isDesktopDetail && isMobileDetailOpen && selectedItem ? createPortal(
-          <div
-            className="fixed inset-0 z-[160] h-[100dvh] bg-app/88 backdrop-blur-sm xl:hidden"
-            onClick={(event) => {
-              if (event.target === event.currentTarget) handleCloseDetail();
-            }}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Guide details"
-              className="absolute inset-0 flex h-[100dvh] flex-col bg-app"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="sticky top-0 z-20 bg-app/92 px-4 py-3 shadow-[0_12px_28px_rgba(2,8,18,0.22)] backdrop-blur-xl">
-                <div className="min-w-0">
-                  <h2 className="mx-auto max-w-full text-center text-[1.4rem] font-black leading-[1.08] tracking-[-0.03em] text-white [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden text-balance">
-                    {detailTitle}
-                  </h2>
-                </div>
-                {detailSections.length ? (
-                  <div ref={sectionNavRef} className="mt-3 flex items-center gap-2">
-                    {detailSections.length ? (
-                      <>
-                        <label className="min-w-0 flex-[0_1_56%] rounded-xl border border-white/5 bg-black/40 p-[3px] shadow-inner backdrop-blur-md transition focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
-                          <span className="sr-only">Jump to section</span>
-                          <select
-                            value={activeSectionId || detailSections[0]?.id || ''}
-                            onChange={(event) => scrollToSection(event.target.value)}
-                            className="h-[40px] w-full appearance-none rounded-[0.85rem] border-0 bg-transparent px-4 text-[13px] font-bold text-white outline-none focus:ring-0"
-                            aria-label="Jump to section"
-                            style={{ colorScheme: 'dark' }}
-                          >
-                            {detailSections.map((section) => (
-                              <option key={section.id} value={section.id} className="bg-slate-950 text-white">
-                                {section.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <button
-                          onClick={scrollToTopOfDetail}
-                          className="shrink-0 rounded-xl border border-cyan-300/25 bg-cyan-400/12 px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                        >
-                          Top
-                        </button>
-                      </>
-                    ) : null}
-                    {hasDetailSource ? (
-                      <a
-                        href={detailSourceHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/12 px-3 py-3 text-[11px] font-semibold text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                        aria-label="Read full article"
-                      >
-                        <span className="material-icons text-[16px]" aria-hidden="true">article</span>
-                        <span>Read full</span>
-                      </a>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/14 bg-cyan-400/[0.05] px-3 py-3 text-[11px] font-semibold text-cyan-50/45 opacity-70"
-                        aria-label="Read full article"
-                      >
-                        <span className="material-icons text-[16px]" aria-hidden="true">article</span>
-                        <span>Read full</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handleCloseDetail}
-                      className="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl border border-cyan-300/25 bg-cyan-400/12 text-cyan-50 transition hover:bg-cyan-400/18 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
-                      aria-label="Close guide details"
-                    >
-                      <span className="material-icons text-[20px]">close</span>
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <div ref={setMobileDetailScrollNode} className="flex-1 overflow-y-auto px-4 pb-[calc(7rem+env(safe-area-inset-bottom))]">
-                <div className="space-y-6">
-                  {detailPanel}
-                </div>
-              </div>
-            </div>
-          </div>,
-          overlayRoot,
-        ) : null}
+        <Suspense fallback={null}>
+          <ArticleLibraryDetailOverlay
+            overlayRoot={overlayRoot}
+            isDesktopDetail={isDesktopDetail}
+            isMobileDetailOpen={isMobileDetailOpen}
+            hasSelectedItem={!!selectedItem}
+            detailTitle={detailTitle}
+            detailSections={detailSections}
+            activeSectionId={activeSectionId}
+            effectiveDateLabel={!isLoadingDetail && detail?.effective_date ? formatDateLabel(detail.effective_date) : null}
+            hasDetailSource={hasDetailSource}
+            detailSourceHref={detailSourceHref}
+            sectionNavRef={sectionNavRef}
+            scrollToSection={scrollToSection}
+            scrollToTopOfDetail={scrollToTopOfDetail}
+            handleCloseDetail={handleCloseDetail}
+            setDesktopDetailScrollNode={setDesktopDetailScrollNode}
+            setMobileDetailScrollNode={setMobileDetailScrollNode}
+            detailPanel={detailPanel}
+          />
+        </Suspense>
       </div>
     </div>
   );
 };
 
-export default PathologyChecklistScreen;
+export default ArticleLibraryScreen;

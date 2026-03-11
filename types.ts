@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census' | 'pathology-checklists';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census' | 'article-library';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
@@ -262,6 +262,8 @@ export interface PathologyChecklistItem {
   order: number;
   notes?: string | null;
 }
+
+export type ArticleLibraryChecklistItem = PathologyChecklistItem;
 
 export interface PathologyGuidelineListItem {
   guideline_id: string;

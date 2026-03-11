@@ -1,2 +1,0 @@
-﻿components/PathologyChecklistScreen.tsx(93,19): error TS2347: Untyped function calls may not accept type arguments.
-components/PathologyChecklistScreen.tsx(109,27): error TS2339: Property 'map' does not exist on type 'unknown'.

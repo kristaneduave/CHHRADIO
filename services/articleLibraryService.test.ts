@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   extractGoogleDriveFileId,
-  getRadioGraphicsTopicHubs,
+  getCurrentPathologyGuidelines,
+  getPathologyGuidelineLandingSnapshot,
+  getArticleLibraryTopicHubs,
   getRelatedPathologyGuidelines,
+  invalidatePathologyGuidelineLibraryCache,
+  publishPathologyGuidelineVersion,
   searchPathologyGuidelines,
-} from './pathologyChecklistService';
+} from './articleLibraryService';
 import type { PathologyGuidelineDetail } from '../types';
 
-const { mockFrom } = vi.hoisted(() => ({
+const { mockFrom, mockRpc } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
+  mockRpc: vi.fn(),
 }));
 
 vi.mock('./supabase', () => ({
@@ -17,7 +22,7 @@ vi.mock('./supabase', () => ({
     functions: {
       invoke: vi.fn(),
     },
-    rpc: vi.fn(),
+    rpc: mockRpc,
   },
 }));
 
@@ -106,9 +111,12 @@ const buildSelectChain = (data: any[]) => ({
   }),
 });
 
-describe('pathologyChecklistService', () => {
+describe('articleLibraryService', () => {
   beforeEach(() => {
+    invalidatePathologyGuidelineLibraryCache();
     mockFrom.mockReset();
+    mockRpc.mockReset();
+    mockRpc.mockResolvedValue({ error: null });
     mockFrom.mockReturnValue({
       select: vi.fn(() => buildSelectChain(guidelineRows)),
     });
@@ -126,13 +134,57 @@ describe('pathologyChecklistService', () => {
     expect(results[0].match_reason).toContain('Matched synonym');
   });
 
+  it('shares one in-flight library request across concurrent callers', async () => {
+    let resolveQuery: ((value: { data: any[]; error: null }) => void) | null = null;
+    const order = vi.fn(() => new Promise<{ data: any[]; error: null }>((resolve) => {
+      resolveQuery = resolve;
+    }));
+    const select = vi.fn(() => ({ order }));
+    mockFrom.mockReturnValue({ select });
+
+    const firstPromise = getCurrentPathologyGuidelines();
+    const secondPromise = getCurrentPathologyGuidelines();
+    expect(resolveQuery).not.toBeNull();
+    resolveQuery?.({ data: guidelineRows, error: null });
+
+    const [first, second] = await Promise.all([firstPromise, secondPromise]);
+
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(order).toHaveBeenCalledTimes(1);
+    expect(first).toHaveLength(guidelineRows.length);
+    expect(second).toHaveLength(guidelineRows.length);
+  });
+
+  it('reuses cached library data for repeated search and hub reads', async () => {
+    await searchPathologyGuidelines('renal');
+    await getArticleLibraryTopicHubs();
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads a smaller landing snapshot before the full library cache exists', async () => {
+    const items = await getPathologyGuidelineLandingSnapshot();
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(items[0].slug).toBe('renal-mass');
+  });
+
+  it('prefers the landing snapshot rpc when available', async () => {
+    mockRpc.mockResolvedValueOnce({ data: guidelineRows, error: null });
+
+    const items = await getPathologyGuidelineLandingSnapshot();
+
+    expect(mockRpc).toHaveBeenCalledWith('get_radiographics_landing_snapshot');
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(items[0].slug).toBe('renal-mass');
+  });
+
   it('supports anatomy synonym expansion for pulmonary to lung queries', async () => {
     const results = await searchPathologyGuidelines('pulmonary mass');
     expect(results[0].slug).toBe('lung-mass');
   });
 
   it('builds topic hubs from published guidelines', async () => {
-    const hubs = await getRadioGraphicsTopicHubs();
+    const hubs = await getArticleLibraryTopicHubs();
     expect(hubs.find((hub) => hub.topic === 'Genitourinary')?.count).toBe(2);
     expect(hubs.find((hub) => hub.topic === 'Thoracic')?.count).toBe(1);
   });
@@ -141,5 +193,23 @@ describe('pathologyChecklistService', () => {
     const current = guidelineRows[0] as unknown as PathologyGuidelineDetail;
     const related = await getRelatedPathologyGuidelines(current);
     expect(related[0].slug).toBe('adrenal-incidentaloma');
+  });
+
+  it('uses a provided library snapshot for related guidelines without querying again', async () => {
+    const current = guidelineRows[0] as unknown as PathologyGuidelineDetail;
+    const related = await getRelatedPathologyGuidelines(current, guidelineRows as any);
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(related[0].slug).toBe('adrenal-incidentaloma');
+  });
+
+  it('invalidates the cached library after publish', async () => {
+    await getCurrentPathologyGuidelines();
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+
+    await publishPathologyGuidelineVersion('version-1');
+    await getCurrentPathologyGuidelines();
+
+    expect(mockRpc).toHaveBeenCalledWith('publish_pathology_guideline_version', { p_version_id: 'version-1' });
+    expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 });

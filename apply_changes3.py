@@ -1,7 +1,7 @@
 import re
 import sys
 
-with open('components/PathologyChecklistScreen.tsx', 'r', encoding='utf-8', errors='ignore') as f:
+with open('components/ArticleLibraryScreen.tsx', 'r', encoding='utf-8', errors='ignore') as f:
     content = f.read()
 
 # 1. Update RadioGraphicsTopicHub interface
@@ -190,7 +190,7 @@ new_grid = '''  <div className="grid grid-cols-2 auto-rows-auto gap-2 sm:grid-co
 
 content = content.replace(old_grid, new_grid)
 
-with open('components/PathologyChecklistScreen.tsx', 'w', encoding='utf-8') as f:
+with open('components/ArticleLibraryScreen.tsx', 'w', encoding='utf-8') as f:
     f.write(content)
 
 print("Done")
