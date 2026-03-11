@@ -542,63 +542,32 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
           ) : null}
         </div>
 
-        {/* Quick Filters */}
-        <div className="flex overflow-x-auto hide-scrollbar gap-2 pb-2 mb-2 -mx-6 px-6 relative z-30">
-          <button
-            onClick={() => setFilters(prev => ({ ...prev, datePreset: '7d', submissionType: '', specialty: '' }))}
-            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.datePreset === '7d' && !filters.submissionType && !filters.specialty ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(13,162,231,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
-          >
-            Last 7 Days
-          </button>
-          <button
-            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'interesting_case', datePreset: 'all', specialty: '' }))}
-            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'interesting_case' ? 'bg-sky-500 text-white border-sky-500 shadow-[0_0_15px_rgba(56,189,248,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
-          >
-            Interesting
-          </button>
-          <button
-            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'rare_pathology', datePreset: 'all', specialty: '' }))}
-            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'rare_pathology' ? 'bg-rose-500 text-white border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
-          >
-            Rare
-          </button>
-          <button
-            onClick={() => setFilters(prev => ({ ...prev, submissionType: 'aunt_minnie', datePreset: 'all', specialty: '' }))}
-            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.submissionType === 'aunt_minnie' ? 'bg-amber-500 text-white border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
-          >
-            Aunt Minnie
-          </button>
-          <button
-            onClick={() => setFilters(prev => ({ ...prev, specialty: 'Neuroradiology', submissionType: '', datePreset: 'all' }))}
-            className={`shrink-0 px-4 py-1.5 rounded-full border text-[11px] font-bold tracking-wider uppercase transition-all ${filters.specialty === 'Neuroradiology' ? 'bg-primary text-white border-primary shadow-[0_0_15px_rgba(13,162,231,0.4)]' : 'bg-white/5 text-slate-400 border-white/10 hover:bg-white/10 hover:text-white'}`}
-          >
-            Neuro
-          </button>
-        </div>
-
         {showFilters ? (
-          <div className="glass-card-enhanced rounded-2xl p-5 mb-6 border-primary/20 bg-primary/[0.02] animate-in slide-in-from-top-4 duration-300">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[10px] font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                <span className="material-icons text-sm">filter_alt</span>
-                Advanced Filters
-              </h3>
+          <div className="mb-6 animate-in slide-in-from-top-4 duration-300 rounded-[2rem] border border-cyan-500/15 bg-[#06111b]/92 p-6 backdrop-blur-xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-cyan-200">
+                  <span className="material-icons text-[16px]">filter_alt</span>
+                  Advanced filters
+                </h3>
+                <p className="mt-1 text-xs text-slate-400">Refine the case library by type, date, organ system, and ICD-10 code.</p>
+              </div>
               <button
                 onClick={clearFilters}
-                className="text-[10px] text-slate-500 hover:text-rose-400 font-bold uppercase transition-colors"
+                className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 transition-colors hover:text-slate-200"
               >
-                Clear All
+                Clear all
               </button>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Case Type</label>
+                <label className="block text-xs font-medium text-slate-300">Case type</label>
                 <select
                   name="submissionType"
                   value={filters.submissionType}
                   onChange={handleFilterChange}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all appearance-none"
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
                   <option value="">All Types</option>
                   <option value="interesting_case" className="bg-surface">Interesting Case</option>
@@ -607,12 +576,12 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Date</label>
+                <label className="block text-xs font-medium text-slate-300">Date</label>
                 <select
                   name="datePreset"
                   value={filters.datePreset}
                   onChange={handleFilterChange}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all appearance-none"
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
                   <option value="all" className="bg-surface">All time</option>
                   <option value="7d" className="bg-surface">Last 7 days</option>
@@ -623,11 +592,11 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Sort</label>
+                <label className="block text-xs font-medium text-slate-300">Sort</label>
                 <select
                   value={sortOrder}
                   onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all appearance-none"
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                   aria-label="Sort search results"
                 >
                   <option value="newest" className="bg-surface">Newest first</option>
@@ -635,36 +604,36 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                 </select>
               </div>
               {filters.datePreset === 'custom' ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">From Date</label>
+                    <label className="block text-xs font-medium text-slate-300">From date</label>
                     <input
                       type="date"
                       name="startDate"
                       value={filters.startDate}
                       onChange={handleFilterChange}
-                      className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">To Date</label>
+                    <label className="block text-xs font-medium text-slate-300">To date</label>
                     <input
                       type="date"
                       name="endDate"
                       value={filters.endDate}
                       onChange={handleFilterChange}
-                      className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all"
+                      className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                     />
                   </div>
                 </div>
               ) : null}
               <div className="space-y-1.5">
-                <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">Organ System</label>
+                <label className="block text-xs font-medium text-slate-300">Organ system</label>
                 <select
                   name="specialty"
                   value={filters.specialty}
                   onChange={handleFilterChange}
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white focus:border-primary transition-all appearance-none"
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
                   <option value="">All Organ Systems</option>
                   {primaryMetaOptions.map((s) => (
@@ -675,8 +644,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">
-                  Diagnostic Code (ICD-10)
+                <label className="block text-xs font-medium text-slate-300">
+                  Diagnostic code (ICD-10)
                 </label>
                 <input
                   type="text"
@@ -684,16 +653,16 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                   value={filters.diagnosticCode}
                   onChange={handleFilterChange}
                   placeholder="e.g. G30.9"
-                  className="w-full bg-white/5 border-white/10 rounded-xl px-3 py-2 text-base md:text-xs text-white placeholder-slate-600 focus:border-primary transition-all"
+                  className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/35"
                 />
               </div>
             </div>
 
             <button
               onClick={applyFilters}
-              className="w-full mt-6 py-3 bg-primary text-white rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg"
+              className="mt-6 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-5 py-2.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
             >
-              Apply Filters
+              Apply filters
             </button>
           </div>
         ) : null}

@@ -562,15 +562,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           <img
             src={profile.avatar_url || PROFILE_IMAGE}
             alt="Profile"
-            className="w-full h-full rounded-full object-cover shadow-inner group-hover:opacity-50 transition-all group-hover:scale-105 duration-300"
+            className="w-full h-full rounded-full object-cover shadow-inner hover:opacity-80 transition-opacity duration-300"
           />
           {/* Overlay Icon */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             <span className="material-icons text-white drop-shadow-lg text-2xl">photo_camera</span>
           </div>
-        </div>
-        <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl bg-[#0a0f18] text-primary flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.6)] border border-primary/40 group-hover:border-primary/80 transition-colors z-20 animate-pulse">
-          <span className="text-[11px] font-black uppercase tracking-wider">{profile.year_level || 'R1'}</span>
         </div>
 
         <input
@@ -584,25 +581,32 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
       {/* View Mode Header */}
       {!isEditing && (
-        <div className="z-10 w-full mb-2">
-          <h1 className="text-[22px] font-extrabold text-white tracking-tight leading-tight">{profile.full_name || 'Doctor'}</h1>
-          <p className="text-primary text-[11px] font-black uppercase tracking-[0.2em] mb-3 mt-1 opacity-90">
-            {profile.year_level || 'Resident'} • {profile.specialty}
-          </p>
-          <p className="text-slate-400 text-xs italic max-w-[260px] mx-auto mb-5 leading-relaxed">"{profile.motto || profile.bio || 'No motto equipped.'}"</p>
+        <div className="z-10 w-full mb-6">
+          <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">{profile.full_name || 'Doctor'}</h1>
+          <div className="flex flex-wrap items-center gap-2 mt-1.5 mb-5 opacity-90">
+            {profile.year_level && (
+              <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-[0.15em] shadow-sm">
+                {profile.year_level}
+              </span>
+            )}
+            <span className="text-slate-300 text-[12px] font-bold uppercase tracking-wider">
+              {profile.role} • {profile.specialty}
+            </span>
+          </div>
 
           {/* Badges Display */}
           <ResidentBadges activeBadges={activeBadges} />
 
-          {/* Stats Row */}
-          <div className="flex justify-center gap-8 pt-5 border-t border-white/5 pb-1">
-            <div className="text-center group">
-              <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Total Cases</span>
+          {/* Stats Box */}
+          <div className="flex justify-center md:justify-start gap-8 mt-6 bg-white/[0.02] border border-white/5 rounded-2xl p-4 md:px-8 max-w-fit shadow-xl backdrop-blur-sm">
+            <div className="text-center md:text-left group">
+              <span className="block text-2xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mt-1 block transition-colors">Total Cases</span>
             </div>
-            <div className="text-center group">
-              <span className="block text-xl font-black text-white group-hover:text-primary transition-colors">{myCases.filter(c => c.status === 'published').length}</span>
-              <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1 block group-hover:text-slate-400 transition-colors">Published</span>
+            <div className="w-[1px] bg-white/5 self-stretch" />
+            <div className="text-center md:text-left group">
+              <span className="block text-2xl font-black text-white group-hover:text-emerald-400 transition-colors">{myCases.filter(c => c.status === 'published').length}</span>
+              <span className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mt-1 block transition-colors">Published</span>
             </div>
           </div>
         </div>

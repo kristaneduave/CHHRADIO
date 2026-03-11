@@ -11,6 +11,20 @@ import {
 } from '../types';
 import { supabase } from './supabase';
 
+export interface PathologyGuidelineDraftListItem {
+  version_id: string;
+  guideline_id: string;
+  slug: string;
+  pathology_name: string;
+  primary_topic: string | null;
+  source_title: string | null;
+  source_kind: 'pdf' | 'google_drive' | 'external';
+  synced_at: string;
+  origin: PathologyGuidelineVersion['origin'];
+  parse_notes: string | null;
+  is_active: boolean;
+}
+
 const QUERY_SYNONYMS: Record<string, string[]> = {
   renal: ['kidney'],
   kidney: ['renal'],
@@ -180,9 +194,11 @@ const scoreGuideline = (item: PathologyGuidelineListItem, query: string) => {
   const fields = getSearchFields(item);
   const exactSynonym = fields.synonyms.find((entry) => entry === normalizedQuery);
   const exactClinicalTag = fields.clinicalTags.find((entry) => entry === normalizedQuery);
-  const queryTokens = expandQueryTokens(normalizeTokens(normalizedQuery));
+  const normalizedTokens = normalizeTokens(normalizedQuery);
+  const queryTokens = expandQueryTokens(normalizedTokens);
   const anatomyHit = queryTokens.find((token) => fields.anatomyTerms.includes(token));
   const problemHit = queryTokens.find((token) => fields.problemTerms.includes(token));
+  const pathologyTokens = normalizeTokens(fields.pathologyName);
   const supportHaystacks = [
     ...fields.keywords,
     ...fields.secondaryTopics,
@@ -222,6 +238,14 @@ const scoreGuideline = (item: PathologyGuidelineListItem, query: string) => {
     matchReason = matchReason || formatMatchReason('Matched pathology', item.pathology_name);
   }
 
+  const matchedPathologyTokens = normalizedTokens.filter((token) =>
+    pathologyTokens.some((entry) => entry.startsWith(token) || entry.includes(token)),
+  ).length;
+  if (matchedPathologyTokens) {
+    score += matchedPathologyTokens * 120;
+    matchReason = matchReason || formatMatchReason('Matched pathology terms', item.pathology_name);
+  }
+
   const weightedArrays = [
     { values: fields.synonyms, exactWeight: 90, partialWeight: 40, label: 'Matched synonym' },
     { values: fields.anatomyTerms, exactWeight: 90, partialWeight: 40, label: 'Matched anatomy' },
@@ -251,6 +275,19 @@ const scoreGuideline = (item: PathologyGuidelineListItem, query: string) => {
       }
     });
   });
+
+  const tokenCoverage = normalizedTokens.length
+    ? normalizedTokens.filter((token) => [
+      fields.pathologyName,
+      ...fields.synonyms,
+      ...fields.anatomyTerms,
+      ...fields.problemTerms,
+      ...fields.clinicalTags,
+      ...fields.keywords,
+      ...supportHaystacks,
+    ].some((value) => value.includes(token))).length / normalizedTokens.length
+    : 0;
+  score += Math.round(tokenCoverage * 160);
 
   return {
     score,
@@ -489,6 +526,44 @@ export const getPathologyGuidelineSource = async (id: string): Promise<Pathology
   };
 };
 
+export const getPathologyGuidelineSourceBySlug = async (slug: string): Promise<PathologyGuidelineSource | null> => {
+  const { data, error } = await supabase
+    .from('pathology_guidelines')
+    .select('*')
+    .eq('slug', slug)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: String(data.id),
+    slug: String(data.slug || ''),
+    pathology_name: String(data.pathology_name || ''),
+    specialty: data.specialty ? String(data.specialty) : null,
+    synonyms: uniqueStrings(data.synonyms),
+    keywords: uniqueStrings(data.keywords),
+    source_url: String(data.source_url || data.google_drive_url || ''),
+    source_kind: data.source_kind || 'pdf',
+    google_drive_url: String(data.google_drive_url || ''),
+    google_drive_file_id: String(data.google_drive_file_id || ''),
+    source_title: data.source_title ? String(data.source_title) : null,
+    issuing_body: data.issuing_body ? String(data.issuing_body) : null,
+    is_active: Boolean(data.is_active ?? true),
+    primary_topic: data.primary_topic ? String(data.primary_topic) : null,
+    secondary_topics: uniqueStrings(data.secondary_topics),
+    clinical_tags: uniqueStrings(data.clinical_tags),
+    anatomy_terms: uniqueStrings(data.anatomy_terms),
+    problem_terms: uniqueStrings(data.problem_terms),
+    content_type: normalizeContentType(data.content_type),
+    is_featured: Boolean(data.is_featured),
+    search_priority: Math.max(0, Number(data.search_priority) || 0),
+    related_guideline_slugs: uniqueStrings(data.related_guideline_slugs),
+    created_at: data.created_at ? String(data.created_at) : undefined,
+    updated_at: data.updated_at ? String(data.updated_at) : undefined,
+  };
+};
+
 export const updatePathologyGuidelineSource = async (
   id: string,
   patch: Partial<PathologyGuidelineSourceInput>,
@@ -692,6 +767,16 @@ export const publishPathologyGuidelineVersion = async (versionId: string): Promi
   if (error) throw error;
 };
 
+export const deletePathologyGuidelineDraft = async (versionId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('pathology_guideline_versions')
+    .delete()
+    .eq('id', versionId)
+    .eq('sync_status', 'draft');
+
+  if (error) throw error;
+};
+
 export const getGuidelineDraftVersions = async (guidelineId: string): Promise<PathologyGuidelineVersion[]> => {
   const { data, error } = await supabase
     .from('pathology_guideline_versions')
@@ -702,4 +787,52 @@ export const getGuidelineDraftVersions = async (guidelineId: string): Promise<Pa
 
   if (error) throw error;
   return (data || []).map(mapVersionRow);
+};
+
+export const listPathologyGuidelineDrafts = async (): Promise<PathologyGuidelineDraftListItem[]> => {
+  const { data, error } = await supabase
+    .from('pathology_guideline_versions')
+    .select(`
+      id,
+      guideline_id,
+      synced_at,
+      origin,
+      parse_notes,
+      pathology_guidelines!inner (
+        id,
+        slug,
+        pathology_name,
+        primary_topic,
+        source_title,
+        source_kind,
+        is_active
+      )
+    `)
+    .eq('sync_status', 'draft')
+    .order('synced_at', { ascending: false });
+
+  if (error) throw error;
+
+  const drafts = (data || []).map((row: any) => ({
+    version_id: String(row.id),
+    guideline_id: String(row.guideline_id),
+    slug: String(row.pathology_guidelines?.slug || ''),
+    pathology_name: String(row.pathology_guidelines?.pathology_name || 'Untitled draft'),
+    primary_topic: row.pathology_guidelines?.primary_topic ? String(row.pathology_guidelines.primary_topic) : null,
+    source_title: row.pathology_guidelines?.source_title ? String(row.pathology_guidelines.source_title) : null,
+    source_kind: row.pathology_guidelines?.source_kind || 'pdf',
+    synced_at: String(row.synced_at || ''),
+    origin: row.origin || 'manual_edit',
+    parse_notes: row.parse_notes ? String(row.parse_notes) : null,
+    is_active: Boolean(row.pathology_guidelines?.is_active ?? true),
+  }));
+
+  return Array.from(
+    drafts.reduce((acc, draft) => {
+      if (!acc.has(draft.guideline_id)) {
+        acc.set(draft.guideline_id, draft);
+      }
+      return acc;
+    }, new Map<string, PathologyGuidelineDraftListItem>()).values(),
+  );
 };

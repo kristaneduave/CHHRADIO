@@ -20,6 +20,7 @@ import LoadingState from './LoadingState';
 import NewsPageShell from './news/NewsPageShell';
 import NewsCardBase from './news/NewsCardBase';
 import NewsCardBadge from './news/NewsCardBadge';
+import TopRightCreateAction from './TopRightCreateAction';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 
 interface AnnouncementsScreenProps {
@@ -711,7 +712,15 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     <>
       <NewsPageShell
         title="News"
-        headerAction={null}
+        headerAction={canCreateAnnouncement ? (
+          <TopRightCreateAction
+            label="Add news"
+            icon="post_add"
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Create news"
+            compact
+          />
+        ) : null}
         searchFilterBar={
           <div ref={typeMenuRef} className="relative mb-0 flex items-center gap-2">
             <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5 w-full">
@@ -880,22 +889,6 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
             fetchAnnouncements(0, true);
           }}
         />
-      )}
-
-      {/* Floating Add Button */}
-      {canCreateAnnouncement && (
-        <div className="fixed top-2 right-4 sm:right-6 lg:right-10 z-[60]">
-          <div className="pointer-events-auto bg-[#1a232f]/80 backdrop-blur-xl shadow-2xl shadow-black/50 border border-white/[0.08] rounded-full p-2">
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="flex flex-col items-center justify-center w-[54px] h-[54px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full text-slate-300 hover:text-white hover:bg-white/5"
-              aria-label="Create news"
-            >
-              <span className="material-icons text-[26px]">post_add</span>
-            </button>
-          </div>
-        </div>
       )}
     </>
   );
