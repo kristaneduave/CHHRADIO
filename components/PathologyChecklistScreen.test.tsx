@@ -264,6 +264,27 @@ describe('PathologyChecklistScreen', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Guide details' })).not.toBeInTheDocument());
   });
 
+  it('does not auto-open the first search result before the user clicks it', async () => {
+    setDesktopDetailMode(true);
+    render(<PathologyChecklistScreen onBack={() => {}} />);
+
+    await waitFor(() => expect(serviceMocks.getCurrentPathologyGuidelines).toHaveBeenCalled());
+    serviceMocks.getPathologyGuidelineDetail.mockClear();
+
+    fireEvent.change(screen.getByPlaceholderText('Search pathology, syndrome, or keyword...'), {
+      target: { value: 'lung' },
+    });
+
+    await waitFor(() => expect(serviceMocks.searchPathologyGuidelines).toHaveBeenCalledWith('lung'));
+    expect(serviceMocks.getPathologyGuidelineDetail).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog', { name: 'Guide details' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /lung mass/i })[0]);
+
+    await waitFor(() => expect(serviceMocks.getPathologyGuidelineDetail).toHaveBeenCalledWith('lung-mass'));
+    expect(await screen.findByRole('dialog', { name: 'Guide details' })).toBeInTheDocument();
+  });
+
   it('hides an article for privileged users from the bottom control panel', async () => {
     serviceMocks.getPathologyGuidelineSource.mockResolvedValueOnce({
       id: 'g-1',

@@ -1546,6 +1546,7 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   }, [featuredGuidelines, recentGuidelines]);
 
   useEffect(() => {
+    if (debouncedQuery.trim()) return;
     if (isDetailDismissed) return;
     if (!displayResults.length) {
       return;
@@ -1558,6 +1559,12 @@ const PathologyChecklistScreen: React.FC<PathologyChecklistScreenProps> = () => 
   useEffect(() => {
     setIsDetailDismissed(false);
   }, [activeTopic, debouncedQuery]);
+
+  useEffect(() => {
+    if (!debouncedQuery.trim()) return;
+    setSelectedItem(null);
+    setIsMobileDetailOpen(false);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     if (!selectedItem) return;
