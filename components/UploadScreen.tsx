@@ -33,6 +33,13 @@ const MODALITIES = [
   'PET/CT'
 ];
 
+const REFERENCE_SOURCE_TYPES = [
+  'Book',
+  'Journal Article',
+  'Reviewer / Board Prep',
+  'Online Resource',
+  'Lecture / Handout'
+];
 
 interface UploadScreenProps {
   existingCase?: any; // Replace with proper type if available, e.g., Case
@@ -47,12 +54,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     age: existingCase?.patient_age || '',
     sex: existingCase?.patient_sex || 'M',
     modality: existingCase?.modality || 'CT Scan',
-    organSystem: existingCase?.anatomy_region || 'Neuroradiology',
+    organSystem: existingCase?.organ_system || existingCase?.anatomy_region || existingCase?.analysis_result?.anatomy_region || 'Neuroradiology',
     clinicalData: existingCase?.clinical_history || '',
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
     notes: existingCase?.educational_summary || '', // Mapped to educational_summary for notes
     radiologicClinchers: existingCase?.radiologic_clinchers || '',
+    referenceSourceType: existingCase?.analysis_result?.reference?.sourceType || '',
+    referenceTitle: existingCase?.analysis_result?.reference?.title || '',
+    referencePage: existingCase?.analysis_result?.reference?.page || '',
     diagnosis: existingCase?.diagnosis || '',
     date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0]
   });
@@ -76,6 +86,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+
+  const setFieldRef = (key: string) => (node: HTMLElement | null) => {
+    fieldRefs.current[key] = node;
+  };
 
   useEffect(() => {
     let timeout: NodeJS.Timeout;
@@ -125,6 +140,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         impression: '',
         notes: '',
         radiologicClinchers: '',
+        referenceSourceType: '',
+        referenceTitle: '',
+        referencePage: '',
         diagnosis: '',
         date: new Date().toISOString().split('T')[0]
       });
@@ -152,7 +170,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const processFiles = (files: FileList | null) => {
     if (!files) return;
 
-    const newImages: ImageUpload[] = [];
     let count = images.length;
 
     Array.from(files).forEach(file => {
@@ -234,6 +251,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     }
 
     setFieldErrors(nextErrors);
+    const firstError = Object.keys(nextErrors)[0];
+    if (firstError) {
+      window.requestAnimationFrame(() => {
+        fieldRefs.current[firstError]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
     return Object.keys(nextErrors).length === 0;
   };
 
@@ -271,6 +294,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             impression: '',
             notes: '',
             radiologicClinchers: '',
+            referenceSourceType: '',
+            referenceTitle: '',
+            referencePage: '',
             diagnosis: '',
             date: new Date().toISOString().split('T')[0]
           });
@@ -285,17 +311,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     fileInputRef.current?.click();
   }
 
-  // Helper to extract visuals for PDF service
-  const getImagesForPdf = () => {
-    return images.map(img => ({
-      url: img.url,
-      description: img.description
-    }));
-  };
-
   const handleExportPdf = async () => {
     await exportPdf(formData, customTitle, uploaderName, images);
   };
+
+  const inputClassName = 'w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.18)] transition-all';
+  const textareaClassName = `${inputClassName} resize-y custom-scrollbar`;
+  const sectionCardClassName = 'rounded-[28px] border border-white/10 bg-black/20 p-5 shadow-xl backdrop-blur-xl sm:p-6';
+  const canShowReferenceFields = formData.submissionType !== 'aunt_minnie';
+  const imageCountLabel = `${images.length} / 8 images`;
 
   return (
     <div className="flex flex-col h-full bg-app relative">
@@ -373,6 +397,20 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               </div>
             )}
 
+            {canShowReferenceFields && (formData.referenceSourceType || formData.referenceTitle || formData.referencePage) && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Reference Source</p>
+                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">
+                    {[formData.referenceSourceType, formData.referenceTitle].filter(Boolean).join(' • ') || 'Reference provided'}
+                  </p>
+                  {formData.referencePage && (
+                    <p className="text-xs text-slate-300 mt-1">{formData.referencePage}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
@@ -391,12 +429,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       <div className={`flex-1 overflow-y-auto px-6 pb-24 custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         {step === 1 && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <header className="space-y-3">
+            <section className={`${sectionCardClassName} space-y-5`}>
               <div className="flex bg-black/40 backdrop-blur-xl border border-white/10 p-1.5 rounded-2xl relative w-full overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'interesting_case' }))}
-                  className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'interesting_case'
+                  className={`flex-1 py-3 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'interesting_case'
                     ? 'bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.5)]'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                     }`}
@@ -406,7 +444,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'rare_pathology' }))}
-                  className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'rare_pathology'
+                  className={`flex-1 py-3 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'rare_pathology'
                     ? 'bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.5)]'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                     }`}
@@ -416,7 +454,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <button
                   type="button"
                   onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'aunt_minnie' }))}
-                  className={`flex-1 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'aunt_minnie'
+                  className={`flex-1 py-3 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest transition-all duration-300 z-10 ${formData.submissionType === 'aunt_minnie'
                     ? 'bg-amber-500 text-slate-900 shadow-[0_0_15px_rgba(245,158,11,0.5)]'
                     : 'text-white/40 hover:text-white/70 hover:bg-white/5'
                     }`}
@@ -425,152 +463,211 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3 py-2">
-                <input
-                  type="text"
-                  value={customTitle}
-                  onChange={handleTitleChange}
-                  placeholder={formData.submissionType === 'rare_pathology' ? 'Enter Pathology Name...' : formData.submissionType === 'aunt_minnie' ? 'Enter Aunt Minnie Title...' : 'Enter Case Title...'}
-                  autoComplete="off"
-                  className="text-2xl md:text-3xl font-black tracking-wide text-white bg-transparent border-none focus:ring-0 placeholder-slate-600 w-full p-0"
-                />
+              <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={handleTitleChange}
+                    placeholder={formData.submissionType === 'rare_pathology' ? 'Enter pathology or syndrome name...' : formData.submissionType === 'aunt_minnie' ? 'Enter pattern-recognition title...' : 'Enter teaching case title...'}
+                    autoComplete="off"
+                    className="w-full bg-transparent text-2xl font-black tracking-wide text-white border-none focus:ring-0 placeholder:text-slate-600 p-0 md:text-3xl"
+                  />
+                </div>
 
-                {/* Date Row */}
-                <div className="flex items-center">
-                  <div className="relative group">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Study Date</label>
+                  <div className="max-w-[220px]">
                     <input
                       type="date"
                       name="date"
                       value={formData.date}
                       onChange={handleInputChange}
-                      className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all max-w-[140px]"
+                      className={inputClassName}
                     />
                   </div>
                 </div>
               </div>
-            </header>
+            </section>
 
-            {/* Multi-Image Gallery */}
-            <div className="space-y-4">
-              {/* Clean, Large Upload Area */}
+            <section
+              ref={setFieldRef('images')}
+              className={`${sectionCardClassName} space-y-5 ${isDragging ? 'ring-2 ring-cyan-500/60 bg-cyan-500/10' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Images</h2>
+                </div>
+              </div>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={(e) => processFiles(e.target.files)}
+                className="hidden"
+                accept="image/*"
+                multiple
+              />
+
               {images.length === 0 ? (
-                <div
+                <button
+                  type="button"
                   onClick={triggerFileInput}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`w-full aspect-video rounded-3xl flex flex-col items-center justify-center gap-4 cursor-pointer transition-all duration-300 group border border-dashed ${isDragging ? 'border-cyan-500 bg-cyan-500/10 shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'border-white/20 bg-black/40 backdrop-blur-md hover:border-cyan-400 hover:bg-white/5 hover:shadow-[0_0_20px_rgba(6,182,212,0.2)]'}`}
+                  className={`w-full min-h-[240px] rounded-[28px] border border-dashed px-6 py-10 text-center transition-all duration-300 md:min-h-[320px] ${isDragging ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'border-white/20 bg-black/40 hover:border-cyan-400 hover:bg-white/5 hover:shadow-[0_0_20px_rgba(6,182,212,0.16)]'}`}
                 >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={(e) => processFiles(e.target.files)}
-                    className="hidden"
-                    accept="image/*"
-                    multiple // Enable multiple files
-                  />
-                  <div className="w-16 h-16 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-110 group-hover:bg-cyan-500/20 group-hover:shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-all duration-300">
-                    <span className="material-icons text-3xl group-hover:animate-glitch">add_photo_alternate</span>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors drop-shadow-md">Tap into Upload Images</p>
-                    <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest">Select multiple (Max 8)</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {/* Horizontal Scroll Gallery */}
-                  <div
-                    className="flex flex-col gap-4"
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    <div className={`flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x transition-colors duration-300 ${isDragging ? 'bg-cyan-500/10 rounded-2xl ring-2 ring-cyan-500/50' : ''}`}>
-                      {images.length < 8 && (
-                        <div
-                          onClick={triggerFileInput}
-                          className="shrink-0 w-40 h-56 border border-dashed border-white/20 bg-black/40 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/5 hover:border-cyan-400 hover:shadow-[0_0_15px_rgba(6,182,212,0.2)] transition-all duration-300 snap-start group"
-                        >
-                          <input
-                            type="file"
-                            ref={fileInputRef}
-                            onChange={(e) => processFiles(e.target.files)}
-                            className="hidden"
-                            accept="image/*"
-                            multiple
-                          />
-                          <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform duration-300">
-                            <span className="material-icons text-xl group-hover:animate-glitch">add</span>
-                          </div>
-                          <span className="text-[10px] font-bold text-cyan-500/70 uppercase tracking-widest group-hover:text-cyan-400 transition-colors">Add New</span>
-                        </div>
-                      )}
-
-                      {images.map((img, idx) => (
-                        <div key={idx} className="shrink-0 w-48 bg-white/5 rounded-2xl p-2 snap-start">
-                          <div
-                            className="relative w-full aspect-square mb-2 group overflow-hidden rounded-xl border border-white/10 cursor-pointer"
-                            onClick={(e) => { e.stopPropagation(); setAnnotatingImageIndex(idx); }}
-                          >
-                            <img src={img.url} className="w-full h-full object-cover bg-black" alt={`Scan ${idx}`} />
-
-                            {/* Tap to Edit Overlay */}
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pt-8 pb-2 px-2 flex flex-col items-center justify-end pointer-events-none opacity-90 group-hover:opacity-100 transition-opacity">
-                              <span className="text-[10px] uppercase font-bold text-white tracking-widest flex items-center gap-1 drop-shadow-md">
-                                <span className="material-icons text-[14px] text-primary">edit</span>
-                                Tap to Edit
-                              </span>
-                            </div>
-
-                            {/* Delete Button (Subtle) */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
-                              className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 border border-white/10 backdrop-blur-md text-slate-300 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-colors hover:border-rose-400 z-10"
-                            >
-                              <span className="material-icons text-[12px]">close</span>
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={img.description}
-                            onChange={(e) => handleImageDescriptionChange(idx, e.target.value)}
-                            placeholder="Description..."
-                            className="w-full bg-black/20 border-white/10 rounded-lg px-2 py-1.5 text-base md:text-[10px] text-white focus:border-primary transition-all"
-                          />
-                        </div>
-                      ))}
+                  <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-400">
+                      <span className="material-icons text-3xl">add_photo_alternate</span>
                     </div>
-                    <p className="text-[10px] text-slate-500 text-center italic">Scroll to view all images</p>
+                    <div className="space-y-2">
+                      <p className="text-lg font-bold text-white">Upload case images</p>
+                      <p className="text-sm text-slate-300">Drag images here or tap to browse</p>
+                      <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Up to 8 images. You can annotate each image after upload.</p>
+                    </div>
                   </div>
+                </button>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+                  {images.map((img, idx) => (
+                    <div key={idx} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-3 sm:p-4">
+                      <div
+                        className="group relative mb-3 aspect-square overflow-hidden rounded-2xl border border-white/10 cursor-pointer"
+                        onClick={(e) => { e.stopPropagation(); setAnnotatingImageIndex(idx); }}
+                      >
+                        <img src={img.url} className="h-full w-full object-cover bg-black" alt={`Uploaded case image ${idx + 1}`} />
+                        <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/85 via-black/30 to-transparent px-3 pb-3 pt-10">
+                          <span className="rounded-full bg-black/50 px-2.5 py-1 text-[11px] font-semibold text-white">Annotate</span>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); removeImage(idx); }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/55 text-slate-200 transition-colors hover:border-rose-400 hover:bg-rose-500 hover:text-white"
+                            aria-label={`Remove image ${idx + 1}`}
+                          >
+                            <span className="material-icons text-[16px]">close</span>
+                          </button>
+                        </div>
+                      </div>
+                      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">Image Note</label>
+                      <input
+                        type="text"
+                        value={img.description}
+                        onChange={(e) => handleImageDescriptionChange(idx, e.target.value)}
+                        placeholder="What should viewers notice in this image?"
+                        className={inputClassName}
+                      />
+                    </div>
+                  ))}
+
+                  {images.length < 8 && (
+                    <button
+                      type="button"
+                      onClick={triggerFileInput}
+                      className="min-h-[260px] rounded-[24px] border border-dashed border-white/20 bg-black/35 p-6 text-left transition-all hover:border-cyan-400 hover:bg-white/5"
+                    >
+                      <div className="flex h-full flex-col justify-between">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-400">
+                          <span className="material-icons text-2xl">add</span>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-lg font-bold text-white">Add images</p>
+                          <p className="text-sm text-slate-400">Add more views or sequences without leaving the form.</p>
+                          <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Drag here or tap to browse</p>
+                        </div>
+                      </div>
+                    </button>
+                  )}
                 </div>
               )}
-              {fieldErrors.images && (
-                <p className="text-[10px] text-rose-400">{fieldErrors.images}</p>
-              )}
-            </div>
 
-            <div className="bg-black/20 backdrop-blur-xl border border-white/10 p-5 rounded-2xl relative space-y-4 shadow-xl">
-              {/* Row 1: Initials, Age, Sex */}
-              {formData.submissionType === 'interesting_case' && (
-                <div className="grid grid-cols-12 gap-4">
-                  <div className="col-span-12 sm:col-span-5 space-y-1.5">
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Initials</label>
-                    <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt Initials" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all placeholder:text-slate-600" />
-                    {fieldErrors.initials && <p className="text-[10px] text-rose-500 font-medium ml-1">{fieldErrors.initials}</p>}
+              {fieldErrors.images && (
+                <p className="text-sm text-rose-400">{fieldErrors.images}</p>
+              )}
+            </section>
+
+            <section className={`${sectionCardClassName} space-y-5`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-white">Required Information</h2>
+                  <p className="mt-1 text-sm text-slate-400">Complete the essentials first so the case is ready to preview and publish.</p>
+                </div>
+                {Object.keys(fieldErrors).length > 0 && (
+                  <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200">Missing required fields</span>
+                )}
+              </div>
+
+              {formData.submissionType !== 'aunt_minnie' && (
+                <div ref={setFieldRef('clinicalData')} className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Clinical Data</label>
+                  <textarea
+                    name="clinicalData"
+                    value={formData.clinicalData}
+                    onChange={handleInputChange}
+                    rows={5}
+                    placeholder="Example: 54-year-old with chronic cough, weight loss, and prior treated TB..."
+                    className={`${textareaClassName} min-h-[120px]`}
+                  />
+                  {fieldErrors.clinicalData && <p className="text-sm text-rose-400">{fieldErrors.clinicalData}</p>}
+                </div>
+              )}
+
+              <div ref={setFieldRef('findings')} className="space-y-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
+                <textarea
+                  name="findings"
+                  value={formData.findings}
+                  onChange={handleInputChange}
+                  rows={7}
+                  placeholder="Example: CT chest shows a spiculated right upper lobe mass with central cavitation..."
+                  className={`${textareaClassName} min-h-[180px]`}
+                />
+                {fieldErrors.findings && <p className="text-sm text-rose-400">{fieldErrors.findings}</p>}
+              </div>
+
+              {formData.submissionType === 'rare_pathology' && (
+                <div ref={setFieldRef('radiologicClinchers')} className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Radiologic Clinchers</label>
+                  <textarea
+                    name="radiologicClinchers"
+                    value={formData.radiologicClinchers}
+                    onChange={handleInputChange}
+                    rows={5}
+                    placeholder="Example: fluid-fluid levels, cortical expansion, narrow zone of transition..."
+                    className={`${textareaClassName} min-h-[120px]`}
+                  />
+                  {fieldErrors.radiologicClinchers && <p className="text-sm text-rose-400">{fieldErrors.radiologicClinchers}</p>}
+                </div>
+              )}
+            </section>
+
+            {formData.submissionType === 'interesting_case' && (
+              <section className={`${sectionCardClassName} space-y-5`}>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Case Details</h2>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-12">
+                  <div ref={setFieldRef('initials')} className="space-y-2 sm:col-span-5">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Initials</label>
+                    <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Pt initials" className={inputClassName} />
+                    {fieldErrors.initials && <p className="text-sm text-rose-400">{fieldErrors.initials}</p>}
                   </div>
-                  <div className="col-span-6 sm:col-span-3 space-y-1.5">
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Age</label>
-                    <input type="number" name="age" value={formData.age} onChange={handleInputChange} placeholder="Age" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all placeholder:text-slate-600" />
+                  <div className="space-y-2 sm:col-span-3">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Age</label>
+                    <input type="number" name="age" value={formData.age} onChange={handleInputChange} placeholder="Age" className={inputClassName} />
                   </div>
-                  <div className="col-span-6 sm:col-span-4 space-y-1.5">
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1 block text-center">Sex</label>
-                    <div className="flex bg-black/50 border border-white/10 p-1 rounded-xl h-[42px]">
+                  <div className="space-y-2 sm:col-span-4">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Sex</label>
+                    <div className="flex rounded-2xl border border-white/10 bg-black/50 p-1">
                       {['M', 'F'].map((s) => (
                         <button
                           key={s}
+                          type="button"
                           onClick={() => setFormData(prev => ({ ...prev, sex: s }))}
-                          className={`flex-1 flex items-center justify-center rounded-lg text-xs font-bold transition-all duration-300 ${formData.sex === s ? 'bg-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                          className={`flex-1 rounded-xl px-3 py-3 text-sm font-bold transition-all ${formData.sex === s ? 'bg-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                         >
                           {s}
                         </button>
@@ -578,99 +675,117 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Row 2: Modality, Organ System */}
-              {formData.submissionType === 'interesting_case' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Modality</label>
-                    <div className="relative group">
-                      <select name="modality" value={formData.modality} onChange={handleInputChange} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all appearance-none cursor-pointer">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Modality</label>
+                    <div className="relative">
+                      <select name="modality" value={formData.modality} onChange={handleInputChange} className={`${inputClassName} appearance-none cursor-pointer pr-10`}>
                         {MODALITIES.map(m => (
                           <option key={m} value={m} className="bg-app text-white">{m}</option>
                         ))}
                       </select>
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-cyan-400 transition-colors">
-                        <span className="material-icons text-sm">expand_more</span>
-                      </div>
+                      <span className="material-icons pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
                     </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Organ System</label>
-                    <div className="relative group">
-                      <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all appearance-none cursor-pointer">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Organ System</label>
+                    <div className="relative">
+                      <select name="organSystem" value={formData.organSystem} onChange={handleInputChange} className={`${inputClassName} appearance-none cursor-pointer pr-10`}>
                         {ORGAN_SYSTEMS.map(os => (
                           <option key={os} value={os} className="bg-app text-white">{os}</option>
                         ))}
                       </select>
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                        <span className="material-icons text-sm">expand_more</span>
-                      </div>
+                      <span className="material-icons pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section className={`${sectionCardClassName} space-y-5`}>
+              <div>
+                <h2 className="text-lg font-bold text-white">Optional Teaching Details</h2>
+              </div>
+
+              {formData.submissionType === 'interesting_case' && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Impression</label>
+                  <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Example: Primary bronchogenic carcinoma" className={inputClassName} />
+                </div>
+              )}
+
+              {(formData.submissionType === 'interesting_case' || formData.submissionType === 'aunt_minnie') && (
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Notes / Remarks</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    rows={5}
+                    placeholder="Add teaching pearls, differential points, or additional remarks..."
+                    className={`${textareaClassName} min-h-[120px]`}
+                  />
+                </div>
+              )}
+
+              {canShowReferenceFields && (
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-4">
+                  <div>
+                    <h3 className="text-base font-bold text-white">Reference Source</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Source Type</label>
+                    <div className="relative">
+                      <select name="referenceSourceType" value={formData.referenceSourceType} onChange={handleInputChange} className={`${inputClassName} appearance-none cursor-pointer pr-10`}>
+                        <option value="" className="bg-app text-white">Select source type</option>
+                        {REFERENCE_SOURCE_TYPES.map((type) => (
+                          <option key={type} value={type} className="bg-app text-white">{type}</option>
+                        ))}
+                      </select>
+                      <span className="material-icons pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500">expand_more</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_220px]">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Title / Source Name</label>
+                      <input name="referenceTitle" value={formData.referenceTitle} onChange={handleInputChange} placeholder="Felson's Principles of Chest Roentgenology" className={inputClassName} />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Page / Figure</label>
+                      <input name="referencePage" value={formData.referencePage} onChange={handleInputChange} placeholder="p. 214" className={inputClassName} />
                     </div>
                   </div>
                 </div>
               )}
+            </section>
 
-              {/* New Row: Clinical Data */}
-              {formData.submissionType !== 'aunt_minnie' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Clinical Data</label>
-                  <textarea name="clinicalData" value={formData.clinicalData} onChange={handleInputChange} rows={2} placeholder="Patient presentation..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all resize-none placeholder:text-slate-600 custom-scrollbar" />
-                  {fieldErrors.clinicalData && <p className="text-[10px] text-rose-500 font-medium ml-1">{fieldErrors.clinicalData}</p>}
-                </div>
-              )}
-
-              {/* Row 3: Findings */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
-                <textarea name="findings" value={formData.findings} onChange={handleInputChange} rows={4} placeholder={formData.submissionType === 'aunt_minnie' ? 'Enter description...' : 'Key observations...'} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all resize-none placeholder:text-slate-600 custom-scrollbar" />
-                {fieldErrors.findings && <p className="text-[10px] text-rose-500 font-medium ml-1">{fieldErrors.findings}</p>}
+            <section className={`${sectionCardClassName} space-y-4`}>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-white">Ready to continue?</p>
+                <p className="text-xs text-slate-400">Preview the report once you have at least one image. You can still come back and edit before saving.</p>
               </div>
-
-              {formData.submissionType === 'rare_pathology' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Radiologic Clinchers</label>
-                  <textarea
-                    name="radiologicClinchers"
-                    value={formData.radiologicClinchers}
-                    onChange={handleInputChange}
-                    rows={2}
-                    placeholder="Distinctive radiologic features..."
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all resize-none placeholder:text-slate-600 custom-scrollbar"
-                  />
-                  {fieldErrors.radiologicClinchers && <p className="text-[10px] text-rose-500 font-medium ml-1">{fieldErrors.radiologicClinchers}</p>}
-                </div>
-              )}
-
-              {/* Row 4: Impression */}
-              {formData.submissionType === 'interesting_case' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Impression</label>
-                  <input name="impression" value={formData.impression} onChange={handleInputChange} placeholder="Diagnosis" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all placeholder:text-slate-600" />
-                </div>
-              )}
-
-              {/* Row 5: Notes / Remarks */}
-              {formData.submissionType === 'interesting_case' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Notes / Remarks</label>
-                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Education / Extra info..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all resize-none placeholder:text-slate-600 custom-scrollbar" />
-                </div>
-              )}
-
-              {formData.submissionType === 'aunt_minnie' && (
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest ml-1">Notes / Remarks</label>
-                  <textarea name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Additional notes..." className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-cyan-500 focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.2)] focus:outline-none transition-all resize-none placeholder:text-slate-600 custom-scrollbar" />
-                </div>
-              )}
-            </div>
-
-            <button onClick={handleGenerateReport} disabled={images.length === 0} className="w-full py-4 bg-primary text-white rounded-2xl font-bold transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-30 flex items-center justify-center gap-2">
-              Generate Reports
-              <span className="material-icons text-sm">arrow_forward</span>
-            </button>
+              <div className="grid grid-cols-2 gap-3 sm:max-w-[320px]">
+                <button
+                  type="button"
+                  onClick={() => handleSave('draft')}
+                  disabled={isSaving || images.length === 0}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Save Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateReport}
+                  disabled={images.length === 0}
+                  className="rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Preview Report
+                </button>
+              </div>
+            </section>
           </div>
         )}
 
@@ -706,19 +821,22 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             <header className="flex justify-between items-center mb-4">
               <div>
                 <h1 className="text-3xl font-bold text-white">{customTitle || 'New Case'}</h1>
-                <div className="flex items-center gap-2 text-xs">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                   <span className="text-slate-500">{formData.date}</span>
+                  <span className="text-slate-600">|</span>
+                  <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 font-semibold text-cyan-100">{imageCountLabel}</span>
                   {formData.submissionType === 'rare_pathology' && (
                     <>
-                      <span className="text-slate-600">|</span>
                       <span className="text-rose-300 font-bold uppercase tracking-wide">Rare Pathology</span>
                     </>
                   )}
                   {formData.submissionType === 'aunt_minnie' && (
                     <>
-                      <span className="text-slate-600">|</span>
                       <span className="text-amber-300 font-bold uppercase tracking-wide">Aunt Minnie</span>
                     </>
+                  )}
+                  {formData.submissionType === 'interesting_case' && (
+                    <span className="text-cyan-200 font-bold uppercase tracking-wide">Interesting Case</span>
                   )}
                 </div>
               </div>
@@ -798,6 +916,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   <p className="text-slate-400 text-xs italic">"{formData.notes}"</p>
                 </div>
               )}
+              {canShowReferenceFields && (formData.referenceSourceType || formData.referenceTitle || formData.referencePage) && (
+                <div>
+                  <span className="text-[9px] text-slate-500 uppercase font-bold">Reference Source</span>
+                  <p className="text-white text-sm font-medium">
+                    {[formData.referenceSourceType, formData.referenceTitle].filter(Boolean).join(' • ') || 'Reference provided'}
+                  </p>
+                  {formData.referencePage && <p className="text-slate-400 text-xs">{formData.referencePage}</p>}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
@@ -837,9 +964,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           </div>
         )}
       </div>
+
     </div>
   );
 };
 
 export default UploadScreen;
-

@@ -73,6 +73,31 @@ export function useCaseSubmission() {
 
             const imageMetadata = images.map(img => ({ description: img.description }));
             const isMinimalSubmission = formData.submissionType === 'rare_pathology' || formData.submissionType === 'aunt_minnie';
+            const existingAnalysisResult = existingCase?.analysis_result ?? {};
+            const reference = formData.referenceSourceType || formData.referenceTitle || formData.referencePage
+                ? {
+                    sourceType: formData.referenceSourceType,
+                    title: formData.referenceTitle,
+                    page: formData.referencePage,
+                }
+                : undefined;
+
+            const analysisResult = {
+                ...existingAnalysisResult,
+                modality: isMinimalSubmission ? null : formData.modality,
+                anatomy_region: isMinimalSubmission ? null : formData.organSystem,
+                keyFindings: [formData.findings],
+                impression: isMinimalSubmission ? null : formData.impression,
+                educationalSummary: formData.submissionType === 'rare_pathology' ? null : formData.notes,
+                imagesMetadata: imageMetadata,
+                studyDate: formData.date
+            } as Record<string, unknown>;
+
+            if (reference) {
+                analysisResult.reference = reference;
+            } else {
+                delete analysisResult.reference;
+            }
 
             const casePayload = {
                 title: customTitle
@@ -92,15 +117,7 @@ export function useCaseSubmission() {
                 category: isMinimalSubmission ? null : formData.organSystem,
                 organ_system: isMinimalSubmission ? null : formData.organSystem,
                 diagnosis: finalDiagnosis,
-                analysis_result: {
-                    modality: isMinimalSubmission ? null : formData.modality,
-                    anatomy_region: isMinimalSubmission ? null : formData.organSystem,
-                    keyFindings: [formData.findings],
-                    impression: isMinimalSubmission ? null : formData.impression,
-                    educationalSummary: formData.submissionType === 'rare_pathology' ? null : formData.notes,
-                    imagesMetadata: imageMetadata,
-                    studyDate: formData.date
-                },
+                analysis_result: analysisResult,
                 modality: isMinimalSubmission ? null : formData.modality,
                 status: status
             };

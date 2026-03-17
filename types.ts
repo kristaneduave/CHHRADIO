@@ -117,6 +117,12 @@ export interface Differential {
   rationale: string;
 }
 
+export interface ReferenceSource {
+  sourceType?: string;
+  title?: string;
+  page?: string;
+}
+
 export interface CaseComment {
   id: string;
   case_id: string;
@@ -149,6 +155,10 @@ export interface AnalysisResult {
   teachingPoints?: string[];
   pearl?: string;
   redFlags?: string[];
+  impression?: string;
+  imagesMetadata?: Array<{ description?: string }>;
+  studyDate?: string;
+  reference?: ReferenceSource;
 }
 
 export interface PatientRecord {
