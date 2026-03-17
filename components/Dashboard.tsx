@@ -100,6 +100,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isUploadTypePickerOpen]);
 
+  useEffect(() => {
+    if (logoClickCount === 0 || logoClickCount >= 3) return;
+    const timeout = window.setTimeout(() => {
+      setLogoClickCount(0);
+    }, 1100);
+    return () => window.clearTimeout(timeout);
+  }, [logoClickCount]);
+
   return (
     <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
       {/* Fiery Overdrive Screen Overlay (Optimized for mobile GPU) */}
@@ -182,6 +190,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
 
               if (newCount >= 3) { // Trigger on 3 or more
                 setIsLogoSyncing(true);
+                window.dispatchEvent(new CustomEvent('radcore-nav-hologram'));
                 setTimeout(() => {
                   setLogoClickCount(0);
                   setIsLogoSyncing(false);
