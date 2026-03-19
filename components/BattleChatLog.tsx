@@ -18,8 +18,8 @@ const BattleChatLog: React.FC = () => {
     useEffect(() => {
         // Initial set
         setLogs([
-            "Welcome to the Live Map Zone.",
-            "Radar online. Tracking local radiologists..."
+            "Welcome to the workspace.",
+            "Presence radar online. Tracking local radiologists..."
         ]);
 
         const interval = setInterval(() => {

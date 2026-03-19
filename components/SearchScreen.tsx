@@ -1,10 +1,13 @@
 import React, { startTransition, useDeferredValue, useEffect, useRef, useState } from 'react';
 import { PatientRecord, SearchFilters } from '../types';
-import { supabase } from '../services/supabase';
 import { toastError } from '../utils/toast';
 import LoadingState from './LoadingState';
 import { Skeleton } from './Skeleton';
 import EmptyState from './EmptyState';
+import { fetchPublishedCasesBundle } from '../services/publishedCasesService';
+import { useAppViewport } from './responsive/useViewport';
+import PageHeader from './ui/PageHeader';
+import PageShell from './ui/PageShell';
 
 const DatabaseItemSkeleton = () => (
   <div className="w-full p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative bg-white/[0.03] border border-white/5 opacity-80 mb-3">
@@ -116,21 +119,10 @@ const getPrimaryMeta = (rawCase: any, fallbackType?: string) => {
   return 'Case';
 };
 
-const withTimeout = async <T,>(promise: PromiseLike<T> | T, timeoutMs: number, message: string): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-  const timeoutPromise = new Promise<T>((_, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
-  });
-  try {
-    return await Promise.race([Promise.resolve(promise), timeoutPromise]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
 const DATABASE_LOADING_WATCHDOG_MS = 15_000;
 
 const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
+  const viewport = useAppViewport();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
@@ -211,91 +203,13 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       setLoading(false);
     }, DATABASE_LOADING_WATCHDOG_MS);
     try {
-      const { data, error: queryError } = await withTimeout(
-        supabase
-          .from('cases')
-          .select('*')
-          .eq('status', 'published')
-          .order('created_at', { ascending: false }),
-        12_000,
-        'Database request timed out.',
-      );
-
-      if (queryError) throw queryError;
-
-      if (data) {
-        if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
-        setRawCases(data);
-
-        // Fetch authors
-        const creatorIds = Array.from(new Set(data.map((item: any) => item.created_by).filter(Boolean)));
-        let authorMap = new Map<string, string>();
-
-        if (creatorIds.length > 0) {
-          const { data: profilesData } = await withTimeout(
-            supabase
-              .from('profiles')
-              .select('id, full_name, nickname')
-              .in('id', creatorIds),
-            8_000,
-            'Author lookup timed out.',
-          );
-
-          if (profilesData) {
-            authorMap = new Map(
-              profilesData.map((p: any) => [
-                p.id,
-                p.nickname || p.full_name || 'Hospital Staff'
-              ])
-            );
-          }
-        }
-
-        const mappedCases: PatientRecord[] = data.map((item: any) => {
-          const submissionType = item.submission_type || 'interesting_case';
-          const impressionTitle = submissionType === 'aunt_minnie'
-            ? (
-              item.findings ||
-              item.title ||
-              item.analysis_result?.impression ||
-              item.diagnosis ||
-              'Aunt Minnie'
-            )
-            : submissionType === 'rare_pathology'
-              ? (
-                item.title ||
-                item.analysis_result?.impression ||
-                item.diagnosis ||
-                'Rare Pathology'
-              )
-              : (
-                item.analysis_result?.impression ||
-                item.diagnosis ||
-                item.title ||
-                (submissionType === 'aunt_minnie' ? 'Aunt Minnie' : 'Interesting Case')
-              );
-          const displayName = String(impressionTitle).toUpperCase();
-
-          return {
-            id: item.id,
-            name: displayName,
-            initials: item.patient_initials || '??',
-            age: parseInt(item.patient_age, 10) || 0,
-            date: item.created_at,
-            specialty: item.organ_system || '',
-            diagnosticCode: item.diagnosis || 'Pending',
-            status: 'Published',
-            submission_type: submissionType,
-            radiologic_clinchers: item.radiologic_clinchers || '',
-            author: item.created_by ? authorMap.get(item.created_by) || 'Hospital Staff' : 'Hospital Staff',
-          };
-        });
-        if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
-        startTransition(() => {
-          setAllCases(mappedCases);
-          setResults(sortCases(mappedCases));
-        });
-      }
+      const { rawCases: nextRawCases, records } = await fetchPublishedCasesBundle();
+      if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
+      setRawCases(nextRawCases);
+      startTransition(() => {
+        setAllCases(records);
+        setResults(sortCases(records));
+      });
     } catch (loadError) {
       console.error('Error fetching cases:', loadError);
       if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
@@ -463,14 +377,13 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   ].filter(Boolean);
 
   return (
-    <div className="flex flex-col min-h-full">
-      <div className="px-6 pt-6 pb-2 bg-app/80 backdrop-blur-md">
-        <header className="flex items-center justify-between min-h-[32px]">
-          <h1 className="text-3xl font-bold text-white">Database</h1>
-        </header>
-      </div>
+    <PageShell layoutMode="split">
+      <div className="flex min-h-full flex-col" data-search-viewport={viewport}>
+        <div className="bg-app/80 pb-2 pt-1 backdrop-blur-md">
+          <PageHeader title="Database" />
+        </div>
 
-      <div className="px-6 pt-2 pb-4">
+        <div className="pt-2 pb-4">
         <div className="relative mb-4 z-40" ref={suggestionsRef}>
           <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5">
             <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">
@@ -677,7 +590,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
           </div>
         )}
 
-        <div className="space-y-3 pr-1 pt-2">
+        <div className="space-y-3 pr-1 pt-2 min-w-0">
 
           {loading && results.length === 0 ? (
             <div className="animate-in fade-in duration-500">
@@ -778,8 +691,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
 
         {/* Bottom spacer so last cards remain accessible above fixed nav */}
         <div className="h-24 shrink-0" aria-hidden="true" />
+        </div>
       </div>
-    </div >
+    </PageShell>
   );
 };
 

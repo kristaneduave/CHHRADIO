@@ -5,6 +5,7 @@ import { Screen, SubmissionType } from '../types';
 import { UploadTypePickerModal } from './UploadTypePickerModal';
 import { OrbitalButton } from './OrbitalButton';
 import { toastSuccess } from '../utils/toast';
+import { useAppViewport } from './responsive/useViewport';
 interface DashboardProps {
   onNavigate: (screen: Screen) => void;
   onStartUpload: (submissionType: SubmissionType) => void;
@@ -66,6 +67,7 @@ const BUTTON_LABELS: Record<string, string> = {
 };
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
+  const viewport = useAppViewport();
   const [isUploadTypePickerOpen, setIsUploadTypePickerOpen] = useState(false);
   const [isLogoSyncing, setIsLogoSyncing] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
@@ -108,8 +110,72 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
     return () => window.clearTimeout(timeout);
   }, [logoClickCount]);
 
+  const renderHeaderTexts = () => (
+    <>
+      <motion.h1
+        initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
+        animate={isLogoSyncing ? {
+          x: [0, -25, 35, -15, 40, -10, 20, 0],
+          filter: [
+            'drop-shadow(0 0 0 transparent)',
+            'drop-shadow(25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-25px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(-35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(35px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-15px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(-40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(40px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-10px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(-20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(20px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
+          ]
+        } : {
+          x: 0,
+          filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
+        }}
+        transition={isLogoSyncing ? {
+          duration: 0.35,
+          ease: "linear",
+          times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
+          repeat: Infinity
+        } : { duration: 0.1 }}
+        className="text-5xl sm:text-6xl font-black text-white uppercase leading-none tracking-[0.1em] select-none"
+      >
+        RADCORE
+      </motion.h1>
+      <motion.p
+        initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
+        animate={isLogoSyncing ? {
+          x: [0, 30, -40, 20, -25, 15, -30, 0],
+          filter: [
+            'drop-shadow(0 0 0 transparent)',
+            'drop-shadow(-25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(25px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-35px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(-15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(15px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-40px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(-10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(10px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-20px 0 0 rgba(34, 211, 238, 1))',
+            'drop-shadow(0 4px 6px rgba(0,0,0,0.1))'
+          ]
+        } : {
+          x: 0,
+          filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))'
+        }}
+        transition={isLogoSyncing ? {
+          duration: 0.35,
+          delay: 0.05,
+          ease: "linear",
+          times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
+          repeat: Infinity
+        } : { duration: 0.1 }}
+        className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 mt-2 select-none"
+      >
+        CHH Radiology Residency Portal
+      </motion.p>
+    </>
+  );
+
   return (
-    <div className="h-full bg-app flex flex-col text-text-primary relative overflow-hidden">
+    <div className="flex flex-col flex-1 w-full min-h-full bg-app text-text-primary relative overflow-x-hidden overflow-y-auto">
+      <div className="flex flex-col flex-1 mx-auto w-full max-w-[1180px] px-4 pt-6 sm:px-6 xl:px-8">
+        <div className="flex-1 w-full flex flex-col relative" data-dashboard-viewport={viewport}>
       {/* Fiery Overdrive Screen Overlay (Optimized for mobile GPU) */}
       <div
         className={`pointer-events-none fixed inset-0 h-[100dvh] w-screen z-[999] transition-opacity duration-500 will-change-[opacity] ${isOverdrive ? 'opacity-100 animate-pulse' : 'opacity-0'}`}
@@ -120,68 +186,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
       >
         <div className="absolute inset-0 border-[2px] border-red-500/40" />
       </div>
-      <header className="pt-10 pb-4 px-6 relative z-10 text-center flex flex-col items-center justify-center space-y-0 w-full overflow-hidden">
-        <motion.h1
-          initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
-          animate={isLogoSyncing ? {
-            x: [0, -25, 35, -15, 40, -10, 20, 0],
-            filter: [
-              'drop-shadow(0 0 0 transparent)',
-              'drop-shadow(25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-25px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(35px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-15px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(40px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-10px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(20px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
-            ]
-          } : {
-            x: 0,
-            filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))'
-          }}
-          transition={isLogoSyncing ? {
-            duration: 0.35,
-            ease: "linear",
-            times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
-            repeat: Infinity
-          } : { duration: 0.1 }}
-          className="text-5xl sm:text-6xl font-black text-white uppercase leading-none tracking-[0.1em] select-none"
-        >
-          RADCORE
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 1, filter: 'drop-shadow(0 0 0 transparent)' }}
-          animate={isLogoSyncing ? {
-            x: [0, 30, -40, 20, -25, 15, -30, 0],
-            filter: [
-              'drop-shadow(0 0 0 transparent)',
-              'drop-shadow(-25px 0 0 rgba(239, 68, 68, 1)) drop-shadow(25px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(35px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-35px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-15px 0 0 rgba(239, 68, 68, 1)) drop-shadow(15px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(40px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-40px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(-10px 0 0 rgba(239, 68, 68, 1)) drop-shadow(10px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(20px 0 0 rgba(239, 68, 68, 1)) drop-shadow(-20px 0 0 rgba(34, 211, 238, 1))',
-              'drop-shadow(0 4px 6px rgba(0,0,0,0.1))' /* matches default drop-shadow-md */
-            ]
-          } : {
-            x: 0,
-            filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))'
-          }}
-          transition={isLogoSyncing ? {
-            duration: 0.35,
-            delay: 0.05, /* slight offset for visual cascade */
-            ease: "linear",
-            times: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1],
-            repeat: Infinity
-          } : { duration: 0.1 }}
-          className="text-[11px] sm:text-[13px] font-bold text-sky-400 uppercase tracking-[0.1em] opacity-90 mt-2 select-none"
-        >
-          CHH Radiology Residency Portal
-        </motion.p>
+      {/* Mobile Header (Hidden on Desktop) */}
+      <header className="relative z-10 flex w-full flex-col items-center justify-center px-6 pb-4 pt-8 xl:hidden">
+        {renderHeaderTexts()}
       </header>
 
-      <main className="relative z-10 flex-1 px-4 w-full flex flex-col items-center justify-start pt-16 overflow-y-auto w-[100vw] overflow-x-hidden">
-        <div className="relative w-[320px] h-[320px] flex items-center justify-center mb-8">
+      <main className="relative z-10 w-full flex-1 flex flex-col items-center xl:justify-center overflow-visible px-1">
+        <div className="flex w-full justify-center xl:z-0 xl:pointer-events-none mt-10 xl:mt-0 min-h-[420px]">
+        <div className="relative mx-auto flex h-[320px] w-[320px] items-center justify-center xl:h-[420px] xl:w-[420px] xl:pointer-events-auto">
+
+          {/* Desktop Header (Locked perfectly above the orbit block) */}
+          <div className="hidden xl:flex absolute bottom-[100%] left-1/2 -translate-x-1/2 mb-16 w-max flex-col items-center justify-center pointer-events-none z-50">
+            {renderHeaderTexts()}
+          </div>
 
           <button
             onClick={() => {
@@ -210,12 +227,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
           </button>
 
           {/* Solid Dark Backdrop (hides lines passing underneath, perfectly matches app background) */}
-          <div className="absolute inset-0 m-auto w-[112px] h-[112px] rounded-full bg-app z-40 pointer-events-none" />
+          <div className="absolute inset-0 m-auto h-[112px] w-[112px] rounded-full bg-app z-40 pointer-events-none" />
 
           {/* Refined Premium Orbital Rings */}
-          <div className={`absolute inset-0 m-auto w-[260px] h-[260px] rounded-full border-[1.5px] pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite]' : 'border-white/5 animate-[spin_160s_linear_infinite]'}`} />
-          <div className={`absolute inset-0 m-auto w-[290px] h-[290px] rounded-full border-[1.5px] border-dashed pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse]' : 'border-white/5 animate-[spin_200s_linear_infinite_reverse]'}`} />
-          <div className={`absolute inset-0 m-auto w-[210px] h-[210px] rounded-full border pointer-events-none transition-all duration-1000 z-10 border-white/5`} />
+          <div className={`absolute inset-0 m-auto h-[260px] w-[260px] rounded-full border-[1.5px] pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite]' : 'border-white/5 animate-[spin_160s_linear_infinite]'}`} />
+          <div className={`absolute inset-0 m-auto h-[290px] w-[290px] rounded-full border-[1.5px] border-dashed pointer-events-none transition-all duration-1000 z-10 peer-active:animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse] ${isLogoSyncing ? 'animate-[orbitalGlitch_0.35s_cubic-bezier(.25,.46,.45,.94)_infinite_reverse]' : 'border-white/5 animate-[spin_200s_linear_infinite_reverse]'}`} />
+          <div className="absolute inset-0 m-auto h-[210px] w-[210px] rounded-full border pointer-events-none transition-all duration-1000 z-10 border-white/5" />
 
           {/* Orbiting Action Buttons */}
           {orderedActions.map((action, index) => {
@@ -248,6 +265,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
               />
             );
           })}
+        </div>
         </div>
       </main>
 
@@ -314,6 +332,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
             'opsz' 24;
         }
       `}</style>
+        </div>
+      </div>
     </div>
   );
 };

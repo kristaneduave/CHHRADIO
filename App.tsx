@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import LoginScreen from './components/LoginScreen';
 import ToastHost from './components/ToastHost';
 import LoadingState from './components/LoadingState';
+import AppBootScreen from './components/AppBootScreen';
 import { Screen, SubmissionType } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
 import { Session } from '@supabase/supabase-js';
@@ -14,10 +15,25 @@ import {
   SNAPSHOT_BASELINE_STORAGE_KEY,
   markSnapshotSectionsSeenForScreen,
 } from './services/dashboardSnapshotService';
-import { getPathologyGuidelineLandingSnapshot } from './services/articleLibraryService';
-import { prefetchGenerateCasePDF } from './services/pdfServiceLoader';
 import { fetchUnreadNotificationsCount, subscribeToNotifications } from './services/newsfeedService';
 import { createAppPresenceTracker } from './services/newsfeedPresenceService';
+import {
+  loadAnatomyScreen,
+  loadAnnouncementsScreen,
+  loadArticleLibraryScreen,
+  loadCalendarScreen,
+  loadCaseViewScreen,
+  loadMonthlyCensusPage,
+  loadNewsfeedScreen,
+  loadProfileScreen,
+  loadQuizScreen,
+  loadResidentEndorsementsScreen,
+  loadResidentsCornerScreen,
+  loadSearchScreen,
+  loadUploadScreen,
+  preloadRouteForScreen,
+} from './services/routePreloadService';
+import { startAppBootstrap } from './services/appBootstrapService';
 
 declare global {
   interface NetworkInformation {
@@ -43,25 +59,28 @@ const TRACKABLE_SCREENS: Screen[] = [
   'profile',
 ];
 
-const UploadScreen = lazy(() => import('./components/UploadScreen'));
-const QuizScreen = lazy(() => import('./components/QuizScreen'));
-const SearchScreen = lazy(() => import('./components/SearchScreen'));
-const CalendarScreen = lazy(() => import('./components/CalendarScreen'));
-const ProfileScreen = lazy(() => import('./components/ProfileScreen'));
-const AnnouncementsScreen = lazy(() => import('./components/AnnouncementsScreen'));
-const CaseViewScreen = lazy(() => import('./components/CaseViewScreen'));
-const ResidentsCornerScreen = lazy(() => import('./components/ResidentsCornerScreen'));
-const ResidentEndorsementsScreen = lazy(() => import('./components/ResidentEndorsementsScreen'));
-const ArticleLibraryScreen = lazy(() => import('./components/ArticleLibraryScreen'));
-const NewsfeedScreen = lazy(() => import('./components/NewsfeedScreen'));
-const LiveMapScreen = lazy(() => import('./components/LiveMapScreen'));
-const MonthlyCensusPage = lazy(() => import('./components/MonthlyCensusPage'));
+const UploadScreen = lazy(loadUploadScreen);
+const QuizScreen = lazy(loadQuizScreen);
+const SearchScreen = lazy(loadSearchScreen);
+const CalendarScreen = lazy(loadCalendarScreen);
+const ProfileScreen = lazy(loadProfileScreen);
+const AnnouncementsScreen = lazy(loadAnnouncementsScreen);
+const CaseViewScreen = lazy(loadCaseViewScreen);
+const ResidentsCornerScreen = lazy(loadResidentsCornerScreen);
+const ResidentEndorsementsScreen = lazy(loadResidentEndorsementsScreen);
+const ArticleLibraryScreen = lazy(loadArticleLibraryScreen);
+const NewsfeedScreen = lazy(loadNewsfeedScreen);
+const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
+const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
 
 const App: React.FC = () => {
   useThemePreference();
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isSessionResolved, setIsSessionResolved] = useState(false);
+  const [isBootReady, setIsBootReady] = useState(false);
+  const [bootProgress, setBootProgress] = useState(8);
+  const [bootStatusLabel, setBootStatusLabel] = useState('Checking session');
   const [caseToEdit, setCaseToEdit] = useState<any>(null);
   const [initialUploadType, setInitialUploadType] = useState<SubmissionType>('interesting_case');
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
@@ -70,8 +89,6 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
   });
-  const hasPrefetchedPdfRef = useRef(false);
-  const articleLibraryPrefetchPromiseRef = useRef<Promise<void> | null>(null);
 
   if (!isSupabaseConfigured) {
     return (
@@ -112,7 +129,7 @@ const App: React.FC = () => {
         window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
         setGuestMode(false);
       }
-      setLoading(false);
+      setIsSessionResolved(true);
     });
 
     const {
@@ -123,47 +140,55 @@ const App: React.FC = () => {
         window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
         setGuestMode(false);
       }
+      setIsSessionResolved(true);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!session || hasPrefetchedPdfRef.current || typeof window === 'undefined') {
+    if (!isSessionResolved) return;
+    if (!session && !guestMode) {
+      setIsBootReady(false);
       return;
     }
-    if (navigator.connection?.saveData) {
-      return;
-    }
 
-    hasPrefetchedPdfRef.current = true;
+    let isCancelled = false;
+    setIsBootReady(false);
+    setBootProgress(15);
+    setBootStatusLabel('Preparing dashboard');
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    let idleId: number | null = null;
+    const runBootstrap = async () => {
+      const result = await startAppBootstrap({
+        session,
+        guestMode,
+        timeoutMs: 5_000,
+        onProgress: (snapshot) => {
+          if (isCancelled) return;
+          setBootProgress(snapshot.progressPct);
+          setBootStatusLabel(snapshot.statusLabel);
+        },
+      });
 
-    const triggerPrefetch = () => {
-      void prefetchGenerateCasePDF();
+      if (isCancelled) return;
+      setBootProgress(100);
+      setBootStatusLabel('Opening workspace');
+      setIsBootReady(true);
+      void result.backgroundPromise.catch((error) => console.error('Background bootstrap failed:', error));
     };
 
-    if (typeof window.requestIdleCallback === 'function') {
-      idleId = window.requestIdleCallback(() => {
-        triggerPrefetch();
-      });
-    } else {
-      timeoutId = setTimeout(() => {
-        triggerPrefetch();
-      }, 1500);
-    }
+    runBootstrap().catch((error) => {
+      console.error('App bootstrap failed:', error);
+      if (isCancelled) return;
+      setBootProgress(100);
+      setBootStatusLabel('Opening workspace');
+      setIsBootReady(true);
+    });
 
     return () => {
-      if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
+      isCancelled = true;
     };
-  }, [session]);
+  }, [guestMode, isSessionResolved, session]);
 
   useEffect(() => {
     const uid = session?.user?.id;
@@ -262,18 +287,9 @@ const App: React.FC = () => {
   };
 
   const prefetchScreen = (screen: Screen) => {
-    if (screen !== 'article-library' || articleLibraryPrefetchPromiseRef.current) return;
-
-    articleLibraryPrefetchPromiseRef.current = (async () => {
-      try {
-        await Promise.all([
-          import('./components/ArticleLibraryScreen'),
-          getPathologyGuidelineLandingSnapshot().then(() => undefined),
-        ]);
-      } catch (error) {
-        console.error('Failed to prefetch Article Library:', error);
-      }
-    })();
+    void preloadRouteForScreen(screen).catch((error) => {
+      console.error(`Failed to prefetch ${screen}:`, error);
+    });
   };
 
   const renderScreen = () => {
@@ -366,19 +382,15 @@ const App: React.FC = () => {
             onSubmitted={() => navigateToScreen('dashboard')}
           />
         );
-      case 'live-map':
-        return <LiveMapScreen />;
+      case 'anatomy':
+        return <AnatomyComingSoonScreen />;
       default:
         return <Dashboard onNavigate={navigateToScreen} onStartUpload={startUploadFlow} />;
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-app flex items-center justify-center text-text-primary px-4">
-        <LoadingState title="Loading workspace..." compact />
-      </div>
-    );
+  if (!isSessionResolved) {
+    return <AppBootScreen progress={bootProgress} statusLabel={bootStatusLabel} />;
   }
 
   if (!session && !guestMode) {
@@ -392,6 +404,10 @@ const App: React.FC = () => {
         }}
       />
     );
+  }
+
+  if (!isBootReady) {
+    return <AppBootScreen progress={bootProgress} statusLabel={bootStatusLabel} />;
   }
 
   return (

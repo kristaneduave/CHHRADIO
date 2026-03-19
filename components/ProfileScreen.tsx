@@ -22,6 +22,16 @@ import { ResidentBadges } from './ResidentBadges';
 import { ProfileEditor } from './ProfileEditor';
 import { MyCaseLibrary } from './MyCaseLibrary';
 import { getMyProfileNote, upsertMyProfileNote } from '../services/profileNotesService';
+import {
+  fetchHiddenAnnouncementsForProfileHome,
+  fetchMyCasesForProfileHome,
+  fetchProfileNotePreview,
+  fetchProfileRecord,
+} from '../services/profileHomeService';
+import { useAppViewport } from './responsive/useViewport';
+import PageShell from './ui/PageShell';
+import PageHeader from './ui/PageHeader';
+import PageSection from './ui/PageSection';
 
 interface ProfileScreenProps {
   onEditCase?: (caseItem: any) => void;
@@ -55,6 +65,7 @@ const formatSavedAt = (iso: string | null): string => {
 };
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase }) => {
+  const viewport = useAppViewport();
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -136,13 +147,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
   const fetchMyCasesData = async (user: any) => {
     try {
-      const { data, error } = await supabase
-        .from('cases')
-        .select('*')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setMyCases(data || []);
+      const rows = await fetchMyCasesForProfileHome(user.id);
+      setMyCases(rows || []);
     } catch (error) {
       console.error('Error fetching cases:', error);
     }
@@ -157,13 +163,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
   const fetchProfileData = async (user: any) => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') throw error;
+      const data = await fetchProfileRecord(user.id);
 
       if (data) {
         const safeNickname = buildFallbackNickname(data.full_name, data.username, user.email);
@@ -200,7 +200,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
 
   const fetchHiddenAnnouncementsData = async (user: any) => {
     try {
-      const rows = await fetchHiddenAnnouncements(user.id, 50);
+      const rows = await fetchHiddenAnnouncementsForProfileHome(user.id, 50);
       setHiddenAnnouncements(rows);
     } catch (error) {
       console.error('Error loading hidden announcements:', error);
@@ -245,7 +245,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     const draftKey = getProfileNotesDraftKey(userId);
     setNotesFeatureUnavailable(false);
     try {
-      const remoteNote = await getMyProfileNote();
+      const remoteNote = await fetchProfileNotePreview(userId);
       const draft = localStorage.getItem(draftKey);
 
       if (draft !== null) {
@@ -552,7 +552,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   };
 
   return (
-    <div className="px-6 pt-8 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+    <PageShell layoutMode="split">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" data-profile-viewport={viewport}>
+      <div className="xl:grid xl:grid-cols-[340px_minmax(0,1fr)] xl:items-start xl:gap-6">
+      <aside className="space-y-6 xl:sticky xl:top-6">
+      <PageHeader title={profile.full_name || 'Doctor'} description="Profile, settings, and account controls." className="hidden xl:flex" />
+      <PageSection className="space-y-6 bg-[#0a0f18]/70">
       <div className="relative mb-5 group cursor-pointer z-10" onClick={() => fileInputRef.current?.click()}>
         {/* Dynamic Avatar Ring Animation */}
         <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-primary via-purple-500 to-sky-400 opacity-40 group-hover:opacity-70 blur-[8px] transition-all duration-500 animate-[spin_4s_linear_infinite]" />
@@ -714,14 +719,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
           </div>
         </div>
       </div >
+      </PageSection>
+      </aside>
+
+      <main className="space-y-6 mt-6 xl:mt-0">
 
       {/* My Notes Section */}
-      < div >
+      <PageSection className="bg-[#0a0f18]/72">
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">My Notes</h2>
           <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Private to your account</span>
         </div>
-        <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 space-y-3">
+        <div className="bg-black/10 backdrop-blur-2xl p-4 rounded-[1.5rem] border border-white/10 space-y-3">
           {!noteLoaded ? (
             <div className="space-y-3 animate-pulse">
               <div className="h-3 w-28 rounded bg-white/10" />
@@ -771,7 +780,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
             </>
           )}
         </div>
-      </div >
+      </PageSection>
 
       {/* My Cases Section */}
       < MyCaseLibrary
@@ -783,7 +792,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
       />
 
       {/* Hidden News Section */}
-      < div >
+      <PageSection className="bg-[#0a0f18]/72">
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">Hidden News</h2>
           {(hiddenAnnouncements.length > 0 || hiddenNotifications.length > 0) && (
@@ -849,7 +858,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
             </div>
           )
         }
-      </div >
+      </PageSection>
+
+      <p className="text-center mt-8 text-[9px] text-slate-700 font-bold uppercase tracking-[0.4em]">
+        Department Portal v3.2.0
+      </p>
+      </main>
+      </div>
 
       {/* Delete Confirmation Modal */}
       {
@@ -882,16 +897,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         )
       }
 
-      <p className="text-center mt-12 text-[9px] text-slate-700 font-bold uppercase tracking-[0.4em]">
-        Department Portal v3.2.0
-      </p>
-
       {
         showAdminPanel && (
           <AdminUserManagement onClose={() => setShowAdminPanel(false)} />
         )
       }
-    </div >
+    </div>
+    </PageShell>
   );
 };
 

@@ -717,7 +717,7 @@ const MonthlyCensusPage: React.FC<MonthlyCensusPageProps> = ({ onBack, onHome, o
                     onChange={(e) => setForm((prev) => ({ ...prev, comments: e.target.value.slice(0, 1000) }))}
                     rows={3}
                     maxLength={1000}
-                    className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2 text-sm text-white placeholder:text-slate-500 focus:border-primary resize-y"
+                    className="w-full rounded-lg border border-white/15 bg-white px-2.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary resize-y"
                     placeholder="Add comments (optional)"
                   />
                 </label>

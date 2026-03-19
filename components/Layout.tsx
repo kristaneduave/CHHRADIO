@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Screen, ScreenMeta } from '../types';
 import { AnimatePresence, motion } from 'framer-motion';
 import { triggerHaptic } from '../utils/haptics';
+import { useAppViewport } from './responsive/useViewport';
+import { getScreenLayoutMode } from './layout/screenLayoutConfig';
 
 export const LayoutScrollContext = React.createContext<HTMLElement | null>(null);
 
@@ -18,7 +20,10 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const [isNavHologramActive, setIsNavHologramActive] = useState(false);
   const [isBottomNavHidden, setIsBottomNavHidden] = useState(false);
-  const isDesktopWideScreen = activeScreen === 'calendar' || activeScreen === 'live-map';
+  const viewport = useAppViewport();
+  const layoutMode = getScreenLayoutMode(activeScreen);
+
+  const isDesktop = viewport === 'desktop';
   const hideBottomNav = activeScreen === 'monthly-census' || isBottomNavHidden;
 
   useEffect(() => {
@@ -82,37 +87,117 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
     return () => document.removeEventListener('click', handleGlobalClick, { capture: true });
   }, []);
 
-  const navItems: (ScreenMeta & { outlineIcon: string })[] = [
+  const ITEM_COLORS: Record<string, { bg: string, border: string, text: string }> = {
+    'newsfeed': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400' },
+    'article-library': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400' },
+    'dashboard': { bg: 'bg-sky-500/10', border: 'border-sky-500/20', text: 'text-sky-400' },
+    'anatomy': { bg: 'bg-rose-500/10', border: 'border-rose-500/20', text: 'text-rose-400' },
+    'profile': { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+  };
+
+  const navItems = [
     { screen: 'dashboard', label: 'Home', icon: 'home', outlineIcon: 'home' },
     { screen: 'newsfeed', label: 'Newsfeed', icon: 'newspaper', outlineIcon: 'newspaper' },
     { screen: 'article-library', label: 'Articles', icon: 'fact_check', outlineIcon: 'fact_check' },
-    { screen: 'live-map', label: 'Live Map', icon: 'map', outlineIcon: 'map' },
-    { screen: 'profile', label: 'Profile', icon: 'person', outlineIcon: 'person' },
-  ];
+    { screen: 'anatomy', label: 'Anatomy', icon: 'favorite', outlineIcon: 'favorite_border' },
+    { screen: 'profile', label: 'Profile', icon: 'person', outlineIcon: 'person_outline' },
+  ] as (ScreenMeta & { outlineIcon: string })[];
+
+  const isDashboardDesktop = isDesktop && activeScreen === 'dashboard';
+  const mainWidthClassName = isDashboardDesktop
+    ? 'max-w-[1180px]'
+    : isDesktop
+    ? layoutMode === 'wide'
+      ? 'max-w-7xl'
+      : layoutMode === 'split'
+        ? 'max-w-6xl'
+        : layoutMode === 'narrow'
+          ? 'max-w-2xl'
+          : 'max-w-5xl'
+    : 'max-w-md';
 
   return (
     <LayoutScrollContext.Provider value={scrollContainer}>
       <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary">
-        <main
-          ref={mainRef}
-          className={`relative z-10 mx-auto w-full flex-[1_1_0%] flex flex-col overflow-y-auto overflow-x-hidden ${isDesktopWideScreen ? 'max-w-md lg:max-w-7xl' : 'max-w-md'
-            }`}
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeScreen}
-              initial={{ opacity: 0, scale: 0.98, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98, y: -10 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              className="flex-1 flex flex-col w-full min-h-full"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
-        </main>
+        <div className="relative flex min-h-0 flex-1">
+          {isDesktop && !hideBottomNav && (
+            <aside className="hidden xl:block">
+              {/* Edge-Docked Vertical Nav */}
+              <div 
+                className="fixed inset-y-0 left-0 z-20 w-[80px] flex flex-col items-start justify-center group"
+              >
+                {/* Background Glass Layer */}
+                <div 
+                  className="absolute inset-0 bg-[#0c1222]/85 backdrop-blur-[40px] border-r-[1.5px] border-white/[0.08] shadow-2xl transition-all duration-300 pointer-events-none"
+                />
 
-        {!hideBottomNav && (
+                <div className="w-[80px] flex flex-col items-start space-y-4 relative z-10 overflow-visible mt-2">
+                  {navItems.map((item) => {
+                    const isActive = activeScreen === item.screen;
+                    const c = ITEM_COLORS[item.screen] || ITEM_COLORS['dashboard'];
+                    
+                    return (
+                      <div key={`desktop-${item.screen}`} className={`relative flex items-center h-[56px] z-10 w-[190px] pl-[14px]`}>
+                        {/* Custom Tab Protrusion */}
+                        <button
+                          onClick={() => setScreen(item.screen)}
+                          onMouseEnter={() => prefetchScreen?.(item.screen)}
+                          onFocus={() => prefetchScreen?.(item.screen)}
+                          className={`relative flex items-center h-[52px] rounded-2xl transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] group/btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 w-[52px] hover:w-[180px] ${isActive ? 'bg-[#111623] border border-white/5 shadow-md' : 'bg-transparent border border-transparent shadow-none hover:bg-[#1a2333] hover:border-white/5'}`}
+                          aria-label={`Open ${item.label}`}
+                        >
+                           {/* Highlighted Icon Tile & Badge */}
+                           <div className={`flex-shrink-0 relative flex items-center justify-center w-[40px] h-[40px] rounded-xl ml-[5px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? `${c.bg} ${c.border} border-[1.5px] shadow-[0_0_15px_rgba(255,255,255,0.02)]` : `bg-transparent border border-transparent group-hover/btn:${c.bg} group-hover/btn:${c.border} group-hover/btn:border-[1.5px]`}`}>
+                              <span className={`material-icons transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? `${c.text} drop-shadow-[0_0_8px_currentColor]` : `text-slate-500 group-hover/btn:${c.text} group-hover/btn:drop-shadow-[0_0_8px_currentColor] group-hover/btn:scale-110`} text-[22px]`}>
+                                {isActive ? item.icon : item.outlineIcon}
+                              </span>
+                              
+                              {/* Unread Counter Badge anchored tightly to icon box */}
+                              {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+                                <span className={`absolute -top-0.5 -right-0.5 z-20 flex min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold leading-none text-white shadow-md transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]`}>
+                                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                                </span>
+                              )}
+                           </div>
+                           
+                           {/* Extended Text Block (Hidden globally except on individual button hover) */}
+                           <div className={`flex flex-1 items-center justify-between whitespace-nowrap overflow-hidden transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] opacity-0 -translate-x-3 group-hover/btn:opacity-100 group-hover/btn:translate-x-0 ml-3`}>
+                              <span className={`font-bold tracking-[0.08em] uppercase text-[12px] ${isActive ? c.text : `text-slate-400 group-hover/btn:${c.text}`}`}>
+                                 {item.label}
+                              </span>
+                              <span className="material-icons text-slate-600 text-[18px] mr-3 group-hover/btn:text-slate-400 transition-colors">
+                                 chevron_right
+                              </span>
+                           </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </aside>
+          )}
+
+          <main
+            ref={mainRef}
+            className={`relative z-10 mx-auto w-full flex-[1_1_0%] flex flex-col overflow-y-auto overflow-x-hidden ${isDesktop ? 'px-0 py-6' : ''} ${mainWidthClassName}`}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeScreen}
+                initial={{ opacity: 0, scale: 0.98, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="flex-1 flex flex-col w-full min-h-full"
+              >
+                {children}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+        </div>
+
+        {!isDesktop && !hideBottomNav && (
           <nav className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none px-4 flex justify-center pb-[env(safe-area-inset-bottom)]">
             <div
               className={`relative pointer-events-auto rounded-full py-1.5 px-3 overflow-hidden transition-all duration-500 ${isNavHologramActive

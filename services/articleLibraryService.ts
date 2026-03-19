@@ -201,6 +201,10 @@ export const getPathologyGuidelineLandingSnapshot = async (): Promise<PathologyG
   }
 };
 
+export const preloadArticleLibraryLanding = async (): Promise<void> => {
+  await getPathologyGuidelineLandingSnapshot();
+};
+
 const buildSourceDefaults = (input: PathologyGuidelineSourceInput) => {
   const sourceKind = input.source_kind || 'pdf';
   const sourceUrl = input.source_url?.trim() || (sourceKind === 'google_drive' ? input.google_drive_url.trim() : '');

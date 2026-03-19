@@ -15,6 +15,7 @@ import { isAnnouncementHiddenForUser } from '../services/announcementVisibilityS
 import { toastInfo } from '../utils/toast';
 import LoadingButton from './LoadingButton';
 import LoadingState from './LoadingState';
+import { useAppViewport } from './responsive/useViewport';
 
 interface NewsfeedPanelProps {
   variant: 'screen' | 'modal';
@@ -24,6 +25,8 @@ interface NewsfeedPanelProps {
 }
 
 const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavigateToTarget, onUnreadCountChange }) => {
+  const viewport = useAppViewport();
+  const isDesktop = viewport === 'desktop';
   const SNAPSHOT_STALE_MS = 60_000;
   const FEED_FILTER_KEY = 'chh_newsfeed_filter';
   const [activeTab, setActiveTab] = useState<'notifications' | 'activity'>('notifications');
@@ -54,7 +57,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   const [onlineError, setOnlineError] = useState<string | null>(null);
 
   const isModal = variant === 'modal';
-  const listPadding = isModal ? 'p-4' : 'px-6';
+  const listPadding = isModal ? 'p-4' : 'px-4 sm:px-6 xl:px-8';
   const onlineDisplayLimit = 12;
   const visibleOnlineUsers = onlineUsers.slice(0, onlineDisplayLimit);
   const hiddenOnlineUsers = Math.max(onlineUsers.length - onlineDisplayLimit, 0);
@@ -386,8 +389,8 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
 
   return (
     <>
-      <div className={`${isModal ? 'p-4 border-b border-white/5 bg-surface' : 'px-6 pt-6 pb-2 bg-app/80 backdrop-blur-md'}`}>
-        <div className="flex items-center justify-between min-h-[32px]">
+      <div className={`${isModal ? 'p-4 border-b border-white/5 bg-surface' : 'bg-app/80 px-4 pt-6 pb-2 backdrop-blur-md sm:px-6 xl:px-8'}`}>
+        <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} flex items-center justify-between min-h-[32px]`}>
           <h1 className={`${isModal ? 'text-xl' : 'text-3xl'} font-bold text-white`}>
             {isModal ? 'Notification Center' : 'Newsfeed'}
           </h1>
@@ -399,7 +402,8 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
         </div>
       </div>
 
-      <div className={isModal ? 'p-4 border-b border-white/5' : 'px-6 pt-2 pb-4'}>
+      <div className={isModal ? 'p-4 border-b border-white/5' : 'px-4 pt-2 pb-4 sm:px-6 xl:px-8'}>
+        <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} space-y-4`}>
         <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner -mx-1.5">
           <button
             onClick={() => setActiveTab('notifications')}
@@ -487,9 +491,32 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
             </button>
           </div>
         )}
+        {!isModal && isDesktop && (
+          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl">
+            <div className="grid gap-3 xl:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Unread</p>
+                <p className="mt-2 text-2xl font-black text-white">{unreadCount}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Online</p>
+                <p className="mt-2 text-2xl font-black text-white">{onlineCount}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Mode</p>
+                <p className="mt-2 text-sm font-bold uppercase tracking-[0.18em] text-sky-300">
+                  {activeTab === 'notifications' ? 'Notification Feed' : 'Activity Log'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
       </div>
 
       <div className={`${listPadding} ${isModal ? 'flex-1 overflow-y-auto' : ''} space-y-4`}>
+        <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} ${!isModal && isDesktop ? 'xl:grid xl:grid-cols-[minmax(0,1.65fr)_320px] xl:items-start xl:gap-6' : ''}`}>
+        <div className="min-w-0">
         {activeTab === 'notifications' ? (
           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {loadingNotifications ? (
@@ -666,6 +693,40 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
             )}
           </div>
         )}
+        </div>
+
+        {!isModal && isDesktop && (
+          <aside className="hidden xl:block xl:sticky xl:top-6">
+            <div className="space-y-4">
+              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Feed Summary</p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-300">Visible items</span>
+                    <span className="text-sm font-black text-white">
+                      {activeTab === 'notifications' ? filteredSortedNotifications.length : activities.length}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-300">Unread alerts</span>
+                    <span className="text-sm font-black text-white">{unreadCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
+                    <span className="text-xs font-semibold text-slate-300">Online now</span>
+                    <span className="text-sm font-black text-white">{onlineCount}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Desktop View</p>
+                <p className="mt-3 text-sm leading-6 text-slate-400">
+                  The feed stays readable while utility context remains pinned on the side.
+                </p>
+              </div>
+            </div>
+          </aside>
+        )}
+        </div>
       </div>
 
     </>

@@ -38,7 +38,7 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
                             <span className="material-icons text-cyan-400 text-[18px]">map</span>
                         </div>
                         <div className="flex-1 min-w-0 pr-1">
-                            <h2 className="text-[12px] sm:text-[13px] tracking-widest font-extrabold text-white group-hover:text-cyan-400 transition-colors uppercase mb-0.5 mt-1">Live Map</h2>
+                            <h2 className="text-[12px] sm:text-[13px] tracking-widest font-extrabold text-white group-hover:text-cyan-400 transition-colors uppercase mb-0.5 mt-1">Workspace</h2>
                             <p className="text-[9px] text-white/50 uppercase tracking-widest font-bold">Workstation status</p>
                         </div>
                     </div>
@@ -118,7 +118,7 @@ const CompactWorkstationWidget: React.FC<CompactWorkstationWidgetProps> = ({
                     onClick={onOpenViewer}
                     className="w-full py-3.5 mt-2 rounded-2xl bg-cyan-500/[0.03] hover:bg-cyan-500/[0.08] border border-cyan-500/10 hover:border-cyan-500/20 text-cyan-400 font-bold text-[10px] transition-all uppercase tracking-widest flex items-center justify-center gap-2"
                 >
-                    Enter Workspace
+                    Open Workspace
                     <span className="material-icons text-[16px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </button>
             </div>

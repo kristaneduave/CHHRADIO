@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'live-map' | 'monthly-census' | 'article-library';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
@@ -797,33 +797,6 @@ export interface AccountAccessRequestStatus {
   status: AccountAccessRequestStatusType;
   createdAt: string;
   reviewedAt: string | null;
-}
-
-export interface LiveMapKickResult {
-  target_user_id: string;
-  cleared_presence_count: number;
-  released_workstation_count: number;
-  kicked_by: string;
-  created_at: string;
-}
-
-export interface LiveMapKickAuditRow extends LiveMapKickResult {
-  id: string;
-  reason: string | null;
-}
-
-export interface LiveMapModerationAction extends LiveMapKickAuditRow {
-  actor_display_name: string;
-  target_display_name: string;
-}
-
-export type OnlinePanelRenderMode = 'simple' | 'virtualized';
-
-export interface LiveMapPerfSample {
-  label: string;
-  durationMs: number;
-  at: string;
-  meta?: Record<string, unknown>;
 }
 
 export type NeedleDifficulty = 'beginner' | 'intermediate' | 'advanced';

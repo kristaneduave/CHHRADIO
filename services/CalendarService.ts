@@ -242,5 +242,14 @@ export const CalendarService = {
             { ttlMs: 15_000, allowStaleWhileRevalidate: true },
         );
         return hydrateEventsWithProfiles(cached || []);
+    },
+
+    async preloadCalendarData(date: Date, upcomingLimit = 10) {
+        const start = new Date(date.getFullYear(), date.getMonth(), 1);
+        const end = new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+        await Promise.all([
+            CalendarService.getEvents(start, end),
+            CalendarService.getUpcomingEvents(upcomingLimit),
+        ]);
     }
 };

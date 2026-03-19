@@ -42,6 +42,52 @@ const REFERENCE_SOURCE_TYPES = [
   'Lecture / Handout'
 ];
 
+const SUBMISSION_TYPE_OPTIONS: Array<{
+  id: SubmissionType;
+  label: string;
+  description: string;
+  shortDescription: string;
+  icon: string;
+  activeClass: string;
+  activeIconClass: string;
+  inactiveIconClass: string;
+  glowClass: string;
+}> = [
+  {
+    id: 'interesting_case',
+    label: 'Interesting Case',
+    description: 'Classic teaching case with findings and discussion',
+    shortDescription: 'Findings and teaching discussion',
+    icon: 'library_books',
+    activeClass: 'border-sky-500/30 bg-sky-500/[0.08] text-sky-100 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)]',
+    activeIconClass: 'bg-sky-500/20 border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.3)] text-sky-400',
+    inactiveIconClass: 'bg-black/40 border-white/5 text-sky-400',
+    glowClass: 'bg-sky-500/20',
+  },
+  {
+    id: 'rare_pathology',
+    label: 'Rare Pathology',
+    description: 'Highlight unusual pathology and key clinchers',
+    shortDescription: 'Unusual pathology and key clinchers',
+    icon: 'science',
+    activeClass: 'border-rose-500/30 bg-rose-500/[0.08] text-rose-100 shadow-[0_4px_24px_-8px_rgba(225,29,72,0.25)]',
+    activeIconClass: 'bg-rose-500/20 border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.3)] text-rose-400',
+    inactiveIconClass: 'bg-black/40 border-white/5 text-rose-400',
+    glowClass: 'bg-rose-500/20',
+  },
+  {
+    id: 'aunt_minnie',
+    label: 'Aunt Minnie',
+    description: 'Pattern-recognition case with minimal prompting',
+    shortDescription: 'Pattern recognition with minimal prompting',
+    icon: 'psychology',
+    activeClass: 'border-amber-500/30 bg-amber-500/[0.08] text-amber-100 shadow-[0_4px_24px_-8px_rgba(217,119,6,0.25)]',
+    activeIconClass: 'bg-amber-500/20 border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.3)] text-amber-400',
+    inactiveIconClass: 'bg-black/40 border-white/5 text-amber-400',
+    glowClass: 'bg-amber-500/20',
+  },
+];
+
 interface UploadScreenProps {
   existingCase?: any; // Replace with proper type if available, e.g., Case
   initialSubmissionType?: SubmissionType;
@@ -84,12 +130,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const [showControls, setShowControls] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isNotesFocusOpen, setIsNotesFocusOpen] = useState(false);
-  const [notesEditorViewportKey, setNotesEditorViewportKey] = useState<'mobile' | 'tablet' | 'desktop'>(() => {
-    if (typeof window === 'undefined') return 'mobile';
-    if (window.innerWidth >= 1280) return 'desktop';
-    if (window.innerWidth >= 640) return 'tablet';
-    return 'mobile';
-  });
 
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
@@ -150,25 +190,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     };
   }, [isNotesFocusOpen]);
 
-  useEffect(() => {
-    const getViewportKey = () => {
-      if (window.innerWidth >= 1280) return 'desktop' as const;
-      if (window.innerWidth >= 640) return 'tablet' as const;
-      return 'mobile' as const;
-    };
-
-    const handleResize = () => {
-      setNotesEditorViewportKey((prev) => {
-        const next = getViewportKey();
-        return prev === next ? prev : next;
-      });
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Force reset form if no existing case (fixes potential stale state or browser autofill issues)
   useEffect(() => {
     if (!existingCase) {
@@ -197,7 +218,17 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   }, [existingCase, initialSubmissionType]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    let { value } = e.target;
+
+    if (name === 'initials') {
+      value = value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
+    }
+
+    if (name === 'age') {
+      value = value.replace(/\D/g, '').slice(0, 3);
+    }
+
     setFieldErrors((prev) => {
       if (!prev[name]) return prev;
       const next = { ...prev };
@@ -368,9 +399,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     await exportPdf(formData, customTitle, uploaderName, images);
   };
 
-  const inputClassName = 'w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:shadow-[inset_0_0_10px_rgba(6,182,212,0.18)] transition-all';
+  const inputClassName = 'w-full rounded-xl border border-white/5 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-primary/50 focus:ring-1 focus:ring-primary/30';
   const textareaClassName = `${inputClassName} resize-y custom-scrollbar`;
-  const sectionCardClassName = 'rounded-[28px] border border-white/10 bg-black/20 p-5 shadow-xl backdrop-blur-xl sm:p-6';
+  const sectionCardClassName = 'rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm sm:p-5';
+  const sectionLabelClassName = 'text-xs font-bold uppercase tracking-[0.18em] text-slate-300';
+  const sectionHintClassName = 'mt-1 text-xs leading-5 text-slate-500';
+  const segmentedPanelClassName = 'grid grid-cols-1 gap-2 md:grid-cols-3';
   const canShowReferenceFields = formData.submissionType !== 'aunt_minnie';
   const imageCountLabel = `${images.length} / 8 images`;
   const submissionTypeLabel = formData.submissionType === 'rare_pathology'
@@ -489,55 +523,51 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       <div className={`flex-1 overflow-y-auto custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         <div className="px-6 pt-6 pb-24 max-w-7xl mx-auto w-full">
         {step === 1 && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-            <header>
-              <h1 className="text-3xl font-bold text-white">
-                Upload
-              </h1>
+          <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
+            <header className="px-1">
+              <h1 className="text-3xl font-bold text-white">Upload</h1>
             </header>
 
-            <section className="space-y-5">
-              <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(420px,1.08fr)] xl:items-stretch">
-                <div className={sectionCardClassName}>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-1 gap-2 rounded-[24px] border border-white/10 bg-white/[0.03] p-2 md:grid-cols-3">
-                      <button
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'interesting_case' }))}
-                        className={`rounded-[18px] px-4 py-3 text-sm font-bold transition-all duration-300 ${formData.submissionType === 'interesting_case'
-                          ? 'bg-cyan-500 text-white shadow-[0_10px_25px_rgba(6,182,212,0.28)]'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                          }`}
-                      >
-                        Interesting Case
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'rare_pathology' }))}
-                        className={`rounded-[18px] px-4 py-3 text-sm font-bold transition-all duration-300 ${formData.submissionType === 'rare_pathology'
-                          ? 'bg-rose-500 text-white shadow-[0_10px_25px_rgba(244,63,94,0.25)]'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                          }`}
-                      >
-                        Rare Pathology
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, submissionType: 'aunt_minnie' }))}
-                        className={`rounded-[18px] px-4 py-3 text-sm font-bold transition-all duration-300 ${formData.submissionType === 'aunt_minnie'
-                          ? 'bg-amber-500 text-slate-950 shadow-[0_10px_25px_rgba(245,158,11,0.25)]'
-                          : 'text-slate-400 hover:bg-white/5 hover:text-white'
-                          }`}
-                      >
-                        Aunt Minnie
-                      </button>
-                    </div>
+            <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(420px,1.08fr)] xl:items-stretch">
+              <div className={`${sectionCardClassName} space-y-4`}>
+                <div className="space-y-1.5">
+                  {SUBMISSION_TYPE_OPTIONS.map((option) => {
+                    const isActive = option.id === formData.submissionType;
 
-                  </div>
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, submissionType: option.id }))}
+                        className={`relative w-full overflow-hidden rounded-3xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
+                          isActive
+                            ? `${option.activeClass} px-3.5 py-2.5`
+                            : 'border-white/5 bg-white/[0.03] px-3.5 py-1.5 hover:bg-white/[0.05]'
+                        }`}
+                      >
+                        {isActive ? (
+                          <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                            <div className={`absolute top-0 right-0 h-14 w-14 ${option.glowClass} blur-[32px] rounded-full -translate-y-1/3 translate-x-1/3`} />
+                          </div>
+                        ) : null}
+                        <div className="relative z-10 flex items-center gap-3">
+                          <div className={`flex ${isActive ? 'h-10 w-10 rounded-[16px]' : 'h-8.5 w-8.5 rounded-xl'} shrink-0 items-center justify-center border shadow-inner ${isActive ? option.activeIconClass : option.inactiveIconClass}`}>
+                            <span className={`material-icons ${isActive ? 'text-[18px]' : 'text-[16px]'}`}>{option.icon}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
+                            {isActive ? <p className="mt-0.5 truncate text-[12px] leading-5 text-slate-300">{option.description}</p> : null}
+                          </div>
+                          {!isActive ? <span className="material-icons text-slate-500">chevron_right</span> : null}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
 
-                <div className={sectionCardClassName}>
-                  <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_220px] 2xl:items-end">
+              <div className={`${sectionCardClassName} space-y-4`}>
+                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_220px] 2xl:items-end">
                     <div className="space-y-2">
                       <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
                       <input
@@ -551,11 +581,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Study Date</label>
-                      <div
-                        onClick={openDatePicker}
-                        className="block w-full"
-                      >
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Upload Date</label>
+                      <div onClick={openDatePicker} className="block w-full">
                         <input
                           ref={dateInputRef}
                           type="date"
@@ -567,21 +594,20 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                         />
                       </div>
                     </div>
-                  </div>
                 </div>
               </div>
             </section>
 
             <section
               ref={setFieldRef('images')}
-              className={`${sectionCardClassName} space-y-5 ${isDragging ? 'ring-2 ring-cyan-500/60 bg-cyan-500/10' : ''}`}
+              className={`${sectionCardClassName} space-y-4 ${isDragging ? 'border-cyan-400/20 bg-cyan-500/10' : ''}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Images</h2>
+                  <h2 className={sectionLabelClassName}>Images</h2>
                 </div>
               </div>
 
@@ -598,15 +624,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <button
                   type="button"
                   onClick={triggerFileInput}
-                  className={`w-full min-h-[240px] rounded-[28px] border border-dashed px-6 py-10 text-center transition-all duration-300 md:min-h-[320px] ${isDragging ? 'border-cyan-400 bg-cyan-500/10 shadow-[0_0_30px_rgba(6,182,212,0.2)]' : 'border-white/20 bg-black/40 hover:border-cyan-400 hover:bg-white/5 hover:shadow-[0_0_20px_rgba(6,182,212,0.16)]'}`}
+                  className={`w-full min-h-[220px] rounded-3xl border border-dashed px-6 py-10 text-center transition md:min-h-[260px] ${isDragging ? 'border-cyan-400/20 bg-cyan-500/10' : 'border-white/5 bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.05]'}`}
                 >
                   <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-400">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
                       <span className="material-icons text-3xl">add_photo_alternate</span>
                     </div>
                     <div className="space-y-2 text-center">
-                      <p className="text-lg font-bold text-white">Upload Images</p>
-                      <p className="text-sm text-slate-300">Drag & drop or tap to browse</p>
+                      <p className="text-base font-bold text-white">Upload images</p>
+                      <p className="text-sm text-slate-300">Drag and drop or tap to browse.</p>
                       <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Max 8 images</p>
                     </div>
                   </div>
@@ -614,9 +640,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               ) : (
                 <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
                   {images.map((img, idx) => (
-                    <div key={idx} className="rounded-[24px] border border-white/10 bg-white/[0.04] p-3 sm:p-4">
+                    <div key={idx} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3 sm:p-4">
                       <div
-                        className="group relative mb-3 aspect-square overflow-hidden rounded-2xl border border-white/10 cursor-pointer"
+                        className="group relative mb-3 aspect-square overflow-hidden rounded-xl border border-white/10 cursor-pointer"
                         onClick={(e) => { e.stopPropagation(); setAnnotatingImageIndex(idx); }}
                       >
                         <img src={img.url} className="h-full w-full object-cover bg-black" alt={`Uploaded case image ${idx + 1}`} />
@@ -642,15 +668,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     </div>
                   ))}
 
-                  {images.length < 8 && (
+                      {images.length < 8 && (
                     <button
                       type="button"
                       onClick={triggerFileInput}
-                      className="min-h-[260px] rounded-[24px] border border-dashed border-white/20 bg-black/35 p-6 text-left transition-all hover:border-cyan-400 hover:bg-white/5"
+                      className="min-h-[220px] rounded-2xl border border-dashed border-white/5 bg-white/[0.03] p-6 text-left transition hover:border-white/10 hover:bg-white/[0.05]"
                     >
                       <div className="flex h-full flex-col justify-between">
                         <div className="flex flex-col items-center justify-center p-6 space-y-4">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-400">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
                             <span className="material-icons text-2xl">add</span>
                           </div>
                           <div className="text-center space-y-1">
@@ -670,30 +696,30 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             </section>
 
             {formData.submissionType === 'interesting_case' && (
-              <section className={`${sectionCardClassName} space-y-5`}>
+              <section className={`${sectionCardClassName} space-y-4`}>
                 <div>
-                  <h2 className="text-lg font-bold text-white">Case Details</h2>
+                  <h2 className={sectionLabelClassName}>Case Details</h2>
                 </div>
 
                 <div className="grid grid-cols-12 gap-4">
                   <div ref={setFieldRef('initials')} className="col-span-5 space-y-2 md:col-span-5">
                     <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Patient Initials</label>
-                    <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Patient initials" className={inputClassName} />
+                    <input name="initials" value={formData.initials} onChange={handleInputChange} autoComplete="off" placeholder="Patient initials" maxLength={2} className={inputClassName} />
                     {fieldErrors.initials && <p className="text-sm text-rose-400">{fieldErrors.initials}</p>}
                   </div>
                   <div className="col-span-3 space-y-2 md:col-span-3">
                     <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Age</label>
-                    <input type="number" name="age" value={formData.age} onChange={handleInputChange} placeholder="Age" className={inputClassName} />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" name="age" value={formData.age} onChange={handleInputChange} placeholder="Age" className={`${inputClassName} appearance-none`} />
                   </div>
                   <div className="col-span-4 space-y-2 md:col-span-4">
                     <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Sex</label>
-                    <div className="flex h-[46px] rounded-2xl border border-white/10 bg-black/40 p-1">
+                    <div className="flex h-[42px] rounded-xl border border-white/5 bg-black/40 p-1">
                       {['M', 'F'].map((s) => (
                         <button
                           key={s}
                           type="button"
                           onClick={() => setFormData(prev => ({ ...prev, sex: s }))}
-                          className={`flex-1 rounded-xl px-2 py-1.5 text-sm font-bold transition-all ${formData.sex === s ? 'bg-cyan-500 text-white shadow-[0_0_10px_rgba(6,182,212,0.2)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
+                          className={`flex-1 rounded-lg px-2 py-1.5 text-sm font-semibold transition ${formData.sex === s ? 'bg-cyan-500/10 text-cyan-100' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}
                         >
                           {s}
                         </button>
@@ -729,7 +755,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             <section className={`${sectionCardClassName} space-y-5`}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-lg font-bold text-white">Case Information</h2>
+                  <h2 className={sectionLabelClassName}>Case Information</h2>
                 </div>
                 {Object.keys(fieldErrors).length > 0 && (
                   <span className="rounded-full border border-rose-400/20 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200">Missing required fields</span>
@@ -782,21 +808,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
             <section className={`${sectionCardClassName} space-y-5`}>
               <div>
-                <h2 className="text-lg font-bold text-white">Teaching Details</h2>
+                <h2 className={sectionLabelClassName}>Teaching Details</h2>
               </div>
-
-              {formData.submissionType === 'interesting_case' && (
-                <div className="space-y-2 max-w-2xl">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Impression</label>
-                  <input
-                    name="impression"
-                    value={formData.impression}
-                    onChange={handleInputChange}
-                    placeholder="Example: Primary bronchogenic carcinoma"
-                    className={inputClassName}
-                  />
-                </div>
-              )}
 
               <div className="space-y-6">
                 {(formData.submissionType === 'interesting_case' || formData.submissionType === 'aunt_minnie') && (
@@ -804,25 +817,26 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     <div className="min-w-0">
                       <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Notes / Remarks</label>
                     </div>
-                    <div key={`notes-inline-${notesEditorViewportKey}`}>
-                      <RichTextEditor
-                        value={formData.notes || ''}
-                        onChange={(val) => setFormData(prev => ({ ...prev, notes: val }))}
-                        placeholder="Add teaching pearls, differential diagnosis, pitfalls, and key takeaways..."
-                        minHeight={notesEditorViewportKey === 'desktop' ? 360 : notesEditorViewportKey === 'tablet' ? 320 : 300}
-                        toolbarMode="compact"
-                        onOpenFocusMode={() => setIsNotesFocusOpen(true)}
-                        showFocusButton
-                        className="min-h-[340px] sm:min-h-[400px] xl:min-h-[460px]"
-                      />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsNotesFocusOpen(true)}
+                      className="group flex w-full flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-6 text-center transition hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+                    >
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-500/10 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,0.12)]">
+                        <span className="material-icons text-[24px]">{formData.notes ? 'edit_note' : 'note_add'}</span>
+                      </div>
+                      <p className="mt-4 text-base font-semibold text-white">{formData.notes ? 'Edit Notes / Remarks' : 'Add Notes / Remarks'}</p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {formData.notes ? 'Open full editor' : 'Open full editor'}
+                      </p>
+                    </button>
                   </div>
                 )}
 
                 {canShowReferenceFields && (
-                  <div className="max-w-3xl rounded-[24px] border border-white/10 bg-white/[0.03] p-4 sm:p-5 space-y-4">
+                  <div className="max-w-3xl space-y-4">
                     <div>
-                      <h3 className="text-base font-bold text-white">Reference Source</h3>
+                      <h3 className={sectionLabelClassName}>Reference Source</h3>
                     </div>
 
                     <div className="space-y-2">
@@ -860,7 +874,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   type="button"
                   onClick={() => handleSave('draft')}
                   disabled={isSaving || images.length === 0}
-                  className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-xl border border-white/5 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Save Draft
                 </button>
@@ -868,7 +882,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   type="button"
                   onClick={handleGenerateReport}
                   disabled={images.length === 0}
-                  className="rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Preview Report
                 </button>
@@ -879,12 +893,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
         {isNotesFocusOpen && (
           <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-md" role="dialog" aria-modal="true" aria-label="Focused notes editor">
-            <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-[30px] border border-white/10 bg-[#08111a] shadow-[0_30px_80px_rgba(2,6,23,0.65)]">
+            <div className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#101922]/95 shadow-[0_30px_80px_rgba(2,6,23,0.65)] backdrop-blur-xl">
               <div className="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">Full Editor</p>
                   <h2 className="mt-2 text-2xl font-black text-white">Notes / Remarks</h2>
-                  <p className="mt-2 text-sm text-slate-400">Write longer teaching notes, build lists cleanly, and insert structured templates.</p>
                 </div>
                 <button
                   type="button"
@@ -904,23 +917,24 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   minHeight="52vh"
                   toolbarMode="expanded"
                   autoFocus
+                  surface="paper"
                   className="h-full"
                 />
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 px-6 py-4">
-                <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/10 px-6 py-4">
+                <div className="flex items-center justify-end gap-3">
                   <button
                     type="button"
                     onClick={() => setIsNotesFocusOpen(false)}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-200 transition-colors hover:bg-white/10"
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/10"
                   >
                     Close
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsNotesFocusOpen(false)}
-                    className="rounded-2xl bg-primary px-4 py-2.5 text-sm font-bold text-white transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.4)]"
+                    className="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition-all shadow-[0_10px_20px_-5px_rgba(13,162,231,0.35)]"
                   >
                     Done
                   </button>

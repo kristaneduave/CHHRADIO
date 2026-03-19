@@ -282,6 +282,14 @@ export const fetchUnreadNotificationsCount = async (userId: string): Promise<num
   return count || 0;
 };
 
+export const preloadNewsfeedData = async (userId: string): Promise<void> => {
+  if (!userId) return;
+  await Promise.all([
+    fetchNotificationsPage(userId, 20),
+    fetchUnreadNotificationsCount(userId),
+  ]);
+};
+
 export const subscribeToNotifications = (
   userId: string,
   onRefreshRequested: () => void,
@@ -383,7 +391,7 @@ export const sendSummonNotification = async (
     severity: 'info',
     title: 'Map Request',
     message: `${senderName} is requesting your presence at ${floorName}`,
-    linkScreen: 'live-map',
+    linkScreen: 'anatomy',
     recipientUserIds: [targetUserId],
   });
 };

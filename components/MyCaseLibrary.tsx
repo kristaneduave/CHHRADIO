@@ -53,12 +53,12 @@ export const getPrimaryMeta = (item: any) => {
 export const getDisplayTitle = (item: any) => {
     const type = item?.submission_type || 'interesting_case';
     if (type === 'aunt_minnie') {
-        return String(item?.findings || item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Aunt Minnie').toUpperCase();
+        return String(item?.title || item?.findings || item?.analysis_result?.impression || item?.diagnosis || 'Aunt Minnie').toUpperCase();
     }
     if (type === 'rare_pathology') {
         return String(item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Rare Pathology').toUpperCase();
     }
-    return String(item?.analysis_result?.impression || item?.diagnosis || item?.title || 'Interesting Case').toUpperCase();
+    return String(item?.title || item?.analysis_result?.impression || item?.diagnosis || 'Interesting Case').toUpperCase();
 };
 
 export const MyCaseLibrary: React.FC<MyCaseLibraryProps> = ({

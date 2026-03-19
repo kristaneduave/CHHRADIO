@@ -214,7 +214,7 @@ const WorkstationViewerModal: React.FC<WorkstationViewerModalProps> = ({
                             </div>
                             <div>
                                 <h2 className="text-xl font-bold text-white tracking-tight">Workstation Viewer</h2>
-                                <p className="text-xs text-slate-400 font-medium">Live map and avatar status</p>
+                                <p className="text-xs text-slate-400 font-medium">Workspace and avatar status</p>
                                 {myLiveFloorName ? (
                                     <p className="mt-0.5 text-[11px] font-semibold text-cyan-300">You are in: {myLiveFloorName}</p>
                                 ) : null}

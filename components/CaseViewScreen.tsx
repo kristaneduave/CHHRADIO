@@ -1,8 +1,9 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { loadGenerateCasePDF } from '../services/pdfServiceLoader';
+import DOMPurify from 'dompurify';
+import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
 import { supabase } from '../services/supabase';
-import { fetchCaseComments, submitCaseComment, fetchCaseRatings, submitCaseRating } from '../services/caseInteractionService';
+import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
 import { CaseComment } from '../types';
 
 interface CaseViewScreenProps {
@@ -17,15 +18,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
+    const resolvedImpression = caseData.title || caseData.analysis_result?.impression || caseData.diagnosis;
 
     const [comments, setComments] = useState<CaseComment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
-
-    const [averageRating, setAverageRating] = useState<number>(0);
-    const [userRating, setUserRating] = useState<number | null>(null);
-    const [hoverRating, setHoverRating] = useState<number | null>(null);
-    const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
 
     useEffect(() => {
@@ -33,25 +30,41 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         loadInteractions();
     }, [caseData]);
 
-    const loadInteractions = async () => {
-        const [commentsData, ratingsData] = await Promise.all([
-            fetchCaseComments(caseData.id),
-            fetchCaseRatings(caseData.id)
-        ]);
-        setComments(commentsData);
-        setAverageRating(ratingsData.average);
-        setUserRating(ratingsData.userRating);
-    };
-
-    const handleRate = async (rating: number) => {
-        setIsSubmittingRating(true);
-        const success = await submitCaseRating(caseData.id, rating);
-        if (success) {
-            setUserRating(rating);
-            const { average } = await fetchCaseRatings(caseData.id);
-            setAverageRating(average);
+    useEffect(() => {
+        if (typeof window === 'undefined' || navigator.connection?.saveData) {
+            return;
         }
-        setIsSubmittingRating(false);
+
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+        let idleId: number | null = null;
+
+        const triggerPrefetch = () => {
+            void prefetchGenerateCasePDF();
+        };
+
+        if (typeof window.requestIdleCallback === 'function') {
+            idleId = window.requestIdleCallback(() => {
+                triggerPrefetch();
+            });
+        } else {
+            timeoutId = setTimeout(() => {
+                triggerPrefetch();
+            }, 900);
+        }
+
+        return () => {
+            if (idleId !== null && typeof window.cancelIdleCallback === 'function') {
+                window.cancelIdleCallback(idleId);
+            }
+            if (timeoutId !== null) {
+                clearTimeout(timeoutId);
+            }
+        };
+    }, []);
+
+    const loadInteractions = async () => {
+        const commentsData = await fetchCaseComments(caseData.id);
+        setComments(commentsData);
     };
 
     const handlePostComment = async () => {
@@ -73,6 +86,34 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const images = caseData.image_urls || [caseData.image_url].filter(Boolean);
+    const goToPreviousImage = () => {
+        setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+    };
+    const goToNextImage = () => {
+        setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+    };
+
+    useEffect(() => {
+        setCurrentImageIndex(0);
+    }, [caseData?.id]);
+
+    useEffect(() => {
+        if (images.length <= 1 || typeof window === 'undefined') {
+            return;
+        }
+
+        const adjacentIndexes = [
+            (currentImageIndex + 1) % images.length,
+            (currentImageIndex - 1 + images.length) % images.length,
+        ];
+
+        adjacentIndexes.forEach((index) => {
+            const src = images[index];
+            if (!src) return;
+            const img = new Image();
+            img.src = src;
+        });
+    }, [currentImageIndex, images]);
     const handleCopyToViber = () => {
         // Map DB fields to formatter expectation
         const formattedData = {
@@ -82,7 +123,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             modality: caseData.modality,
             organSystem: caseData.organ_system,
             findings: caseData.findings,
-            impression: caseData.analysis_result?.impression || caseData.diagnosis, // Fallback
+            impression: resolvedImpression,
             notes: caseData.clinical_history
         };
         const text = generateViberText(formattedData);
@@ -107,12 +148,15 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             modality: caseData.modality,
             organSystem: caseData.organ_system,
             findings: caseData.findings,
-            impression: caseData.analysis_result?.impression || caseData.diagnosis,
+            impression: resolvedImpression,
             notes: caseData.educational_summary,
             clinicalData: caseData.clinical_history || caseData.clinicalData,
             radiologicClinchers: caseData.radiologic_clinchers,
             pearl: caseData.pearl || caseData.analysis_result?.pearl,
-            additionalNotes: caseData.notes // Attempt to pass generic notes if they exist
+            additionalNotes: caseData.notes,
+            uploadDate: caseData.analysis_result?.studyDate,
+            reference: caseData.analysis_result?.reference,
+            title: caseData.title,
         };
 
         try {
@@ -178,10 +222,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     {isOwner && (
                         <button
                             onClick={onEdit}
-                            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/60 transition-colors pointer-events-auto border border-white/10"
+                            className={`pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full border px-4 ${theme.borderClass} ${theme.buttonBg} shadow-[0_12px_28px_rgba(15,23,42,0.32)] backdrop-blur-md transition-all hover:scale-[1.02] hover:shadow-[0_16px_34px_rgba(15,23,42,0.38)]`}
                             title="Edit Case"
                         >
                             <span className="material-icons text-[18px]">edit</span>
+                            <span className="text-[12px] font-bold uppercase tracking-[0.18em]">Edit Case</span>
                         </button>
                     )}
                 </div>
@@ -189,49 +234,97 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
             <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
                 {/* Hero Section - Image Gallery */}
-                <div className="relative w-full aspect-[4/3] bg-black group overflow-hidden border-b border-[#1e293b]">
+                <div className="relative w-full bg-black overflow-hidden border-b border-[#1e293b]">
                     {images.length > 0 ? (
-                        <>                            <img
-                            src={images[currentImageIndex]}
-                            className="w-full h-full object-contain relative z-10"
-                            alt="Case Scan"
-                        />
+                        <>
+                            <div className="mx-auto w-full max-w-[1180px] px-4 pt-4 pb-4">
+                                <div className="relative flex h-[54vh] min-h-[340px] max-h-[760px] items-center justify-center overflow-hidden rounded-[28px] bg-[#04070c] sm:h-[62vh]">
+                                    <img
+                                        src={images[currentImageIndex]}
+                                        className="relative z-10 max-h-full max-w-full object-contain transition-opacity duration-200"
+                                        alt="Case Scan"
+                                    />
 
-                            {/* Image Navigation Overlays */}
-                            {images.length > 1 && (
-                                <div className="z-20">
-                                    <div className="absolute inset-x-0 bottom-6 flex justify-center gap-3 z-30">
-                                        {images.map((_: any, idx: number) => (
+                                    {images.length > 1 && (
+                                        <>
+                                            <div className="absolute right-5 top-5 z-30 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] font-bold tracking-[0.18em] text-white/75 backdrop-blur-md">
+                                                {currentImageIndex + 1} / {images.length}
+                                            </div>
                                             <button
-                                                key={idx}
-                                                onClick={() => setCurrentImageIndex(idx)}
-                                                className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentImageIndex ? `w-8 ${theme.bgClass.replace('/10', '')} shadow-[0_0_10px_currentColor]` : 'w-2 bg-white/30 hover:bg-white/50 border border-white/10'}`}
-                                            />
-                                        ))}
-                                    </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev === 0 ? images.length - 1 : prev - 1); }}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-30"
-                                    >
-                                        <span className="material-icons text-lg">chevron_left</span>
-                                    </button>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev === images.length - 1 ? 0 : prev + 1); }}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/80 z-30"
-                                    >
-                                        <span className="material-icons text-lg">chevron_right</span>
-                                    </button>
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    goToPreviousImage();
+                                                }}
+                                                className="absolute left-5 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75"
+                                                aria-label="Previous image"
+                                            >
+                                                <span className="material-icons text-[22px]">chevron_left</span>
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    goToNextImage();
+                                                }}
+                                                className="absolute right-5 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75"
+                                                aria-label="Next image"
+                                            >
+                                                <span className="material-icons text-[22px]">chevron_right</span>
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
-                            )}
 
-                            {/* Image Description Overlay */}
-                            {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
-                                <div className="absolute bottom-0 inset-x-0 bg-black/80 p-6 pt-12 z-20 border-t border-[#1e293b]">
-                                    <p className="text-sm text-slate-300 text-center tracking-wide leading-relaxed">
-                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
-                                    </p>
-                                </div>
-                            )}
+                                {images.length > 1 && (
+                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                        <button
+                                            onClick={goToPreviousImage}
+                                            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                        >
+                                            <span className="material-icons text-[16px]">west</span>
+                                            Previous
+                                        </button>
+
+                                        <div className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
+                                            {images.map((image: string, idx: number) => (
+                                                <button
+                                                    key={idx}
+                                                    onClick={() => setCurrentImageIndex(idx)}
+                                                    className={`relative h-12 w-16 shrink-0 overflow-hidden rounded-xl border transition-all duration-200 ${idx === currentImageIndex
+                                                        ? `border-white/40 ${theme.bgClass} shadow-[0_0_0_1px_rgba(255,255,255,0.14)]`
+                                                        : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+                                                        }`}
+                                                    aria-label={`View image ${idx + 1}`}
+                                                >
+                                                    <img
+                                                        src={image}
+                                                        alt={`Thumbnail ${idx + 1}`}
+                                                        className="h-full w-full object-cover opacity-80"
+                                                    />
+                                                    {idx === currentImageIndex && (
+                                                        <span className={`absolute inset-x-2 bottom-1 h-0.5 rounded-full ${theme.bgClass.replace('/10', '')}`} />
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            onClick={goToNextImage}
+                                            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                        >
+                                            Next
+                                            <span className="material-icons text-[16px]">east</span>
+                                        </button>
+                                    </div>
+                                )}
+
+                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
+                                    <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
+                                        <p className="text-sm text-slate-300 text-center tracking-wide leading-relaxed">
+                                            {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
                         </>
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-500 relative z-10 border border-dashed border-[#1e293b] m-4 rounded-xl mx-auto max-w-sm max-h-[200px] mt-12 bg-[#131b26]">
@@ -401,7 +494,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         )}
 
                         {/* Impression */}
-                        {(isInterestingCase || submissionType === 'rare_pathology') && (caseData.analysis_result?.impression || caseData.diagnosis) && (
+                        {(isInterestingCase || submissionType === 'rare_pathology') && resolvedImpression && (
                             <div className="space-y-4">
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
@@ -411,7 +504,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
                                 </div>
                                 <div className="text-[14px] font-medium text-white leading-relaxed whitespace-pre-line text-justify tracking-wide">
-                                    {caseData.analysis_result?.impression || caseData.diagnosis}
+                                    {resolvedImpression}
                                 </div>
                             </div>
                         )}
@@ -426,9 +519,50 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     </h3>
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
                                 </div>
-                                <div className="text-[13px] text-slate-400/80 leading-relaxed whitespace-pre-line text-justify">
-                                    {caseData.educational_summary}
-                                </div>
+                                <div
+                                    className="case-rich-preview text-[13px] text-slate-300/90 leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(caseData.educational_summary) }}
+                                />
+                                <style>{`
+                                  .case-rich-preview h2,
+                                  .case-rich-preview h3 {
+                                    margin: 0.65rem 0 0.4rem;
+                                    font-weight: 800;
+                                    color: #f8fafc;
+                                    letter-spacing: -0.01em;
+                                  }
+
+                                  .case-rich-preview h2 {
+                                    font-size: 1rem;
+                                  }
+
+                                  .case-rich-preview h3 {
+                                    font-size: 0.95rem;
+                                  }
+
+                                  .case-rich-preview p {
+                                    margin: 0.4rem 0;
+                                    color: rgba(203, 213, 225, 0.92);
+                                  }
+
+                                  .case-rich-preview ul,
+                                  .case-rich-preview ol {
+                                    margin: 0.45rem 0;
+                                    padding-left: 1.2rem;
+                                  }
+
+                                  .case-rich-preview li {
+                                    margin: 0.2rem 0;
+                                  }
+
+                                  .case-rich-preview strong {
+                                    color: #ffffff;
+                                  }
+
+                                  .case-rich-preview span[style*="color"] {
+                                    filter: saturate(0.95) brightness(1.05);
+                                  }
+                                `}</style>
                             </div>
                         )}
 
@@ -470,41 +604,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                     {/* Discussion Section */}
                     <div className="mt-8 pt-8 border-t border-white/10">
-                        {/* Header & Ratings Component */}
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
                                 <span className="material-icons text-base text-primary">forum</span>
                                 Discussion Thread
                             </h3>
-
-                            <div className="flex items-center gap-2 bg-[#131b26] border border-white/5 px-3 py-1.5 rounded-xl">
-                                <div className="flex items-center">
-                                    {[1, 2, 3, 4, 5].map((star) => {
-                                        const isFilled = (hoverRating !== null ? star <= hoverRating : (userRating && star <= userRating));
-                                        const isAverageFilled = !userRating && hoverRating === null && star <= averageRating;
-                                        return (
-                                            <button
-                                                key={star}
-                                                onClick={() => handleRate(star)}
-                                                onMouseEnter={() => setHoverRating(star)}
-                                                onMouseLeave={() => setHoverRating(null)}
-                                                disabled={isSubmittingRating}
-                                                className={`material-icons text-[16px] focus:outline-none transition-colors ${isFilled || isAverageFilled ? 'text-yellow-400' : 'text-slate-700 hover:text-yellow-400/50'}`}
-                                            >
-                                                {isFilled || isAverageFilled ? 'star' : 'star_border'}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                {averageRating > 0 && (
-                                    <>
-                                        <div className="h-4 w-[1px] bg-white/10 mx-1"></div>
-                                        <span className="text-xs font-bold text-slate-400 min-w-[20px] text-center">
-                                            {averageRating.toFixed(1)}
-                                        </span>
-                                    </>
-                                )}
-                            </div>
                         </div>
 
                         <div className="space-y-4 mb-6">
@@ -570,5 +674,3 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 };
 
 export default CaseViewScreen;
-
-

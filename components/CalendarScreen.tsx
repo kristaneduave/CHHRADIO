@@ -12,6 +12,7 @@ import CalendarMonthNavigator from './calendar/CalendarMonthNavigator';
 import CalendarSchedulePanel from './calendar/CalendarSchedulePanel';
 import CalendarEventModal from './calendar/CalendarEventModal';
 import { CalendarViewScope, CalendarViewport } from './calendar/types';
+import { getAppViewport } from './responsive/useViewport';
 
 type ValidationErrors = {
   title?: string;
@@ -44,10 +45,7 @@ const formatEventTypeLabel = (type: EventType | 'all') => {
 };
 
 const getCalendarViewport = (): CalendarViewport => {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return 'mobile';
-  if (window.matchMedia('(min-width: 1280px)').matches) return 'desktop';
-  if (window.matchMedia('(min-width: 768px)').matches) return 'tablet';
-  return 'mobile';
+  return getAppViewport();
 };
 
 const CalendarScreen: React.FC = () => {

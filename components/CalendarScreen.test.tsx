@@ -101,8 +101,8 @@ describe('CalendarScreen', () => {
     render(<CalendarScreen />);
     expect(screen.getByText('Calendar')).toBeInTheDocument();
     await waitFor(() => expect(mockCalendarService.getEvents).toHaveBeenCalled());
-    expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Month navigator')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open schedule filters' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Event' })).toBeInTheDocument();
     expect(screen.getByTestId('calendar-layout')).toHaveAttribute('data-calendar-viewport', 'mobile');
   });
 
