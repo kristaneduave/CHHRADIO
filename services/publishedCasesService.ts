@@ -25,9 +25,9 @@ const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): Pa
         'Rare Pathology'
       )
       : (
+        item.title ||
         item.analysis_result?.impression ||
         item.diagnosis ||
-        item.title ||
         'Interesting Case'
       );
 
