@@ -54,3 +54,26 @@ export const preloadTopRouteChunks = async (): Promise<void> => {
     loadProfileScreen(),
   ]);
 };
+
+export const preloadMajorRouteChunks = async (): Promise<void> => {
+  await Promise.all([
+    loadNewsfeedScreen(),
+    loadSearchScreen(),
+    loadProfileScreen(),
+    loadCalendarScreen(),
+    loadUploadScreen(),
+    loadCaseViewScreen(),
+    loadAnnouncementsScreen(),
+    loadResidentsCornerScreen(),
+    loadResidentEndorsementsScreen(),
+    loadArticleLibraryScreen(),
+    loadQuizScreen(),
+    loadMonthlyCensusPage(),
+  ]);
+};
+
+export const preloadNonCriticalRouteChunks = async (): Promise<void> => {
+  await Promise.all([
+    loadAnatomyScreen(),
+  ]);
+};

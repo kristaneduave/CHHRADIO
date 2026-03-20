@@ -1,10 +1,9 @@
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import LoginScreen from './components/LoginScreen';
 import ToastHost from './components/ToastHost';
-import LoadingState from './components/LoadingState';
 import AppBootScreen from './components/AppBootScreen';
 import { Screen, SubmissionType } from './types';
 import { supabase, isSupabaseConfigured } from './services/supabase';
@@ -72,6 +71,8 @@ const ArticleLibraryScreen = lazy(loadArticleLibraryScreen);
 const NewsfeedScreen = lazy(loadNewsfeedScreen);
 const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
 const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
+const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 
 const App: React.FC = () => {
   useThemePreference();
@@ -79,16 +80,26 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isBootReady, setIsBootReady] = useState(false);
-  const [bootProgress, setBootProgress] = useState(8);
+  const [bootProgress, setBootProgress] = useState(0);
   const [bootStatusLabel, setBootStatusLabel] = useState('Checking session');
+  const [bootPhaseLabel, setBootPhaseLabel] = useState('Resolving access');
+  const [bootFunMessage, setBootFunMessage] = useState('Checking if the residents broke the dashboard again...');
+  const [bootTaskSummary, setBootTaskSummary] = useState({ completed: 0, total: 0 });
+  const [bootPrincipalKey, setBootPrincipalKey] = useState<string | null>(null);
   const [caseToEdit, setCaseToEdit] = useState<any>(null);
   const [initialUploadType, setInitialUploadType] = useState<SubmissionType>('interesting_case');
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
+  const hasReleasedBootRef = useRef(false);
   const [guestMode, setGuestMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
   });
+  const principalKey = session?.user?.id ? `user:${session.user.id}` : guestMode ? 'guest' : 'anon';
+  const debugLifecycle = React.useCallback((label: string, details?: Record<string, unknown>) => {
+    if (!isDevRuntime) return;
+    console.log(`[app:${APP_INSTANCE_ID}] ${label}`, details || {});
+  }, []);
 
   if (!isSupabaseConfigured) {
     return (
@@ -113,6 +124,7 @@ const App: React.FC = () => {
   }
 
   useEffect(() => {
+    debugLifecycle('mount', { principalKey });
     if (typeof window !== 'undefined') {
       const previousOpenAt = window.localStorage.getItem(APP_OPEN_STORAGE_KEY);
       if (previousOpenAt) {
@@ -124,6 +136,10 @@ const App: React.FC = () => {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      debugLifecycle('auth:getSession:resolved', {
+        hasSession: Boolean(session),
+        userId: session?.user?.id || null,
+      });
       setSession(session);
       if (session && typeof window !== 'undefined') {
         window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
@@ -134,7 +150,12 @@ const App: React.FC = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      debugLifecycle('auth:onAuthStateChange', {
+        event,
+        hasSession: Boolean(session),
+        userId: session?.user?.id || null,
+      });
       setSession(session);
       if (session && typeof window !== 'undefined') {
         window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
@@ -143,52 +164,100 @@ const App: React.FC = () => {
       setIsSessionResolved(true);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      debugLifecycle('unmount');
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     if (!isSessionResolved) return;
-    if (!session && !guestMode) {
+    if (principalKey === 'anon') {
+      debugLifecycle('bootstrap:idle-anon');
+      hasReleasedBootRef.current = false;
+      setBootPrincipalKey(null);
       setIsBootReady(false);
       return;
     }
 
+    if (hasReleasedBootRef.current && bootPrincipalKey === principalKey) {
+      debugLifecycle('bootstrap:skip-same-principal', { principalKey });
+      return;
+    }
+
     let isCancelled = false;
+    debugLifecycle('bootstrap:start', {
+      principalKey,
+      previousPrincipalKey: bootPrincipalKey,
+      guestMode,
+      userId: session?.user?.id || null,
+    });
+
+    hasReleasedBootRef.current = false;
     setIsBootReady(false);
-    setBootProgress(15);
-    setBootStatusLabel('Preparing dashboard');
+    setBootProgress(0);
+    setBootPhaseLabel('Preparing workspace shell');
+    setBootStatusLabel('Preparing workspace');
+    setBootFunMessage('Checking if the residents broke the dashboard again...');
+    setBootTaskSummary({ completed: 0, total: 0 });
 
     const runBootstrap = async () => {
       const result = await startAppBootstrap({
         session,
         guestMode,
-        timeoutMs: 5_000,
         onProgress: (snapshot) => {
           if (isCancelled) return;
           setBootProgress(snapshot.progressPct);
           setBootStatusLabel(snapshot.statusLabel);
+          setBootPhaseLabel(snapshot.phaseLabel);
+          setBootFunMessage(snapshot.funMessage);
+          setBootTaskSummary({
+            completed: snapshot.completedTaskCount,
+            total: snapshot.totalTaskCount,
+          });
         },
       });
 
       if (isCancelled) return;
+      debugLifecycle('bootstrap:complete', {
+        principalKey,
+        releaseReason: result.releaseReason,
+        tasks: result.tasks.map((task) => ({
+          name: task.name,
+          status: task.status,
+          blocking: task.blocking,
+        })),
+      });
       setBootProgress(100);
+      setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
+      setBootFunMessage('Making the homepage look suspiciously prepared...');
       setIsBootReady(true);
+      setBootPrincipalKey(principalKey);
+      hasReleasedBootRef.current = true;
       void result.backgroundPromise.catch((error) => console.error('Background bootstrap failed:', error));
     };
 
     runBootstrap().catch((error) => {
       console.error('App bootstrap failed:', error);
+      debugLifecycle('bootstrap:error', {
+        principalKey,
+        message: error instanceof Error ? error.message : String(error),
+      });
       if (isCancelled) return;
       setBootProgress(100);
+      setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
+      setBootFunMessage('Opening the reading room despite one dramatic scanner...');
       setIsBootReady(true);
+      setBootPrincipalKey(principalKey);
+      hasReleasedBootRef.current = true;
     });
 
     return () => {
       isCancelled = true;
     };
-  }, [guestMode, isSessionResolved, session]);
+  }, [bootPrincipalKey, debugLifecycle, guestMode, isSessionResolved, principalKey, session]);
 
   useEffect(() => {
     const uid = session?.user?.id;
@@ -221,6 +290,37 @@ const App: React.FC = () => {
   }, [session?.user?.id]);
 
   useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      debugLifecycle('page:visibilitychange', { hidden: document.hidden });
+    };
+    const handlePageShow = (event: PageTransitionEvent) => {
+      debugLifecycle('page:pageshow', { persisted: event.persisted });
+    };
+    const handlePageHide = (event: PageTransitionEvent) => {
+      debugLifecycle('page:pagehide', { persisted: event.persisted });
+    };
+    const handleBeforeUnload = () => {
+      debugLifecycle('page:beforeunload');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('pagehide', handlePageHide);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('pagehide', handlePageHide);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [debugLifecycle]);
+
+  useEffect(() => {
     const uid = session?.user?.id;
     if (!uid || typeof document === 'undefined' || typeof window === 'undefined') {
       return;
@@ -235,9 +335,11 @@ const App: React.FC = () => {
     tracker.setVisible(!document.hidden);
 
     const handleVisibilityChange = () => {
+      debugLifecycle('presence:visibilitychange', { hidden: document.hidden, userId: uid });
       tracker.setVisible(!document.hidden);
     };
     const handleBeforeUnload = () => {
+      debugLifecycle('presence:beforeunload', { userId: uid });
       tracker.stop();
     };
 
@@ -249,7 +351,7 @@ const App: React.FC = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       tracker.stop();
     };
-  }, [session?.user?.id]);
+  }, [debugLifecycle, session?.user?.id]);
 
   const updateRecentScreens = (screen: Screen) => {
     if (typeof window === 'undefined' || !TRACKABLE_SCREENS.includes(screen)) return;
@@ -390,7 +492,15 @@ const App: React.FC = () => {
   };
 
   if (!isSessionResolved) {
-    return <AppBootScreen progress={bootProgress} statusLabel={bootStatusLabel} />;
+    return (
+      <AppBootScreen
+        progress={bootProgress}
+        statusLabel={bootStatusLabel}
+        phaseLabel={bootPhaseLabel}
+        funMessage={bootFunMessage}
+        taskSummary={bootTaskSummary}
+      />
+    );
   }
 
   if (!session && !guestMode) {
@@ -407,7 +517,15 @@ const App: React.FC = () => {
   }
 
   if (!isBootReady) {
-    return <AppBootScreen progress={bootProgress} statusLabel={bootStatusLabel} />;
+    return (
+      <AppBootScreen
+        progress={bootProgress}
+        statusLabel={bootStatusLabel}
+        phaseLabel={bootPhaseLabel}
+        funMessage={bootFunMessage}
+        taskSummary={bootTaskSummary}
+      />
+    );
   }
 
   return (
@@ -418,7 +536,7 @@ const App: React.FC = () => {
       prefetchScreen={prefetchScreen}
       unreadNotificationsCount={unreadNotificationsCount}
     >
-        <Suspense fallback={<LoadingState title="Loading module..." compact />}>
+        <Suspense fallback={null}>
           {renderScreen()}
         </Suspense>
       </Layout>
