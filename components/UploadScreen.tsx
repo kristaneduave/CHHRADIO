@@ -553,8 +553,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                               <span className={`material-icons ${isActive ? 'text-[18px]' : 'text-[16px]'}`}>{option.icon}</span>
                             </div>
                             <div className="min-w-0 flex-1">
-                              <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
-                              {!isActive ? <p className="mt-0.5 truncate text-[12px] leading-5 text-slate-500">{option.shortDescription}</p> : null}
+                              <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} truncate font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
+                              {!isActive ? <p className="mt-0.5 hidden truncate text-[12px] leading-5 text-slate-500 sm:block">{option.shortDescription}</p> : null}
                             </div>
                             {!isActive ? <span className="material-icons text-slate-500">chevron_right</span> : null}
                           </div>
