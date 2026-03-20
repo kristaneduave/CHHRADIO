@@ -94,6 +94,61 @@ describe('pdfService helpers', () => {
     expect(blocks[0].items).toHaveLength(2);
   });
 
+  it('preserves nested list structure in rich notes parsing', () => {
+    const blocks = __testables.parseRichContent(
+      '<ul><li>Parent<ul><li>Child</li></ul></li><li>Sibling</li></ul>'
+    );
+
+    expect(blocks[0]?.type).toBe('unorderedList');
+    if (blocks[0]?.type !== 'unorderedList') {
+      throw new Error('Expected unorderedList block');
+    }
+
+    expect(blocks[0].items).toHaveLength(2);
+    expect(blocks[0].items[0]?.some((block) => block.type === 'unorderedList')).toBe(true);
+  });
+
+  it('keeps inline wrappers inside a list item in the same paragraph block', () => {
+    const blocks = __testables.parseRichContent(
+      '<ul><li>transitional <span>meningioma</span> (40%): mixed histology</li></ul>'
+    );
+
+    expect(blocks[0]?.type).toBe('unorderedList');
+    if (blocks[0]?.type !== 'unorderedList') {
+      throw new Error('Expected unorderedList block');
+    }
+
+    expect(blocks[0].items[0]).toHaveLength(1);
+    expect(blocks[0].items[0]?.[0]?.type).toBe('paragraph');
+    if (blocks[0].items[0]?.[0]?.type !== 'paragraph') {
+      throw new Error('Expected paragraph block');
+    }
+
+    expect(blocks[0].items[0][0].segments.map((segment) => segment.text).join('')).toBe(
+      'transitional meningioma (40%): mixed histology'
+    );
+  });
+
+  it('repairs spaced letter runs before parsing notes html', () => {
+    const normalized = __testables.normalizePdfExportData({
+      submissionType: 'interesting_case',
+      notes: '<ul><li>t r a n s i t i o n a l meningioma (40%): mixed histology</li></ul>',
+    });
+
+    expect(normalized.notesHtml).toContain('transitional meningioma');
+    expect(normalized.notesHtml).not.toContain('t r a n s i t i o n a l');
+  });
+
+  it('strips hidden control characters from notes html before rendering', () => {
+    const normalized = __testables.normalizePdfExportData({
+      submissionType: 'interesting_case',
+      notes: '<ul><li>\u000Btransitional meningioma (40%): mixed histology</li></ul>',
+    });
+
+    expect(normalized.notesHtml).toContain('transitional meningioma');
+    expect(normalized.notesHtml).not.toContain('\u000B');
+  });
+
   it('builds document metadata with uploader fallback', () => {
     const metadata = __testables.buildDocumentProperties(
       {
@@ -119,7 +174,7 @@ describe('pdfService helpers', () => {
   it('groups compact metadata into fixed columns and inline long rows', () => {
     const grouped = __testables.getCompactMetadataGroups([
       { label: 'Patient', value: 'WE | 23 yo | M' },
-      { label: 'Date', value: 'Mar 18, 2026' },
+      { label: 'Uploaded', value: 'Mar 18, 2026, 2:14 PM' },
       { label: 'Exam', value: 'CT Scan - Neuroradiology' },
       { label: 'Patient ID', value: 'RAD-479038' },
       { label: 'Clinical Data', value: 'Headache', fullWidth: true },
@@ -127,20 +182,20 @@ describe('pdfService helpers', () => {
     ]);
 
     expect(grouped.rows.map((row) => row.columns.map((item) => item?.label ?? null))).toEqual([
-      ['Patient', 'Patient ID', 'Date'],
+      ['Patient', 'Patient ID', 'Uploaded'],
       ['Clinical Data', 'Exam', 'Reference Source'],
     ]);
   });
 
   it('omits missing compact metadata fields without placeholders', () => {
     const grouped = __testables.getCompactMetadataGroups([
-      { label: 'Date', value: 'Mar 18, 2026' },
+      { label: 'Uploaded', value: 'Mar 18, 2026, 2:14 PM' },
       { label: 'Patient ID', value: 'RAD-479038' },
       { label: 'Clinical Data', value: '', fullWidth: true },
     ]);
 
     expect(grouped.rows.map((row) => row.columns.map((item) => item?.label ?? null))).toEqual([
-      [null, 'Patient ID', 'Date'],
+      [null, 'Patient ID', 'Uploaded'],
     ]);
   });
 });

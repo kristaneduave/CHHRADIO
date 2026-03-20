@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import { loadGenerateCasePDF } from '../services/pdfServiceLoader';
+import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { toastError, toastSuccess } from '../utils/toast';
 
 export interface ImageUpload {
@@ -88,9 +89,8 @@ export function useCaseSubmission() {
                 anatomy_region: isMinimalSubmission ? null : formData.organSystem,
                 keyFindings: [formData.findings],
                 impression: isMinimalSubmission ? null : formData.impression,
-                educationalSummary: formData.submissionType === 'rare_pathology' ? null : formData.notes,
+                educationalSummary: formData.submissionType === 'rare_pathology' ? null : normalizeRichTextNotesHtml(formData.notes),
                 imagesMetadata: imageMetadata,
-                studyDate: formData.date
             } as Record<string, unknown>;
 
             if (reference) {
@@ -106,7 +106,7 @@ export function useCaseSubmission() {
                 patient_age: isMinimalSubmission ? null : formData.age,
                 patient_sex: isMinimalSubmission ? null : formData.sex,
                 clinical_history: formData.submissionType === 'aunt_minnie' ? null : formData.clinicalData,
-                educational_summary: formData.submissionType === 'rare_pathology' ? null : formData.notes,
+                educational_summary: formData.submissionType === 'rare_pathology' ? null : normalizeRichTextNotesHtml(formData.notes),
                 radiologic_clinchers: formData.submissionType === 'rare_pathology' ? formData.radiologicClinchers : null,
                 submission_type: formData.submissionType,
                 findings: formData.findings,
@@ -220,7 +220,17 @@ export function useCaseSubmission() {
                 url: img.url,
                 description: img.description
             }));
-            generateCasePDF({ ...formData }, null, getImagesForPdf(), customTitle, uploaderName);
+            await generateCasePDF(
+                {
+                    ...formData,
+                    notes: normalizeRichTextNotesHtml(formData.notes),
+                    uploadDate: new Date().toISOString(),
+                },
+                null,
+                getImagesForPdf(),
+                customTitle,
+                uploaderName
+            );
         } catch (e) {
             console.error('Export failed:', e);
             const message = e instanceof Error ? e.message : String(e);

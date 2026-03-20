@@ -2,6 +2,7 @@
 import DOMPurify from 'dompurify';
 import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
+import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
 import { CaseComment } from '../types';
@@ -20,15 +21,21 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
     const resolvedImpression = caseData.title || caseData.analysis_result?.impression || caseData.diagnosis;
+    const normalizedEducationalSummary = React.useMemo(
+        () => normalizeRichTextNotesHtml(caseData.educational_summary),
+        [caseData.educational_summary]
+    );
 
     const [comments, setComments] = useState<CaseComment[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
+    const [publisherName, setPublisherName] = useState('Radiologist');
 
     useEffect(() => {
         checkOwnership();
         loadInteractions();
+        loadPublisherName();
     }, [caseData]);
 
     useEffect(() => {
@@ -84,6 +91,27 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         if (user && caseData.created_by === user.id) {
             setIsOwner(true);
         }
+    };
+
+    const loadPublisherName = async () => {
+        const directName = String(caseData.author || caseData.publisherName || '').trim();
+        if (directName) {
+            setPublisherName(directName);
+            return;
+        }
+
+        if (!caseData.created_by) {
+            setPublisherName('Radiologist');
+            return;
+        }
+
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('nickname, full_name')
+            .eq('id', caseData.created_by)
+            .maybeSingle();
+
+        setPublisherName(profile?.nickname || profile?.full_name || 'Radiologist');
     };
 
     const images = caseData.image_urls || [caseData.image_url].filter(Boolean);
@@ -197,12 +225,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             organSystem: caseData.organ_system,
             findings: caseData.findings,
             impression: resolvedImpression,
-            notes: caseData.educational_summary,
+            notes: normalizedEducationalSummary,
             clinicalData: caseData.clinical_history || caseData.clinicalData,
             radiologicClinchers: caseData.radiologic_clinchers,
             pearl: caseData.pearl || caseData.analysis_result?.pearl,
             additionalNotes: caseData.notes,
-            uploadDate: caseData.analysis_result?.studyDate,
+            uploadDate: caseData.created_at,
             reference: caseData.analysis_result?.reference,
             title: caseData.title,
         };
@@ -217,7 +245,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             // Filename: TITLE
             const fileName = `${caseData.title || 'CASE'}`.toUpperCase();
 
-            generateCasePDF(formattedData, null, pdfImages, headerTitle, 'Radiologist', fileName);
+            await generateCasePDF(formattedData, null, pdfImages, headerTitle, publisherName, fileName);
         } catch (e: any) {
             const message = e instanceof Error ? e.message : String(e);
             if (message.includes('Unable to load export module')) {
@@ -314,8 +342,14 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                         {(images.length > 1 || caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description) && (
                             <div className="border-t border-white/8 px-4 py-4 sm:px-6">
+                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
+                                    <p className="mb-4 text-center text-sm leading-relaxed text-slate-300">
+                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
+                                    </p>
+                                )}
+
                                 {images.length > 1 && (
-                                    <div className="mb-4 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                                    <div className="flex items-center justify-center gap-2 overflow-x-auto custom-scrollbar">
                                         {images.map((image: string, idx: number) => (
                                             <button
                                                 key={`modal-thumb-${idx}`}
@@ -338,12 +372,6 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                             </button>
                                         ))}
                                     </div>
-                                )}
-
-                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
-                                    <p className="text-center text-sm leading-relaxed text-slate-300">
-                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
-                                    </p>
                                 )}
                             </div>
                         )}
@@ -391,38 +419,20 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                         alt="Case Scan"
                                     />
 
-                                    <div className="absolute bottom-5 left-5 z-20 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 backdrop-blur-md">
-                                        Tap to expand
-                                    </div>
-
                                     {images.length > 1 && (
                                         <>
                                             <div className="absolute right-5 top-5 z-30 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] font-bold tracking-[0.18em] text-white/75 backdrop-blur-md">
                                                 {currentImageIndex + 1} / {images.length}
                                             </div>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    goToPreviousImage();
-                                                }}
-                                                className="absolute left-5 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75"
-                                                aria-label="Previous image"
-                                            >
-                                                <span className="material-icons text-[22px]">chevron_left</span>
-                                            </button>
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    goToNextImage();
-                                                }}
-                                                className="absolute right-5 top-1/2 z-30 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75"
-                                                aria-label="Next image"
-                                            >
-                                                <span className="material-icons text-[22px]">chevron_right</span>
-                                            </button>
                                         </>
                                     )}
                                 </button>
+
+                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
+                                    <p className="mt-3 text-center text-sm leading-relaxed tracking-wide text-slate-300">
+                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
+                                    </p>
+                                )}
 
                                 {images.length > 1 && (
                                     <div className="mt-3 flex items-center justify-between gap-3">
@@ -464,14 +474,6 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                             Next
                                             <span className="material-icons text-[16px]">east</span>
                                         </button>
-                                    </div>
-                                )}
-
-                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
-                                    <div className="mt-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3">
-                                        <p className="text-sm text-slate-300 text-center tracking-wide leading-relaxed">
-                                            {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
-                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -660,7 +662,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         )}
 
                         {/* Notes / Remarks */}
-                        {caseData.educational_summary && (
+                        {normalizedEducationalSummary && (
                             <div className="space-y-4">
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
@@ -671,7 +673,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 </div>
                                 <div
                                     className="case-rich-preview text-[13px] text-slate-300/90 leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(caseData.educational_summary) }}
+                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normalizedEducationalSummary) }}
                                 />
                                 <style>{`
                                   .case-rich-preview h2,
@@ -701,7 +703,24 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     padding-left: 1.2rem;
                                   }
 
+                                  .case-rich-preview ul {
+                                    list-style-type: disc;
+                                  }
+
+                                  .case-rich-preview ol {
+                                    list-style-type: decimal;
+                                  }
+
+                                  .case-rich-preview ul ul {
+                                    list-style-type: circle;
+                                  }
+
+                                  .case-rich-preview ol ol {
+                                    list-style-type: lower-alpha;
+                                  }
+
                                   .case-rich-preview li {
+                                    display: list-item;
                                     margin: 0.2rem 0;
                                   }
 

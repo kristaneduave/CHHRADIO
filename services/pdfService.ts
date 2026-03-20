@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import { ReferenceSource, SubmissionType } from '../types';
+import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 
 type PdfImage = {
   url: string;
@@ -93,7 +94,21 @@ type RunStyle = {
   color?: string;
   bold?: boolean;
   indent?: number;
+  maxWidth?: number;
 };
+
+type ResolvedInlineSegment = InlineSegment & {
+  resolvedFontSize: number;
+  resolvedBold: boolean;
+  resolvedColor: string;
+};
+
+const RICH_INDENT_STEP = 5.5;
+const LIST_MARKER_GAP = 4;
+const BLOCK_SPACING = 2;
+const LIST_ITEM_SPACING = 1.2;
+const BLOCKQUOTE_PADDING_X = 5;
+const BLOCKQUOTE_PADDING_Y = 4;
 
 const PDF_THEME_BY_SUBMISSION: Record<SubmissionType, PdfThemeTokens> = {
   interesting_case: {
@@ -225,6 +240,74 @@ const normalizeImages = (
     .filter((image) => image.url.length > 0);
 };
 
+const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      if (result) {
+        resolve(result);
+        return;
+      }
+      reject(new Error('Failed to convert blob to data URL'));
+    };
+    reader.onerror = () => reject(reader.error || new Error('Failed to read blob'));
+    reader.readAsDataURL(blob);
+  });
+
+const prepareCanvasImage = async (url: string): Promise<string> => {
+  if (/^data:image\//i.test(url)) return url;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return url;
+
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) return url;
+
+    const blob = await response.blob();
+    const mimeType = 'image/png';
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return url;
+
+    if (typeof createImageBitmap === 'function') {
+      const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      ctx.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height);
+      return canvas.toDataURL(mimeType);
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Image load failed'));
+        img.src = objectUrl;
+      });
+      canvas.width = image.naturalWidth || image.width;
+      canvas.height = image.naturalHeight || image.height;
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL(mimeType);
+    } catch {
+      return blobToDataUrl(blob);
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
+  } catch {
+    return url;
+  }
+};
+
+const preparePdfImages = async (images: PdfImage[]): Promise<PdfImage[]> =>
+  Promise.all(
+    images.map(async (image) => ({
+      ...image,
+      url: await prepareCanvasImage(image.url),
+    }))
+  );
+
 const normalizeReference = (data: any): ReferenceSource | null => {
   const source = data.reference || data.analysis_result?.reference;
   const reference: ReferenceSource = {
@@ -261,21 +344,35 @@ const normalizePdfExportData = (
     findings: normalizeText(data.findings) || null,
     clinicalData: normalizeText(data.clinicalData || data.clinical_history || data.clinicalHistory) || null,
     radiologicClinchers: normalizeText(data.radiologicClinchers || data.radiologic_clinchers) || null,
-    notesHtml: ensureHtmlString(data.notes || data.educational_summary || data.additionalNotes || data.pearl),
+    notesHtml: normalizeRichTextNotesHtml(
+      ensureHtmlString(data.notes || data.educational_summary || data.additionalNotes || data.pearl)
+    ),
     diagnosis: normalizeText(data.diagnosis || data.diagnosticCode) || null,
     reference: normalizeReference(data),
     images: normalizeImages(images),
   };
 };
 
-const parseColor = (value?: string | null): string | undefined => {
-  const normalized = normalizeText(value);
-  return normalized || undefined;
-};
+const compactInlineSegments = (segments: InlineSegment[]): InlineSegment[] => {
+  const compacted: InlineSegment[] = [];
 
-const parseFontSize = (value?: string | null): string | undefined => {
-  const normalized = normalizeText(value);
-  return normalized || undefined;
+  segments.forEach((segment) => {
+    const previous = compacted[compacted.length - 1];
+    if (
+      previous &&
+      previous.bold === segment.bold &&
+      previous.color === segment.color &&
+      previous.highlight === segment.highlight &&
+      previous.fontSize === segment.fontSize
+    ) {
+      previous.text += segment.text;
+      return;
+    }
+
+    compacted.push({ ...segment });
+  });
+
+  return compacted;
 };
 
 const parseInlineNodes = (nodes: NodeListOf<ChildNode> | ChildNode[], inherited: Omit<InlineSegment, 'text'> = {}) => {
@@ -295,14 +392,42 @@ const parseInlineNodes = (nodes: NodeListOf<ChildNode> | ChildNode[], inherited:
     const nextInherited: Omit<InlineSegment, 'text'> = {
       ...inherited,
       bold: inherited.bold || node.tagName === 'STRONG' || node.tagName === 'B',
-      color: parseColor(node.style.color) || inherited.color,
-      fontSize: parseFontSize(node.style.fontSize) || inherited.fontSize,
     };
 
     segments.push(...parseInlineNodes(Array.from(node.childNodes), nextInherited));
   });
 
-  return segments;
+  return compactInlineSegments(segments);
+};
+
+const isListItemBlockNode = (node: ChildNode) =>
+  node instanceof HTMLElement && ['P', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'UL', 'OL', 'DIV', 'SECTION', 'ARTICLE'].includes(node.tagName);
+
+const parseListItemNode = (node: Element): RichBlock[] => {
+  const blocks: RichBlock[] = [];
+  let inlineBuffer: ChildNode[] = [];
+
+  const flushInlineBuffer = () => {
+    if (inlineBuffer.length === 0) return;
+    const inlineSegments = parseInlineNodes(inlineBuffer);
+    if (inlineSegments.length > 0) {
+      blocks.push({ type: 'paragraph', segments: inlineSegments });
+    }
+    inlineBuffer = [];
+  };
+
+  Array.from(node.childNodes).forEach((child) => {
+    if (isListItemBlockNode(child)) {
+      flushInlineBuffer();
+      blocks.push(...parseBlockNode(child));
+      return;
+    }
+
+    inlineBuffer.push(child);
+  });
+
+  flushInlineBuffer();
+  return blocks;
 };
 
 const parseBlockNode = (node: ChildNode): RichBlock[] => {
@@ -315,20 +440,15 @@ const parseBlockNode = (node: ChildNode): RichBlock[] => {
 
   const tag = node.tagName;
   if (tag === 'P') return [{ type: 'paragraph', segments: parseInlineNodes(Array.from(node.childNodes)) }];
-  if (tag === 'H2') return [{ type: 'heading2', segments: parseInlineNodes(Array.from(node.childNodes)) }];
-  if (tag === 'H3') return [{ type: 'heading3', segments: parseInlineNodes(Array.from(node.childNodes)) }];
+  if (tag === 'H1' || tag === 'H2') return [{ type: 'heading2', segments: parseInlineNodes(Array.from(node.childNodes)) }];
+  if (tag === 'H3' || tag === 'H4') return [{ type: 'heading3', segments: parseInlineNodes(Array.from(node.childNodes)) }];
   if (tag === 'BLOCKQUOTE') {
     return Array.from(node.childNodes).flatMap((child) => parseBlockNode(child));
   }
   if (tag === 'UL' || tag === 'OL') {
     const items = Array.from(node.children)
       .filter((child) => child.tagName === 'LI')
-      .map((li) => {
-        const childBlocks = Array.from(li.childNodes).flatMap((child) => parseBlockNode(child));
-        if (childBlocks.length > 0) return childBlocks;
-        const inlineSegments = parseInlineNodes(Array.from(li.childNodes));
-        return inlineSegments.length ? [{ type: 'paragraph', segments: inlineSegments } as RichBlock] : [];
-      });
+      .map((li) => parseListItemNode(li));
     return [{ type: tag === 'OL' ? 'orderedList' : 'unorderedList', items }];
   }
   if (tag === 'DIV' || tag === 'SECTION' || tag === 'ARTICLE') {
@@ -361,7 +481,13 @@ const formatDisplayDate = (value?: string) => {
   if (!value) return '';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 };
 
 const formatIsoDate = (date = new Date()) => {
@@ -389,7 +515,7 @@ const getCompactMetadataGroups = (items: Array<{ label: string; value: string; f
         columns: [
           byLabel.get('Patient') ?? null,
           byLabel.get('Patient ID') ?? null,
-          byLabel.get('Date') ?? null,
+          byLabel.get('Uploaded') ?? null,
         ],
       },
       {
@@ -446,9 +572,10 @@ const ensureImageRowSpace = (doc: jsPDF, ctx: RenderContext, rowHeight: number) 
   ensurePageSpace(doc, ctx, Math.max(SECTION_SPEC.imageRow.minHeight, rowHeight));
 };
 
-const inferImageFormat = (url: string): 'PNG' | 'JPEG' => {
+const inferImageFormat = (url: string): 'PNG' | 'JPEG' | undefined => {
   if (/^data:image\/png/i.test(url) || /\.png($|\?)/i.test(url)) return 'PNG';
-  return 'JPEG';
+  if (/^data:image\/jpe?g/i.test(url) || /\.jpe?g($|\?)/i.test(url)) return 'JPEG';
+  return undefined;
 };
 
 const getImageSize = (doc: jsPDF, url: string, targetWidth: number, fallbackRatio = 0.68) => {
@@ -479,7 +606,12 @@ const drawImageFrame = (
   doc.setDrawColor(...theme.border);
   doc.roundedRect(x, y, width, height, 2.5, 2.5, 'S');
   try {
-    doc.addImage(image.url, inferImageFormat(image.url), x, y, width, height);
+    const format = inferImageFormat(image.url);
+    if (format) {
+      doc.addImage(image.url, format, x, y, width, height);
+    } else {
+      doc.addImage(image.url, 'PNG', x, y, width, height);
+    }
   } catch {
     doc.setFillColor(...theme.fillMuted);
     doc.roundedRect(x, y, width, height, 2.5, 2.5, 'F');
@@ -499,30 +631,30 @@ const drawTitleBar = (
   data: PdfExportData,
   theme: PdfThemeTokens
 ) => {
-  const boxX = Math.max(8, ctx.margin - 10);
-  const boxY = ctx.y || 8;
-  const boxWidth = ctx.pageWidth - boxX * 2;
-  const titleLines = doc.splitTextToSize(data.title, boxWidth - 32);
-  const boxHeight = Math.max(38, 16 + Math.max(titleLines.length, 1) * 8 + 10);
+  const boxX = 0;
+  const boxY = 0;
+  const boxWidth = ctx.pageWidth;
+  const titleLines = doc.splitTextToSize(data.title, boxWidth - 24);
+  const titleLineHeight = 6.8;
+  const boxHeight = Math.max(26, 10 + Math.max(titleLines.length, 1) * titleLineHeight + 6);
 
   ensurePageSpace(doc, ctx, boxHeight + 4);
 
   doc.setFillColor(...theme.accent);
   doc.setDrawColor(...theme.accent);
   doc.setLineWidth(0.8);
-  doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 2.8, 2.8, 'FD');
+  doc.rect(boxX, boxY, boxWidth, boxHeight, 'FD');
 
-  const titleLineHeight = 8;
   const titleBlockHeight = Math.max(titleLines.length, 1) * titleLineHeight;
-  const titleY = boxY + ((boxHeight - titleBlockHeight) / 2) + (titleLineHeight * 0.72);
+  const titleY = boxY + ((boxHeight - titleBlockHeight) / 2) + (titleLineHeight * 0.76);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
+  doc.setFontSize(17);
   doc.setTextColor(255, 255, 255);
   titleLines.forEach((line, index) => {
     doc.text(line, boxX + boxWidth / 2, titleY + index * titleLineHeight, { align: 'center' });
   });
 
-  ctx.y = boxY + boxHeight + 8;
+  ctx.y = boxY + boxHeight + 6;
 };
 
 const writeSectionHeader = (doc: jsPDF, ctx: RenderContext, label: string, theme: PdfThemeTokens) => {
@@ -647,7 +779,7 @@ const estimateStyledSegmentsHeight = (
   let lineCount = 1;
   let lineWidth = 0;
 
-  segments.forEach((segment) => {
+  normalizeRenderableSegments(segments, style, themeFallbackColor(style)).forEach((segment) => {
     const tokens = tokenize(segment.text);
     tokens.forEach((token) => {
       if (token === '\n') {
@@ -657,9 +789,8 @@ const estimateStyledSegmentsHeight = (
       }
 
       const isWhitespace = /^\s+$/.test(token);
-      const resolvedFontSize = resolveSegmentFontSize(segment.fontSize, style.fontSize);
-      doc.setFont('helvetica', segment.bold || style.bold ? 'bold' : 'normal');
-      doc.setFontSize(resolvedFontSize);
+      doc.setFont('helvetica', segment.resolvedBold ? 'bold' : 'normal');
+      doc.setFontSize(segment.resolvedFontSize);
       const tokenWidth = doc.getTextWidth(token);
 
       if (!isWhitespace && lineWidth + tokenWidth > maxWidth && lineWidth > 0) {
@@ -674,53 +805,142 @@ const estimateStyledSegmentsHeight = (
   return lineCount * style.lineHeight;
 };
 
+const themeFallbackColor = (style: RunStyle) => style.color || '';
+
+const normalizeRenderableSegments = (
+  segments: InlineSegment[],
+  style: RunStyle,
+  fallbackColor: string,
+): ResolvedInlineSegment[] => {
+  const normalized: ResolvedInlineSegment[] = [];
+
+  segments.forEach((segment) => {
+    const resolvedFontSize = resolveSegmentFontSize(segment.fontSize, style.fontSize);
+    const resolvedBold = Boolean(segment.bold || style.bold);
+    const resolvedColor = segment.color || fallbackColor;
+    const previous = normalized[normalized.length - 1];
+
+    if (
+      previous &&
+      previous.resolvedFontSize === resolvedFontSize &&
+      previous.resolvedBold === resolvedBold &&
+      previous.resolvedColor === resolvedColor
+    ) {
+      previous.text += segment.text;
+      return;
+    }
+
+    normalized.push({
+      ...segment,
+      resolvedFontSize,
+      resolvedBold,
+      resolvedColor,
+    });
+  });
+
+  return normalized;
+};
+
+const measureRemainingPageHeight = (ctx: RenderContext) => ctx.pageHeight - ctx.bottomMargin - ctx.y;
+
+const getListMarkerWidth = (
+  doc: jsPDF,
+  block: Extract<RichBlock, { type: 'unorderedList' | 'orderedList' }>,
+  theme: PdfThemeTokens,
+) => {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(theme.typography.body);
+  const markers = block.items.map((_, index) => (
+    block.type === 'orderedList' ? `${index + 1}.` : '\u2022'
+  ));
+  const widest = markers.reduce((max, marker) => Math.max(max, doc.getTextWidth(marker)), 0);
+  return widest + LIST_MARKER_GAP;
+};
+
+const estimateBlockHeight = (
+  doc: jsPDF,
+  block: RichBlock,
+  theme: PdfThemeTokens,
+  ctx: RenderContext,
+): number => {
+  switch (block.type) {
+    case 'paragraph':
+      return estimateStyledSegmentsHeight(doc, block.segments, {
+        fontSize: theme.typography.body,
+        lineHeight: theme.layout.bodyLineHeight,
+      }, ctx) + BLOCK_SPACING;
+    case 'heading2':
+      return estimateStyledSegmentsHeight(doc, block.segments, {
+        fontSize: theme.typography.sectionTitle,
+        lineHeight: 5.2,
+        bold: true,
+      }, ctx) + BLOCK_SPACING;
+    case 'heading3':
+      return estimateStyledSegmentsHeight(doc, block.segments, {
+        fontSize: theme.typography.body,
+        lineHeight: 4.9,
+        bold: true,
+      }, ctx) + BLOCK_SPACING;
+    case 'blockquote': {
+      const innerCtx = { ...ctx, margin: ctx.margin + BLOCKQUOTE_PADDING_X };
+      const innerHeight = estimateRichBlocksHeight(doc, block.blocks, theme, innerCtx);
+      return Math.max(innerHeight + BLOCKQUOTE_PADDING_Y * 2, 14) + BLOCK_SPACING;
+    }
+    case 'unorderedList':
+    case 'orderedList':
+      return estimateListHeight(doc, block, theme, ctx);
+  }
+};
+
+const estimateListItemBlocksHeight = (
+  doc: jsPDF,
+  blocks: RichBlock[],
+  theme: PdfThemeTokens,
+  ctx: RenderContext,
+): number => {
+  let height = 0;
+
+  blocks.forEach((block) => {
+    if (block.type === 'unorderedList' || block.type === 'orderedList') {
+      const nestedCtx = { ...ctx, margin: ctx.margin + RICH_INDENT_STEP };
+      height += estimateListHeight(doc, block, theme, nestedCtx);
+      return;
+    }
+
+    height += estimateBlockHeight(doc, block, theme, ctx);
+  });
+
+  return height;
+};
+
+const estimateListHeight = (
+  doc: jsPDF,
+  block: Extract<RichBlock, { type: 'unorderedList' | 'orderedList' }>,
+  theme: PdfThemeTokens,
+  ctx: RenderContext,
+): number => {
+  const markerWidth = getListMarkerWidth(doc, block, theme);
+  const contentCtx = { ...ctx, margin: ctx.margin + markerWidth };
+  let height = 0;
+
+  block.items.forEach((itemBlocks) => {
+    const itemHeight = estimateListItemBlocksHeight(doc, itemBlocks, theme, contentCtx);
+    height += Math.max(itemHeight, theme.layout.bodyLineHeight) + LIST_ITEM_SPACING;
+  });
+
+  return height + 0.5;
+};
+
 const estimateRichBlocksHeight = (
   doc: jsPDF,
   blocks: RichBlock[],
   theme: PdfThemeTokens,
   ctx: RenderContext,
-  depth = 0
 ): number => {
   let height = 0;
-
   blocks.forEach((block) => {
-    switch (block.type) {
-      case 'paragraph':
-        height += estimateStyledSegmentsHeight(doc, block.segments, {
-          fontSize: theme.typography.body,
-          lineHeight: theme.layout.bodyLineHeight,
-          indent: depth * 8,
-        }, ctx) + 2;
-        break;
-      case 'heading2':
-        height += estimateStyledSegmentsHeight(doc, block.segments, {
-          fontSize: theme.typography.sectionTitle,
-          lineHeight: 5.2,
-          bold: true,
-          indent: depth * 8,
-        }, ctx) + 2;
-        break;
-      case 'heading3':
-        height += estimateStyledSegmentsHeight(doc, block.segments, {
-          fontSize: theme.typography.body,
-          lineHeight: 4.9,
-          bold: true,
-          indent: depth * 8,
-        }, ctx) + 2;
-        break;
-      case 'blockquote':
-        height += estimateRichBlocksHeight(doc, block.blocks, theme, ctx, depth + 1) + 8;
-        break;
-      case 'unorderedList':
-      case 'orderedList':
-        block.items.forEach((itemBlocks) => {
-          height += estimateRichBlocksHeight(doc, itemBlocks, theme, ctx, depth + 1) + 1;
-        });
-        height += 1;
-        break;
-    }
+    height += estimateBlockHeight(doc, block, theme, ctx);
   });
-
   return height;
 };
 
@@ -732,7 +952,7 @@ const renderStyledSegments = (
   theme: PdfThemeTokens
 ) => {
   const baseX = ctx.margin + (style.indent || 0);
-  const maxX = ctx.pageWidth - ctx.margin;
+  const maxX = style.maxWidth ? baseX + style.maxWidth : ctx.pageWidth - ctx.margin;
   let x = baseX;
   let y = ctx.y;
 
@@ -745,7 +965,7 @@ const renderStyledSegments = (
     }
   };
 
-  segments.forEach((segment) => {
+  normalizeRenderableSegments(segments, style, themeFallbackColor(style)).forEach((segment) => {
     const tokens = tokenize(segment.text);
     tokens.forEach((token) => {
       if (token === '\n') {
@@ -754,17 +974,15 @@ const renderStyledSegments = (
       }
 
       const isWhitespace = /^\s+$/.test(token);
-      const fontStyle = segment.bold || style.bold ? 'bold' : 'normal';
-      const resolvedFontSize = resolveSegmentFontSize(segment.fontSize, style.fontSize);
-      doc.setFont('helvetica', fontStyle);
-      doc.setFontSize(resolvedFontSize);
+      doc.setFont('helvetica', segment.resolvedBold ? 'bold' : 'normal');
+      doc.setFontSize(segment.resolvedFontSize);
       const tokenWidth = doc.getTextWidth(token);
 
       if (!isWhitespace && x + tokenWidth > maxX && x > baseX) {
         newLine();
       }
 
-      const drawColor = getReadableTextColor(segment.color || style.color, theme.textSecondary);
+      const drawColor = getReadableTextColor(segment.resolvedColor || style.color, theme.textSecondary);
       doc.setTextColor(...drawColor);
       doc.text(token, x, y);
       x += tokenWidth;
@@ -774,94 +992,139 @@ const renderStyledSegments = (
   ctx.y = y + style.lineHeight * 0.5;
 };
 
+const renderRichBlock = (
+  doc: jsPDF,
+  ctx: RenderContext,
+  block: RichBlock,
+  theme: PdfThemeTokens,
+) => {
+  switch (block.type) {
+    case 'paragraph':
+      renderStyledSegments(doc, ctx, block.segments, {
+        fontSize: theme.typography.body,
+        lineHeight: theme.layout.bodyLineHeight,
+      }, theme);
+      ctx.y += BLOCK_SPACING;
+      return;
+    case 'heading2':
+      renderStyledSegments(doc, ctx, block.segments, {
+        fontSize: theme.typography.sectionTitle,
+        lineHeight: 5.2,
+        bold: true,
+      }, theme);
+      ctx.y += BLOCK_SPACING;
+      return;
+    case 'heading3':
+      renderStyledSegments(doc, ctx, block.segments, {
+        fontSize: theme.typography.body,
+        lineHeight: 4.9,
+        bold: true,
+      }, theme);
+      ctx.y += BLOCK_SPACING;
+      return;
+    case 'blockquote': {
+      const quoteHeight = Math.max(
+        estimateRichBlocksHeight(doc, block.blocks, theme, { ...ctx, margin: ctx.margin + BLOCKQUOTE_PADDING_X }) + BLOCKQUOTE_PADDING_Y * 2,
+        14
+      );
+      ensurePageSpace(doc, ctx, quoteHeight + BLOCK_SPACING);
+      const quoteStartY = ctx.y;
+      doc.setFillColor(...theme.fillSubtle);
+      doc.setDrawColor(...theme.border);
+      doc.roundedRect(
+        ctx.margin,
+        quoteStartY,
+        ctx.pageWidth - ctx.margin * 2,
+        quoteHeight,
+        2.5,
+        2.5,
+        'FD'
+      );
+      doc.setDrawColor(...theme.accentMuted);
+      doc.setLineWidth(0.8);
+      doc.line(ctx.margin + 2, quoteStartY + 2, ctx.margin + 2, quoteStartY + quoteHeight - 2);
+      const innerCtx = { ...ctx, margin: ctx.margin + BLOCKQUOTE_PADDING_X, y: quoteStartY + BLOCKQUOTE_PADDING_Y };
+      writeRichBlocks(doc, innerCtx, block.blocks, theme);
+      ctx.y = Math.max(quoteStartY + quoteHeight, innerCtx.y) + BLOCK_SPACING;
+      return;
+    }
+    case 'unorderedList':
+    case 'orderedList':
+      renderListBlock(doc, ctx, block, theme);
+      return;
+  }
+};
+
+const renderListItemBlocks = (
+  doc: jsPDF,
+  ctx: RenderContext,
+  blocks: RichBlock[],
+  theme: PdfThemeTokens,
+) => {
+  blocks.forEach((block) => {
+    if (block.type === 'unorderedList' || block.type === 'orderedList') {
+      const nestedCtx = { ...ctx, margin: ctx.margin + RICH_INDENT_STEP };
+      renderListBlock(doc, nestedCtx, block, theme);
+      ctx.y = nestedCtx.y;
+      return;
+    }
+
+    renderRichBlock(doc, ctx, block, theme);
+  });
+};
+
+const renderListBlock = (
+  doc: jsPDF,
+  ctx: RenderContext,
+  block: Extract<RichBlock, { type: 'unorderedList' | 'orderedList' }>,
+  theme: PdfThemeTokens,
+) => {
+  const markerWidth = getListMarkerWidth(doc, block, theme);
+  const markerX = ctx.margin;
+  const contentStart = markerX + markerWidth;
+
+  block.items.forEach((itemBlocks, index) => {
+    const itemContentCtx = { ...ctx, margin: contentStart, y: ctx.y };
+    const itemHeight = estimateListItemBlocksHeight(doc, itemBlocks, theme, itemContentCtx);
+    const minimumItemHeight = Math.max(theme.layout.bodyLineHeight * 2, 10);
+
+    if (measureRemainingPageHeight(ctx) < minimumItemHeight) {
+      doc.addPage();
+      ctx.y = ctx.margin;
+      itemContentCtx.y = ctx.y;
+    }
+
+    ensurePageSpace(doc, ctx, theme.layout.bodyLineHeight);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(theme.typography.body);
+    doc.setTextColor(...theme.textSecondary);
+    const marker = block.type === 'orderedList' ? `${index + 1}.` : '\u2022';
+    doc.text(marker, markerX, ctx.y);
+
+    itemContentCtx.y = ctx.y;
+    renderListItemBlocks(doc, itemContentCtx, itemBlocks, theme);
+    ctx.y = Math.max(itemContentCtx.y, ctx.y + theme.layout.bodyLineHeight) + LIST_ITEM_SPACING;
+  });
+
+  ctx.y += 0.5;
+};
+
 const writeRichBlocks = (
   doc: jsPDF,
   ctx: RenderContext,
   blocks: RichBlock[],
   theme: PdfThemeTokens,
-  depth = 0
 ) => {
-  blocks.forEach((block) => {
-    switch (block.type) {
-      case 'paragraph':
-        renderStyledSegments(doc, ctx, block.segments, {
-          fontSize: theme.typography.body,
-          lineHeight: theme.layout.bodyLineHeight,
-          indent: depth * 8,
-        }, theme);
-        ctx.y += 2;
-        break;
-      case 'heading2':
-        renderStyledSegments(doc, ctx, block.segments, {
-          fontSize: theme.typography.sectionTitle,
-          lineHeight: 5.2,
-          bold: true,
-          indent: depth * 8,
-        }, theme);
-        ctx.y += 2;
-        break;
-      case 'heading3':
-        renderStyledSegments(doc, ctx, block.segments, {
-          fontSize: theme.typography.body,
-          lineHeight: 4.9,
-          bold: true,
-          indent: depth * 8,
-        }, theme);
-        ctx.y += 2;
-        break;
-      case 'blockquote': {
-        const quoteStartY = ctx.y;
-        const quotePaddingY = 4;
-        const quotePaddingX = 5;
-        const estimatedHeight = estimateRichBlocksHeight(doc, block.blocks, theme, ctx, depth + 1);
-        const quoteHeight = Math.max(estimatedHeight + quotePaddingY * 2, 14);
-        ensurePageSpace(doc, ctx, quoteHeight + 2);
-
-        doc.setFillColor(...theme.fillSubtle);
-        doc.setDrawColor(...theme.border);
-        doc.roundedRect(
-          ctx.margin + depth * 8,
-          ctx.y,
-          ctx.pageWidth - ctx.margin * 2 - depth * 8,
-          quoteHeight,
-          2.5,
-          2.5,
-          'FD'
-        );
-        doc.setDrawColor(...theme.accentMuted);
-        doc.setLineWidth(0.8);
-        doc.line(
-          ctx.margin + depth * 8 + 2,
-          ctx.y + 2,
-          ctx.margin + depth * 8 + 2,
-          ctx.y + quoteHeight - 2
-        );
-
-        const renderCtx: RenderContext = {
-          ...ctx,
-          y: quoteStartY + quotePaddingY,
-          margin: ctx.margin + quotePaddingX,
-        };
-        writeRichBlocks(doc, renderCtx, block.blocks, theme, depth + 1);
-        ctx.y = Math.max(quoteStartY + quoteHeight, renderCtx.y + 2) + 2;
-        break;
-      }
-      case 'unorderedList':
-      case 'orderedList':
-        block.items.forEach((itemBlocks, index) => {
-          ensurePageSpace(doc, ctx, 8);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(theme.typography.body);
-          doc.setTextColor(...theme.textSecondary);
-          const bullet = block.type === 'orderedList' ? `${index + 1}.` : '-';
-          doc.text(bullet, ctx.margin + depth * 8, ctx.y);
-          const itemCtx: RenderContext = { ...ctx, y: ctx.y };
-          writeRichBlocks(doc, itemCtx, itemBlocks, theme, depth + 1);
-          ctx.y = itemCtx.y;
-        });
-        ctx.y += 1;
-        break;
+  blocks.forEach((block, index) => {
+    const nextBlock = blocks[index + 1] || null;
+    const shouldKeepWithNext = (block.type === 'heading2' || block.type === 'heading3') && nextBlock;
+    if (shouldKeepWithNext && nextBlock) {
+      const needed = estimateBlockHeight(doc, block, theme, ctx) + estimateBlockHeight(doc, nextBlock, theme, ctx);
+      ensurePageSpace(doc, ctx, needed);
+    } else {
+      ensurePageSpace(doc, ctx, estimateBlockHeight(doc, block, theme, ctx));
     }
+    renderRichBlock(doc, ctx, block, theme);
   });
 };
 
@@ -882,8 +1145,6 @@ const renderImageGrid = (
 ) => {
   if (images.length === 0) return;
 
-  writeSectionHeader(doc, ctx, 'Images', theme);
-
   if (images.length === 1) {
     const width = ctx.pageWidth - ctx.margin * 2;
     const image = images[0];
@@ -898,7 +1159,7 @@ const renderImageGrid = (
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(theme.typography.caption);
       doc.setTextColor(...theme.textMuted);
-      doc.text(captionLines, ctx.margin, ctx.y + imageHeight + 5);
+      doc.text(captionLines, ctx.margin + width / 2, ctx.y + imageHeight + 5, { align: 'center' });
       ctx.y += imageHeight + captionLines.length * 4 + 7;
     } else {
       ctx.y += imageHeight + 6;
@@ -934,7 +1195,7 @@ const renderImageGrid = (
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(theme.typography.caption);
       doc.setTextColor(...theme.textMuted);
-      doc.text(captionLines, x, rowY + imageHeight + 5);
+      doc.text(captionLines, x + colWidth / 2, rowY + imageHeight + 5, { align: 'center' });
     }
 
     if (!isLeft || index === images.length - 1) {
@@ -943,9 +1204,20 @@ const renderImageGrid = (
   });
 };
 
-const addFooter = (doc: jsPDF, margin: number, pageHeight: number, title: string, submissionType: SubmissionType, theme: PdfThemeTokens) => {
+const addFooter = (
+  doc: jsPDF,
+  margin: number,
+  pageHeight: number,
+  title: string,
+  theme: PdfThemeTokens,
+  uploaderName?: string,
+) => {
   const pageCount = (doc as any).internal.getNumberOfPages();
   const titleFragment = title.length > 48 ? `${title.slice(0, 45)}...` : title;
+  const uploaderFragment = normalizeText(uploaderName).toUpperCase();
+  const footerLabel = uploaderFragment
+    ? `RADCORE | ${titleFragment} | ${uploaderFragment}`
+    : `RADCORE | ${titleFragment}`;
 
   for (let page = 1; page <= pageCount; page += 1) {
     doc.setPage(page);
@@ -956,12 +1228,12 @@ const addFooter = (doc: jsPDF, margin: number, pageHeight: number, title: string
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(theme.typography.footer);
     doc.setTextColor(...theme.textMuted);
-    doc.text(`RADCORE | ${titleFragment}`, margin, pageHeight - 9);
+    doc.text(footerLabel, margin, pageHeight - 9);
     doc.text(`Page ${page} of ${pageCount}`, doc.internal.pageSize.width - margin, pageHeight - 9, { align: 'right' });
   }
 };
 
-export const generateCasePDF = (
+export const generateCasePDF = async (
   data: any,
   unusedAnalysis: any,
   images: Array<{ url: string; description?: string }> | string[] | string | null,
@@ -971,6 +1243,7 @@ export const generateCasePDF = (
 ) => {
   try {
     const normalized = normalizePdfExportData(data, customTitle, images);
+    const preparedImages = await preparePdfImages(normalized.images);
     const doc = new jsPDF();
     const theme = PDF_THEME_BY_SUBMISSION[normalized.submissionType];
     const ctx: RenderContext = {
@@ -999,7 +1272,7 @@ export const generateCasePDF = (
                 ' | '
               ),
             },
-            { label: 'Date', value: formatDisplayDate(normalized.uploadDate) },
+            { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
             { label: 'Patient ID', value: normalized.diagnosis || '' },
             { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
@@ -1019,7 +1292,7 @@ export const generateCasePDF = (
               : []),
           ]
         : [
-            { label: 'Date', value: formatDisplayDate(normalized.uploadDate) },
+            { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
             { label: 'Patient ID', value: normalized.diagnosis || '' },
             ...(normalized.clinicalData ? [{ label: 'Clinical Data', value: normalized.clinicalData, fullWidth: true }] : []),
@@ -1042,7 +1315,25 @@ export const generateCasePDF = (
     writeSectionHeader(doc, ctx, 'Case Information', theme);
     drawCompactMetadataSummary(doc, ctx, overviewRows, theme);
 
-    ensureHeadingAndBodySpace(doc, ctx, 12, 18);
+    if (preparedImages.length > 0) {
+      renderImageGrid(doc, ctx, preparedImages, theme);
+    } else {
+      const placeholderY = ctx.y;
+      const width = ctx.pageWidth - ctx.margin * 2;
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...theme.border);
+      doc.roundedRect(ctx.margin, placeholderY, width, 34, 3, 3, 'FD');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(theme.typography.body);
+      doc.setTextColor(...theme.textMuted);
+      doc.text('No images attached for this case.', ctx.margin + 8, placeholderY + 19);
+      ctx.y = placeholderY + 42;
+    }
+
+    doc.addPage();
+    ctx.y = 8;
+    drawTitleBar(doc, ctx, normalized, theme);
+
     writeSectionHeader(
       doc,
       ctx,
@@ -1064,32 +1355,11 @@ export const generateCasePDF = (
     }
 
     if (normalized.notesHtml && normalized.submissionType !== 'rare_pathology') {
-      ensureHeadingAndBodySpace(doc, ctx, 12, 18);
       writeSectionHeader(doc, ctx, 'Notes / Remarks', theme);
       renderRichNotes(doc, ctx, normalized.notesHtml, theme);
     }
 
-    doc.addPage();
-    ctx.y = 8;
-    drawTitleBar(doc, ctx, normalized, theme);
-
-    if (normalized.images.length > 0) {
-      renderImageGrid(doc, ctx, normalized.images, theme);
-    } else {
-      writeSectionHeader(doc, ctx, 'Images', theme);
-      const placeholderY = ctx.y;
-      const width = ctx.pageWidth - ctx.margin * 2;
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(...theme.border);
-      doc.roundedRect(ctx.margin, placeholderY, width, 34, 3, 3, 'FD');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(theme.typography.body);
-      doc.setTextColor(...theme.textMuted);
-      doc.text('No images attached for this case.', ctx.margin + 8, placeholderY + 19);
-      ctx.y = placeholderY + 42;
-    }
-
-    addFooter(doc, ctx.margin, ctx.pageHeight, normalized.title, normalized.submissionType, theme);
+    addFooter(doc, ctx.margin, ctx.pageHeight, normalized.title, theme, uploaderName);
     doc.save(buildFilename(normalized, customFileName));
   } catch (error: any) {
     console.error('CRITICAL PDF ERROR:', error);
@@ -1107,6 +1377,7 @@ export const __testables = {
   joinWithSeparator,
   normalizeImages,
   normalizePdfExportData,
+  preparePdfImages,
   parseRichContent,
   sanitizeFilenamePart,
   getPdfSectionOrder,

@@ -29,6 +29,15 @@ interface SearchScreenProps {
 
 const OPENED_CASES_STORAGE_KEY = 'chh_database_opened_case_ids_v1';
 
+const formatUploadedAt = (value: string) =>
+  new Date(value).toLocaleString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
 const ORGAN_SYSTEM_OPTIONS = [
   'Neuroradiology',
   'Head & Neck',
@@ -441,11 +450,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                     <div className="flex-1">
                       <p className="text-sm font-medium text-white">{p.name}</p>
                       <p className="text-[10px] text-slate-500 uppercase tracking-tighter">
-                        {getPrimaryMeta(rawCases.find((c) => c.id === p.id), p.submission_type)} - {new Date(p.date).toLocaleDateString('en-US', {
-                          month: 'numeric',
-                          day: 'numeric',
-                          year: '2-digit',
-                        })}
+                        {getPrimaryMeta(rawCases.find((c) => c.id === p.id), p.submission_type)} - {formatUploadedAt(p.date)}
                       </p>
                     </div>
                   </button>
@@ -656,12 +661,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                       </div>
 
                       <div className="flex items-center shrink-0 gap-2 relative z-50">
-                        <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold uppercase tracking-widest text-slate-500">
-                          {new Date(p.date).toLocaleDateString('en-US', {
-                            month: 'numeric',
-                            day: 'numeric',
-                            year: '2-digit',
-                          })}
+                        <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold tracking-widest text-slate-500">
+                          {formatUploadedAt(p.date)}
                         </span>
                         <span className="material-icons text-slate-500 group-hover:text-primary transition-colors hover:bg-white/10 hover:text-slate-300 rounded-full h-6 w-6 inline-flex items-center justify-center -mr-1">
                           chevron_right

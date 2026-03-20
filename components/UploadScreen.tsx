@@ -134,7 +134,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dateInputRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const setFieldRef = (key: string) => (node: HTMLElement | null) => {
@@ -386,15 +385,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     fileInputRef.current?.click();
   }
 
-  const openDatePicker = () => {
-    const input = dateInputRef.current;
-    if (!input) return;
-    input.focus();
-    if (typeof input.showPicker === 'function') {
-      input.showPicker();
-    }
-  };
-
   const handleExportPdf = async () => {
     await exportPdf(formData, customTitle, uploaderName, images);
   };
@@ -567,33 +557,16 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               </div>
 
               <div className={`${sectionCardClassName} space-y-4`}>
-                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_220px] 2xl:items-end">
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
-                      <input
-                        type="text"
-                        value={customTitle}
-                        onChange={handleTitleChange}
-                        placeholder={titlePlaceholder}
-                        autoComplete="off"
-                        className={inputClassName}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Upload Date</label>
-                      <div onClick={openDatePicker} className="block w-full">
-                        <input
-                          ref={dateInputRef}
-                          type="date"
-                          name="date"
-                          value={formData.date}
-                          onChange={handleInputChange}
-                          onClick={openDatePicker}
-                          className={`${inputClassName} cursor-pointer`}
-                        />
-                      </div>
-                    </div>
+                <div className="space-y-2">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
+                  <input
+                    type="text"
+                    value={customTitle}
+                    onChange={handleTitleChange}
+                    placeholder={titlePlaceholder}
+                    autoComplete="off"
+                    className={inputClassName}
+                  />
                 </div>
               </div>
             </section>
@@ -977,8 +950,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               <div>
                 <h1 className="text-3xl font-bold text-white">{customTitle || 'New Case'}</h1>
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="text-slate-500">{formData.date}</span>
-                  <span className="text-slate-600">|</span>
                   <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2.5 py-1 font-semibold text-cyan-100">{imageCountLabel}</span>
                   {formData.submissionType === 'rare_pathology' && (
                     <>
