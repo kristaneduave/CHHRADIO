@@ -488,6 +488,131 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
         return todaySlots[0]?.doctor || null;
     };
 
+    const sidebarCards = (
+        <>
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-xl shadow-lg">
+                <div className="mb-4 flex items-center justify-between">
+                    <h3 className="flex items-center gap-2.5 text-[11px] font-black uppercase tracking-widest text-slate-300">
+                        <span className="relative flex h-2 w-2">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        </span>
+                        Current Readers
+                    </h3>
+                    <span className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-[10px] font-black text-sky-400 shadow-sm">
+                        {currentDayName}
+                    </span>
+                </div>
+                <div className="space-y-3">
+                    {hospitalModalities.map((mod) => {
+                        const reader = getCurrentReader(mod);
+                        const todaySlots = mod.schedule[currentDayName] || [];
+                        let coveringDoctor: string | null = null;
+                        todaySlots.forEach((_, idx) => {
+                            const slotId = getSlotId(selectedHospital!.id, mod.id, currentDayName, idx);
+                            const covers = coverOverrides[slotId] || [];
+                            if (covers.length > 0) {
+                                coveringDoctor = covers[covers.length - 1].doctorName;
+                            }
+                        });
+                        const displayName = coveringDoctor || reader;
+                        const isCovered = !!coveringDoctor;
+
+                        return (
+                            <div key={mod.id} className="flex items-start gap-3">
+                                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/5">
+                                    <span className="material-icons text-[14px] text-slate-400">{mod.icon}</span>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{mod.name}</p>
+                                    <p className={`mt-0.5 truncate text-[13px] font-semibold ${isCovered ? 'text-amber-300' : 'text-slate-200'}`}>
+                                        {displayName || <span className="text-[12px] italic text-slate-600">No reader today</span>}
+                                    </p>
+                                    {isCovered && (
+                                        <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-500/70">Covering</p>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <p className="px-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">Quick Actions</p>
+
+                <button
+                    onClick={handleOpenMonthlyCensus}
+                    className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-amber-500/[0.12]"
+                >
+                    <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-amber-500/20 text-amber-300 transition-transform group-hover:scale-110">
+                        <span className="material-icons text-[14px]">checklist</span>
+                    </div>
+                    <h3 className="truncate text-xs font-bold text-amber-200 transition-colors group-hover:text-white">Monthly Census</h3>
+                </button>
+
+                <a
+                    href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-blue-500/[0.12]"
+                >
+                    <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-blue-500/30 bg-blue-500/20 text-blue-300 transition-transform group-hover:scale-110">
+                        <span className="material-icons text-[14px]">description</span>
+                    </div>
+                    <h3 className="truncate text-xs font-bold text-blue-200 transition-colors group-hover:text-white">Decking List</h3>
+                </a>
+
+                <a
+                    href="https://docs.google.com/spreadsheets/u/0/d/1zlSKOCLmBmvrxZqoPKUysf3RcNpLQQoB/htmlview#gid=799246403"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-lime-500/20 bg-lime-500/[0.06] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-lime-500/[0.12]"
+                >
+                    <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-lime-500/0 via-lime-500/10 to-lime-500/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-lime-500/30 bg-lime-500/20 text-lime-300 transition-transform group-hover:scale-110">
+                        <span className="material-icons text-[14px]">event_busy</span>
+                    </div>
+                    <h3 className="truncate text-xs font-bold text-lime-200 transition-colors group-hover:text-white">On Leave</h3>
+                </a>
+
+                {pickleballEnabled && (
+                    <button
+                        onClick={() => setIsPickleballOpen(true)}
+                        className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-emerald-500/10"
+                    >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-500/20 text-emerald-300 transition-transform group-hover:scale-110">
+                            <span className="material-icons text-[14px]">sports_tennis</span>
+                        </div>
+                        <h3 className="truncate text-xs font-bold text-emerald-200">Pickleball Rally</h3>
+                    </button>
+                )}
+
+                {isRoleLoading && (
+                    <div className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 animate-pulse">
+                        <div className="h-7 w-7 shrink-0 rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/20" />
+                        <div className="h-3 w-24 rounded bg-fuchsia-200/20" />
+                    </div>
+                )}
+
+                {!isRoleLoading && canOpenEndorsements && (
+                    <button
+                        onClick={() => onOpenResidentEndorsements?.()}
+                        className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-fuchsia-500/[0.12]"
+                    >
+                        <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/10 to-fuchsia-500/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/20 text-fuchsia-300 transition-transform group-hover:scale-110">
+                            <span className="material-icons text-[14px]">forum</span>
+                        </div>
+                        <h3 className="truncate text-xs font-bold text-fuchsia-200 transition-colors group-hover:text-white">Endorsements</h3>
+                    </button>
+                )}
+            </div>
+        </>
+    );
+
     return (
         <PageShell layoutMode="wide" contentClassName="pt-6">
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
@@ -900,6 +1025,14 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                         </aside>
                     </div>
 
+                </div>
+            </div>
+
+            <div className="pointer-events-none fixed inset-x-4 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-40 xl:hidden">
+                <div className="pointer-events-auto max-h-[46vh] overflow-y-auto rounded-[2rem] border border-white/10 bg-app/88 p-4 shadow-[0_20px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    <div className="space-y-4">
+                        {sidebarCards}
+                    </div>
                 </div>
             </div>
 
