@@ -21,6 +21,18 @@ interface SaveCaseParams {
     onSetFormData?: (updates: any) => void;
 }
 
+const buildFallbackUsername = (fullName?: string, email?: string | null): string => {
+    const safeBase = String(fullName || email?.split('@')[0] || 'resident')
+        .trim()
+        .replace(/\s+/g, '_')
+        .toLowerCase()
+        .replace(/[^a-z0-9_]/g, '')
+        .slice(0, 18);
+
+    const base = safeBase.length >= 3 ? safeBase : 'resident';
+    return `${base}${Math.random().toString(36).slice(2, 6)}`.slice(0, 24);
+};
+
 export function useCaseSubmission() {
     const [isSaving, setIsSaving] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -38,6 +50,32 @@ export function useCaseSubmission() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('No user logged in');
+
+            const { data: existingProfile, error: profileLookupError } = await supabase
+                .from('profiles')
+                .select('id, full_name, username, nickname, role')
+                .eq('id', user.id)
+                .maybeSingle();
+
+            if (profileLookupError) throw profileLookupError;
+
+            if (!existingProfile) {
+                const fallbackName =
+                    String(user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Resident').trim() || 'Resident';
+                const fallbackNickname = fallbackName.length >= 3 ? fallbackName : 'Resident';
+                const fallbackUsername = buildFallbackUsername(fallbackName, user.email);
+
+                const { error: profileUpsertError } = await supabase.from('profiles').upsert({
+                    id: user.id,
+                    full_name: fallbackName,
+                    nickname: fallbackNickname,
+                    username: fallbackUsername,
+                    role: 'resident',
+                    updated_at: new Date().toISOString(),
+                });
+
+                if (profileUpsertError) throw profileUpsertError;
+            }
 
             // Auto-generate Patient ID if publishing and doesn't exist
             let finalDiagnosis = formData.diagnosis;
