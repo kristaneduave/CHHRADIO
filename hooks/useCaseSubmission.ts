@@ -39,7 +39,7 @@ export function useCaseSubmission() {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error('No user logged in');
 
-            // Auto-generate Diagnostic Code if publishing and doesn't exist
+            // Auto-generate Patient ID if publishing and doesn't exist
             let finalDiagnosis = formData.diagnosis;
             if (status === 'published' && !finalDiagnosis) {
                 finalDiagnosis = 'RAD-' + Math.floor(100000 + Math.random() * 900000).toString();
@@ -188,7 +188,7 @@ export function useCaseSubmission() {
                 } catch (notifError) {
                     console.error('Failed to emit case notification:', notifError);
                 }
-                toastSuccess('Case published', `Diagnostic Code: ${finalDiagnosis}`);
+                toastSuccess('Case published', `Patient ID: ${finalDiagnosis}`);
             } else {
                 toastSuccess('Private draft saved');
             }

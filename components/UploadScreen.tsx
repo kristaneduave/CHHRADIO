@@ -1004,10 +1004,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 )}
               </div>
 
-              {/* Diagnostic Code Display */}
+              {/* Patient ID Display */}
               {formData.diagnosis && (
                 <div>
-                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Diagnostic Code</span>
+                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Patient ID</span>
                   <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
                 </div>
               )}

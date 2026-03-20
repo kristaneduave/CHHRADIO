@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../services/supabase';
 import { Activity, NewsfeedNotification, NewsfeedOnlineUser, Screen } from '../types';
 import { fetchRecentActivity } from '../services/activityService';
@@ -353,7 +353,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     }
   };
 
-  const handleHideAllNotifications = async () => {
+  const handleClearAllNotifications = async () => {
     if (!userId || notifications.length === 0) return;
     const previous = notifications;
     setBulkActionLoading('hide');
@@ -363,14 +363,14 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     try {
       await hideAllNotificationsForUser(userId);
     } catch (error) {
-      console.error('Failed to hide all notifications:', error);
+      console.error('Failed to clear all notifications:', error);
       setNotifications(previous);
     } finally {
       setBulkActionLoading(null);
     }
   };
 
-  const handleHideNotification = async (event: React.MouseEvent, notificationId: string) => {
+  const handleClearNotification = async (event: React.MouseEvent, notificationId: string) => {
     event.stopPropagation();
     if (!userId || hidingNotificationId === notificationId) return;
 
@@ -380,15 +380,81 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     try {
       await hideNotificationForUser(notificationId, userId);
     } catch (error) {
-      console.error('Failed to hide notification:', error);
+      console.error('Failed to clear notification:', error);
       setNotifications(previous);
     } finally {
       setHidingNotificationId(null);
     }
   };
 
+  const renderWhosOnline = () => (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-xl shadow-lg relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="mb-4 flex items-center justify-between relative z-10">
+        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-300 flex items-center gap-2.5">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          Who's Online
+        </h3>
+        <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-[10px] font-black text-emerald-400 border border-emerald-500/20 shadow-sm">
+          {onlineCount} ACTIVE
+        </span>
+      </div>
+
+      {loadingOnline ? (
+        <div className="animate-pulse flex space-x-3">
+          <div className="rounded-full bg-white/10 h-8 w-8"></div>
+          <div className="flex-1 space-y-2 py-1">
+            <div className="h-2 bg-white/10 rounded w-3/4"></div>
+          </div>
+        </div>
+      ) : onlineCount > 0 ? (
+        <div className="flex flex-col gap-2.5 relative z-10">
+          {visibleOnlineUsers.map((user) => {
+            const initial = user.displayName.trim().charAt(0).toUpperCase() || 'U';
+            return (
+              <div
+                key={user.id}
+                className="flex items-center gap-3 rounded-2xl border border-transparent p-1.5 transition-all hover:bg-white/[0.04] hover:border-white/5"
+                title={`${user.displayName} is online`}
+              >
+                <div className="relative shrink-0">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt={user.displayName} className="h-9 w-9 rounded-full object-cover shadow-sm" />
+                  ) : (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 text-[12px] font-bold text-slate-200 shadow-sm border border-white/5">
+                      {initial}
+                    </span>
+                  )}
+                  <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-400 border-[2.5px] border-[#161b22] shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                </div>
+                <span className="text-[13px] font-semibold text-slate-200 tracking-wide">{user.displayName.split(' ')[0]}</span>
+              </div>
+            );
+          })}
+          {hiddenOnlineUsers > 0 && (
+            <div className="mt-1 pt-2 border-t border-white/5 flex items-center justify-center">
+              <span className="text-[11px] font-bold text-slate-500 tracking-wider">
+                +{hiddenOnlineUsers} MORE
+              </span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-[13px] text-slate-500 text-center py-4 relative z-10">No one is online right now.</p>
+      )}
+
+      {onlineError && (
+        <p className="mt-3 text-xs text-rose-400/80 bg-rose-500/10 rounded-lg p-2 text-center border border-rose-500/20">{onlineError}</p>
+      )}
+    </div>
+  );
+
   return (
     <>
+
       <div className={`${isModal ? 'p-4 border-b border-white/5 bg-surface' : 'bg-app/80 px-4 pt-6 pb-2 backdrop-blur-md sm:px-6 xl:px-8'}`}>
         <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} flex items-center justify-between min-h-[32px]`}>
           <h1 className={`${isModal ? 'text-xl' : 'text-3xl'} font-bold text-white`}>
@@ -482,40 +548,20 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
               <span className="truncate">Read All</span>
             </button>
             <button
-              onClick={handleHideAllNotifications}
+              onClick={handleClearAllNotifications}
               disabled={notifications.length === 0 || bulkActionLoading !== null}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 py-2.5 px-2 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-300 transition-all shadow-sm disabled:opacity-50"
             >
-              <span className="material-icons text-[14px]">visibility_off</span>
-              <span className="truncate">Hide All</span>
+              <span className="material-icons text-[14px]">delete_sweep</span>
+              <span className="truncate">Clear All</span>
             </button>
-          </div>
-        )}
-        {!isModal && isDesktop && (
-          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl">
-            <div className="grid gap-3 xl:grid-cols-3">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Unread</p>
-                <p className="mt-2 text-2xl font-black text-white">{unreadCount}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Online</p>
-                <p className="mt-2 text-2xl font-black text-white">{onlineCount}</p>
-              </div>
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Mode</p>
-                <p className="mt-2 text-sm font-bold uppercase tracking-[0.18em] text-sky-300">
-                  {activeTab === 'notifications' ? 'Notification Feed' : 'Activity Log'}
-                </p>
-              </div>
-            </div>
           </div>
         )}
         </div>
       </div>
 
       <div className={`${listPadding} ${isModal ? 'flex-1 overflow-y-auto' : ''} space-y-4`}>
-        <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} ${!isModal && isDesktop ? 'xl:grid xl:grid-cols-[minmax(0,1.65fr)_320px] xl:items-start xl:gap-6' : ''}`}>
+        <div className={`${isModal ? '' : 'mx-auto max-w-6xl'} ${!isModal && isDesktop ? 'xl:grid xl:grid-cols-[minmax(0,1.65fr)_320px] xl:items-start xl:gap-8' : ''}`}>
         <div className="min-w-0">
         {activeTab === 'notifications' ? (
           <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -532,9 +578,9 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                   <button
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`w-full text-left p-3 rounded-2xl backdrop-blur-md transition-all duration-300 relative group overflow-hidden ${notif.read
-                      ? 'bg-white/[0.03] border border-white/5 opacity-80 hover:bg-white/[0.05]'
-                      : 'bg-primary/[0.08] border border-primary/30 shadow-[0_4px_24px_-8px_rgba(13,162,231,0.25)] hover:bg-primary/[0.12]'
+                    className={`w-full text-left p-3.5 rounded-2xl backdrop-blur-xl transition-all duration-300 relative group overflow-hidden hover:-translate-y-[1px] hover:shadow-lg ${notif.read
+                      ? 'bg-white/[0.02] border border-white/5 opacity-80 hover:bg-white/[0.06] hover:border-white/10 hover:opacity-100'
+                      : 'bg-primary/[0.05] border border-primary/20 shadow-[0_4px_24px_-8px_rgba(13,162,231,0.2)] hover:bg-primary/[0.1] hover:border-primary/40'
                       }`}
                   >
                     {/* Subtle glow effect for unread */}
@@ -568,13 +614,13 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                             {formatNotificationDate(notif.createdAt)}
                           </span>
                           <button
-                            onClick={(event) => handleHideNotification(event, notif.id)}
+                            onClick={(event) => handleClearNotification(event, notif.id)}
                             disabled={hidingNotificationId === notif.id}
                             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/10 hover:text-slate-300 disabled:opacity-50 -mr-1"
-                            aria-label="Hide notification"
-                            title="Hide notification"
+                            aria-label="Clear notification"
+                            title="Clear notification"
                           >
-                            <span className="material-icons text-[14px]">visibility_off</span>
+                            <span className="material-icons text-[14px]">clear</span>
                           </button>
                         </div>
                       </div>
@@ -663,15 +709,15 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
                 <div key={group.key} className="space-y-2">
                   <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{group.label}</p>
                   {group.items.map((activity, index) => (
-                    <div key={`${activity.id}-${index}`} className="group relative overflow-hidden backdrop-blur-md bg-white/[0.02] hover:bg-white/[0.04] p-4 rounded-2xl flex items-start gap-4 border border-white/5 transition-all duration-300">
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.01] to-transparent -translate-x-full group-hover:translate-x-full duration-1000 ease-in-out pointer-events-none" />
+                    <div key={`${activity.id}-${index}`} className="group relative overflow-hidden backdrop-blur-xl bg-white/[0.02] hover:bg-white/[0.05] hover:-translate-y-[1px] hover:shadow-lg p-4 rounded-3xl flex items-start gap-4 border border-white/5 hover:border-white/10 transition-all duration-300">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent -translate-x-full group-hover:translate-x-full duration-1000 ease-in-out pointer-events-none" />
 
-                      <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 shadow-inner ${activity.colorClass?.includes('primary') || activity.colorClass?.includes('blue')
-                        ? 'bg-primary/10 border-primary/30 text-primary-light shadow-[0_0_15px_rgba(13,162,231,0.15)]'
+                      <div className={`relative z-10 w-12 h-12 rounded-2xl flex items-center justify-center border shrink-0 shadow-sm transition-transform duration-300 group-hover:scale-110 ${activity.colorClass?.includes('primary') || activity.colorClass?.includes('blue')
+                        ? 'bg-primary/10 border-primary/20 text-primary shadow-[0_0_20px_rgba(13,162,231,0.15)]'
                         : activity.colorClass?.includes('green') || activity.colorClass?.includes('emerald')
-                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                          ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]'
                           : activity.colorClass?.includes('amber') || activity.colorClass?.includes('yellow') || activity.colorClass?.includes('orange')
-                            ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.15)]'
                             : 'bg-white/5 border-white/10 text-slate-300'
                         }`}>
                         <span className="material-icons text-[22px]">{activity.icon}</span>
@@ -696,32 +742,21 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
         </div>
 
         {!isModal && isDesktop && (
-          <aside className="hidden xl:block xl:sticky xl:top-6">
-            <div className="space-y-4">
-              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Feed Summary</p>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-                    <span className="text-xs font-semibold text-slate-300">Visible items</span>
-                    <span className="text-sm font-black text-white">
-                      {activeTab === 'notifications' ? filteredSortedNotifications.length : activities.length}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-                    <span className="text-xs font-semibold text-slate-300">Unread alerts</span>
-                    <span className="text-sm font-black text-white">{unreadCount}</span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-2xl border border-white/8 bg-black/20 px-3 py-2">
-                    <span className="text-xs font-semibold text-slate-300">Online now</span>
-                    <span className="text-sm font-black text-white">{onlineCount}</span>
-                  </div>
+          <aside className="hidden xl:block xl:sticky xl:top-2 px-2">
+            <div className="space-y-6">
+              {renderWhosOnline()}
+
+              {/* Minimal Feed Stats */}
+              <div className="px-1 space-y-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 pl-1">Feed Overview</p>
+                <div className="flex items-center justify-between group">
+                  <span className="text-[12px] font-semibold text-slate-500 group-hover:text-slate-300 transition-colors">Visible Items</span>
+                  <span className="text-[13px] font-bold text-white bg-white/5 px-2 py-0.5 rounded-md border border-white/5">{activeTab === 'notifications' ? filteredSortedNotifications.length : activities.length}</span>
                 </div>
-              </div>
-              <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 backdrop-blur-xl">
-                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-500">Desktop View</p>
-                <p className="mt-3 text-sm leading-6 text-slate-400">
-                  The feed stays readable while utility context remains pinned on the side.
-                </p>
+                <div className="flex items-center justify-between group">
+                  <span className="text-[12px] font-semibold text-slate-500 group-hover:text-slate-300 transition-colors">Unread Alerts</span>
+                  <span className={`text-[13px] font-bold px-2 py-0.5 rounded-md border ${unreadCount > 0 ? 'text-primary bg-primary/10 border-primary/20' : 'text-slate-400 bg-white/5 border-white/5'}`}>{unreadCount}</span>
+                </div>
               </div>
             </div>
           </aside>

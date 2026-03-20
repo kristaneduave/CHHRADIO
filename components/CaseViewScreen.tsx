@@ -512,11 +512,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isMetadataExpanded ? 'max-h-[500px] opacity-100 mt-2' : 'max-h-0 opacity-0 mt-0 pointer-events-none'}`}>
                             <div className="bg-[#131b26] border border-[#1e293b] rounded-xl p-5 flex flex-col gap-5">
 
-                                {/* Diagnostic Code */}
+                                {/* Patient ID */}
                                 <div>
                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                                         <span className="material-icons text-[12px]">local_hospital</span>
-                                        Diagnostic Code
+                                        Patient ID
                                     </div>
                                     <div className="text-xl sm:text-2xl font-black text-white tracking-wide leading-none select-text">
                                         {caseData.diagnosis || 'PENDING'}
@@ -552,7 +552,13 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     <div className="flex items-center gap-2 text-slate-400">
                                         <span className="material-icons text-[14px]">calendar_today</span>
                                         <span className="text-[11px] font-bold tracking-widest uppercase">
-                                            {new Date(caseData.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                                            {new Date(caseData.created_at).toLocaleString([], {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric',
+                                                hour: 'numeric',
+                                                minute: '2-digit',
+                                            })}
                                         </span>
                                     </div>
 
