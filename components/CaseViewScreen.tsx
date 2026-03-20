@@ -14,6 +14,7 @@ interface CaseViewScreenProps {
 
 const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [isOwner, setIsOwner] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
@@ -86,12 +87,59 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const images = caseData.image_urls || [caseData.image_url].filter(Boolean);
-    const goToPreviousImage = () => {
+    function goToPreviousImage() {
         setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-    };
-    const goToNextImage = () => {
+    }
+    function goToNextImage() {
         setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+    }
+    const openImageModal = () => {
+        if (!images.length) return;
+        setIsImageModalOpen(true);
     };
+    const closeImageModal = () => {
+        setIsImageModalOpen(false);
+    };
+
+    useEffect(() => {
+        if (typeof document === 'undefined' || !isImageModalOpen) {
+            return;
+        }
+
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                setIsImageModalOpen(false);
+            }
+            if (images.length > 1 && event.key === 'ArrowLeft') {
+                goToPreviousImage();
+            }
+            if (images.length > 1 && event.key === 'ArrowRight') {
+                goToNextImage();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = originalOverflow;
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [images.length, isImageModalOpen]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        window.dispatchEvent(new CustomEvent('radcore-bottom-nav-visibility', { detail: { hidden: isImageModalOpen } }));
+
+        return () => {
+            window.dispatchEvent(new CustomEvent('radcore-bottom-nav-visibility', { detail: { hidden: false } }));
+        };
+    }, [isImageModalOpen]);
 
     useEffect(() => {
         setCurrentImageIndex(0);
@@ -209,6 +257,99 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     return (
         <div className="flex flex-col h-full relative overflow-hidden antialiased text-slate-200">
+            {isImageModalOpen && images.length > 0 && (
+                <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center bg-black/92 px-4 py-6 backdrop-blur-md"
+                    onClick={closeImageModal}
+                >
+                    <div
+                        className="relative flex h-full max-h-[94vh] w-full max-w-[1600px] flex-col rounded-[28px] border border-white/10 bg-[#03060a] shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-4 sm:px-6">
+                            <div className="min-w-0">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Image Viewer</p>
+                                <p className="truncate text-sm font-semibold text-white/90">
+                                    {currentImageIndex + 1} / {images.length}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeImageModal}
+                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                aria-label="Close full screen image viewer"
+                            >
+                                <span className="material-icons text-[22px]">close</span>
+                            </button>
+                        </div>
+
+                        <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-4 sm:px-6 sm:py-6">
+                            <img
+                                src={images[currentImageIndex]}
+                                className="max-h-full max-w-full object-contain"
+                                alt={`Case scan ${currentImageIndex + 1}`}
+                            />
+
+                            {images.length > 1 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={goToPreviousImage}
+                                        className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75 sm:left-6"
+                                        aria-label="Previous image"
+                                    >
+                                        <span className="material-icons text-[24px]">chevron_left</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={goToNextImage}
+                                        className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75 sm:right-6"
+                                        aria-label="Next image"
+                                    >
+                                        <span className="material-icons text-[24px]">chevron_right</span>
+                                    </button>
+                                </>
+                            )}
+                        </div>
+
+                        {(images.length > 1 || caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description) && (
+                            <div className="border-t border-white/8 px-4 py-4 sm:px-6">
+                                {images.length > 1 && (
+                                    <div className="mb-4 flex items-center gap-2 overflow-x-auto custom-scrollbar">
+                                        {images.map((image: string, idx: number) => (
+                                            <button
+                                                key={`modal-thumb-${idx}`}
+                                                type="button"
+                                                onClick={() => setCurrentImageIndex(idx)}
+                                                className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border transition-all duration-200 ${idx === currentImageIndex
+                                                    ? `border-white/45 ${theme.bgClass} shadow-[0_0_0_1px_rgba(255,255,255,0.14)]`
+                                                    : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+                                                    }`}
+                                                aria-label={`View image ${idx + 1}`}
+                                            >
+                                                <img
+                                                    src={image}
+                                                    alt={`Modal thumbnail ${idx + 1}`}
+                                                    className="h-full w-full object-cover opacity-80"
+                                                />
+                                                {idx === currentImageIndex && (
+                                                    <span className={`absolute inset-x-2 bottom-1 h-0.5 rounded-full ${theme.bgClass.replace('/10', '')}`} />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
+                                    <p className="text-center text-sm leading-relaxed text-slate-300">
+                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
             {/* Floating Top Navigation Buttons */}
             <div className="absolute top-0 inset-x-0 p-4 flex flex-col gap-4 pointer-events-none z-50 mt-2">
                 <div className="flex justify-between w-full relative">
@@ -238,12 +379,21 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     {images.length > 0 ? (
                         <>
                             <div className="mx-auto w-full max-w-[1180px] px-4 pt-4 pb-4">
-                                <div className="relative flex h-[54vh] min-h-[340px] max-h-[760px] items-center justify-center overflow-hidden rounded-[28px] bg-[#04070c] sm:h-[62vh]">
+                                <button
+                                    type="button"
+                                    onClick={openImageModal}
+                                    className="relative flex h-[54vh] min-h-[340px] max-h-[760px] w-full items-center justify-center overflow-hidden rounded-[28px] bg-[#04070c] text-left sm:h-[62vh]"
+                                    aria-label="Open image in full screen"
+                                >
                                     <img
                                         src={images[currentImageIndex]}
                                         className="relative z-10 max-h-full max-w-full object-contain transition-opacity duration-200"
                                         alt="Case Scan"
                                     />
+
+                                    <div className="absolute bottom-5 left-5 z-20 rounded-full border border-white/10 bg-black/55 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 backdrop-blur-md">
+                                        Tap to expand
+                                    </div>
 
                                     {images.length > 1 && (
                                         <>
@@ -272,7 +422,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                             </button>
                                         </>
                                     )}
-                                </div>
+                                </button>
 
                                 {images.length > 1 && (
                                     <div className="mt-3 flex items-center justify-between gap-3">

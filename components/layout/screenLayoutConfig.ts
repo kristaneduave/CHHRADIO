@@ -13,7 +13,7 @@ export const SCREEN_LAYOUT_CONFIG: Record<Screen, ScreenLayoutMode> = {
   profile: 'split',
   announcements: 'content',
   'case-view': 'wide',
-  'residents-corner': 'content',
+  'residents-corner': 'wide',
   'resident-endorsements': 'content',
   'article-library': 'split',
   newsfeed: 'split',

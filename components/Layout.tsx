@@ -128,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
               >
                 {/* Background Glass Layer */}
                 <div 
-                  className="absolute inset-0 bg-[#0c1222]/85 backdrop-blur-[40px] border-r-[1.5px] border-white/[0.08] shadow-2xl transition-all duration-300 pointer-events-none"
+                  className="absolute inset-0 bg-black/40 backdrop-blur-md border-r-[1.5px] border-white/[0.08] shadow-2xl transition-all duration-300 pointer-events-none"
                 />
 
                 <div className="w-[80px] flex flex-col items-start space-y-4 relative z-10 overflow-visible mt-2">
@@ -137,37 +137,64 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
                     const c = ITEM_COLORS[item.screen] || ITEM_COLORS['dashboard'];
                     
                     return (
-                      <div key={`desktop-${item.screen}`} className={`relative flex items-center h-[56px] z-10 w-[190px] pl-[14px]`}>
-                        {/* Custom Tab Protrusion */}
+                      <div key={item.screen} className="relative group/btn w-auto flex ml-[12px]">
+                        {/* The original code used a button directly, the new code uses a Link.
+                            Assuming this is a direct replacement for the visual structure,
+                            I'll adapt the Link to a button for functional consistency with the original.
+                            If `Link` is a custom component, it needs to be imported or defined.
+                            For this task, I'll keep it as a button to match the original interaction.
+                        */}
                         <button
                           onClick={() => setScreen(item.screen)}
                           onMouseEnter={() => prefetchScreen?.(item.screen)}
                           onFocus={() => prefetchScreen?.(item.screen)}
-                          className={`relative flex items-center h-[52px] rounded-2xl transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] group/btn focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 w-[52px] hover:w-[180px] ${isActive ? 'bg-[#111623] border border-white/5 shadow-md' : 'bg-transparent border border-transparent shadow-none hover:bg-[#1a2333] hover:border-white/5'}`}
+                          className={`
+                            relative flex items-center h-[56px] rounded-full cursor-pointer transition-all duration-[300ms] ease-[cubic-bezier(0.16,1,0.3,1)]
+                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50
+                            bg-transparent border border-transparent shadow-none w-[56px] hover:w-[180px] hover:shadow-lg
+                            ${isActive
+                              ? 'hover:bg-[#151b28] hover:border-white/10'
+                              : 'hover:bg-[#1a2333] hover:border-white/[0.06]'
+                            }
+                          `}
                           aria-label={`Open ${item.label}`}
                         >
-                           {/* Highlighted Icon Tile & Badge */}
-                           <div className={`flex-shrink-0 relative flex items-center justify-center w-[40px] h-[40px] rounded-xl ml-[5px] transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? `${c.bg} ${c.border} border-[1.5px] shadow-[0_0_15px_rgba(255,255,255,0.02)]` : `bg-transparent border border-transparent group-hover/btn:${c.bg} group-hover/btn:${c.border} group-hover/btn:border-[1.5px]`}`}>
-                              <span className={`material-icons transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${isActive ? `${c.text} drop-shadow-[0_0_8px_currentColor]` : `text-slate-500 group-hover/btn:${c.text} group-hover/btn:drop-shadow-[0_0_8px_currentColor] group-hover/btn:scale-110`} text-[22px]`}>
+                           {/* Inner Icon Tile */}
+                           <div className={`
+                             absolute left-[6px] top-[6px] w-[44px] h-[44px] rounded-full flex items-center justify-center transition-all duration-[300ms] ease-[cubic-bezier(0.16,1,0.3,1)] z-10
+                             ${isActive
+                               ? `${c.bg}/20 border-[1.5px] border-${c.text.split('-')[1]}-500/30 shadow-[0_0_15px_rgba(255,255,255,0.02)]`
+                               : `bg-transparent border-[1.5px] border-transparent group-hover/btn:${c.bg}/15 group-hover/btn:border-${c.text.split('-')[1]}-500/20`
+                             }
+                           `}>
+                              <span className={`material-icons transition-all duration-[300ms] text-[22px] ${isActive ? `${c.text} drop-shadow-[0_0_8px_currentColor] scale-110` : `text-slate-500 group-hover/btn:${c.text} group-hover/btn:drop-shadow-[0_0_8px_currentColor] group-hover/btn:scale-110`}`}>
                                 {isActive ? item.icon : item.outlineIcon}
                               </span>
-                              
-                              {/* Unread Counter Badge anchored tightly to icon box */}
-                              {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
-                                <span className={`absolute -top-0.5 -right-0.5 z-20 flex min-h-[16px] min-w-[16px] items-center justify-center rounded-full bg-[#ef4444] px-1 text-[10px] font-bold leading-none text-white shadow-md transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]`}>
-                                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-                                </span>
-                              )}
                            </div>
-                           
-                           {/* Extended Text Block (Hidden globally except on individual button hover) */}
-                           <div className={`flex flex-1 items-center justify-between whitespace-nowrap overflow-hidden transition-all duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)] opacity-0 -translate-x-3 group-hover/btn:opacity-100 group-hover/btn:translate-x-0 ml-3`}>
-                              <span className={`font-bold tracking-[0.08em] uppercase text-[12px] ${isActive ? c.text : `text-slate-400 group-hover/btn:${c.text}`}`}>
+
+                           {/* Unread Counter Badge */}
+                           {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+                              <div className="absolute left-[30px] top-[6px] min-w-[18px] h-[18px] flex items-center justify-center bg-[#ef4444] text-white text-[10px] font-bold px-1 rounded-full border-[2px] border-[#080d19] z-20 shadow-[0_4px_8px_rgba(239,68,68,0.3)] transition-transform group-hover/btn:scale-105 pointer-events-none">
+                                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                              </div>
+                           )}
+
+                           {/* Text Block */}
+                           <div className={`
+                             absolute left-[62px] right-[32px] h-full flex items-center overflow-hidden pointer-events-none transition-all duration-[300ms] ease-[cubic-bezier(0.16,1,0.3,1)]
+                             opacity-0 -translate-x-3 w-0 group-hover/btn:w-auto group-hover/btn:opacity-100 group-hover/btn:translate-x-0
+                           `}>
+                              <span className={`font-bold tracking-[0.08em] uppercase text-[12.5px] whitespace-nowrap ${isActive ? c.text : `text-slate-300 group-hover/btn:text-white`}`}>
                                  {item.label}
                               </span>
-                              <span className="material-icons text-slate-600 text-[18px] mr-3 group-hover/btn:text-slate-400 transition-colors">
-                                 chevron_right
-                              </span>
+                           </div>
+
+                           {/* Chevron */}
+                           <div className={`
+                             absolute right-[12px] flex items-center pointer-events-none transition-all duration-[300ms]
+                             opacity-0 -translate-x-2 group-hover/btn:opacity-100 group-hover/btn:translate-x-0
+                           `}>
+                              <span className={`material-icons text-[18px] ${isActive ? c.text : 'text-slate-500'}`}>chevron_right</span>
                            </div>
                         </button>
                       </div>

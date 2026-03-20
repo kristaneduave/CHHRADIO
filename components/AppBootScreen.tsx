@@ -32,9 +32,6 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({ progress, statusLabel }) 
                 style={{ width: `${normalizedProgress}%` }}
               />
             </div>
-            <p className="mt-4 text-xs leading-5 text-slate-400">
-              Entering app when ready or after 5 seconds.
-            </p>
           </div>
         </div>
       </div>

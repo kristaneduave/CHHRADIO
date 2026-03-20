@@ -12,6 +12,7 @@ import { getNeedleUserStats } from '../services/needleNavigatorService';
 import PickleballRallyGame from './PickleballRallyGame';
 import { getPickleballUserStats } from '../services/pickleballRallyService';
 import { normalizeUserRole } from '../utils/roles';
+import PageShell from './ui/PageShell';
 const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
@@ -162,6 +163,25 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const currentDayIndex = new Date().getDay();
     const currentDayName = daysOfWeek[currentDayIndex];
+    const selectedHospitalLabel = selectedHospital?.name || 'Fuente';
+    const hospitalModalities = selectedHospital?.modalities || [];
+    const totalCoverCount = hospitalModalities.reduce((count, modality) => {
+        return count + daysOfWeek.reduce((dayCount, day) => {
+            const daySchedule = modality.schedule[day] || [];
+            return dayCount + daySchedule.reduce((slotCount, _item, idx) => {
+                const slotId = getSlotId(selectedHospitalId, modality.id, day, idx);
+                return slotCount + ((coverOverrides[slotId]?.length || 0) > 0 ? 1 : 0);
+            }, 0);
+        }, 0);
+    }, 0);
+    const todayConsultantCount = hospitalModalities.reduce((count, modality) => {
+        return count + (modality.schedule[currentDayName] || []).length;
+    }, 0);
+    const quickActionCount =
+        4 +
+        (needleNavigatorEnabled ? 1 : 0) +
+        (pickleballEnabled ? 1 : 0) +
+        (!isRoleLoading && canOpenEndorsements ? 1 : 0);
 
     const toggleModality = (modalityId: string) => {
         setExpandedModality(prev => prev === modalityId ? null : modalityId);
@@ -407,19 +427,53 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
 
 
     return (
-        <div className="px-6 pt-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
-            <div className="max-w-md mx-auto space-y-6">
-                {/* Header Section */}
-                <div className="mb-4">
-                    <h1 className="text-3xl font-bold text-white mb-2">Resident HQ</h1>
-                </div>
-                {/* Unified Quick Actions & Tools Section - Compact Design */}
-                <section className="mb-6">
+        <PageShell layoutMode="wide" contentClassName="pt-6">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
+                <div className="mx-auto w-full max-w-7xl space-y-6">
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.95fr)] xl:items-start">
+                        <div className="space-y-5">
+                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-md lg:p-6">
+                                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                                    <div className="min-w-0">
+                                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-sky-400/85">Resident Operations Board</p>
+                                        <h1 className="text-3xl font-bold text-white md:text-4xl">Resident HQ</h1>
+                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                                            Live workstation coverage, quick tools, and consultant schedules for {selectedHospitalLabel}.
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
+                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Today</p>
+                                            <p className="mt-1 text-sm font-semibold text-white">{format(new Date(), 'EEEE, MMM d')}</p>
+                                        </div>
+                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Hospital</p>
+                                            <p className="mt-1 text-sm font-semibold text-white">{selectedHospitalLabel}</p>
+                                        </div>
+                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Consultants Today</p>
+                                            <p className="mt-1 text-lg font-bold text-white">{todayConsultantCount}</p>
+                                        </div>
+                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Active Covers</p>
+                                            <p className="mt-1 text-lg font-bold text-amber-300">{totalCoverCount}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <section className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
+                                <div className="mb-4 flex items-center justify-between gap-3">
                     <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2 pl-1">
                         <span className="material-icons text-[12px] text-primary">apps</span>
                         Quick Actions & Tools
                     </h2>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                                    <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                        {quickActionCount} Actions
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 2xl:grid-cols-4">
                         {/* Monthly Census */}
                         <button
                             onClick={handleOpenMonthlyCensus}
@@ -540,27 +594,65 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                 </div>
                             </button>
                         )}
+                                </div>
+                            </section>
+                        </div>
+
+                        <aside className="space-y-5">
+                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
+                                <div className="mb-4 flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Coverage Context</p>
+                                        <h2 className="mt-1 text-lg font-bold text-white">{selectedHospitalLabel}</h2>
+                                    </div>
+                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                                        {currentDayName}
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Modalities</p>
+                                        <p className="mt-1 text-xl font-bold text-white">{hospitalModalities.length}</p>
+                                        <p className="mt-1 text-xs text-slate-400">Active sections for this site</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Expanded Section</p>
+                                        <p className="mt-1 text-sm font-semibold text-white">{expandedModality ? hospitalModalities.find((modality) => modality.id === expandedModality)?.name || 'Selected' : 'None'}</p>
+                                        <p className="mt-1 text-xs text-slate-400">Tap a modality to review weekly schedules</p>
+                                    </div>
+                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3 sm:col-span-2 xl:col-span-1">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Coverage Notes</p>
+                                        <div className="mt-3 space-y-2 text-xs leading-5 text-slate-400">
+                                            <p>Collapsed cards show today's staffing only for faster scanning.</p>
+                                            <p>Expanded mode reveals the full week so pending cover issues are easier to inspect.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
+                                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Hospital Switcher</p>
+                                <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
+                                    {CONSULTANT_SCHEDULE.map((hospital) => (
+                                        <button
+                                            key={hospital.id}
+                                            onClick={() => setSelectedHospitalId(hospital.id)}
+                                            className={`flex-1 py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
+                                                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
+                                                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                                                }`}
+                                        >
+                                            {hospital.name}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </aside>
                     </div>
-                </section>
-                {/* Hospital Selector - Segmented Control Style */}
-                <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
-                    {/* Sliding Indicator (simplified) */}
-                    {CONSULTANT_SCHEDULE.map((hospital) => (
-                        <button
-                            key={hospital.id}
-                            onClick={() => setSelectedHospitalId(hospital.id)}
-                            className={`flex-1 py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
-                                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
-                                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                                }`}
-                        >
-                            {hospital.name}
-                        </button>
-                    ))}
-                </div>
 
                 {/* Schedule Content */}
-                <div className="space-y-2">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                     {selectedHospital && (
                         selectedHospital.modalities.map((modality) => {
                             const todaySchedule = modality.schedule[currentDayName] || [];
@@ -582,7 +674,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             return (
                                 <div
                                     key={modality.id}
-                                    className={`w-full text-left rounded-2xl backdrop-blur-md border overflow-hidden transition-all duration-500 opacity-95 ${isExpanded ? 'ring-1 ring-sky-500/30 bg-black/60 border-white/10 shadow-lg' : 'bg-black/40 border-white/5 hover:bg-white/[0.03]'
+                                    className={`w-full h-fit text-left rounded-2xl backdrop-blur-md border overflow-hidden transition-all duration-500 opacity-95 ${isExpanded ? 'ring-1 ring-sky-500/30 bg-black/60 border-white/10 shadow-lg xl:col-span-2 2xl:col-span-3' : 'bg-black/40 border-white/5 hover:bg-white/[0.03]'
                                         }`}
                                 >
                                     {/* Accordion Header */}
@@ -635,7 +727,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                                             <div
                                                                 key={idx}
                                                                 onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
-                                                                className={`relative group rounded-xl border transition-all cursor-pointer mb-2 last:mb-0 p-3 pt-4 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${hasCovers
+                                                                className={`relative group rounded-xl border transition-all cursor-pointer mb-2 last:mb-0 p-2.5 pt-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${hasCovers
                                                                     ? 'bg-sky-500/[0.08] border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)]'
                                                                     : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
                                                                     }`}
@@ -643,8 +735,8 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                                                 {/* Interactive Shine Effect */}
                                                                 <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
 
-                                                                <div className="p-3">
-                                                                    <div className="flex items-center justify-between mb-2">
+                                                                <div className="p-2">
+                                                                    <div className="flex items-center justify-between mb-1.5">
                                                                         <div className="flex items-center gap-2">
                                                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${hasCovers ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 bg-white/10'
                                                                                 }`}>
@@ -662,16 +754,16 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                                                         </button>
                                                                     </div>
 
-                                                                    <div className="flex items-center justify-between relative min-h-[24px]">
+                                                                    <div className="flex items-center justify-between relative min-h-[20px]">
                                                                         {!hasCovers ? (
                                                                             <div className="text-sm font-bold text-slate-200">
                                                                                 {item.doctor}
                                                                             </div>
                                                                         ) : (
-                                                                            <div className="flex flex-col gap-2 w-full pr-14">
+                                                                            <div className="flex flex-col gap-1.5 w-full pr-14">
                                                                                 {activeCovers.map((cover) => (
                                                                                     <div key={cover.id} className="flex items-center flex-wrap gap-2">
-                                                                                        <span className={`text-sm font-bold whitespace-nowrap ${cover.readStatus === 'complete' ? 'text-emerald-400' :
+                                                                                        <span className={`text-[13px] font-bold whitespace-nowrap ${cover.readStatus === 'complete' ? 'text-emerald-400' :
                                                                                             cover.readStatus === 'partial' ? 'text-amber-400' : 'text-rose-400'
                                                                                             }`}>
                                                                                             {cover.doctorName}
@@ -863,7 +955,8 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                     onClose={() => setIsPickleballOpen(false)}
                 />
             )}
-        </div>
+            </div>
+        </PageShell>
     );
 };
 
