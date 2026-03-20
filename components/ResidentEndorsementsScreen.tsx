@@ -98,6 +98,20 @@ const getCategoryIcon = (category?: string): string => {
   return 'local_hospital';
 };
 
+
+const getCategoryAccent = (category?: string): string => {
+  const normalized = String(category || '').toLowerCase();
+  if (normalized.includes('ct')) return 'border-l-sky-400/60 bg-sky-500/[0.03]';
+  if (normalized.includes('mri')) return 'border-l-violet-400/60 bg-violet-500/[0.03]';
+  if (normalized.includes('x-ray') || normalized.includes('xray')) return 'border-l-blue-400/60 bg-blue-500/[0.03]';
+  if (normalized.includes('ultrasound')) return 'border-l-emerald-400/60 bg-emerald-500/[0.03]';
+  if (normalized.includes('mammography')) return 'border-l-pink-400/60 bg-pink-500/[0.03]';
+  if (normalized.includes('fluoroscopy')) return 'border-l-amber-400/60 bg-amber-500/[0.03]';
+  if (normalized.includes('nuclear')) return 'border-l-teal-400/60 bg-teal-500/[0.03]';
+  if (normalized.includes('interventional')) return 'border-l-rose-400/60 bg-rose-500/[0.03]';
+  if (normalized.includes('pet')) return 'border-l-fuchsia-400/60 bg-fuchsia-500/[0.03]';
+  return 'border-l-slate-400/30';
+};
 const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [isSavingPost, setIsSavingPost] = useState(false);
@@ -459,7 +473,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
             rows={4}
             maxLength={4000}
             placeholder="Write endorsement or after-duty notes..."
-            className="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder:text-slate-500 outline-none focus:border-primary/60 resize-y"
+            className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 resize-y transition-colors"
           />
           {composerFiles.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -538,7 +552,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
         const canManagePost = post.created_by === userId || canModerate;
 
         return (
-          <article key={post.id} className="rounded-2xl border border-white/10 bg-[#121e2e]/85 p-3.5 space-y-3">
+          <article key={post.id} className={`rounded-2xl border border-white/10 border-l-2 bg-[#121e2e]/85 p-3.5 space-y-3 transition-colors ${getCategoryAccent(post.tags[0])}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -549,7 +563,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
                     </span>
                   )}
                   {!!post.tags[0] && (
-                    <span className="inline-flex items-center gap-1 rounded-md border border-cyan-400/30 bg-cyan-500/15 px-2 py-0.5 text-[11px] font-bold normal-case tracking-normal text-cyan-200">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/30 bg-cyan-500/15 px-2.5 py-0.5 text-[11px] font-bold normal-case tracking-normal text-cyan-200">
                       <span className="material-icons text-[12px]">{getCategoryIcon(post.tags[0])}</span>
                       <span>{post.tags[0]}</span>
                     </span>
@@ -677,7 +691,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
                   {post.comments.map((comment) => {
                     const canManageComment = comment.created_by === userId || canModerate;
                     return (
-                      <div key={comment.id} className="rounded-lg border border-white/10 bg-black/20 p-2.5">
+                      <div key={comment.id} className="rounded-xl border border-white/8 bg-black/25 p-2.5 hover:bg-white/[0.02] transition-colors">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-[11px] text-slate-400">
                             {comment.author_name || 'Staff'} | {toDisplayDateTime(comment.created_at)}

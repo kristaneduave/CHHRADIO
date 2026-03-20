@@ -426,231 +426,98 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
 
 
 
+    // ── Current reader helper ─────────────────────────────────
+    const getCurrentReader = (modality: { id: string; name: string; icon: string; schedule: { [key: string]: { doctor: string; time: string; subtext?: string }[] } }) => {
+        const todaySlots = modality.schedule[currentDayName] || [];
+        if (todaySlots.length === 0) return null;
+
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+        const parseTime = (t: string): number => {
+            // Handle 'AM', 'PM', 'AM-PM' shorthand
+            const trimmed = t.trim().toUpperCase();
+            if (trimmed === 'AM') return 6 * 60; // 6 AM
+            if (trimmed === 'PM') return 12 * 60; // 12 PM
+            if (trimmed === 'AM-PM') return 6 * 60; // start of day
+
+            // Handle '12:00 NN' = noon
+            const nnMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*NN$/);
+            if (nnMatch) return 12 * 60 + parseInt(nnMatch[2]);
+
+            // Handle '7:01 AM', '1:00 PM', '12:00 AM'
+            const stdMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/);
+            if (stdMatch) {
+                let h = parseInt(stdMatch[1]);
+                const m = parseInt(stdMatch[2]);
+                const ampm = stdMatch[3];
+                if (ampm === 'AM' && h === 12) h = 0;
+                if (ampm === 'PM' && h !== 12) h += 12;
+                return h * 60 + m;
+            }
+
+            // Handle bare '7:01' — assume AM
+            const bareMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+            if (bareMatch) {
+                return parseInt(bareMatch[1]) * 60 + parseInt(bareMatch[2]);
+            }
+
+            return -1; // unparseable
+        };
+
+        for (const slot of todaySlots) {
+            const parts = slot.time.split('-').map(s => s.trim());
+            if (parts.length === 2) {
+                const start = parseTime(parts[0]);
+                const end = parseTime(parts[1]);
+                if (start < 0 || end < 0) continue;
+
+                // Handle overnight shifts (end < start)
+                if (end <= start) {
+                    // e.g. 8:01 PM - 7:00 AM
+                    if (nowMinutes >= start || nowMinutes < end) return slot.doctor;
+                } else {
+                    if (nowMinutes >= start && nowMinutes < end) return slot.doctor;
+                }
+            } else {
+                // Single token like 'AM-PM' — all day
+                return slot.doctor;
+            }
+        }
+        // Fallback: return first slot if nothing matched
+        return todaySlots[0]?.doctor || null;
+    };
+
     return (
         <PageShell layoutMode="wide" contentClassName="pt-6">
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
                 <div className="mx-auto w-full max-w-7xl space-y-6">
-                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.95fr)] xl:items-start">
-                        <div className="space-y-5">
-                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-md lg:p-6">
-                                <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                                    <div className="min-w-0">
-                                        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-sky-400/85">Resident Operations Board</p>
-                                        <h1 className="text-3xl font-bold text-white md:text-4xl">Resident HQ</h1>
-                                        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-                                            Live workstation coverage, quick tools, and consultant schedules for {selectedHospitalLabel}.
-                                        </p>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-3 xl:min-w-[320px]">
-                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Today</p>
-                                            <p className="mt-1 text-sm font-semibold text-white">{format(new Date(), 'EEEE, MMM d')}</p>
-                                        </div>
-                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Hospital</p>
-                                            <p className="mt-1 text-sm font-semibold text-white">{selectedHospitalLabel}</p>
-                                        </div>
-                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Consultants Today</p>
-                                            <p className="mt-1 text-lg font-bold text-white">{todayConsultantCount}</p>
-                                        </div>
-                                        <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Active Covers</p>
-                                            <p className="mt-1 text-lg font-bold text-amber-300">{totalCoverCount}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <section className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
-                                <div className="mb-4 flex items-center justify-between gap-3">
-                    <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2 pl-1">
-                        <span className="material-icons text-[12px] text-primary">apps</span>
-                        Quick Actions & Tools
-                    </h2>
-                                    <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
-                                        {quickActionCount} Actions
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 2xl:grid-cols-4">
-                        {/* Monthly Census */}
-                        <button
-                            onClick={handleOpenMonthlyCensus}
-                            className="w-full text-left rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-amber-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-300 group-hover:scale-110 transition-transform shadow-inner border border-amber-500/30">
-                                <span className="material-icons text-[16px]">checklist</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-amber-200 group-hover:text-white transition-colors truncate">Monthly Census</h3>
-                                <p className="text-[9px] text-amber-100/70 mt-0.5 truncate">Log requirements</p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={handleRadiopaediaSearch}
-                            className="w-full text-left rounded-xl border border-violet-500/20 bg-violet-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-violet-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/10 to-violet-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-violet-500/20 flex items-center justify-center text-violet-300 group-hover:scale-110 transition-transform shadow-inner border border-violet-500/30">
-                                <span className="material-icons text-[16px]">search</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-violet-200 group-hover:text-white transition-colors truncate">Search Radiopaedia</h3>
-                                <p className="text-[9px] text-violet-100/70 mt-0.5 truncate">Quick case lookup</p>
-                            </div>
-                        </button>
-
-                        {/* Patient Decking List */}
-                        <a
-                            href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full text-left rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-blue-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-300 group-hover:scale-110 transition-transform shadow-inner border border-blue-500/30">
-                                <span className="material-icons text-[16px]">description</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-blue-200 group-hover:text-white transition-colors truncate">Decking List</h3>
-                                <p className="text-[9px] text-blue-100/70 mt-0.5 truncate">Live Updates</p>
-                            </div>
-                        </a>
-
-                        {/* Doctors on Leave */}
-                        <a
-                            href="https://docs.google.com/spreadsheets/u/0/d/1zlSKOCLmBmvrxZqoPKUysf3RcNpLQQoB/htmlview#gid=799246403"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full text-left rounded-xl border border-lime-500/20 bg-lime-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-lime-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-r from-lime-500/0 via-lime-500/10 to-lime-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                            <div className="w-8 h-8 shrink-0 rounded-lg bg-lime-500/20 flex items-center justify-center text-lime-300 group-hover:scale-110 transition-transform shadow-inner border border-lime-500/30">
-                                <span className="material-icons text-[16px]">event_busy</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <h3 className="text-xs font-bold text-lime-200 group-hover:text-white transition-colors truncate">On Leave</h3>
-                                <p className="text-[9px] text-lime-100/70 mt-0.5 truncate">March 2026</p>
-                            </div>
-                        </a>
-
-                        {/* Needle Navigator */}
-                        {needleNavigatorEnabled && (
-                            <button
-                                onClick={() => setIsNeedleNavigatorOpen(true)}
-                                className="w-full text-left rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-rose-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-rose-500/0 via-rose-500/10 to-rose-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-rose-500/20 flex items-center justify-center text-rose-300 group-hover:scale-110 transition-transform shadow-inner border border-rose-500/30">
-                                    <span className="material-icons text-[16px]">sports_esports</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-bold text-rose-200 truncate">Needle Game</h3>
-                                    <p className="text-[9px] text-rose-100/70 mt-0.5 truncate">Best: {Math.round(needleStats?.best_score ?? 0)}</p>
-                                </div>
-                            </button>
-                        )}
-
-                        {pickleballEnabled && (
-                            <button
-                                onClick={() => setIsPickleballOpen(true)}
-                                className="w-full text-left glass-card-enhanced p-2.5 rounded-xl border border-emerald-500/20 flex items-center gap-2.5 group hover:bg-emerald-500/10 transition-all active:scale-[0.99] relative overflow-hidden bg-emerald-500/5"
-                            >
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform shadow-inner border border-emerald-500/30">
-                                    <span className="material-icons text-[16px]">sports_tennis</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-bold text-emerald-200 truncate">Pickleball Rally</h3>
-                                    <p className="text-[9px] text-slate-400 mt-0.5 truncate">Best: {Math.round(pickleballStats?.best_score ?? 0)}</p>
-                                </div>
-                            </button>
-                        )}
-
-                        {isRoleLoading && (
-                            <div className="w-full rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 relative overflow-hidden animate-pulse">
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/30" />
-                                <div className="flex-1 min-w-0 space-y-1">
-                                    <div className="h-3 w-24 rounded bg-fuchsia-200/20" />
-                                    <div className="h-2 w-20 rounded bg-fuchsia-100/20" />
-                                </div>
-                            </div>
-                        )}
-
-                        {!isRoleLoading && canOpenEndorsements && (
-                            <button
-                                onClick={() => onOpenResidentEndorsements?.()}
-                                className="w-full text-left rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-fuchsia-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/10 to-fuchsia-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                                <div className="w-8 h-8 shrink-0 rounded-lg bg-fuchsia-500/20 flex items-center justify-center text-fuchsia-300 group-hover:scale-110 transition-transform shadow-inner border border-fuchsia-500/30">
-                                    <span className="material-icons text-[16px]">forum</span>
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-xs font-bold text-fuchsia-200 group-hover:text-white transition-colors truncate">Endorsements</h3>
-                                    <p className="text-[9px] text-fuchsia-100/70 mt-0.5 truncate">After-duty handoff</p>
-                                </div>
-                            </button>
-                        )}
-                                </div>
-                            </section>
-                        </div>
-
-                        <aside className="space-y-5">
-                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
-                                <div className="mb-4 flex items-center justify-between gap-3">
-                                    <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Coverage Context</p>
-                                        <h2 className="mt-1 text-lg font-bold text-white">{selectedHospitalLabel}</h2>
-                                    </div>
-                                    <div className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                                        {currentDayName}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Modalities</p>
-                                        <p className="mt-1 text-xl font-bold text-white">{hospitalModalities.length}</p>
-                                        <p className="mt-1 text-xs text-slate-400">Active sections for this site</p>
-                                    </div>
-                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Expanded Section</p>
-                                        <p className="mt-1 text-sm font-semibold text-white">{expandedModality ? hospitalModalities.find((modality) => modality.id === expandedModality)?.name || 'Selected' : 'None'}</p>
-                                        <p className="mt-1 text-xs text-slate-400">Tap a modality to review weekly schedules</p>
-                                    </div>
-                                    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3 sm:col-span-2 xl:col-span-1">
-                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Coverage Notes</p>
-                                        <div className="mt-3 space-y-2 text-xs leading-5 text-slate-400">
-                                            <p>Collapsed cards show today's staffing only for faster scanning.</p>
-                                            <p>Expanded mode reveals the full week so pending cover issues are easier to inspect.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="rounded-[2rem] border border-white/8 bg-white/[0.03] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.18)] backdrop-blur-md lg:p-6">
-                                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Hospital Switcher</p>
-                                <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
-                                    {CONSULTANT_SCHEDULE.map((hospital) => (
-                                        <button
-                                            key={hospital.id}
-                                            onClick={() => setSelectedHospitalId(hospital.id)}
-                                            className={`flex-1 py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
-                                                ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
-                                                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                                                }`}
-                                        >
-                                            {hospital.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </aside>
+                    {/* ── Header: bare on background like Newsfeed ── */}
+                    <div className="px-1">
+                        <h1 className="text-3xl font-bold text-white md:text-4xl">Resident HQ</h1>
                     </div>
 
+                    {/* ── Hospital Switcher: tab bar like Newsfeed's Notifications/Activity ── */}
+                    <div className="flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner">
+                        {CONSULTANT_SCHEDULE.map((hospital) => (
+                            <button
+                                key={hospital.id}
+                                onClick={() => setSelectedHospitalId(hospital.id)}
+                                className={`flex-1 py-3 rounded-xl text-[10px] sm:text-[11px] font-bold uppercase tracking-widest transition-all duration-300 relative z-10 ${selectedHospitalId === hospital.id
+                                    ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                                    }`}
+                            >
+                                {hospital.name}
+                            </button>
+                        ))}
+                    </div>
+
+
+
+                    {/* ── Schedule + Sidebar ── */}
+                    <div className="xl:grid xl:grid-cols-[minmax(0,1.65fr)_320px] xl:items-start xl:gap-8">
+                        <div className="min-w-0">
                 {/* Schedule Content */}
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                     {selectedHospital && (
@@ -674,7 +541,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                             return (
                                 <div
                                     key={modality.id}
-                                    className={`w-full h-fit text-left rounded-2xl backdrop-blur-md border overflow-hidden transition-all duration-500 opacity-95 ${isExpanded ? 'ring-1 ring-sky-500/30 bg-black/60 border-white/10 shadow-lg xl:col-span-2 2xl:col-span-3' : 'bg-black/40 border-white/5 hover:bg-white/[0.03]'
+                                    className={`w-full h-fit text-left rounded-2xl backdrop-blur-md border overflow-hidden transition-all duration-500 opacity-95 ${isExpanded ? 'ring-1 ring-sky-500/30 bg-black/60 border-white/10 shadow-lg xl:col-span-2 2xl:col-span-3' : 'bg-black/40 border-white/5'
                                         }`}
                                 >
                                     {/* Accordion Header */}
@@ -692,16 +559,14 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                                 <h3 className={`text-sm font-bold transition-colors ${isExpanded ? 'text-white' : 'text-slate-300'}`}>
                                                     {modality.name}
                                                 </h3>
-                                                <p className="text-[10px] text-slate-500">
-                                                    {isExpanded ? 'Full Weekly Schedule' : 'Today\'s Consultants'}
-                                                </p>
+
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-3">
                                             {activeCoverCount > 0 && (
-                                                <div className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center gap-1">
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                                    <span className="text-[9px] font-bold text-amber-500">{activeCoverCount} Cover{activeCoverCount > 1 ? 's' : ''}</span>
+                                                <div className="px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center gap-1">
+                                                    <span className="w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
+                                                    <span className="text-[8px] font-bold text-amber-400">{activeCoverCount}</span>
                                                 </div>
                                             )}
                                             <span className={`material-icons text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
@@ -729,11 +594,10 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                                                 onClick={(e) => handleCardClick(e, slotId, item.doctor, item.time, hasCovers)}
                                                                 className={`relative group rounded-xl border transition-all cursor-pointer mb-2 last:mb-0 p-2.5 pt-3 select-none touch-manipulation [-webkit-tap-highlight-color:transparent] ${hasCovers
                                                                     ? 'bg-sky-500/[0.08] border-sky-500/30 shadow-[0_4px_24px_-8px_rgba(14,165,233,0.25)]'
-                                                                    : 'bg-white/[0.03] border-white/5 hover:border-white/10 hover:bg-white/[0.05]'
+                                                                    : 'bg-white/[0.03] border-white/5'
                                                                     }`}
                                                             >
-                                                                {/* Interactive Shine Effect */}
-                                                                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-shimmer pointer-events-none"></div>
+
 
                                                                 <div className="p-2">
                                                                     <div className="flex items-center justify-between mb-1.5">
@@ -906,8 +770,137 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                         })
                     )}
                 </div>
+                        </div>
 
+                        {/* ── Right sidebar ── */}
+                        <aside className="hidden xl:block xl:sticky xl:top-2 px-2 space-y-5">
 
+                            {/* Current Readers — with cover override */}
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.02] p-5 backdrop-blur-xl shadow-lg">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-300 flex items-center gap-2.5">
+                                        <span className="relative flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                        </span>
+                                        Current Readers
+                                    </h3>
+                                    <span className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-[10px] font-black text-sky-400 border border-sky-500/20 shadow-sm">
+                                        {currentDayName}
+                                    </span>
+                                </div>
+                                <div className="space-y-3">
+                                    {hospitalModalities.map((mod) => {
+                                        const reader = getCurrentReader(mod);
+                                        // Find if there's an active cover for the current slot
+                                        const todaySlots = mod.schedule[currentDayName] || [];
+                                        let coveringDoctor: string | null = null;
+                                        todaySlots.forEach((_, idx) => {
+                                            const slotId = getSlotId(selectedHospital!.id, mod.id, currentDayName, idx);
+                                            const covers = coverOverrides[slotId] || [];
+                                            if (covers.length > 0) {
+                                                coveringDoctor = covers[covers.length - 1].doctorName;
+                                            }
+                                        });
+                                        const displayName = coveringDoctor || reader;
+                                        const isCovered = !!coveringDoctor;
+                                        return (
+                                            <div key={mod.id} className="flex items-start gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <span className="material-icons text-[14px] text-slate-400">{mod.icon}</span>
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{mod.name}</p>
+                                                    <p className={`text-[13px] font-semibold truncate mt-0.5 ${isCovered ? 'text-amber-300' : 'text-slate-200'}`}>
+                                                        {displayName || <span className="text-slate-600 italic text-[12px]">No reader today</span>}
+                                                    </p>
+                                                    {isCovered && (
+                                                        <p className="text-[9px] text-amber-500/70 font-bold uppercase tracking-wider mt-0.5">Covering</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Quick Actions — 1 column */}
+                            <div className="space-y-2">
+                                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 px-1">Quick Actions</p>
+
+                                <button
+                                    onClick={handleOpenMonthlyCensus}
+                                    className="w-full text-left rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-amber-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-amber-500/0 via-amber-500/10 to-amber-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                    <div className="w-7 h-7 shrink-0 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-300 group-hover:scale-110 transition-transform border border-amber-500/30">
+                                        <span className="material-icons text-[14px]">checklist</span>
+                                    </div>
+                                    <h3 className="text-xs font-bold text-amber-200 group-hover:text-white transition-colors truncate">Monthly Census</h3>
+                                </button>
+
+                                <a
+                                    href="https://docs.google.com/document/d/1Ii3VB-9oJFwKHV55Hf97-ncDVLi1FoRjTcb_QWQMuFI/edit?ouid=106573662772064075580&usp=docs_home&ths=true"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full text-left rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-blue-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/10 to-blue-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                    <div className="w-7 h-7 shrink-0 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-300 group-hover:scale-110 transition-transform border border-blue-500/30">
+                                        <span className="material-icons text-[14px]">description</span>
+                                    </div>
+                                    <h3 className="text-xs font-bold text-blue-200 group-hover:text-white transition-colors truncate">Decking List</h3>
+                                </a>
+
+                                <a
+                                    href="https://docs.google.com/spreadsheets/u/0/d/1zlSKOCLmBmvrxZqoPKUysf3RcNpLQQoB/htmlview#gid=799246403"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full text-left rounded-xl border border-lime-500/20 bg-lime-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-lime-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-lime-500/0 via-lime-500/10 to-lime-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                    <div className="w-7 h-7 shrink-0 rounded-lg bg-lime-500/20 flex items-center justify-center text-lime-300 group-hover:scale-110 transition-transform border border-lime-500/30">
+                                        <span className="material-icons text-[14px]">event_busy</span>
+                                    </div>
+                                    <h3 className="text-xs font-bold text-lime-200 group-hover:text-white transition-colors truncate">On Leave</h3>
+                                </a>
+
+                                {pickleballEnabled && (
+                                    <button
+                                        onClick={() => setIsPickleballOpen(true)}
+                                        className="w-full text-left rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] p-2.5 flex items-center gap-2.5 group hover:bg-emerald-500/10 transition-all active:scale-[0.99] relative overflow-hidden"
+                                    >
+                                        <div className="w-7 h-7 shrink-0 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-300 group-hover:scale-110 transition-transform border border-emerald-500/30">
+                                            <span className="material-icons text-[14px]">sports_tennis</span>
+                                        </div>
+                                        <h3 className="text-xs font-bold text-emerald-200 truncate">Pickleball Rally</h3>
+                                    </button>
+                                )}
+
+                                {isRoleLoading && (
+                                    <div className="w-full rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 relative overflow-hidden animate-pulse">
+                                        <div className="w-7 h-7 shrink-0 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/30" />
+                                        <div className="h-3 w-24 rounded bg-fuchsia-200/20" />
+                                    </div>
+                                )}
+
+                                {!isRoleLoading && canOpenEndorsements && (
+                                    <button
+                                        onClick={() => onOpenResidentEndorsements?.()}
+                                        className="w-full text-left rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-fuchsia-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/0 via-fuchsia-500/10 to-fuchsia-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                        <div className="w-7 h-7 shrink-0 rounded-lg bg-fuchsia-500/20 flex items-center justify-center text-fuchsia-300 group-hover:scale-110 transition-transform border border-fuchsia-500/30">
+                                            <span className="material-icons text-[14px]">forum</span>
+                                        </div>
+                                        <h3 className="text-xs font-bold text-fuchsia-200 group-hover:text-white transition-colors truncate">Endorsements</h3>
+                                    </button>
+                                )}
+                            </div>
+                        </aside>
+                    </div>
+
+                </div>
             </div>
 
             {/* Manage Covers Modal */}
@@ -955,7 +948,6 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                     onClose={() => setIsPickleballOpen(false)}
                 />
             )}
-            </div>
         </PageShell>
     );
 };
