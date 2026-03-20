@@ -402,6 +402,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     : formData.submissionType === 'aunt_minnie'
       ? 'Aunt Minnie'
       : 'Interesting Case';
+  const selectedSubmissionOption =
+    SUBMISSION_TYPE_OPTIONS.find((option) => option.id === formData.submissionType) ?? SUBMISSION_TYPE_OPTIONS[0];
   const titlePlaceholder = formData.submissionType === 'rare_pathology'
     ? 'Enter pathology or syndrome name'
     : formData.submissionType === 'aunt_minnie'
@@ -518,55 +520,70 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               <h1 className="text-3xl font-bold text-white">Upload</h1>
             </header>
 
-            <section className="grid gap-5 xl:grid-cols-[minmax(320px,0.92fr)_minmax(420px,1.08fr)] xl:items-stretch">
-              <div className={`${sectionCardClassName} space-y-4`}>
-                <div className="space-y-1.5">
-                  {SUBMISSION_TYPE_OPTIONS.map((option) => {
-                    const isActive = option.id === formData.submissionType;
-
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setFormData((prev) => ({ ...prev, submissionType: option.id }))}
-                        className={`relative w-full overflow-hidden rounded-3xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
-                          isActive
-                            ? `${option.activeClass} px-3.5 py-2.5`
-                            : 'border-white/5 bg-white/[0.03] px-3.5 py-1.5 hover:bg-white/[0.05]'
-                        }`}
-                      >
-                        {isActive ? (
-                          <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
-                            <div className={`absolute top-0 right-0 h-14 w-14 ${option.glowClass} blur-[32px] rounded-full -translate-y-1/3 translate-x-1/3`} />
-                          </div>
-                        ) : null}
-                        <div className="relative z-10 flex items-center gap-3">
-                          <div className={`flex ${isActive ? 'h-10 w-10 rounded-[16px]' : 'h-8.5 w-8.5 rounded-xl'} shrink-0 items-center justify-center border shadow-inner ${isActive ? option.activeIconClass : option.inactiveIconClass}`}>
-                            <span className={`material-icons ${isActive ? 'text-[18px]' : 'text-[16px]'}`}>{option.icon}</span>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
-                            {isActive ? <p className="mt-0.5 truncate text-[12px] leading-5 text-slate-300">{option.description}</p> : null}
-                          </div>
-                          {!isActive ? <span className="material-icons text-slate-500">chevron_right</span> : null}
-                        </div>
-                      </button>
-                    );
-                  })}
+            <section>
+              <div className={`${sectionCardClassName} space-y-5`}>
+                <div className="space-y-1">
+                  <p className={sectionLabelClassName}>Case Identity</p>
+                  <p className={sectionHintClassName}>Choose the upload format, then name the case in the same place.</p>
                 </div>
-              </div>
 
-              <div className={`${sectionCardClassName} space-y-4`}>
-                <div className="space-y-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
-                  <input
-                    type="text"
-                    value={customTitle}
-                    onChange={handleTitleChange}
-                    placeholder={titlePlaceholder}
-                    autoComplete="off"
-                    className={inputClassName}
-                  />
+                <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.88fr)_minmax(420px,1.12fr)] xl:items-start">
+                  <div className="space-y-1.5">
+                    {SUBMISSION_TYPE_OPTIONS.map((option) => {
+                      const isActive = option.id === formData.submissionType;
+
+                      return (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, submissionType: option.id }))}
+                          className={`relative w-full overflow-hidden rounded-3xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
+                            isActive
+                              ? `${option.activeClass} px-3.5 py-2.5`
+                              : 'border-white/5 bg-white/[0.03] px-3.5 py-1.5 hover:bg-white/[0.05]'
+                          }`}
+                        >
+                          {isActive ? (
+                            <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
+                              <div className={`absolute top-0 right-0 h-14 w-14 ${option.glowClass} blur-[32px] rounded-full -translate-y-1/3 translate-x-1/3`} />
+                            </div>
+                          ) : null}
+                          <div className="relative z-10 flex items-center gap-3">
+                            <div className={`flex ${isActive ? 'h-10 w-10 rounded-[16px]' : 'h-8.5 w-8.5 rounded-xl'} shrink-0 items-center justify-center border shadow-inner ${isActive ? option.activeIconClass : option.inactiveIconClass}`}>
+                              <span className={`material-icons ${isActive ? 'text-[18px]' : 'text-[16px]'}`}>{option.icon}</span>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
+                              {!isActive ? <p className="mt-0.5 truncate text-[12px] leading-5 text-slate-500">{option.shortDescription}</p> : null}
+                            </div>
+                            {!isActive ? <span className="material-icons text-slate-500">chevron_right</span> : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-4 rounded-[28px] bg-black/10 p-2 sm:p-3">
+                    <div className="flex items-center gap-3 rounded-[22px] border border-white/6 bg-white/[0.02] px-3.5 py-3 sm:px-4">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border shadow-inner ${selectedSubmissionOption.activeIconClass}`}>
+                        <span className="material-icons text-[18px]">{selectedSubmissionOption.icon}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-base font-bold leading-tight text-white sm:text-lg">{selectedSubmissionOption.label}</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 px-1 sm:px-2">
+                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
+                      <input
+                        type="text"
+                        value={customTitle}
+                        onChange={handleTitleChange}
+                        placeholder={titlePlaceholder}
+                        autoComplete="off"
+                        className={inputClassName}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
