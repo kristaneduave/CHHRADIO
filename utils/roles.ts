@@ -2,6 +2,7 @@ import { UserRole } from '../types';
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Admin',
+  faculty: 'Faculty',
   moderator: 'Moderator',
   training_officer: 'Training Officer',
   consultant: 'Consultant',
@@ -17,8 +18,8 @@ export const getRoleLabel = (role?: string | null): string => {
 
 export const normalizeUserRole = (role?: string | null): UserRole => {
   const normalized = String(role || '').toLowerCase();
-  if (normalized === 'faculty') return 'moderator';
   if (normalized === 'admin') return 'admin';
+  if (normalized === 'faculty') return 'faculty';
   if (normalized === 'moderator') return 'moderator';
   if (normalized === 'training_officer') return 'training_officer';
   if (normalized === 'consultant') return 'consultant';

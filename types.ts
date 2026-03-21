@@ -233,7 +233,7 @@ export interface CalendarEvent {
 
 // ... existing types ...
 
-export type UserRole = 'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer';
+export type UserRole = 'admin' | 'faculty' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer';
 
 export interface Profile {
   id: string;
@@ -634,90 +634,114 @@ export interface AssignableOccupant {
   avatarUrl: string | null;
 }
 
-export interface QuizExam {
+export type QuizStatus = 'draft' | 'published' | 'archived';
+export type QuizAvailability = 'open' | 'scheduled' | 'closed';
+export type QuizTargetLevel = 'junior' | 'senior' | 'board' | 'mixed';
+export type QuestionDifficulty = 'junior' | 'senior' | 'board';
+export type QuizCorrectOption = 'A' | 'B' | 'C' | 'D' | 'E';
+export type QuizAttemptStatus = 'in_progress' | 'submitted' | 'abandoned';
+
+export interface Quiz {
   id: string;
   title: string;
-  specialty: string;
   description: string | null;
-  duration_minutes: number;
-  pass_mark_percent: number;
-  status: 'draft' | 'published' | 'archived';
-  is_published: boolean;
+  specialty: string;
+  target_level: QuizTargetLevel;
+  timer_enabled: boolean;
+  timer_minutes: number | null;
+  opens_at: string;
+  closes_at: string;
+  status: QuizStatus;
   created_by: string;
-  created_at: string;
-  updated_at: string;
+  updated_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  question_count?: number;
+  author_name?: string | null;
+  author_role?: UserRole | null;
 }
 
 export interface QuizQuestion {
   id: string;
-  exam_id: string;
-  question_text: string;
-  question_type: 'mcq' | 'image';
+  quiz_id: string;
+  sort_order: number;
+  stem: string;
+  clinical_context: string | null;
   image_url: string | null;
-  options: string[];
-  correct_answer_index: number;
-  explanation: string | null;
-  points: number;
-  sort_order: number;
-  estimated_time_sec?: number | null;
-  created_at: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  option_e: string | null;
+  correct_option: QuizCorrectOption;
+  explanation: string;
+  teaching_point: string | null;
+  pitfall: string | null;
+  modality: string | null;
+  anatomy_region: string | null;
+  difficulty: QuestionDifficulty;
+  created_at?: string;
+  updated_at?: string;
 }
 
-export interface QuizAttemptSummary {
-  attempt_id: string;
-  score: number;
-  total_points: number;
-  correct_count: number;
-  is_pass: boolean;
-  duration_seconds: number;
-  completed_at: string;
+export interface QuizAnswer {
+  questionId: string;
+  selectedOption: QuizCorrectOption | null;
+  isCorrect: boolean;
 }
 
-export type QuizAnswerMap = Record<string, { selected_answer_index?: number; response_time_ms: number }>;
-
-export interface QuizClientEvent {
-  event_type: string;
-  question_id: string | null;
-  event_at: string;
-  meta: Record<string, unknown>;
-}
-
-export interface QuizExamAnalyticsRow {
-  exam_id: string;
-  exam_title: string;
-  specialty: string;
-  attempts_count: number;
-  avg_score_percent: number;
-  pass_rate_percent: number;
-}
-
-export interface QuizQuestionAnalyticsRow {
-  question_id: string;
-  exam_id: string;
-  exam_title: string;
-  question_text: string;
-  sort_order: number;
-  correct_rate_percent: number;
-  avg_response_time_ms: number;
-  discrimination_proxy: number;
-}
-
-export interface QuizUserAnalyticsRow {
+export interface QuizAttempt {
+  id: string;
+  quiz_id: string;
   user_id: string;
-  full_name: string | null;
-  username: string | null;
-  role: UserRole | string | null;
-  attempts_count: number;
-  avg_score_percent: number;
-  pass_rate_percent: number;
+  started_at: string;
+  submitted_at: string | null;
+  score: number;
+  total_questions: number;
+  percentage: number;
+  timer_enabled: boolean;
+  timer_minutes: number | null;
+  time_spent_seconds: number | null;
+  status: QuizAttemptStatus;
+  answers: QuizAnswer[];
+  quiz?: QuizListItem;
 }
 
-export interface QuizGroupAnalyticsRow {
-  role: UserRole | string | null;
-  year_level: string | null;
-  attempts_count: number;
-  learners_count: number;
-  avg_score_percent: number;
+export interface QuizListItem extends Quiz {
+  availability: QuizAvailability;
+  can_start: boolean;
+}
+
+export interface QuizQuestionFormValues {
+  id?: string;
+  stem: string;
+  clinical_context: string;
+  image_url: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  option_e: string;
+  correct_option: QuizCorrectOption;
+  explanation: string;
+  teaching_point: string;
+  pitfall: string;
+  modality: string;
+  anatomy_region: string;
+  difficulty: QuestionDifficulty;
+}
+
+export interface QuizAuthorFormValues {
+  title: string;
+  description: string;
+  specialty: string;
+  target_level: QuizTargetLevel;
+  timer_enabled: boolean;
+  timer_minutes: number | '';
+  opens_at: string;
+  closes_at: string;
+  status: QuizStatus;
+  questions: QuizQuestionFormValues[];
 }
 
 export interface ResidentMonthlyCensus {

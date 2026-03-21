@@ -1,301 +1,482 @@
 import { supabase } from './supabase';
 import {
-  QuizAnswerMap,
-  QuizAttemptSummary,
-  QuizClientEvent,
-  QuizExam,
-  QuizExamAnalyticsRow,
-  QuizGroupAnalyticsRow,
+  Quiz,
+  QuizAnswer,
+  QuizAttempt,
+  QuizAuthorFormValues,
+  QuizAvailability,
+  QuizCorrectOption,
+  QuizListItem,
   QuizQuestion,
-  QuizQuestionAnalyticsRow,
-  QuizUserAnalyticsRow,
+  QuizQuestionFormValues,
+  QuizStatus,
   UserRole,
 } from '../types';
-import { normalizeUserRole } from '../utils/roles';
 
-export type QuizExamWithCounts = QuizExam & { question_count: number; attempt_count: number };
-
-export type QuizDraftQuestionInput = {
-  question_text: string;
-  options: string[];
-  correct_answer_index: number;
-  explanation: string;
-  points: number;
-  question_type?: 'mcq' | 'image';
-  image_url?: string | null;
+type QuizRow = Quiz & {
+  profiles?: {
+    full_name: string | null;
+    nickname?: string | null;
+    role?: UserRole | null;
+  } | null;
 };
 
-export interface QuizAnalyticsData {
-  exams: QuizExamAnalyticsRow[];
-  questions: QuizQuestionAnalyticsRow[];
-  users: QuizUserAnalyticsRow[];
-  groups: QuizGroupAnalyticsRow[];
-}
+const AUTHOR_ROLES: UserRole[] = ['admin', 'faculty'];
 
-type QuizExamRow = {
-  id: string;
-  title: string;
-  specialty: string;
-  description: string | null;
-  duration_minutes: number;
-  pass_mark_percent?: number | null;
-  status?: QuizExam['status'] | null;
-  is_published: boolean;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-};
+const getAvailability = (quiz: Pick<Quiz, 'status' | 'opens_at' | 'closes_at'>): QuizAvailability => {
+  const now = Date.now();
+  const opensAt = new Date(quiz.opens_at).getTime();
+  const closesAt = new Date(quiz.closes_at).getTime();
 
-type QuizExamIdRow = { id: string };
-type ExamIdOnlyRow = { exam_id: string };
-
-const toNumber = (value: unknown, defaultValue = 0): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : defaultValue;
-};
-
-const toError = (error: unknown, fallback: string): Error => {
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = String((error as { message?: unknown }).message ?? fallback);
-    return new Error(message);
+  if (quiz.status !== 'published' || now >= closesAt) {
+    return 'closed';
   }
-  return new Error(fallback);
+
+  if (now < opensAt) {
+    return 'scheduled';
+  }
+
+  return 'open';
 };
 
-const normalizeExamRow = (row: QuizExamRow): QuizExam => ({
+const normalizeQuiz = (row: QuizRow, questionCount = 0): QuizListItem => ({
   ...row,
-  pass_mark_percent: toNumber(row.pass_mark_percent, 70),
-  status: row.status || (row.is_published ? 'published' : 'draft'),
+  description: row.description ?? '',
+  question_count: questionCount,
+  author_name: row.profiles?.nickname || row.profiles?.full_name || 'Unknown author',
+  author_role: row.profiles?.role || null,
+  availability: getAvailability(row),
+  can_start: row.status === 'published' && getAvailability(row) === 'open',
 });
 
-const countByExamId = (rows: ExamIdOnlyRow[]): Record<string, number> => {
-  const counts: Record<string, number> = {};
-  rows.forEach((row) => {
-    counts[row.exam_id] = (counts[row.exam_id] || 0) + 1;
-  });
+const fetchQuestionCounts = async (quizIds: string[]) => {
+  if (quizIds.length === 0) {
+    return new Map<string, number>();
+  }
+
+  const { data, error } = await supabase
+    .from('quiz_questions')
+    .select('quiz_id')
+    .in('quiz_id', quizIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const counts = new Map<string, number>();
+  for (const row of data || []) {
+    counts.set(row.quiz_id, (counts.get(row.quiz_id) || 0) + 1);
+  }
+
   return counts;
 };
 
-export const getQuizBootstrapContext = async (): Promise<{ uid: string; role: UserRole }> => {
-  const { data } = await supabase.auth.getUser();
-  const uid = data?.user?.id ?? '';
-  if (!uid) {
-    return { uid: '', role: 'resident' };
-  }
-
-  const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', uid).single();
-  if (error) {
-    throw toError(error, 'Failed to fetch profile role');
-  }
-
-  return { uid, role: normalizeUserRole(profile?.role) };
-};
-
-const fetchExamCounts = async (examIds: string[]): Promise<{ questionCount: Record<string, number>; attemptCount: Record<string, number> }> => {
-  if (!examIds.length) {
-    return { questionCount: {}, attemptCount: {} };
-  }
-
-  const [qRows, atRows] = await Promise.all([
-    supabase.from('quiz_questions').select('exam_id').in('exam_id', examIds),
-    supabase.from('quiz_attempts').select('exam_id').in('exam_id', examIds),
-  ]);
-  if (qRows.error) {
-    throw toError(qRows.error, 'Failed to fetch question counts');
-  }
-  if (atRows.error) {
-    throw toError(atRows.error, 'Failed to fetch attempt counts');
-  }
-
-  const questionCount = countByExamId((qRows.data ?? []) as ExamIdOnlyRow[]);
-  const attemptCount = countByExamId((atRows.data ?? []) as ExamIdOnlyRow[]);
-  return { questionCount, attemptCount };
-};
-
-export const listPublishedExamsWithCounts = async (): Promise<QuizExamWithCounts[]> => {
-  let rows: QuizExamRow[] = [];
-  const primary = await supabase
-    .from('quiz_exams')
-    .select('id,title,specialty,description,duration_minutes,pass_mark_percent,status,is_published,created_by,created_at,updated_at')
-    .or('status.eq.published,is_published.eq.true');
-
-  if (primary.error) {
-    const fallback = await supabase
-      .from('quiz_exams')
-      .select('id,title,specialty,description,duration_minutes,is_published,created_by,created_at,updated_at')
-      .eq('is_published', true);
-    if (fallback.error) {
-      throw toError(fallback.error, 'Failed to fetch published exams');
-    }
-    rows = ((fallback.data ?? []) as QuizExamRow[]).map((item) => ({
-      ...item,
-      pass_mark_percent: 70,
-      status: item.is_published ? 'published' : 'draft',
-    }));
-  } else {
-    rows = (primary.data ?? []) as QuizExamRow[];
-  }
-
-  const examIds = rows.map((row) => row.id);
-  const counts = await fetchExamCounts(examIds);
-  return rows.map((row) => ({
-    ...normalizeExamRow(row),
-    question_count: counts.questionCount[row.id] || 0,
-    attempt_count: counts.attemptCount[row.id] || 0,
+const mapQuestionInput = (quizId: string, questions: QuizQuestionFormValues[]) =>
+  questions.map((question, index) => ({
+    quiz_id: quizId,
+    sort_order: index,
+    stem: question.stem.trim(),
+    clinical_context: question.clinical_context.trim() || null,
+    image_url: question.image_url.trim() || null,
+    option_a: question.option_a.trim(),
+    option_b: question.option_b.trim(),
+    option_c: question.option_c.trim(),
+    option_d: question.option_d.trim(),
+    option_e: question.option_e.trim() || null,
+    correct_option: question.correct_option,
+    explanation: question.explanation.trim() || null,
+    teaching_point: question.teaching_point.trim() || null,
+    pitfall: question.pitfall.trim() || null,
+    modality: question.modality.trim() || null,
+    anatomy_region: question.anatomy_region.trim() || null,
+    difficulty: question.difficulty,
   }));
+
+const validateQuestionPayload = (questions: QuizQuestionFormValues[]) => {
+  if (questions.length === 0) {
+    throw new Error('Add at least one question before saving a quiz.');
+  }
+
+  questions.forEach((question, index) => {
+    if (!question.stem.trim()) {
+      throw new Error(`Question ${index + 1}: stem is required.`);
+    }
+
+    if (!question.option_a.trim() || !question.option_b.trim() || !question.option_c.trim() || !question.option_d.trim()) {
+      throw new Error(`Question ${index + 1}: options A to D are required.`);
+    }
+    if (question.correct_option === 'E' && !question.option_e.trim()) {
+      throw new Error(`Question ${index + 1}: option E is required when the correct answer is E.`);
+    }
+  });
 };
 
-export const listManageExams = async (role: UserRole, uid: string): Promise<QuizExamWithCounts[]> => {
-  let query = supabase
-    .from('quiz_exams')
-    .select('id,title,specialty,description,duration_minutes,pass_mark_percent,status,is_published,created_by,created_at,updated_at')
-    .order('updated_at', { ascending: false });
-  if (role === 'training_officer') {
-    query = query.eq('created_by', uid);
+export const isQuizAuthorRole = (role: UserRole | null) => !!role && AUTHOR_ROLES.includes(role);
+
+export const getCurrentUserRole = async (): Promise<UserRole | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return null;
   }
+
+  const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+  if (error) {
+    throw error;
+  }
+
+  return (data?.role as UserRole) || 'resident';
+};
+
+export const listAvailableQuizzes = async (): Promise<QuizListItem[]> => {
+  const { data, error } = await supabase
+    .from('quizzes')
+    .select('*, profiles:created_by(full_name, nickname, role)')
+    .eq('status', 'published')
+    .order('opens_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data || []) as QuizRow[];
+  const counts = await fetchQuestionCounts(rows.map((row) => row.id));
+
+  return rows
+    .map((row) => normalizeQuiz(row, counts.get(row.id) || 0))
+    .sort((a, b) => {
+      const order = { open: 0, scheduled: 1, closed: 2 } as const;
+      const availabilityDiff = order[a.availability] - order[b.availability];
+      if (availabilityDiff !== 0) return availabilityDiff;
+      return new Date(a.opens_at).getTime() - new Date(b.opens_at).getTime();
+    });
+};
+
+export const listManagedQuizzes = async (): Promise<QuizListItem[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return [];
+  }
+
+  const role = await getCurrentUserRole();
+  let query = supabase
+    .from('quizzes')
+    .select('*, profiles:created_by(full_name, nickname, role)')
+    .order('updated_at', { ascending: false });
+
+  if (role !== 'admin') {
+    query = query.eq('created_by', user.id);
+  }
+
   const { data, error } = await query;
   if (error) {
-    throw toError(error, 'Failed to fetch manage exams');
+    throw error;
   }
 
-  return ((data ?? []) as QuizExamRow[]).map((row) => ({
-    ...normalizeExamRow(row),
-    question_count: 0,
-    attempt_count: 0,
-  }));
+  const rows = (data || []) as QuizRow[];
+  const counts = await fetchQuestionCounts(rows.map((row) => row.id));
+  return rows.map((row) => normalizeQuiz(row, counts.get(row.id) || 0));
 };
 
-export const listExamQuestions = async (examId: string): Promise<QuizQuestion[]> => {
-  const { data, error } = await supabase
-    .from('quiz_questions')
-    .select('id,exam_id,question_text,question_type,image_url,options,correct_answer_index,explanation,points,sort_order,created_at')
-    .eq('exam_id', examId)
-    .order('sort_order');
-  if (error) {
-    throw toError(error, 'Failed to fetch quiz questions');
+export const getQuizWithQuestions = async (quizId: string): Promise<{ quiz: QuizListItem; questions: QuizQuestion[] }> => {
+  const { data: quizData, error: quizError } = await supabase
+    .from('quizzes')
+    .select('*, profiles:created_by(full_name, nickname, role)')
+    .eq('id', quizId)
+    .single();
+
+  if (quizError) {
+    throw quizError;
   }
 
-  return ((data ?? []) as QuizQuestion[]).map((row) => ({
-    ...row,
-    options: Array.isArray(row.options) ? row.options.map((item) => String(item)) : [],
-  }));
+  const { data: questions, error: questionError } = await supabase
+    .from('quiz_questions')
+    .select('*')
+    .eq('quiz_id', quizId)
+    .order('sort_order', { ascending: true });
+
+  if (questionError) {
+    throw questionError;
+  }
+
+  return {
+    quiz: normalizeQuiz(quizData as QuizRow, (questions || []).length),
+    questions: (questions || []) as QuizQuestion[],
+  };
+};
+
+export const createQuiz = async (payload: QuizAuthorFormValues): Promise<QuizListItem> => {
+  validateQuestionPayload(payload.questions);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('quizzes')
+    .insert({
+      title: payload.title.trim(),
+      description: payload.description.trim() || null,
+      specialty: payload.specialty,
+      target_level: payload.target_level,
+      timer_enabled: payload.timer_enabled,
+      timer_minutes: payload.timer_enabled ? Number(payload.timer_minutes) : null,
+      opens_at: new Date(payload.opens_at).toISOString(),
+      closes_at: new Date(payload.closes_at).toISOString(),
+      status: payload.status,
+      created_by: user.id,
+      updated_by: user.id,
+    })
+    .select('*, profiles:created_by(full_name, nickname, role)')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  await saveQuizQuestions(data.id, payload.questions);
+  return normalizeQuiz(data as QuizRow, payload.questions.length);
+};
+
+export const updateQuiz = async (quizId: string, payload: QuizAuthorFormValues): Promise<QuizListItem> => {
+  validateQuestionPayload(payload.questions);
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  const { data, error } = await supabase
+    .from('quizzes')
+    .update({
+      title: payload.title.trim(),
+      description: payload.description.trim() || null,
+      specialty: payload.specialty,
+      target_level: payload.target_level,
+      timer_enabled: payload.timer_enabled,
+      timer_minutes: payload.timer_enabled ? Number(payload.timer_minutes) : null,
+      opens_at: new Date(payload.opens_at).toISOString(),
+      closes_at: new Date(payload.closes_at).toISOString(),
+      status: payload.status,
+      updated_by: user.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', quizId)
+    .select('*, profiles:created_by(full_name, nickname, role)')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  await saveQuizQuestions(quizId, payload.questions);
+  return normalizeQuiz(data as QuizRow, payload.questions.length);
+};
+
+export const deleteQuiz = async (quizId: string) => {
+  const { error } = await supabase.from('quizzes').delete().eq('id', quizId);
+  if (error) {
+    throw error;
+  }
+};
+
+export const duplicateQuiz = async (quizId: string): Promise<QuizListItem> => {
+  const { quiz, questions } = await getQuizWithQuestions(quizId);
+  const clonePayload: QuizAuthorFormValues = {
+    title: `${quiz.title} (Copy)`,
+    description: quiz.description || '',
+    specialty: quiz.specialty,
+    target_level: quiz.target_level,
+    timer_enabled: quiz.timer_enabled,
+    timer_minutes: quiz.timer_minutes || '',
+    opens_at: quiz.opens_at.slice(0, 16),
+    closes_at: quiz.closes_at.slice(0, 16),
+    status: 'draft',
+    questions: questions.map((question) => ({
+      stem: question.stem,
+      clinical_context: question.clinical_context || '',
+      image_url: question.image_url || '',
+      option_a: question.option_a,
+      option_b: question.option_b,
+      option_c: question.option_c,
+      option_d: question.option_d,
+      option_e: question.option_e || '',
+      correct_option: question.correct_option,
+      explanation: question.explanation || '',
+      teaching_point: question.teaching_point || '',
+      pitfall: question.pitfall || '',
+      modality: question.modality || '',
+      anatomy_region: question.anatomy_region || '',
+      difficulty: question.difficulty,
+    })),
+  };
+
+  return createQuiz(clonePayload);
+};
+
+export const saveQuizQuestions = async (quizId: string, questions: QuizQuestionFormValues[]) => {
+  validateQuestionPayload(questions);
+
+  const { error: deleteError } = await supabase.from('quiz_questions').delete().eq('quiz_id', quizId);
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const payload = mapQuestionInput(quizId, questions);
+  const { error } = await supabase.from('quiz_questions').insert(payload);
+  if (error) {
+    throw error;
+  }
+};
+
+export const uploadQuizQuestionImage = async (file: File, questionIndex: number) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Only image files are supported.');
+  }
+
+  if (file.size > 15 * 1024 * 1024) {
+    throw new Error('Image must be 15MB or smaller.');
+  }
+
+  const extension = file.name.split('.').pop() || 'jpg';
+  const path = `${user.id}/${Date.now()}-${questionIndex}.${extension}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('quiz-images')
+    .upload(path, file, { upsert: true });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  const { data } = supabase.storage.from('quiz-images').getPublicUrl(path);
+  return data.publicUrl;
+};
+
+export const startQuizAttempt = async (quiz: QuizListItem) => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  if (!quiz.can_start) {
+    throw new Error('This quiz is not currently open.');
+  }
+
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .insert({
+      quiz_id: quiz.id,
+      user_id: user.id,
+      total_questions: quiz.question_count || 0,
+      timer_enabled: quiz.timer_enabled,
+      timer_minutes: quiz.timer_minutes,
+      status: 'in_progress',
+      answers: [],
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as QuizAttempt;
 };
 
 export const submitQuizAttempt = async (
-  examId: string,
-  answers: QuizAnswerMap,
-  startedAt: string,
-  clientEvents: QuizClientEvent[],
-): Promise<QuizAttemptSummary> => {
-  const { data, error } = await supabase.rpc('submit_quiz_attempt', {
-    p_exam_id: examId,
-    p_answers: answers,
-    p_started_at: startedAt,
-    p_client_events: clientEvents,
+  attemptId: string,
+  questions: QuizQuestion[],
+  answers: Array<{ questionId: string; selectedOption: QuizCorrectOption | null }>,
+  timeSpentSeconds: number,
+) => {
+  const questionMap = new Map(questions.map((question) => [question.id, question]));
+  const validatedAnswers: QuizAnswer[] = answers.map((answer) => {
+    const question = questionMap.get(answer.questionId);
+    return {
+      questionId: answer.questionId,
+      selectedOption: answer.selectedOption,
+      isCorrect: !!question && answer.selectedOption === question.correct_option,
+    };
   });
+
+  const score = validatedAnswers.filter((answer) => answer.isCorrect).length;
+  const percentage = questions.length ? Number(((score / questions.length) * 100).toFixed(2)) : 0;
+
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .update({
+      answers: validatedAnswers,
+      score,
+      total_questions: questions.length,
+      percentage,
+      submitted_at: new Date().toISOString(),
+      time_spent_seconds: timeSpentSeconds,
+      status: 'submitted',
+    })
+    .eq('id', attemptId)
+    .select('*')
+    .single();
+
   if (error) {
-    throw toError(error, 'Failed to submit quiz attempt');
+    throw error;
   }
 
-  const row = Array.isArray(data) ? data[0] : data;
-  if (!row) {
-    throw new Error('No result returned.');
-  }
-
-  return {
-    attempt_id: String(row.attempt_id),
-    score: toNumber(row.score),
-    total_points: toNumber(row.total_points),
-    correct_count: toNumber(row.correct_count),
-    is_pass: Boolean(row.is_pass),
-    duration_seconds: toNumber(row.duration_seconds),
-    completed_at: String(row.completed_at),
-  };
+  return data as QuizAttempt;
 };
 
-export const saveExamWithQuestions = async (
-  exam: Pick<QuizExam, 'id' | 'title' | 'specialty' | 'description' | 'duration_minutes' | 'pass_mark_percent' | 'status'>,
-  createdBy: string,
-  questions: QuizDraftQuestionInput[],
-): Promise<{ examId: string; isNewExam: boolean }> => {
-  let examId = exam.id;
-  const isNewExam = !examId;
-  if (!examId) {
-    const insertResult = await supabase
-      .from('quiz_exams')
-      .insert({ ...exam, created_by: createdBy })
-      .select('id')
-      .single();
-    if (insertResult.error) {
-      throw toError(insertResult.error, 'Failed to create exam');
-    }
-    examId = ((insertResult.data as QuizExamIdRow | null)?.id ?? '');
-    if (!examId) {
-      throw new Error('Missing exam id after create.');
-    }
-  } else {
-    const updateResult = await supabase.from('quiz_exams').update(exam).eq('id', examId);
-    if (updateResult.error) {
-      throw toError(updateResult.error, 'Failed to update exam');
-    }
+export const listMyQuizAttempts = async (): Promise<QuizAttempt[]> => {
+  const { data, error } = await supabase
+    .from('quiz_attempt_summaries')
+    .select('*')
+    .order('submitted_at', { ascending: false });
+
+  if (error) {
+    throw error;
   }
 
-  const deleteResult = await supabase.from('quiz_questions').delete().eq('exam_id', examId);
-  if (deleteResult.error) {
-    throw toError(deleteResult.error, 'Failed to reset exam questions');
-  }
-
-  const questionPayload = questions.map((question, sortOrder) => ({
-    exam_id: examId,
-    question_text: question.question_text.trim(),
-    options: question.options.map((item) => item.trim()),
-    correct_answer_index: question.correct_answer_index,
-    explanation: question.explanation.trim(),
-    points: Math.max(1, toNumber(question.points, 1)),
-    sort_order: sortOrder,
-    question_type: question.question_type || 'mcq',
-    image_url: question.image_url || null,
+  return (data || []).map((attempt: any) => ({
+    id: attempt.id,
+    quiz_id: attempt.quiz_id,
+    user_id: attempt.user_id,
+    started_at: attempt.started_at,
+    submitted_at: attempt.submitted_at,
+    score: attempt.score,
+    total_questions: attempt.total_questions,
+    percentage: Number(attempt.percentage || 0),
+    timer_enabled: attempt.timer_enabled,
+    timer_minutes: attempt.timer_minutes,
+    time_spent_seconds: attempt.time_spent_seconds,
+    status: attempt.status,
+    answers: (attempt.answers || []) as QuizAnswer[],
+    quiz: {
+      id: attempt.quiz_id,
+      title: attempt.title,
+      description: '',
+      specialty: attempt.specialty,
+      target_level: attempt.target_level,
+      timer_enabled: attempt.timer_enabled,
+      timer_minutes: attempt.timer_minutes,
+      opens_at: attempt.opens_at,
+      closes_at: attempt.closes_at,
+      status: attempt.quiz_status as QuizStatus,
+      created_by: attempt.created_by,
+      question_count: attempt.total_questions,
+      availability: getAvailability({
+        status: attempt.quiz_status,
+        opens_at: attempt.opens_at,
+        closes_at: attempt.closes_at,
+      }),
+      can_start: getAvailability({
+        status: attempt.quiz_status,
+        opens_at: attempt.opens_at,
+        closes_at: attempt.closes_at,
+      }) === 'open' && attempt.quiz_status === 'published',
+    },
   }));
-
-  const insertQuestionsResult = await supabase.from('quiz_questions').insert(questionPayload);
-  if (insertQuestionsResult.error) {
-    throw toError(insertQuestionsResult.error, 'Failed to save quiz questions');
-  }
-
-  return { examId, isNewExam };
-};
-
-export const updateExamStatus = async (examId: string, status: QuizExam['status']): Promise<void> => {
-  const { error } = await supabase.from('quiz_exams').update({ status }).eq('id', examId);
-  if (error) {
-    throw toError(error, 'Failed to update exam status');
-  }
-};
-
-export const fetchQuizAnalytics = async (limit = 500): Promise<QuizAnalyticsData> => {
-  const [exams, questions, users, groups] = await Promise.all([
-    supabase.from('quiz_exam_analytics_v').select('*').limit(limit),
-    supabase.from('quiz_question_analytics_v').select('*').limit(limit),
-    supabase.from('quiz_user_analytics_v').select('*').limit(limit),
-    supabase.from('quiz_group_analytics_v').select('*').limit(limit),
-  ]);
-  if (exams.error) {
-    throw toError(exams.error, 'Failed to load exam analytics');
-  }
-  if (questions.error) {
-    throw toError(questions.error, 'Failed to load question analytics');
-  }
-  if (users.error) {
-    throw toError(users.error, 'Failed to load user analytics');
-  }
-  if (groups.error) {
-    throw toError(groups.error, 'Failed to load group analytics');
-  }
-
-  return {
-    exams: (exams.data ?? []) as QuizExamAnalyticsRow[],
-    questions: (questions.data ?? []) as QuizQuestionAnalyticsRow[],
-    users: (users.data ?? []) as QuizUserAnalyticsRow[],
-    groups: (groups.data ?? []) as QuizGroupAnalyticsRow[],
-  };
 };
