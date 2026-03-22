@@ -93,18 +93,10 @@ const QuizResultReview: React.FC<QuizResultReviewProps> = ({ quiz, questions, at
                 })}
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm">
+              <div className="text-sm">
                 <div className="rounded-2xl bg-cyan-500/5 border border-cyan-500/10 p-4">
                   <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-300 mb-2">Explanation</p>
                   <p className="text-slate-200 leading-relaxed">{question.explanation || 'No explanation provided for this question.'}</p>
-                </div>
-                <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/10 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-300 mb-2">Teaching Point</p>
-                  <p className="text-slate-200 leading-relaxed">{question.teaching_point || 'No teaching point provided.'}</p>
-                </div>
-                <div className="rounded-2xl bg-amber-500/5 border border-amber-500/10 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-amber-300 mb-2">Common Pitfall</p>
-                  <p className="text-slate-200 leading-relaxed">{question.pitfall || 'No common pitfall documented.'}</p>
                 </div>
               </div>
             </div>

@@ -89,17 +89,17 @@ const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onS
   return (
     <div className="space-y-5">
       <div className="glass-card-enhanced rounded-3xl border border-white/10 p-5">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Quiz Session</p>
-            <h2 className="text-2xl font-bold text-white mt-2">{quiz.title}</h2>
-            <p className="text-sm text-slate-400 mt-2">{quiz.specialty} • {quiz.target_level} level • {questions.length} questions</p>
+            <h2 className="mt-2 text-2xl font-bold text-white">{quiz.title}</h2>
+            <p className="mt-2 text-sm text-slate-400">{quiz.specialty} • {questions.length} questions</p>
           </div>
           {formattedTime && (
-            <div className={`rounded-2xl border px-4 py-3 min-w-[130px] text-center ${timerTone}`}>
+            <div className={`min-w-[130px] rounded-2xl border px-4 py-3 text-center ${timerTone}`}>
               <p className="text-[10px] uppercase tracking-[0.2em]">Timer</p>
-              <p className="text-2xl font-bold mt-1">{formattedTime}</p>
-              <p className="text-[11px] mt-1">{timerExpired ? 'Time expired. Manual submit required.' : 'Countdown warning only'}</p>
+              <p className="mt-1 text-2xl font-bold">{formattedTime}</p>
+              <p className="mt-1 text-[11px]">{timerExpired ? 'Time expired. Manual submit required.' : 'Countdown warning only'}</p>
             </div>
           )}
         </div>
@@ -112,34 +112,28 @@ const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onS
       </div>
 
       <div className="glass-card-enhanced rounded-3xl border border-white/10 p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <p className="text-sm text-slate-400">Question {currentIndex + 1} of {questions.length}</p>
           <p className="text-sm text-slate-400">{answeredCount} answered</p>
         </div>
-        <div className="h-2 rounded-full bg-white/5 overflow-hidden mb-6">
+        <div className="mb-6 h-2 overflow-hidden rounded-full bg-white/5">
           <div className="h-full bg-primary transition-all duration-300" style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }} />
         </div>
 
         {currentQuestion.clinical_context && (
-          <div className="rounded-2xl border border-cyan-500/10 bg-cyan-500/5 p-4 mb-4">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-300 mb-2">Clinical Context</p>
-            <p className="text-sm text-slate-200 leading-relaxed">{currentQuestion.clinical_context}</p>
+          <div className="mb-4 rounded-2xl border border-cyan-500/10 bg-cyan-500/5 p-4">
+            <p className="mb-2 text-[10px] uppercase tracking-[0.2em] text-cyan-300">Clinical Context</p>
+            <p className="text-sm leading-relaxed text-slate-200">{currentQuestion.clinical_context}</p>
           </div>
         )}
 
         {currentQuestion.image_url && (
-          <div className="mb-5 rounded-3xl overflow-hidden border border-white/10 bg-black/20">
-            <img src={currentQuestion.image_url} alt={`Question ${currentIndex + 1} study`} className="w-full max-h-[320px] object-cover" />
+          <div className="mb-5 overflow-hidden rounded-3xl border border-white/10 bg-black/20">
+            <img src={currentQuestion.image_url} alt={`Question ${currentIndex + 1} study`} className="max-h-[320px] w-full object-cover" />
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 mb-4">
-          {currentQuestion.modality && <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">{currentQuestion.modality}</span>}
-          {currentQuestion.anatomy_region && <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">{currentQuestion.anatomy_region}</span>}
-          <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-slate-300">{currentQuestion.difficulty}</span>
-        </div>
-
-        <h3 className="text-xl font-semibold text-white leading-relaxed">{currentQuestion.stem}</h3>
+        <h3 className="text-xl font-semibold leading-relaxed text-white">{currentQuestion.stem}</h3>
 
         <div className="mt-6 space-y-3">
           {questionOptions.map((option) => (
@@ -152,19 +146,19 @@ const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onS
                 : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20'
                 }`}
             >
-              <span className="font-bold mr-3">{option.key}.</span>
+              <span className="mr-3 font-bold">{option.key}.</span>
               {option.value}
             </button>
           ))}
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setCurrentIndex((previous) => Math.max(0, previous - 1))}
               disabled={currentIndex === 0}
-              className="px-4 py-2 rounded-xl border border-white/10 text-slate-300 disabled:opacity-50"
+              className="rounded-xl border border-white/10 px-4 py-2 text-slate-300 disabled:opacity-50"
             >
               Previous
             </button>
@@ -172,20 +166,20 @@ const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onS
               type="button"
               onClick={() => setCurrentIndex((previous) => Math.min(questions.length - 1, previous + 1))}
               disabled={currentIndex === questions.length - 1}
-              className="px-4 py-2 rounded-xl border border-white/10 text-slate-300 disabled:opacity-50"
+              className="rounded-xl border border-white/10 px-4 py-2 text-slate-300 disabled:opacity-50"
             >
               Next
             </button>
           </div>
           <div className="flex gap-3">
-            <button type="button" onClick={onCancel} className="px-4 py-2 rounded-xl text-slate-400">
+            <button type="button" onClick={onCancel} className="px-4 py-2 text-slate-400">
               Back to library
             </button>
             <button
               type="button"
               onClick={handleSubmit}
               disabled={submitting}
-              className="px-5 py-2.5 rounded-xl bg-primary text-white font-bold disabled:opacity-50"
+              className="rounded-xl bg-primary px-5 py-2.5 font-bold text-white disabled:opacity-50"
             >
               {submitting ? 'Submitting...' : 'Submit Quiz'}
             </button>

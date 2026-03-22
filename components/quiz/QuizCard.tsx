@@ -30,12 +30,6 @@ const QuizCard: React.FC<QuizCardProps> = ({ quiz, onStart }) => {
           <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300">
             {quiz.specialty}
           </span>
-          <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] rounded-full border border-white/10 bg-white/5 text-slate-300">
-            {quiz.target_level}
-          </span>
-          <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 text-fuchsia-300">
-            Practice
-          </span>
           {quiz.timer_enabled && (
             <span className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.2em] rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-300">
               Timed
@@ -43,7 +37,7 @@ const QuizCard: React.FC<QuizCardProps> = ({ quiz, onStart }) => {
           )}
         </div>
         <h3 className="text-lg font-bold text-white">{quiz.title}</h3>
-        <p className="text-sm text-slate-400 mt-2 leading-relaxed">{quiz.description || 'Case-based radiology training quiz for resident learning.'}</p>
+        <p className="text-sm text-slate-400 mt-2 leading-relaxed">{quiz.description || 'Radiology training quiz.'}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-xs text-slate-400">
