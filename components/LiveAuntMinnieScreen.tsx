@@ -98,6 +98,25 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [composerPrompt, setComposerPrompt] = useState<LiveAuntMinniePromptInput>(createEmptyPrompt());
 
+  const applyRoomState = (nextState: LiveAuntMinnieRoomState) => {
+    setRoomState(nextState);
+    setDraftResponsesByPromptId((previous) => {
+      const next = { ...previous };
+      nextState.prompts.forEach((prompt) => {
+        if (!(prompt.id in next)) {
+          next[prompt.id] = nextState.myResponsesByPromptId[prompt.id]?.response_text || '';
+        }
+      });
+      return next;
+    });
+  };
+
+  const refreshCurrentRoom = async (sessionId: string, onlineParticipantIds: string[] = []) => {
+    const nextState = await getLiveAuntMinnieRoomState(sessionId, onlineParticipantIds);
+    applyRoomState(nextState);
+    return nextState;
+  };
+
   const loadWorkspace = async () => {
     setLoading(true);
     setError(null);
@@ -128,16 +147,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       sessionId: currentSessionId,
       onStateChange: (nextState) => {
         if (!isMounted) return;
-        setRoomState(nextState);
-        setDraftResponsesByPromptId((previous) => {
-          const next = { ...previous };
-          nextState.prompts.forEach((prompt) => {
-            if (!(prompt.id in next)) {
-              next[prompt.id] = nextState.myResponsesByPromptId[prompt.id]?.response_text || '';
-            }
-          });
-          return next;
-        });
+        applyRoomState(nextState);
       },
       onError: (message) => {
         if (!isMounted) return;
@@ -169,13 +179,8 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
       refreshInFlight = true;
       try {
-        const nextState = await getLiveAuntMinnieRoomState(
-          currentSessionId,
-          roomState?.onlineParticipantIds || [],
-        );
-        if (!cancelled) {
-          setRoomState(nextState);
-        }
+        const nextState = await getLiveAuntMinnieRoomState(currentSessionId, roomState?.onlineParticipantIds || []);
+        if (!cancelled) applyRoomState(nextState);
       } catch {
         // Keep existing realtime state if polling fails.
       } finally {
@@ -185,7 +190,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
     const intervalId = window.setInterval(() => {
       void refreshRoom();
-    }, 2500);
+    }, 1200);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -284,6 +289,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setError(null);
     try {
       await startLiveAuntMinnieSession(roomState.session.id);
+      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       await refreshWorkspace();
     } catch (err: any) {
       setError(err.message || 'Failed to go live.');
@@ -298,6 +304,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setError(null);
     try {
       await completeLiveAuntMinnieSession(roomState.session.id);
+      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       await refreshWorkspace();
     } catch (err: any) {
       setError(err.message || 'Failed to end room.');
@@ -315,6 +322,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
         roomState.session.id,
         roomState.session.current_phase !== 'reveal',
       );
+      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
     } catch (err: any) {
       setError(err.message || 'Failed to update answer visibility.');
     } finally {
@@ -344,6 +352,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       } else {
         await appendLiveAuntMinnieQuestion(roomState.session.id, composerPrompt);
       }
+      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       setIsComposerOpen(false);
       setEditingPromptId(null);
       setComposerPrompt(createEmptyPrompt());
