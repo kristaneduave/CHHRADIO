@@ -26,7 +26,7 @@ const PageShell: React.FC<PageShellProps> = ({
   const widthClassName = WIDTH_CLASS_MAP[layoutMode];
 
   return (
-    <div className={`min-h-full bg-app text-text-primary ${noBottomPadding ? '' : 'pb-24 xl:pb-10'} ${className}`.trim()}>
+    <div className={`min-h-full bg-app text-text-primary ${noBottomPadding ? '' : 'mobile-nav-clearance xl:pb-10'} ${className}`.trim()}>
       <div className={`mx-auto w-full ${widthClassName} px-4 pt-6 sm:px-6 xl:px-8 ${contentClassName}`.trim()}>
         {children}
       </div>

@@ -128,7 +128,7 @@ const ArticleLibraryDetailOverlay: React.FC<ArticleLibraryDetailOverlayProps> = 
               </div>
             ) : null}
           </div>
-          <div ref={setMobileDetailScrollNode} className="flex-1 overflow-y-auto px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] xl:px-6 xl:pb-6 xl:pt-0">
+          <div ref={setMobileDetailScrollNode} className="mobile-nav-clearance flex-1 overflow-y-auto px-4 xl:px-6 xl:pb-6 xl:pt-0">
             <div className="space-y-6">{detailPanel}</div>
           </div>
         </div>

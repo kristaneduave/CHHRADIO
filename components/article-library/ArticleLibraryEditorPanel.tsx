@@ -77,7 +77,7 @@ const ArticleLibraryEditorPanel: React.FC<ArticleLibraryEditorPanelProps> = ({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[120] px-3 py-3 xl:inset-auto xl:bottom-6 xl:right-6 xl:px-0 xl:py-0">
+    <div className="mobile-bottom-nav-frame fixed inset-x-0 top-0 z-[120] px-3 py-3 xl:inset-auto xl:bottom-6 xl:right-6 xl:px-0 xl:py-0">
       <section className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-fuchsia-500/15 bg-[#101922]/95 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl xl:mx-0 xl:h-auto xl:w-[24rem] xl:max-w-none">
         <div className="flex items-start justify-between gap-3">
           <div>

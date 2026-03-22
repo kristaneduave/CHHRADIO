@@ -19,7 +19,6 @@ import {
   deleteLiveAuntMinnieResponse,
   getLiveAuntMinnieRoomState,
   getLiveAuntMinnieWorkspace,
-  setLiveAuntMinnieAutoAdvanceInterval,
   submitLiveAuntMinnieResponse,
   subscribeToLiveAuntMinnieRoom,
   updateLiveAuntMinniePrompt,
@@ -89,7 +88,8 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<LiveAuntMinnieRoomState | null>(null);
   const [draftTitle, setDraftTitle] = useState('Friday Noon Aunt Minnie');
-  const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState<number | null>(60);
+  const [composerDelaySeconds, setComposerDelaySeconds] = useState<number | null>(null);
+  const [pendingPromptReleaseAtById, setPendingPromptReleaseAtById] = useState<Record<string, number>>({});
   const [draftResponsesByPromptId, setDraftResponsesByPromptId] = useState<Record<string, string>>({});
   const [submittingPromptIds, setSubmittingPromptIds] = useState<Record<string, boolean>>({});
   const [isComposerOpen, setIsComposerOpen] = useState(false);
@@ -117,11 +117,6 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   useEffect(() => {
     roomStateRef.current = roomState;
   }, [roomState]);
-
-  useEffect(() => {
-    if (!roomState?.isHost) return;
-    setAutoAdvanceSeconds(roomState.session.auto_advance_interval_seconds || null);
-  }, [roomState?.isHost, roomState?.session.auto_advance_interval_seconds]);
 
   useEffect(() => {
     latestDraftResponsesRef.current = draftResponsesByPromptId;
@@ -234,26 +229,66 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   }, [currentSessionId, roomState?.onlineParticipantIds]);
 
   useEffect(() => {
-    if (!roomState?.isHost || roomState.session.status !== 'live' || !roomState.session.next_prompt_at) {
+    if (!roomState?.isHost || roomState.session.status !== 'live') {
       return;
     }
 
-    const remaining = new Date(roomState.session.next_prompt_at).getTime() - Date.now();
+    const queuedPrompt = roomState.prompts[roomState.session.current_prompt_index + 1];
+    if (!queuedPrompt) {
+      return;
+    }
+
+    const releaseAt = pendingPromptReleaseAtById[queuedPrompt.id];
+    if (!releaseAt) {
+      return;
+    }
+
+    const advanceQueuedPrompt = async () => {
+      try {
+        await advanceLiveAuntMinniePrompt(roomState.session.id);
+        await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
+        await refreshWorkspace();
+      } catch {
+        // Keep current room state if delayed release fails.
+      }
+    };
+
+    const remaining = releaseAt - Date.now();
     if (remaining <= 0) {
-      void advanceLiveAuntMinniePrompt(roomState.session.id).catch(() => {
-        // Keep current room state if auto-advance fails.
-      });
+      void advanceQueuedPrompt();
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      void advanceLiveAuntMinniePrompt(roomState.session.id).catch(() => {
-        // Keep current room state if auto-advance fails.
-      });
+      void advanceQueuedPrompt();
     }, remaining + 50);
 
     return () => window.clearTimeout(timeoutId);
-  }, [roomState?.isHost, roomState?.session.id, roomState?.session.status, roomState?.session.next_prompt_at]);
+  }, [
+    pendingPromptReleaseAtById,
+    roomState?.isHost,
+    roomState?.onlineParticipantIds,
+    roomState?.prompts,
+    roomState?.session.current_prompt_index,
+    roomState?.session.id,
+    roomState?.session.status,
+  ]);
+
+  useEffect(() => {
+    if (!roomState) return;
+
+    setPendingPromptReleaseAtById((previous) => {
+      const activePromptIds = new Set(
+        roomState.prompts
+          .slice(roomState.session.current_prompt_index + 1)
+          .map((prompt) => prompt.id),
+      );
+      const nextEntries = Object.entries(previous).filter(([promptId]) => activePromptIds.has(promptId));
+      return nextEntries.length === Object.keys(previous).length
+        ? previous
+        : Object.fromEntries(nextEntries);
+    });
+  }, [roomState]);
 
   const refreshWorkspace = async () => {
     try {
@@ -272,6 +307,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setIsComposerOpen(false);
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());
+    setComposerDelaySeconds(null);
   };
 
   const closeRoom = () => {
@@ -284,6 +320,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setIsComposerOpen(false);
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());
+    setComposerDelaySeconds(null);
     void refreshWorkspace();
   };
 
@@ -318,21 +355,6 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       setError(err.message || 'Image upload failed.');
     } finally {
       setBusyAction(null);
-    }
-  };
-
-  const handleAutoAdvanceSecondsChange = async (value: number | null) => {
-    setAutoAdvanceSeconds(value);
-    if (!roomState || roomState.session.status === 'completed' || roomState.session.status === 'cancelled') {
-      return;
-    }
-
-    try {
-      await setLiveAuntMinnieAutoAdvanceInterval(roomState.session.id, value);
-      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
-      await refreshWorkspace();
-    } catch (err: any) {
-      setError(err.message || 'Failed to update timer.');
     }
   };
 
@@ -386,12 +408,14 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const openNewPromptComposer = () => {
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());
+    setComposerDelaySeconds(null);
     setIsComposerOpen(true);
   };
 
   const openEditPromptComposer = (prompt: LiveAuntMinniePrompt) => {
     setEditingPromptId(prompt.id);
     setComposerPrompt(mapPromptToInput(prompt));
+    setComposerDelaySeconds(null);
     setIsComposerOpen(true);
   };
 
@@ -400,22 +424,27 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setBusyAction(editingPromptId ? 'edit-prompt' : 'append-question');
     setError(null);
     try {
-      const hadQueuedPrompts =
-        roomState.session.status === 'live' &&
-        roomState.prompts.length > roomState.session.current_prompt_index + 1;
-
+      let appendedPromptId: string | null = null;
       if (editingPromptId) {
         await updateLiveAuntMinniePrompt(roomState.session.id, editingPromptId, composerPrompt);
       } else {
-        await appendLiveAuntMinnieQuestion(roomState.session.id, composerPrompt);
-        if (roomState.session.status === 'live' && autoAdvanceSeconds === null && !hadQueuedPrompts) {
+        appendedPromptId = await appendLiveAuntMinnieQuestion(roomState.session.id, composerPrompt, {
+          insertAfterCurrent: roomState.session.status === 'live',
+        });
+        if (roomState.session.status === 'live' && composerDelaySeconds === null) {
           await advanceLiveAuntMinniePrompt(roomState.session.id);
+        } else if (roomState.session.status === 'live' && composerDelaySeconds !== null && appendedPromptId) {
+          setPendingPromptReleaseAtById((previous) => ({
+            ...previous,
+            [appendedPromptId as string]: Date.now() + composerDelaySeconds * 1000,
+          }));
         }
       }
       await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       setIsComposerOpen(false);
       setEditingPromptId(null);
       setComposerPrompt(createEmptyPrompt());
+      setComposerDelaySeconds(null);
       await refreshWorkspace();
     } catch (err: any) {
       setError(err.message || 'Failed to save question.');
@@ -621,7 +650,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
           )}
           {workspace?.canHost && (
             <p className="text-xs text-slate-500">
-              Add questions now, then release them manually or every 30 sec, 1 min, 2 min, or 5 min after going live.
+              Add questions now. Each question can post immediately or after 15, 30, 45, or 60 sec.
             </p>
           )}
         </div>
@@ -661,7 +690,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   }
 
   return (
-    <div className="px-4 pb-24 pt-4 sm:px-6 sm:pt-6">
+    <div className="mobile-nav-clearance px-4 pt-4 sm:px-6 sm:pt-6">
       {currentSessionId && roomState ? (
         <div className="mx-auto max-w-5xl space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -717,11 +746,14 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
               <div className="absolute inset-x-0 bottom-0 top-20 overflow-hidden md:inset-x-auto md:right-0 md:top-0 md:w-[430px]">
                 <LiveAuntMinniePromptComposer
                   auntMinnieCases={workspace?.auntMinnieCases || []}
-                  delaySeconds={autoAdvanceSeconds}
+                  delaySeconds={composerDelaySeconds}
                   heading={editingPromptId ? 'Edit question' : 'New question'}
                   onAddPromptImage={handleUploadPromptImage}
-                  onClose={() => setIsComposerOpen(false)}
-                  onDelaySecondsChange={setAutoAdvanceSeconds}
+                  onClose={() => {
+                    setIsComposerOpen(false);
+                    setComposerDelaySeconds(null);
+                  }}
+                  onDelaySecondsChange={setComposerDelaySeconds}
                   onPromptChange={(updates) =>
                     setComposerPrompt((previous) => ({
                       ...previous,
@@ -730,17 +762,13 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
                   }
                   onSave={handleSavePrompt}
                   postActionLabel={
-                    roomState.session.status === 'live'
-                      ? autoAdvanceSeconds === null
-                        ? 'Post now'
-                        : 'Add to queue'
+                    roomState.session.status === 'live' && composerDelaySeconds !== null
+                      ? `Post in ${composerDelaySeconds} sec`
                       : 'Post now'
                   }
                   postModeSummary={
-                    roomState.session.status === 'live'
-                      ? autoAdvanceSeconds === null
-                        ? 'This question posts immediately.'
-                        : `This question joins the queue and releases every ${autoAdvanceSeconds} sec.`
+                    roomState.session.status === 'live' && composerDelaySeconds !== null
+                      ? `This question posts in ${composerDelaySeconds} sec.`
                       : 'This question posts immediately.'
                   }
                   prompt={composerPrompt}

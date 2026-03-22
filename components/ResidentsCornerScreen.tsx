@@ -1029,7 +1029,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             </div>
 
             <div className="mx-auto w-full max-w-7xl xl:hidden">
-                <div className="mt-6 rounded-[2rem] border border-white/10 bg-white/[0.02] p-4 backdrop-blur-xl shadow-lg">
+                <div className="mobile-action-zone-clearance mt-6 rounded-[2rem] border border-white/10 bg-white/[0.02] p-4 backdrop-blur-xl shadow-lg">
                     <div className="space-y-4">
                         {sidebarCards}
                     </div>

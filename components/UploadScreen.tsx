@@ -615,7 +615,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         </div>
       )}
 
-      <div className={`flex-1 overflow-y-auto custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
+      <div data-layout-scroll-target="true" className={`flex-1 overflow-y-auto custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         <div className="px-6 pt-6 pb-24 max-w-7xl mx-auto w-full">
         {step === 1 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
@@ -879,38 +879,46 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 )}
 
                 {canShowReferenceFields && (
-                  <div className="max-w-3xl space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className={sectionLabelClassName}>Reference Source</h3>
+                  <div className="max-w-4xl space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <h3 className={sectionLabelClassName}>References</h3>
+                        <p className="text-xs text-slate-500">
+                          Optional sources for teaching points. Up to {MAX_REFERENCES}.
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={handleAddReference}
                         disabled={formData.references.length >= MAX_REFERENCES}
-                        className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Add Reference
                       </button>
                     </div>
 
-                    <p className="text-xs text-slate-500">Add up to 4 optional references.</p>
-
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       {formData.references.map((reference, index) => (
-                        <div key={reference.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                        <div key={reference.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-4 sm:p-5">
                           <div className="mb-4 flex items-center justify-between gap-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                              Reference {index + 1}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-7 min-w-7 items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/10 px-2 text-[11px] font-semibold text-cyan-100">
+                                {index + 1}
+                              </span>
+                              <p className="text-sm font-semibold text-white">
+                                {reference.title?.trim() || `Reference ${index + 1}`}
+                              </p>
+                            </div>
                             <button
                               type="button"
                               onClick={() => handleRemoveReference(reference.id)}
-                              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:bg-white/10 hover:text-white"
+                              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-300 transition hover:bg-white/10 hover:text-white"
                             >
                               Remove
                             </button>
                           </div>
 
-                          <div className="space-y-4">
+                          <div className="grid gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.6fr)]">
                             <div className="space-y-2">
                               <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Source Type</label>
                               <div className="relative">
@@ -936,7 +944,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                                 className={inputClassName}
                               />
                             </div>
+                          </div>
 
+                          <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                             <div className="space-y-2">
                               <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Page / Figure</label>
                               <input
@@ -946,22 +956,29 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                                 className={inputClassName}
                               />
                             </div>
+                            {(reference.sourceType || reference.title || reference.page) && (
+                              <div className="rounded-2xl border border-white/5 bg-black/20 px-4 py-3 md:min-w-[220px]">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">Preview</p>
+                                <p className="mt-1 text-sm font-medium text-white">{getReferenceSummary(reference)}</p>
+                                {reference.page && <p className="mt-1 text-xs text-slate-400">{reference.page}</p>}
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    {activeReferences.length > 0 && (
-                      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Reference Preview</p>
-                        <div className="mt-3 space-y-2">
+                    {activeReferences.length > 1 && (
+                      <div className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Saved References</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
                           {activeReferences.map((reference, index) => (
-                            <div key={reference.id}>
-                              <p className="text-sm font-medium text-white">
-                                {index + 1}. {getReferenceSummary(reference)}
-                              </p>
-                              {reference.page && <p className="mt-1 text-xs text-slate-400">{reference.page}</p>}
-                            </div>
+                            <span
+                              key={reference.id}
+                              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-200"
+                            >
+                              {index + 1}. {reference.title?.trim() || reference.sourceType || 'Reference'}
+                            </span>
                           ))}
                         </div>
                       </div>

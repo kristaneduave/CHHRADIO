@@ -360,7 +360,7 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({ quiz, questions = [],
               />
             </section>
 
-            <div className="sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#08111d]/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
+            <div className="mobile-sheet-footer-clearance sticky bottom-0 z-20 -mx-4 border-t border-white/10 bg-[#08111d]/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
                 <button type="button" onClick={onClose} className="min-h-[48px] px-4 py-2 text-slate-400">
                   Cancel

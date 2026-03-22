@@ -458,7 +458,7 @@ const MonthlyCensusModal: React.FC<MonthlyCensusModalProps> = ({ isOpen, onClose
     >
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 my-2 sm:my-4 w-full max-w-[380px] max-h-[92dvh] rounded-2xl border border-white/10 bg-[#0B101A] shadow-2xl overflow-hidden">
-        <form onSubmit={handleSubmit} className="h-full overflow-y-auto p-3 sm:p-4 space-y-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <form onSubmit={handleSubmit} className="mobile-nav-clearance h-full overflow-y-auto p-3 sm:p-4 space-y-2">
           <div className="sticky top-0 z-10 -mx-3 sm:-mx-4 px-3 sm:px-4 py-1.5 bg-[#0B101A]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0B101A]/80 flex items-center justify-between">
             <h2 className="text-base font-bold text-white">Monthly Census</h2>
             <button
@@ -629,7 +629,7 @@ const MonthlyCensusModal: React.FC<MonthlyCensusModalProps> = ({ isOpen, onClose
             })}
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1 sticky bottom-0 -mx-3 sm:-mx-4 px-3 sm:px-4 py-1.5 bg-[#0B101A]/95 backdrop-blur supports-[backdrop-filter]:bg-[#0B101A]/80">
+          <div className="mobile-sheet-footer-clearance sticky bottom-0 -mx-3 flex items-center justify-end gap-2 bg-[#0B101A]/95 px-3 py-1.5 pt-1 backdrop-blur supports-[backdrop-filter]:bg-[#0B101A]/80 sm:-mx-4 sm:px-4">
             <button
               type="button"
               onClick={onClose}

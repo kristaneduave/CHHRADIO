@@ -95,7 +95,7 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
     <button
       type="button"
       onClick={onCompose}
-      className="fixed bottom-5 right-5 z-20 flex h-14 min-w-[56px] items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/90 px-5 text-base font-semibold text-slate-950 shadow-[0_20px_40px_rgba(34,211,238,0.2)] transition hover:bg-cyan-300 md:bottom-8 md:right-8"
+      className="mobile-fab-clearance fixed right-5 z-20 flex h-14 min-w-[56px] items-center justify-center rounded-full border border-cyan-400/20 bg-cyan-500/90 px-5 text-base font-semibold text-slate-950 shadow-[0_20px_40px_rgba(34,211,238,0.2)] transition hover:bg-cyan-300 md:bottom-8 md:right-8"
       aria-label="Add question"
       title="Add question"
     >

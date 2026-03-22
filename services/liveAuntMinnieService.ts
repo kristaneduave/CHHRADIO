@@ -571,7 +571,11 @@ export const updateLiveAuntMinnieSession = async (sessionId: string, payload: Li
   return mapSession(sessionData);
 };
 
-export const appendLiveAuntMinnieQuestion = async (sessionId: string, prompt: LiveAuntMinniePromptInput) => {
+export const appendLiveAuntMinnieQuestion = async (
+  sessionId: string,
+  prompt: LiveAuntMinniePromptInput,
+  options?: { insertAfterCurrent?: boolean },
+) => {
   validatePromptInputs([prompt]);
   const { userId, profile } = await getAuthenticatedProfile();
   ensureHostRole(profile?.role);
@@ -582,13 +586,36 @@ export const appendLiveAuntMinnieQuestion = async (sessionId: string, prompt: Li
   }
 
   const prompts = await fetchPrompts(sessionId);
-  const normalized = normalizePromptInput(prompt, prompts.length);
+  const insertAt =
+    options?.insertAfterCurrent && session.status === 'live'
+      ? Math.min(session.current_prompt_index + 1, prompts.length)
+      : prompts.length;
+  const normalized = normalizePromptInput(prompt, insertAt);
+  const promptsToShift = prompts
+    .filter((item) => item.sort_order >= insertAt)
+    .sort((left, right) => right.sort_order - left.sort_order);
+  const now = new Date().toISOString();
+
+  for (const existingPrompt of promptsToShift) {
+    const { error: reorderError } = await supabase
+      .from('live_aunt_minnie_prompts')
+      .update({
+        sort_order: existingPrompt.sort_order + 1,
+        updated_at: now,
+      })
+      .eq('id', existingPrompt.id)
+      .eq('session_id', sessionId);
+
+    if (reorderError) {
+      throw reorderError;
+    }
+  }
 
   const { data: promptData, error: promptError } = await supabase
     .from('live_aunt_minnie_prompts')
     .insert({
       session_id: sessionId,
-      sort_order: prompts.length,
+      sort_order: insertAt,
       source_case_id: normalized.source_case_id,
       image_url: normalized.images[0]?.image_url || '',
       image_caption: normalized.images[0]?.caption || null,
@@ -634,6 +661,8 @@ export const appendLiveAuntMinnieQuestion = async (sessionId: string, prompt: Li
   if (sessionUpdateError) {
     throw sessionUpdateError;
   }
+
+  return promptData.id as string;
 };
 
 export const updateLiveAuntMinniePrompt = async (
@@ -920,17 +949,11 @@ export const advanceLiveAuntMinniePrompt = async (sessionId: string) => {
     return session;
   }
 
-  const intervalSeconds = session.auto_advance_interval_seconds || null;
-  const nextPromptAt =
-    intervalSeconds && nextIndex < prompts.length - 1
-      ? new Date(Date.now() + intervalSeconds * 1000).toISOString()
-      : null;
-
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .update({
       current_prompt_index: nextIndex,
-      next_prompt_at: nextPromptAt,
+      next_prompt_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)

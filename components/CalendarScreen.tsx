@@ -600,7 +600,7 @@ const CalendarScreen: React.FC = () => {
     <div
       data-testid="calendar-layout"
       data-calendar-viewport={viewport}
-      className="mx-auto min-h-screen w-full max-w-7xl animate-in fade-in duration-500 px-4 pt-5 pb-[calc(7rem+env(safe-area-inset-bottom))] md:px-6 xl:px-8"
+      className="mobile-action-zone-clearance mx-auto min-h-screen w-full max-w-7xl animate-in fade-in duration-500 px-4 pt-5 md:px-6 xl:px-8 xl:pb-10"
     >
       <div className="space-y-4">
         <header className="flex items-center justify-between gap-4 min-h-[32px]">

@@ -1482,21 +1482,24 @@ const ArticleLibraryScreen: React.FC = () => {
 
   const displayResults = useMemo(() => {
     if (debouncedQuery.trim()) return results;
-    if (!activeTopic) return [];
     return browseItems
-      .filter((item) => getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic === activeTopic)
+      .filter((item) => !activeTopic || getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic === activeTopic)
       .filter((item) => !activeBrowseTag || [...item.clinical_tags, ...item.problem_terms].includes(activeBrowseTag))
       .sort((left, right) => Number(right.is_featured) - Number(left.is_featured) || right.search_priority - left.search_priority || left.pathology_name.localeCompare(right.pathology_name));
   }, [activeBrowseTag, activeTopic, browseItems, debouncedQuery, results]);
 
   const browseSections = useMemo<ArticleLibraryBrowseSection[]>(() => {
-    if (!activeTopic || debouncedQuery.trim()) return [];
+    if (debouncedQuery.trim()) return [];
     if (!displayResults.length) return [];
     return [
-      { id: 'featured', title: `${activeTopic} highlights`, description: activeHub?.activeDescription || 'Curated training guides.', items: displayResults.filter((item) => item.is_featured).slice(0, 4) },
-      { id: 'library', title: 'Full library', description: 'All published guides in this topic.', items: displayResults },
+      {
+        id: 'library',
+        title: activeTopic ? 'Full library' : 'All guides',
+        description: activeTopic ? 'All published guides in this topic.' : 'All published guides across the library.',
+        items: displayResults,
+      },
     ].filter((section) => section.items.length);
-  }, [activeHub?.activeDescription, activeTopic, debouncedQuery, displayResults]);
+  }, [activeTopic, debouncedQuery, displayResults]);
 
   const recentlyUpdatedItems = useMemo(
     () => [...browseItems]
@@ -2324,7 +2327,7 @@ const ArticleLibraryScreen: React.FC = () => {
   const renderBrowseSection = (section: ArticleLibraryBrowseSection) => (
     <div key={section.id} className="space-y-1.5">
       {section.title || section.description ? (
-        <div>
+        <div className="text-center xl:text-left">
           {section.title ? <h4 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">{section.title}</h4> : null}
           {section.description ? <p className="mt-1 text-xs text-slate-500">{section.description}</p> : null}
         </div>
@@ -2534,8 +2537,6 @@ const ArticleLibraryScreen: React.FC = () => {
   const showDockedDesktopDetail = false;
   const overlayRoot = typeof document !== 'undefined' ? document.body : null;
 
-  const desktopHomeState = !debouncedQuery.trim() && !activeTopic;
-
   const desktopUtilityRail = (
     <div className="space-y-4 xl:sticky xl:top-6">
       {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
@@ -2598,7 +2599,10 @@ const ArticleLibraryScreen: React.FC = () => {
   );
 
   return (
-    <div className="min-h-full bg-app px-6 pb-40 pt-6">
+    <div
+      className="min-h-full bg-app px-6 pt-6 xl:pb-40"
+      style={{ paddingBottom: 'calc(var(--mobile-bottom-nav-clearance, 0px) - 0.35rem)' }}
+    >
       <div className="mx-auto max-w-[1680px] space-y-6">
         <header className="flex items-center justify-between gap-3 pt-2">
           <h1 className="text-3xl font-bold text-white">Article Library</h1>
@@ -2662,13 +2666,16 @@ const ArticleLibraryScreen: React.FC = () => {
             </section>
           </aside>
 
-          <div className="space-y-6">
+          <div className="flex flex-col gap-6">
             <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm xl:hidden">
               {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
             </section>
 
             <div className={`space-y-6 ${showDockedDesktopDetail ? '2xl:grid 2xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)] 2xl:gap-6 2xl:space-y-0' : ''}`}>
-              <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
+              <section
+                className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm xl:pb-4"
+                style={{ paddingBottom: 'calc(var(--mobile-bottom-nav-clearance, 0px) - 0.35rem)' }}
+              >
                 {debouncedQuery.trim() ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
@@ -2680,54 +2687,13 @@ const ArticleLibraryScreen: React.FC = () => {
                     </div>
                     {isLoadingResults ? <LoadingState compact title="Searching Article Library..." /> : displayResults.length ? <div className="flex flex-col gap-2">{displayResults.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={item.guideline_id === selectedItem?.guideline_id} onClick={() => handleSelectItem(item)} topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic} />)}</div> : <EmptyState compact icon="rule" title="No pathology matched that search term" description="Try a broader pathology name, synonym, or keyword." />}
                   </div>
-                ) : desktopHomeState ? (
-                  <div className="space-y-6">
-                    <div className="rounded-3xl border border-cyan-400/10 bg-[linear-gradient(135deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] p-5">
-                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-200">Desktop Workspace</p>
-                      <h2 className="mt-2 text-2xl font-bold text-white">Browse by domain, scan featured guides, and keep tools in view.</h2>
-                      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">The desktop layout keeps topics on the left, reading context in the center, and editor utilities on the right so the library feels like a workstation instead of a stacked mobile feed.</p>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Featured topics</h3>
-                        <p className="mt-1 text-xs text-slate-400">Jump into the busiest domains without opening a modal first.</p>
-                      </div>
-                      <DesktopTopicShowcase hubs={topicHubs} onSelectTopic={handleSelectTopic} />
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Recently updated</h3>
-                        <p className="mt-1 text-xs text-slate-400">Latest published or synced guides across the library.</p>
-                      </div>
-                      <div className="grid gap-2 xl:grid-cols-2">
-                        {recentlyUpdatedItems.map((item) => (
-                          <GuidelineResultCard
-                            key={item.guideline_id}
-                            item={item}
-                            active={item.guideline_id === selectedItem?.guideline_id}
-                            onClick={() => handleSelectItem(item)}
-                            variant="browse"
-                            topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic}
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                 ) : (
                   <div className="space-y-4">
-                    <div className="rounded-3xl border border-white/5 bg-white/[0.02] p-4">
-                      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                        <div>
-                          <h2 className="text-lg font-semibold text-white">{activeTopic}</h2>
-                          <p className="mt-1 text-xs leading-5 text-slate-400">{activeHub?.activeDescription || 'Curated training guides.'}</p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {hubTags.map((tag) => <button key={tag} type="button" onClick={() => setActiveBrowseTag((prev) => (prev === tag ? null : tag))} className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${activeBrowseTag === tag ? 'border-cyan-400/24 bg-cyan-500/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'}`}>{tag}</button>)}
-                        </div>
+                    {hubTags.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {hubTags.map((tag) => <button key={tag} type="button" onClick={() => setActiveBrowseTag((prev) => (prev === tag ? null : tag))} className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${activeBrowseTag === tag ? 'border-cyan-400/24 bg-cyan-500/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'}`}>{tag}</button>)}
                       </div>
-                    </div>
+                    ) : null}
                     <div className="space-y-3">
                       {browseSections.map((section) => renderBrowseSection({
                         ...section,

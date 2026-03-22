@@ -25,6 +25,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
 
   const isDesktop = viewport === 'desktop';
   const hideBottomNav = activeScreen === 'monthly-census' || isBottomNavHidden;
+  const shellStyle = {
+    ['--mobile-safe-bottom' as string]: 'env(safe-area-inset-bottom, 0px)',
+    ['--mobile-bottom-nav-height' as string]: !isDesktop && !hideBottomNav ? '4.25rem' : '0px',
+    ['--mobile-bottom-nav-offset' as string]: !isDesktop && !hideBottomNav ? '2.25rem' : '0px',
+    ['--mobile-bottom-nav-clearance' as string]:
+      'calc(var(--mobile-safe-bottom) + var(--mobile-bottom-nav-height) + var(--mobile-bottom-nav-offset) + 1rem)',
+    ['--mobile-sheet-footer-clearance' as string]:
+      'calc(var(--mobile-safe-bottom) + var(--mobile-bottom-nav-height) + var(--mobile-bottom-nav-offset) + 1.25rem)',
+    ['--mobile-floating-action-clearance' as string]:
+      'calc(var(--mobile-safe-bottom) + var(--mobile-bottom-nav-height) + var(--mobile-bottom-nav-offset) + 0.75rem)',
+  } as React.CSSProperties;
 
   useEffect(() => {
     setScrollContainer(mainRef.current);
@@ -115,11 +126,30 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
           ? 'max-w-2xl'
           : 'max-w-5xl'
     : 'max-w-md';
+  const handleDesktopShellWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    if (!isDesktop) return;
+    if (!mainRef.current) return;
+
+    const target = event.target as Node | null;
+    if (target && mainRef.current.contains(target)) {
+      return;
+    }
+
+    if (event.deltaY === 0) {
+      return;
+    }
+
+    const nestedScrollTarget = mainRef.current.querySelector<HTMLElement>('[data-layout-scroll-target="true"]');
+    const scrollTarget = nestedScrollTarget ?? mainRef.current;
+
+    scrollTarget.scrollTop += event.deltaY;
+    event.preventDefault();
+  };
 
   return (
     <LayoutScrollContext.Provider value={scrollContainer}>
-      <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary">
-        <div className="relative flex min-h-0 flex-1">
+      <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary" style={shellStyle}>
+        <div className="relative flex min-h-0 flex-1" onWheel={handleDesktopShellWheel}>
           {isDesktop && !hideBottomNav && (
             <aside className="hidden xl:block">
               {/* Edge-Docked Vertical Nav */}
@@ -225,7 +255,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
         </div>
 
         {!isDesktop && !hideBottomNav && (
-          <nav className="fixed bottom-6 left-0 right-0 z-50 pointer-events-none px-4 flex justify-center pb-[env(safe-area-inset-bottom)]">
+          <nav
+            className="fixed left-0 right-0 z-50 flex justify-center px-4 pointer-events-none"
+            style={{
+              bottom: 'var(--mobile-bottom-nav-offset)',
+              paddingBottom: 'var(--mobile-safe-bottom)',
+            }}
+          >
             <div
               className={`relative pointer-events-auto rounded-full py-1.5 px-3 overflow-hidden transition-all duration-500 ${isNavHologramActive
                 ? 'bg-[#101a28] border border-cyan-300/40 shadow-[0_0_30px_rgba(34,211,238,0.24),0_0_50px_rgba(236,72,153,0.18)] nav-hologram-shell'
@@ -311,6 +347,28 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
             animation: navHologramGlitch 0.32s linear infinite;
             backdrop-filter: blur(18px) saturate(150%);
             -webkit-backdrop-filter: blur(18px) saturate(150%);
+          }
+
+          @media (max-width: 1279px) {
+            .mobile-nav-clearance {
+              padding-bottom: var(--mobile-bottom-nav-clearance);
+            }
+
+            .mobile-sheet-footer-clearance {
+              padding-bottom: var(--mobile-sheet-footer-clearance);
+            }
+
+            .mobile-fab-clearance {
+              bottom: var(--mobile-floating-action-clearance);
+            }
+
+            .mobile-bottom-nav-frame {
+              bottom: var(--mobile-bottom-nav-clearance);
+            }
+
+            .mobile-action-zone-clearance {
+              padding-bottom: calc(var(--mobile-bottom-nav-clearance) + 1.5rem);
+            }
           }
 
           .nav-hologram-chromatic::before,

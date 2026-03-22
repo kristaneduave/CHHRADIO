@@ -98,7 +98,7 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
         </button>
       </div>
 
-      <div className="flex-1 space-y-4 overflow-y-auto px-4 pb-5 sm:px-5">
+      <div className="mobile-nav-clearance flex-1 space-y-4 overflow-y-auto px-4 pb-10 sm:px-5 sm:pb-24">
         <div className="space-y-3">
           <input
             ref={inputRef}
@@ -265,7 +265,7 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
         )}
       </div>
 
-      <div className="border-t border-white/10 px-4 py-4 sm:px-5">
+      <div className="mobile-sheet-footer-clearance border-t border-white/10 bg-[#101b26] px-4 py-4 sm:px-5">
         {postModeSummary && (
           <p className="mb-3 text-xs text-slate-400">
             {postModeSummary}

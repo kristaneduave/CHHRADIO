@@ -390,7 +390,7 @@ export const ImageAnnotatorDialog: React.FC<ImageAnnotatorDialogProps> = ({
             </div>
 
             {/* Bottom Toolbars Container */}
-            <div className="shrink-0 bg-white/5 border-t border-white/10 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div className="mobile-sheet-footer-clearance shrink-0 border-t border-white/10 bg-white/5">
 
                 {/* Properties Toolbar (Color & Stroke) */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 overflow-x-auto custom-scrollbar">
