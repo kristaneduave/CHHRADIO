@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AuntMinnieCaseOption,
   LiveAuntMinniePrompt,
@@ -12,14 +12,14 @@ import LiveAuntMinnieParticipantView from './live-aunt-minnie/LiveAuntMinniePart
 import LiveAuntMinniePromptComposer from './live-aunt-minnie/LiveAuntMinniePromptComposer';
 import {
   appendLiveAuntMinnieQuestion,
+  advanceLiveAuntMinniePrompt,
   completeLiveAuntMinnieSession,
   createLiveAuntMinnieSession,
+  deleteLiveAuntMinnieSession,
   deleteLiveAuntMinnieResponse,
   getLiveAuntMinnieRoomState,
   getLiveAuntMinnieWorkspace,
-  joinLiveAuntMinnieSession,
-  setLiveAuntMinnieAnswersVisible,
-  startLiveAuntMinnieSession,
+  setLiveAuntMinnieAutoAdvanceInterval,
   submitLiveAuntMinnieResponse,
   subscribeToLiveAuntMinnieRoom,
   updateLiveAuntMinniePrompt,
@@ -54,16 +54,12 @@ const mapPromptToInput = (prompt: LiveAuntMinniePrompt): LiveAuntMinniePromptInp
 const mapSessionTone = (session: LiveAuntMinnieSession) =>
   session.status === 'live'
     ? 'border-emerald-500/20 bg-emerald-500/10'
-    : session.status === 'draft'
-      ? 'border-cyan-500/20 bg-cyan-500/10'
-      : 'border-white/10 bg-white/[0.03]';
+    : 'border-white/10 bg-white/[0.03]';
 
 const mapSessionLabel = (session: LiveAuntMinnieSession) =>
   session.status === 'live'
     ? 'Live'
-    : session.status === 'draft'
-      ? 'Draft'
-      : session.status === 'completed'
+    : session.status === 'completed'
         ? 'Ended'
         : 'Closed';
 
@@ -80,7 +76,6 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState('');
   const [workspace, setWorkspace] = useState<{
     currentUserId: string;
     currentUserRole: any;
@@ -92,13 +87,19 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<LiveAuntMinnieRoomState | null>(null);
   const [draftTitle, setDraftTitle] = useState('Friday Noon Aunt Minnie');
+  const [autoAdvanceSeconds, setAutoAdvanceSeconds] = useState<number | null>(60);
   const [draftResponsesByPromptId, setDraftResponsesByPromptId] = useState<Record<string, string>>({});
   const [submittingPromptIds, setSubmittingPromptIds] = useState<Record<string, boolean>>({});
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [composerPrompt, setComposerPrompt] = useState<LiveAuntMinniePromptInput>(createEmptyPrompt());
+  const roomStateRef = useRef<LiveAuntMinnieRoomState | null>(null);
+  const latestDraftResponsesRef = useRef<Record<string, string>>({});
+  const queuedResponseValuesRef = useRef<Record<string, string | undefined>>({});
+  const submittingPromptIdsRef = useRef<Record<string, boolean>>({});
 
   const applyRoomState = (nextState: LiveAuntMinnieRoomState) => {
+    roomStateRef.current = nextState;
     setRoomState(nextState);
     setDraftResponsesByPromptId((previous) => {
       const next = { ...previous };
@@ -110,6 +111,23 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       return next;
     });
   };
+
+  useEffect(() => {
+    roomStateRef.current = roomState;
+  }, [roomState]);
+
+  useEffect(() => {
+    if (!roomState?.isHost) return;
+    setAutoAdvanceSeconds(roomState.session.auto_advance_interval_seconds || null);
+  }, [roomState?.isHost, roomState?.session.auto_advance_interval_seconds]);
+
+  useEffect(() => {
+    latestDraftResponsesRef.current = draftResponsesByPromptId;
+  }, [draftResponsesByPromptId]);
+
+  useEffect(() => {
+    submittingPromptIdsRef.current = submittingPromptIds;
+  }, [submittingPromptIds]);
 
   const refreshCurrentRoom = async (sessionId: string, onlineParticipantIds: string[] = []) => {
     const nextState = await getLiveAuntMinnieRoomState(sessionId, onlineParticipantIds);
@@ -207,6 +225,28 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     };
   }, [currentSessionId, roomState?.onlineParticipantIds]);
 
+  useEffect(() => {
+    if (!roomState?.isHost || roomState.session.status !== 'live' || !roomState.session.next_prompt_at) {
+      return;
+    }
+
+    const remaining = new Date(roomState.session.next_prompt_at).getTime() - Date.now();
+    if (remaining <= 0) {
+      void advanceLiveAuntMinniePrompt(roomState.session.id).catch(() => {
+        // Keep current room state if auto-advance fails.
+      });
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void advanceLiveAuntMinniePrompt(roomState.session.id).catch(() => {
+        // Keep current room state if auto-advance fails.
+      });
+    }, remaining + 50);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [roomState?.isHost, roomState?.session.id, roomState?.session.status, roomState?.session.next_prompt_at]);
+
   const refreshWorkspace = async () => {
     try {
       const data = await getLiveAuntMinnieWorkspace();
@@ -229,6 +269,10 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const closeRoom = () => {
     setCurrentSessionId(null);
     setRoomState(null);
+    roomStateRef.current = null;
+    latestDraftResponsesRef.current = {};
+    queuedResponseValuesRef.current = {};
+    submittingPromptIdsRef.current = {};
     setIsComposerOpen(false);
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());
@@ -253,20 +297,6 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     }
   };
 
-  const handleJoinByCode = async () => {
-    setBusyAction('join');
-    setError(null);
-    try {
-      const session = await joinLiveAuntMinnieSession({ joinCode });
-      await refreshWorkspace();
-      await openSession(session.id);
-    } catch (err: any) {
-      setError(err.message || 'Failed to join room.');
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
   const handleUploadPromptImage = async (file: File) => {
     setBusyAction('upload-image');
     setError(null);
@@ -283,16 +313,31 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     }
   };
 
-  const handleStartSession = async () => {
-    if (!roomState) return;
-    setBusyAction('start');
-    setError(null);
+  const handleAutoAdvanceSecondsChange = async (value: number | null) => {
+    setAutoAdvanceSeconds(value);
+    if (!roomState || roomState.session.status === 'completed' || roomState.session.status === 'cancelled') {
+      return;
+    }
+
     try {
-      await startLiveAuntMinnieSession(roomState.session.id);
+      await setLiveAuntMinnieAutoAdvanceInterval(roomState.session.id, value);
       await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       await refreshWorkspace();
     } catch (err: any) {
-      setError(err.message || 'Failed to go live.');
+      setError(err.message || 'Failed to update timer.');
+    }
+  };
+
+  const handlePostNextNow = async () => {
+    if (!roomState) return;
+    setBusyAction('post-next');
+    setError(null);
+    try {
+      await advanceLiveAuntMinniePrompt(roomState.session.id);
+      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
+      await refreshWorkspace();
+    } catch (err: any) {
+      setError(err.message || 'Failed to post next question.');
     } finally {
       setBusyAction(null);
     }
@@ -313,18 +358,18 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     }
   };
 
-  const handleToggleAnswers = async () => {
-    if (!roomState) return;
-    setBusyAction('toggle-answers');
+  const handleDeleteSession = async (sessionId: string) => {
+    setBusyAction(`delete-room:${sessionId}`);
     setError(null);
     try {
-      await setLiveAuntMinnieAnswersVisible(
-        roomState.session.id,
-        roomState.session.current_phase !== 'reveal',
-      );
-      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
+      await deleteLiveAuntMinnieSession(sessionId);
+      if (currentSessionId === sessionId) {
+        closeRoom();
+        return;
+      }
+      await refreshWorkspace();
     } catch (err: any) {
-      setError(err.message || 'Failed to update answer visibility.');
+      setError(err.message || 'Failed to delete room.');
     } finally {
       setBusyAction(null);
     }
@@ -347,10 +392,17 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setBusyAction(editingPromptId ? 'edit-prompt' : 'append-question');
     setError(null);
     try {
+      const hadQueuedPrompts =
+        roomState.session.status === 'live' &&
+        roomState.prompts.length > roomState.session.current_prompt_index + 1;
+
       if (editingPromptId) {
         await updateLiveAuntMinniePrompt(roomState.session.id, editingPromptId, composerPrompt);
       } else {
         await appendLiveAuntMinnieQuestion(roomState.session.id, composerPrompt);
+        if (roomState.session.status === 'live' && autoAdvanceSeconds === null && !hadQueuedPrompts) {
+          await advanceLiveAuntMinniePrompt(roomState.session.id);
+        }
       }
       await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
       setIsComposerOpen(false);
@@ -364,14 +416,21 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     }
   };
 
-  const handleSubmitResponse = async (promptId: string) => {
-    if (!roomState) return;
-    const body = (draftResponsesByPromptId[promptId] || '').trim();
-    const existingResponse = roomState.myResponsesByPromptId[promptId];
+  const handleSubmitResponse = async (promptId: string, explicitValue?: string) => {
+    const currentRoomState = roomStateRef.current;
+    if (!currentRoomState) return;
+    const body = (explicitValue ?? latestDraftResponsesRef.current[promptId] ?? '').trim();
+    const existingResponse = currentRoomState.myResponsesByPromptId[promptId];
 
     if (!body && !existingResponse) return;
 
+    if (submittingPromptIdsRef.current[promptId]) {
+      queuedResponseValuesRef.current[promptId] = body;
+      return;
+    }
+
     setSubmittingPromptIds((previous) => ({ ...previous, [promptId]: true }));
+    submittingPromptIdsRef.current = { ...submittingPromptIdsRef.current, [promptId]: true };
     setError(null);
     try {
       if (!body && existingResponse) {
@@ -386,7 +445,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
           return next;
         });
         await deleteLiveAuntMinnieResponse({
-          sessionId: roomState.session.id,
+          sessionId: currentRoomState.session.id,
           promptId,
         });
         setDraftResponsesByPromptId((previous) => ({ ...previous, [promptId]: '' }));
@@ -399,7 +458,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
             }
           : {
               id: `optimistic:${promptId}:${workspace?.currentUserId || 'me'}`,
-              session_id: roomState.session.id,
+              session_id: currentRoomState.session.id,
               prompt_id: promptId,
               user_id: workspace?.currentUserId || '',
               response_text: body,
@@ -409,7 +468,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
               updated_at: new Date().toISOString(),
               reviewed_at: null,
               reviewed_by: null,
-              participant: roomState.participants.find(
+              participant: currentRoomState.participants.find(
                 (participant) => participant.user_id === (workspace?.currentUserId || ''),
               )?.profile || null,
             };
@@ -429,7 +488,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
         });
 
         const savedResponse = await submitLiveAuntMinnieResponse({
-          sessionId: roomState.session.id,
+          sessionId: currentRoomState.session.id,
           promptId,
           responseText: body,
         });
@@ -453,10 +512,18 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       setError(err.message || 'Failed to save answer.');
     } finally {
       setSubmittingPromptIds((previous) => ({ ...previous, [promptId]: false }));
+      submittingPromptIdsRef.current = { ...submittingPromptIdsRef.current, [promptId]: false };
+      const queuedValue = queuedResponseValuesRef.current[promptId];
+      if (queuedValue !== undefined) {
+        delete queuedResponseValuesRef.current[promptId];
+        if (queuedValue !== body) {
+          void handleSubmitResponse(promptId, queuedValue);
+        }
+      }
     }
   };
 
-  const renderRoomList = (sessions: LiveAuntMinnieSession[], emptyLabel: string) => (
+  const renderRoomList = (sessions: LiveAuntMinnieSession[], emptyLabel: string, canDelete = false) => (
     <div className="space-y-3">
       {sessions.length === 0 ? (
         <div className="rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm text-slate-400">
@@ -464,20 +531,38 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
         </div>
       ) : (
         sessions.map((session) => (
-          <button
+          <div
             key={session.id}
-            type="button"
-            onClick={() => void openSession(session.id)}
             className={`w-full rounded-[22px] border p-4 text-left transition hover:opacity-90 ${mapSessionTone(session)}`}
           >
-            <div className="flex items-center justify-between gap-3">
-              <p className="truncate text-sm font-semibold text-white">{session.title}</p>
-              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-slate-300">
-                {mapSessionLabel(session)}
-              </span>
+            <div className="flex items-start justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => void openSession(session.id)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="truncate text-sm font-semibold text-white">{session.title}</p>
+                  <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-slate-300">
+                    {mapSessionLabel(session)}
+                  </span>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">Code {session.join_code}</p>
+              </button>
+              {canDelete && (
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteSession(session.id)}
+                  disabled={busyAction === `delete-room:${session.id}`}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-500/20 bg-rose-500/10 text-rose-100 transition hover:bg-rose-500/15 disabled:opacity-50"
+                  aria-label="Delete room"
+                  title="Delete room"
+                >
+                  <span className="material-icons text-[18px]">delete</span>
+                </button>
+              )}
             </div>
-            <p className="mt-2 text-xs text-slate-400">Code {session.join_code}</p>
-          </button>
+          </div>
         ))
       )}
     </div>
@@ -487,8 +572,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     <div className="mx-auto max-w-5xl space-y-5">
       <header className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200">Aunt Minnie</p>
-          <h1 className="mt-1 text-3xl font-black text-white sm:text-4xl">Live rooms</h1>
+          <h1 className="text-3xl font-black text-white sm:text-4xl">Aunt Minnie</h1>
         </div>
         {onBack && (
           <button
@@ -508,31 +592,30 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       )}
 
       <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3">
           {workspace?.canHost && (
-            <button
-              type="button"
-              onClick={() => void handleOpenTrainingOfficerRoom()}
-              disabled={busyAction === 'create-room'}
-              className="rounded-[20px] border border-cyan-400/20 bg-cyan-500/90 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50"
-            >
-              {busyAction === 'create-room' ? 'Starting...' : 'Start room'}
-            </button>
+            <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row">
+              <input
+                value={draftTitle}
+                onChange={(event) => setDraftTitle(event.target.value)}
+                placeholder="Room name"
+                className="min-w-0 flex-1 rounded-[20px] border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10"
+              />
+              <button
+                type="button"
+                onClick={() => void handleOpenTrainingOfficerRoom()}
+                disabled={!draftTitle.trim() || busyAction === 'create-room'}
+                className="rounded-[20px] border border-cyan-400/20 bg-cyan-500/90 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:opacity-50"
+              >
+                {busyAction === 'create-room' ? 'Starting...' : 'Start room'}
+              </button>
+            </div>
           )}
-          <input
-            value={joinCode}
-            onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
-            placeholder="Join code"
-            className="min-w-0 flex-1 rounded-[20px] border border-white/10 bg-black/30 px-4 py-3 text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10"
-          />
-          <button
-            type="button"
-            onClick={() => void handleJoinByCode()}
-            disabled={!joinCode.trim() || busyAction === 'join'}
-            className="rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10 disabled:opacity-50"
-          >
-            {busyAction === 'join' ? 'Joining...' : 'Join'}
-          </button>
+          {workspace?.canHost && (
+            <p className="text-xs text-slate-500">
+              Add questions now, then release them manually or every 30 sec, 1 min, 2 min, or 5 min after going live.
+            </p>
+          )}
         </div>
       </section>
 
@@ -548,10 +631,10 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
         {workspace?.canHost && (
           <section className="rounded-[28px] border border-white/10 bg-white/[0.03] p-4 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Drafts</h2>
+              <h2 className="text-lg font-semibold text-white">Your rooms</h2>
               <span className="text-xs text-slate-400">{workspace?.hostSessions.length || 0}</span>
             </div>
-            {renderRoomList(workspace?.hostSessions || [], 'No drafts')}
+            {renderRoomList(workspace?.hostSessions || [], 'No rooms yet', true)}
           </section>
         )}
       </div>
@@ -577,8 +660,9 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
             <button
               type="button"
               onClick={closeRoom}
-              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
             >
+              <span className="material-icons text-[18px] leading-none">chevron_left</span>
               Back
             </button>
             {error && <p className="text-sm text-rose-300">{error}</p>}
@@ -589,14 +673,14 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
               busyAction={busyAction}
               currentUserId={workspace?.currentUserId || null}
               draftResponsesByPromptId={draftResponsesByPromptId}
+              hasQueuedPrompts={roomState.prompts.length > roomState.session.current_prompt_index + 1}
               onCompose={openNewPromptComposer}
               onDraftChange={(promptId, value) =>
                 setDraftResponsesByPromptId((previous) => ({ ...previous, [promptId]: value }))
               }
               onEditPrompt={openEditPromptComposer}
               onEnd={handleEndSession}
-              onStart={handleStartSession}
-              onToggleAnswers={handleToggleAnswers}
+              onPostNextNow={handlePostNextNow}
               onSubmitResponse={handleSubmitResponse}
               roomState={roomState}
               submittingPromptIds={submittingPromptIds}
@@ -625,9 +709,11 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
               <div className="absolute inset-x-0 bottom-0 top-20 overflow-hidden md:inset-x-auto md:right-0 md:top-0 md:w-[430px]">
                 <LiveAuntMinniePromptComposer
                   auntMinnieCases={workspace?.auntMinnieCases || []}
+                  delaySeconds={autoAdvanceSeconds}
                   heading={editingPromptId ? 'Edit question' : 'New question'}
                   onAddPromptImage={handleUploadPromptImage}
                   onClose={() => setIsComposerOpen(false)}
+                  onDelaySecondsChange={setAutoAdvanceSeconds}
                   onPromptChange={(updates) =>
                     setComposerPrompt((previous) => ({
                       ...previous,
@@ -635,6 +721,20 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
                     }))
                   }
                   onSave={handleSavePrompt}
+                  postActionLabel={
+                    roomState.session.status === 'live'
+                      ? autoAdvanceSeconds === null
+                        ? 'Post now'
+                        : 'Add to queue'
+                      : 'Post now'
+                  }
+                  postModeSummary={
+                    roomState.session.status === 'live'
+                      ? autoAdvanceSeconds === null
+                        ? 'This question posts immediately.'
+                        : `This question joins the queue and releases every ${autoAdvanceSeconds} sec.`
+                      : 'This question posts immediately.'
+                  }
                   prompt={composerPrompt}
                   saving={busyAction === 'append-question' || busyAction === 'edit-prompt' || busyAction === 'upload-image'}
                 />

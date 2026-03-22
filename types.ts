@@ -207,6 +207,8 @@ export interface LiveAuntMinnieSession {
   ended_at: string | null;
   join_code: string | null;
   allow_late_join: boolean;
+  auto_advance_interval_seconds?: number | null;
+  next_prompt_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -314,8 +316,10 @@ export interface AuntMinnieCaseOption {
   id: string;
   title: string;
   imageUrl: string | null;
+  imageUrls?: string[];
   diagnosis: string | null;
   notes: string | null;
+  submissionType?: SubmissionType | null;
 }
 
 export interface PatientRecord {

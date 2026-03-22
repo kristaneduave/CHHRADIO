@@ -15,6 +15,7 @@ import {
   LiveAuntMinnieSubmitMessagePayload,
   LiveAuntMinnieSubmitResponsePayload,
   Profile,
+  SubmissionType,
   UserRole,
 } from '../types';
 
@@ -123,8 +124,14 @@ const mapCaseOption = (row: any): AuntMinnieCaseOption => ({
   id: row.id as string,
   title: (row.title as string) || 'Aunt Minnie',
   imageUrl: (Array.isArray(row.image_urls) && row.image_urls[0]) || row.image_url || null,
+  imageUrls: Array.isArray(row.image_urls)
+    ? row.image_urls.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+    : row.image_url
+      ? [row.image_url]
+      : [],
   diagnosis: (row.diagnosis as string | null) || null,
   notes: (row.educational_summary as string | null) || null,
+  submissionType: (row.submission_type as SubmissionType | null) || null,
 });
 
 const mapSession = (row: any): LiveAuntMinnieSession => ({
@@ -140,6 +147,8 @@ const mapSession = (row: any): LiveAuntMinnieSession => ({
   ended_at: row.ended_at || null,
   join_code: row.join_code || null,
   allow_late_join: Boolean(row.allow_late_join),
+  auto_advance_interval_seconds: row.auto_advance_interval_seconds ? Number(row.auto_advance_interval_seconds) : null,
+  next_prompt_at: row.next_prompt_at || null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -365,11 +374,11 @@ export const listAuntMinnieCases = async (): Promise<AuntMinnieCaseOption[]> => 
   const { userId } = await getAuthenticatedProfile();
   const { data, error } = await supabase
     .from('cases')
-    .select('id, title, image_url, image_urls, diagnosis, educational_summary, status, created_by')
-    .eq('submission_type', 'aunt_minnie')
+    .select('id, title, image_url, image_urls, diagnosis, educational_summary, submission_type, status, created_by')
+    .in('submission_type', ['interesting_case', 'rare_pathology', 'aunt_minnie'])
     .or(`status.eq.published,created_by.eq.${userId}`)
     .order('created_at', { ascending: false })
-    .limit(30);
+    .limit(60);
 
   if (error) {
     throw error;
@@ -448,7 +457,26 @@ export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreateP
     throw sessionInsertError;
   }
 
-  const sessionData = await fetchSession(sessionId);
+  const { data: activatedSession, error: activateError } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      status: 'live',
+      current_phase: 'prompt_open',
+      current_prompt_index: 0,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (activateError) {
+    throw activateError;
+  }
+
+  const sessionData = mapSession(activatedSession);
 
   if (payload.prompts.length > 0) {
     const promptRows = createPromptRows(sessionData.id, payload.prompts);
@@ -474,7 +502,7 @@ export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreateP
   }
 
   await upsertParticipant(sessionData.id, userId, 'host');
-  return mapSession(sessionData);
+  return sessionData;
 };
 
 export const updateLiveAuntMinnieSession = async (sessionId: string, payload: LiveAuntMinnieCreatePayload) => {
@@ -684,10 +712,14 @@ const fetchSession = async (sessionId: string) => {
     .from('live_aunt_minnie_sessions')
     .select('*')
     .eq('id', sessionId)
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;
+  }
+
+  if (!data) {
+    throw new Error('Live Aunt Minnie room not found.');
   }
 
   return mapSession(data);
@@ -794,11 +826,11 @@ export const getLiveAuntMinnieRoomState = async (
 export const joinLiveAuntMinnieSession = async (params: { sessionId?: string; joinCode?: string }) => {
   const { userId } = await getAuthenticatedProfile();
   const identifier = params.sessionId
-    ? supabase.from('live_aunt_minnie_sessions').select('*').eq('id', params.sessionId).single()
-    : supabase.from('live_aunt_minnie_sessions').select('*').eq('join_code', params.joinCode?.trim().toUpperCase() || '').single();
+    ? supabase.from('live_aunt_minnie_sessions').select('*').eq('id', params.sessionId).maybeSingle()
+    : supabase.from('live_aunt_minnie_sessions').select('*').eq('join_code', params.joinCode?.trim().toUpperCase() || '').maybeSingle();
 
   const { data, error } = await identifier;
-  if (error) {
+  if (error || !data) {
     throw new Error('Live Aunt Minnie session not found.');
   }
 
@@ -818,6 +850,13 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
     throw new Error('Add at least one question before starting the session.');
   }
 
+  const session = await fetchSession(sessionId);
+  const intervalSeconds = session.auto_advance_interval_seconds || null;
+  const nextPromptAt =
+    intervalSeconds && prompts.length > 1
+      ? new Date(Date.now() + intervalSeconds * 1000).toISOString()
+      : null;
+
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .update({
@@ -827,6 +866,71 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
       prompt_count: prompts.length,
       started_at: new Date().toISOString(),
       ended_at: null,
+      next_prompt_at: nextPromptAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSession(data);
+};
+
+export const setLiveAuntMinnieAutoAdvanceInterval = async (sessionId: string, intervalSeconds: number | null) => {
+  const { userId } = await getAuthenticatedProfile();
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      auto_advance_interval_seconds: intervalSeconds,
+      next_prompt_at: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSession(data);
+};
+
+export const advanceLiveAuntMinniePrompt = async (sessionId: string) => {
+  const { userId } = await getAuthenticatedProfile();
+  const session = await fetchSession(sessionId);
+  const prompts = await fetchPrompts(sessionId);
+
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can advance the room.');
+  }
+
+  if (session.status !== 'live') {
+    throw new Error('Room is not live.');
+  }
+
+  const nextIndex = Math.min(session.current_prompt_index + 1, Math.max(prompts.length - 1, 0));
+  if (nextIndex === session.current_prompt_index) {
+    return session;
+  }
+
+  const intervalSeconds = session.auto_advance_interval_seconds || null;
+  const nextPromptAt =
+    intervalSeconds && nextIndex < prompts.length - 1
+      ? new Date(Date.now() + intervalSeconds * 1000).toISOString()
+      : null;
+
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      current_prompt_index: nextIndex,
+      next_prompt_at: nextPromptAt,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
@@ -881,6 +985,45 @@ export const completeLiveAuntMinnieSession = async (sessionId: string) => {
   }
 
   return mapSession(data);
+};
+
+export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
+  const { userId, profile } = await getAuthenticatedProfile();
+  ensureHostRole(profile?.role);
+
+  const session = await fetchSession(sessionId);
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can delete this room.');
+  }
+
+  const tables = [
+    'live_aunt_minnie_prompt_images',
+    'live_aunt_minnie_responses',
+    'live_aunt_minnie_messages',
+    'live_aunt_minnie_participants',
+    'live_aunt_minnie_prompts',
+  ] as const;
+
+  for (const table of tables) {
+    const { error } = await supabase
+      .from(table)
+      .delete()
+      .eq('session_id', sessionId);
+
+    if (error) {
+      throw error;
+    }
+  }
+
+  const { error: sessionDeleteError } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .delete()
+    .eq('id', sessionId)
+    .eq('host_user_id', userId);
+
+  if (sessionDeleteError) {
+    throw sessionDeleteError;
+  }
 };
 
 export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmitResponsePayload) => {

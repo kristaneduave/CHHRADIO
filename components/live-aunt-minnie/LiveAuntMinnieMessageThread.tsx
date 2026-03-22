@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LiveAuntMinnieResponse } from '../../types';
 
 interface LiveAuntMinnieMessageThreadProps {
@@ -10,7 +10,7 @@ interface LiveAuntMinnieMessageThreadProps {
   canAnswer: boolean;
   responses: LiveAuntMinnieResponse[];
   onDraftChange: (value: string) => void;
-  onSubmit: () => Promise<void>;
+  onSubmit: (value?: string) => Promise<void>;
 }
 
 const displayName = (response: LiveAuntMinnieResponse) =>
@@ -38,7 +38,23 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   );
   const visibleResponses = expanded ? sortedResponses : sortedResponses.slice(0, 5);
   const hasOverflow = sortedResponses.length > 5;
-  const submitLabel = myResponse ? (draftValue.trim() ? 'Save' : 'Clear') : 'Answer';
+  const savedValue = (myResponse?.response_text || '').trim();
+  const currentValue = draftValue.trim();
+  const isDirty = currentValue !== savedValue;
+
+  useEffect(() => {
+    if (isReadOnly || !canAnswer || !isDirty || isSubmitting) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void onSubmit(draftValue);
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [canAnswer, draftValue, isDirty, isReadOnly, isSubmitting, onSubmit]);
 
   return (
     <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-3 sm:p-4">
@@ -83,18 +99,18 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
           <textarea
             value={draftValue}
             onChange={(event) => onDraftChange(event.target.value)}
+            onBlur={() => {
+              if (isDirty && !isSubmitting) {
+                void onSubmit(draftValue);
+              }
+            }}
             placeholder={myResponse ? 'Edit your answer' : 'Add your answer'}
             disabled={isSubmitting}
             className="min-h-[88px] flex-1 rounded-[20px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60"
           />
-          <button
-            type="button"
-            onClick={() => void onSubmit()}
-            disabled={isSubmitting || (!draftValue.trim() && !myResponse)}
-            className="rounded-[20px] border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {isSubmitting ? 'Saving...' : submitLabel}
-          </button>
+          <div className="min-w-[72px] pb-1 text-right text-xs text-slate-400">
+            {isSubmitting ? 'Saving...' : isDirty ? 'Typing...' : 'Saved'}
+          </div>
         </div>
       )}
     </div>
