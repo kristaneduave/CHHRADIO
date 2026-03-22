@@ -841,6 +841,26 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
   return mapSession(data);
 };
 
+export const setLiveAuntMinnieAnswersVisible = async (sessionId: string, visible: boolean) => {
+  const { userId } = await getAuthenticatedProfile();
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      current_phase: visible ? 'reveal' : 'prompt_open',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSession(data);
+};
+
 export const completeLiveAuntMinnieSession = async (sessionId: string) => {
   const { userId } = await getAuthenticatedProfile();
   const { data, error } = await supabase

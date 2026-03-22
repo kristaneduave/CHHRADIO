@@ -12,6 +12,7 @@ interface LiveAuntMinnieHostPanelProps {
   onSubmitResponse: (promptId: string) => Promise<void>;
   onStart: () => Promise<void>;
   onEnd: () => Promise<void>;
+  onToggleAnswers: () => Promise<void>;
   onCompose: () => void;
   onEditPrompt: (prompt: LiveAuntMinniePrompt) => void;
 }
@@ -35,6 +36,7 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
   onSubmitResponse,
   onStart,
   onEnd,
+  onToggleAnswers,
   onCompose,
   onEditPrompt,
 }) => (
@@ -53,6 +55,20 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {roomState.session.status === 'live' && (
+            <button
+              type="button"
+              onClick={() => void onToggleAnswers()}
+              disabled={busyAction === 'toggle-answers'}
+              className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              {busyAction === 'toggle-answers'
+                ? 'Updating...'
+                : roomState.session.current_phase === 'reveal'
+                  ? 'Hide answers'
+                  : 'Show answers'}
+            </button>
+          )}
           {roomState.session.status === 'draft' && (
             <button
               type="button"

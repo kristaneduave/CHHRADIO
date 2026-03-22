@@ -3,6 +3,7 @@ import {
   AuntMinnieCaseOption,
   LiveAuntMinniePrompt,
   LiveAuntMinniePromptInput,
+  LiveAuntMinnieResponse,
   LiveAuntMinnieRoomState,
   LiveAuntMinnieSession,
 } from '../types';
@@ -14,8 +15,10 @@ import {
   completeLiveAuntMinnieSession,
   createLiveAuntMinnieSession,
   deleteLiveAuntMinnieResponse,
+  getLiveAuntMinnieRoomState,
   getLiveAuntMinnieWorkspace,
   joinLiveAuntMinnieSession,
+  setLiveAuntMinnieAnswersVisible,
   startLiveAuntMinnieSession,
   submitLiveAuntMinnieResponse,
   subscribeToLiveAuntMinnieRoom,
@@ -63,6 +66,15 @@ const mapSessionLabel = (session: LiveAuntMinnieSession) =>
       : session.status === 'completed'
         ? 'Ended'
         : 'Closed';
+
+const cloneRoomState = (state: LiveAuntMinnieRoomState): LiveAuntMinnieRoomState => ({
+  ...state,
+  responses: [...state.responses],
+  responsesByPromptId: Object.fromEntries(
+    Object.entries(state.responsesByPromptId).map(([promptId, responses]) => [promptId, [...responses]]),
+  ),
+  myResponsesByPromptId: { ...state.myResponsesByPromptId },
+});
 
 const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
@@ -143,6 +155,52 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       cleanup?.();
     };
   }, [currentSessionId]);
+
+  useEffect(() => {
+    if (!currentSessionId) return;
+
+    let cancelled = false;
+    let refreshInFlight = false;
+
+    const refreshRoom = async () => {
+      if (cancelled || refreshInFlight || document.visibilityState !== 'visible') {
+        return;
+      }
+
+      refreshInFlight = true;
+      try {
+        const nextState = await getLiveAuntMinnieRoomState(
+          currentSessionId,
+          roomState?.onlineParticipantIds || [],
+        );
+        if (!cancelled) {
+          setRoomState(nextState);
+        }
+      } catch {
+        // Keep existing realtime state if polling fails.
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshRoom();
+    }, 2500);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshRoom();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentSessionId, roomState?.onlineParticipantIds]);
 
   const refreshWorkspace = async () => {
     try {
@@ -248,6 +306,22 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     }
   };
 
+  const handleToggleAnswers = async () => {
+    if (!roomState) return;
+    setBusyAction('toggle-answers');
+    setError(null);
+    try {
+      await setLiveAuntMinnieAnswersVisible(
+        roomState.session.id,
+        roomState.session.current_phase !== 'reveal',
+      );
+    } catch (err: any) {
+      setError(err.message || 'Failed to update answer visibility.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const openNewPromptComposer = () => {
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());
@@ -292,16 +366,77 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setError(null);
     try {
       if (!body && existingResponse) {
+        setRoomState((previous) => {
+          if (!previous) return previous;
+          const next = cloneRoomState(previous);
+          next.responses = next.responses.filter((response) => response.id !== existingResponse.id);
+          next.responsesByPromptId[promptId] = (next.responsesByPromptId[promptId] || []).filter(
+            (response) => response.id !== existingResponse.id,
+          );
+          next.myResponsesByPromptId[promptId] = null;
+          return next;
+        });
         await deleteLiveAuntMinnieResponse({
           sessionId: roomState.session.id,
           promptId,
         });
         setDraftResponsesByPromptId((previous) => ({ ...previous, [promptId]: '' }));
       } else if (body) {
-        await submitLiveAuntMinnieResponse({
+        const optimisticResponse: LiveAuntMinnieResponse = existingResponse
+          ? {
+              ...existingResponse,
+              response_text: body,
+              updated_at: new Date().toISOString(),
+            }
+          : {
+              id: `optimistic:${promptId}:${workspace?.currentUserId || 'me'}`,
+              session_id: roomState.session.id,
+              prompt_id: promptId,
+              user_id: workspace?.currentUserId || '',
+              response_text: body,
+              judgment: 'unreviewed',
+              consultant_note: null,
+              submitted_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              reviewed_at: null,
+              reviewed_by: null,
+              participant: roomState.participants.find(
+                (participant) => participant.user_id === (workspace?.currentUserId || ''),
+              )?.profile || null,
+            };
+
+        setRoomState((previous) => {
+          if (!previous) return previous;
+          const next = cloneRoomState(previous);
+          const promptResponses = next.responsesByPromptId[promptId] || [];
+          const filteredPromptResponses = promptResponses.filter(
+            (response) => response.user_id !== optimisticResponse.user_id,
+          );
+          next.responses = next.responses.filter((response) => response.user_id !== optimisticResponse.user_id);
+          next.responses.push(optimisticResponse);
+          next.responsesByPromptId[promptId] = [...filteredPromptResponses, optimisticResponse];
+          next.myResponsesByPromptId[promptId] = optimisticResponse;
+          return next;
+        });
+
+        const savedResponse = await submitLiveAuntMinnieResponse({
           sessionId: roomState.session.id,
           promptId,
           responseText: body,
+        });
+        setRoomState((previous) => {
+          if (!previous) return previous;
+          const next = cloneRoomState(previous);
+          next.responses = next.responses.filter((response) => response.user_id !== savedResponse.user_id);
+          next.responses.push(savedResponse);
+          next.responsesByPromptId[promptId] = [
+            ...(next.responsesByPromptId[promptId] || []).filter(
+              (response) => response.user_id !== savedResponse.user_id,
+            ),
+            savedResponse,
+          ];
+          next.myResponsesByPromptId[promptId] = savedResponse;
+          return next;
         });
         setDraftResponsesByPromptId((previous) => ({ ...previous, [promptId]: body }));
       }
@@ -452,6 +587,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
               onEditPrompt={openEditPromptComposer}
               onEnd={handleEndSession}
               onStart={handleStartSession}
+              onToggleAnswers={handleToggleAnswers}
               onSubmitResponse={handleSubmitResponse}
               roomState={roomState}
               submittingPromptIds={submittingPromptIds}

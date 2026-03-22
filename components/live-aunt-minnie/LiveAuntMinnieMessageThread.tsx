@@ -16,12 +16,6 @@ interface LiveAuntMinnieMessageThreadProps {
 const displayName = (response: LiveAuntMinnieResponse) =>
   response.participant?.nickname || response.participant?.full_name || 'Resident';
 
-const formatResponseTime = (response: LiveAuntMinnieResponse) =>
-  new Date(response.updated_at || response.submitted_at).toLocaleTimeString([], {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-
 const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = ({
   currentUserId,
   draftValue,
@@ -38,18 +32,13 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
     () =>
       [...responses].sort(
         (left, right) =>
-          new Date(left.updated_at || left.submitted_at).getTime() -
-          new Date(right.updated_at || right.submitted_at).getTime(),
+          new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime(),
       ),
     [responses],
   );
-  const visibleResponses = expanded ? sortedResponses : sortedResponses.slice(0, 4);
-  const hasOverflow = sortedResponses.length > 4;
-  const submitLabel = myResponse
-    ? draftValue.trim()
-      ? 'Save'
-      : 'Clear'
-    : 'Answer';
+  const visibleResponses = expanded ? sortedResponses : sortedResponses.slice(0, 5);
+  const hasOverflow = sortedResponses.length > 5;
+  const submitLabel = myResponse ? (draftValue.trim() ? 'Save' : 'Clear') : 'Answer';
 
   return (
     <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-3 sm:p-4">
@@ -63,20 +52,16 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
             return (
               <div
                 key={response.id}
-                className={`rounded-[20px] border px-3 py-2.5 ${
-                  isMine ? 'border-cyan-400/20 bg-cyan-500/10' : 'border-white/10 bg-white/5'
+                className={`rounded-[18px] px-3 py-2 text-sm leading-6 ${
+                  isMine ? 'bg-cyan-500/10 text-cyan-50' : 'bg-white/5 text-slate-100'
                 }`}
               >
-                <div className="flex items-center justify-between gap-3">
-                  <p className={`text-sm font-semibold ${isMine ? 'text-cyan-100' : 'text-white'}`}>
-                    {displayName(response)}
-                    {isMine ? ' • You' : ''}
-                  </p>
-                  <p className="text-[11px] text-slate-500">{formatResponseTime(response)}</p>
-                </div>
-                <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-slate-100">
-                  {response.response_text}
-                </p>
+                <span className={`font-semibold ${isMine ? 'text-cyan-100' : 'text-white'}`}>
+                  {displayName(response)}
+                  {isMine ? ' (You)' : ''}
+                </span>
+                <span className="text-slate-400">: </span>
+                <span className="whitespace-pre-wrap break-words">{response.response_text}</span>
               </div>
             );
           })
