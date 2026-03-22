@@ -54,6 +54,7 @@ const buildFallbackNickname = (fullName?: string, username?: string, email?: str
 
 const PROFILE_NOTES_MAX_LENGTH = 5000;
 const getProfileNotesDraftKey = (userId: string) => `profile:notes:draft:${userId}`;
+const getHiddenNewsDismissedKey = (userId: string) => `profile:hidden-news:dismissed:${userId}`;
 const formatSavedAt = (iso: string | null): string => {
   if (!iso) return 'Not saved yet';
   const dt = new Date(iso);
@@ -104,6 +105,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
   const [hiddenNotifications, setHiddenNotifications] = useState<any[]>(cachedWorkspace?.hiddenNotifications || []);
   const [unhidingNotificationId, setUnhidingNotificationId] = useState<string | null>(null);
   const [unhidingAll, setUnhidingAll] = useState(false);
+  const [dismissedHiddenNewsIds, setDismissedHiddenNewsIds] = useState<string[]>([]);
   const [profileNotesUserId, setProfileNotesUserId] = useState<string | null>(currentUserId || null);
   const [noteContent, setNoteContent] = useState(cachedWorkspace?.notePreview?.content || '');
   const [noteLoaded, setNoteLoaded] = useState(Boolean(cachedWorkspace));
@@ -114,6 +116,26 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const noteAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setDismissedHiddenNewsIds([]);
+      return;
+    }
+
+    const stored = localStorage.getItem(getHiddenNewsDismissedKey(currentUserId));
+    if (!stored) {
+      setDismissedHiddenNewsIds([]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(stored);
+      setDismissedHiddenNewsIds(Array.isArray(parsed) ? parsed.map((value) => String(value)) : []);
+    } catch {
+      setDismissedHiddenNewsIds([]);
+    }
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!cachedWorkspace?.profileRecord) return;
@@ -575,6 +597,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
     }
   };
 
+  const persistDismissedHiddenNews = (nextIds: string[]) => {
+    setDismissedHiddenNewsIds(nextIds);
+    if (!currentUserId) return;
+    localStorage.setItem(getHiddenNewsDismissedKey(currentUserId), JSON.stringify(nextIds));
+  };
+
+  const handleDismissHiddenNewsItem = (itemId: string) => {
+    if (dismissedHiddenNewsIds.includes(itemId)) return;
+    persistDismissedHiddenNews([...dismissedHiddenNewsIds, itemId]);
+  };
+
+  const handleDismissAllHiddenNews = () => {
+    const allIds = [
+      ...hiddenAnnouncements.map((item) => `announcement:${item.id}`),
+      ...hiddenNotifications.map((item) => `notification:${item.id}`),
+    ];
+    persistDismissedHiddenNews(Array.from(new Set([...dismissedHiddenNewsIds, ...allIds])));
+  };
+
   const handleUnhideAllAnnouncements = async () => {
     try {
       setUnhidingAll(true);
@@ -611,19 +652,25 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
     }
   };
 
+  const visibleHiddenAnnouncements = hiddenAnnouncements.filter(
+    (item) => !dismissedHiddenNewsIds.includes(`announcement:${item.id}`),
+  );
+  const visibleHiddenNotifications = hiddenNotifications.filter(
+    (item) => !dismissedHiddenNewsIds.includes(`notification:${item.id}`),
+  );
+  const hasVisibleHiddenNews = visibleHiddenAnnouncements.length > 0 || visibleHiddenNotifications.length > 0;
+
   return (
     <PageShell layoutMode="split">
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" data-profile-viewport={viewport}>
       <div className="xl:grid xl:grid-cols-[340px_minmax(0,1fr)] xl:items-start xl:gap-6">
       <aside className="space-y-6 xl:sticky xl:top-6">
-      <PageHeader title={profile.full_name || 'Doctor'} description="Profile, settings, and account controls." className="hidden xl:flex" />
       <PageSection className="space-y-6 bg-[#0a0f18]/70">
-      <div className="relative mb-5 group cursor-pointer z-10" onClick={() => fileInputRef.current?.click()}>
-        {/* Dynamic Avatar Ring Animation */}
-        <div className="absolute -inset-1.5 rounded-full bg-gradient-to-tr from-primary via-purple-500 to-sky-400 opacity-40 group-hover:opacity-70 blur-[8px] transition-all duration-500 animate-[spin_4s_linear_infinite]" />
-        <div className="absolute -inset-[3px] rounded-full bg-gradient-to-bl from-primary via-blue-500 to-transparent border border-white/20 opacity-60 animate-[spin_8s_linear_infinite_reverse]" />
+      <div className="relative mb-5 flex h-24 w-24 cursor-pointer group mx-auto z-10" onClick={() => fileInputRef.current?.click()}>
+        <div className="absolute -inset-2 rounded-full bg-primary/18 blur-xl opacity-55 transition-opacity duration-300 group-hover:opacity-75" />
+        <div className="absolute -inset-[3px] rounded-full border border-primary/18 opacity-70 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition-opacity duration-300 group-hover:opacity-90" />
 
-        <div className="relative w-24 h-24 rounded-full p-1 border border-white/10 glass-card-enhanced overflow-hidden shadow-2xl bg-[#0a0f18] z-10">
+        <div className="relative h-24 w-24 rounded-full border border-white/10 bg-[#0a0f18] p-1 shadow-2xl overflow-hidden z-10">
           <img
             src={profile.avatar_url || PROFILE_IMAGE}
             alt="Profile"
@@ -855,27 +902,35 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
       <PageSection className="bg-[#0a0f18]/72">
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">Hidden News</h2>
-          {(hiddenAnnouncements.length > 0 || hiddenNotifications.length > 0) && (
-            <button
-              onClick={handleUnhideAllAnnouncements}
-              disabled={unhidingAll}
-              className="text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors mt-1"
-            >
-              {unhidingAll ? 'Restoring...' : 'Unhide all'}
-            </button>
+          {hasVisibleHiddenNews && (
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                onClick={handleDismissAllHiddenNews}
+                className="text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Clear list
+              </button>
+              <button
+                onClick={handleUnhideAllAnnouncements}
+                disabled={unhidingAll}
+                className="text-[9px] font-bold uppercase tracking-wider text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {unhidingAll ? 'Restoring...' : 'Unhide all'}
+              </button>
+            </div>
           )}
         </div>
 
         {
           loadingHiddenAnnouncements ? (
             <div className="text-center py-6 text-slate-500 text-xs">Loading hidden news...</div>
-          ) : hiddenAnnouncements.length === 0 && hiddenNotifications.length === 0 ? (
+          ) : !hasVisibleHiddenNews ? (
             <div className="bg-[#0a0f18]/80 backdrop-blur-2xl p-5 rounded-[2rem] border border-white/10 text-center">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No hidden news.</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {hiddenAnnouncements.map((item) => (
+              {visibleHiddenAnnouncements.map((item) => (
                 <div
                   key={item.id}
                   className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
@@ -884,16 +939,24 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
                     <p className="text-[12px] font-extrabold text-white truncate tracking-wide">{item.title}</p>
                     <p className="text-[9px] font-bold text-slate-500 truncate uppercase mt-0.5 tracking-wider">By {item.author} • {item.date}</p>
                   </div>
-                  <button
-                    onClick={() => handleUnhideAnnouncement(item.id)}
-                    disabled={unhidingAnnouncementId === item.id}
-                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
-                  >
-                    {unhidingAnnouncementId === item.id ? 'Restoring...' : 'Unhide'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDismissHiddenNewsItem(`announcement:${item.id}`)}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => handleUnhideAnnouncement(item.id)}
+                      disabled={unhidingAnnouncementId === item.id}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {unhidingAnnouncementId === item.id ? 'Restoring...' : 'Unhide'}
+                    </button>
+                  </div>
                 </div>
               ))}
-              {hiddenNotifications.map((item) => (
+              {visibleHiddenNotifications.map((item) => (
                 <div
                   key={`notif-${item.id}`}
                   className="bg-white/[0.03] p-3 rounded-2xl border border-white/5 flex items-center justify-between gap-3 group"
@@ -906,13 +969,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
                       {new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
                     </p>
                   </div>
-                  <button
-                    onClick={() => handleUnhideNotification(item.id)}
-                    disabled={unhidingNotificationId === item.id}
-                    className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
-                  >
-                    {unhidingNotificationId === item.id ? 'Restoring...' : 'Unhide'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDismissHiddenNewsItem(`notification:${item.id}`)}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => handleUnhideNotification(item.id)}
+                      disabled={unhidingNotificationId === item.id}
+                      className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-[9px] font-bold uppercase tracking-wider text-slate-300 hover:text-white transition-colors disabled:opacity-50"
+                    >
+                      {unhidingNotificationId === item.id ? 'Restoring...' : 'Unhide'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

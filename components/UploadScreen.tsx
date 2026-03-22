@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { generateViberText } from '../utils/formatters';
-import { SubmissionType } from '../types';
+import { ReferenceSource, SubmissionType } from '../types';
 import { toastError, toastSuccess, toastInfo } from '../utils/toast';
 import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
@@ -41,6 +41,50 @@ const REFERENCE_SOURCE_TYPES = [
   'Online Resource',
   'Lecture / Handout'
 ];
+
+const MAX_REFERENCES = 4;
+
+type UploadReference = ReferenceSource & {
+  id: string;
+};
+
+const createEmptyReference = (id: string): UploadReference => ({
+  id,
+  sourceType: '',
+  title: '',
+  page: '',
+});
+
+const hasReferenceContent = (reference?: ReferenceSource | null): boolean =>
+  Boolean(reference?.sourceType?.trim() || reference?.title?.trim() || reference?.page?.trim());
+
+const normalizeReferences = (existingCase?: any): UploadReference[] => {
+  const existingReferences = Array.isArray(existingCase?.analysis_result?.references)
+    ? existingCase.analysis_result.references
+    : [];
+  const legacyReference = existingCase?.analysis_result?.reference;
+  const seededReferences = existingReferences.length > 0
+    ? existingReferences
+    : hasReferenceContent(legacyReference)
+      ? [legacyReference]
+      : [];
+
+  if (seededReferences.length === 0) {
+    return [createEmptyReference('reference-1')];
+  }
+
+  return seededReferences.slice(0, MAX_REFERENCES).map((reference: ReferenceSource, index: number) => ({
+    id: `reference-${index + 1}`,
+    sourceType: reference?.sourceType || '',
+    title: reference?.title || '',
+    page: reference?.page || '',
+  }));
+};
+
+const buildEmptyReferences = (): UploadReference[] => [createEmptyReference('reference-1')];
+
+const getReferenceSummary = (reference: ReferenceSource): string =>
+  [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
 
 const SUBMISSION_TYPE_OPTIONS: Array<{
   id: SubmissionType;
@@ -107,9 +151,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     impression: existingCase?.analysis_result?.impression || '',
     notes: existingCase?.educational_summary || '', // Mapped to educational_summary for notes
     radiologicClinchers: existingCase?.radiologic_clinchers || '',
-    referenceSourceType: existingCase?.analysis_result?.reference?.sourceType || '',
-    referenceTitle: existingCase?.analysis_result?.reference?.title || '',
-    referencePage: existingCase?.analysis_result?.reference?.page || '',
+    referenceSourceType: normalizeReferences(existingCase)[0]?.sourceType || '',
+    referenceTitle: normalizeReferences(existingCase)[0]?.title || '',
+    referencePage: normalizeReferences(existingCase)[0]?.page || '',
+    references: normalizeReferences(existingCase),
     diagnosis: existingCase?.diagnosis || '',
     date: existingCase?.analysis_result?.studyDate || new Date().toISOString().split('T')[0]
   });
@@ -207,6 +252,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         referenceSourceType: '',
         referenceTitle: '',
         referencePage: '',
+        references: buildEmptyReferences(),
         diagnosis: '',
         date: new Date().toISOString().split('T')[0]
       });
@@ -240,6 +286,60 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomTitle(e.target.value);
   }
+
+  const handleReferenceChange = (referenceId: string, field: keyof ReferenceSource, value: string) => {
+    setFormData((prev) => {
+      const references = prev.references.map((reference) =>
+        reference.id === referenceId ? { ...reference, [field]: value } : reference
+      );
+      const firstReference = references[0] ?? createEmptyReference('reference-1');
+
+      return {
+        ...prev,
+        referenceSourceType: firstReference.sourceType || '',
+        referenceTitle: firstReference.title || '',
+        referencePage: firstReference.page || '',
+        references,
+      };
+    });
+  };
+
+  const handleAddReference = () => {
+    setFormData((prev) => {
+      if (prev.references.length >= MAX_REFERENCES) return prev;
+      return {
+        ...prev,
+        referenceSourceType: prev.referenceSourceType,
+        referenceTitle: prev.referenceTitle,
+        referencePage: prev.referencePage,
+        references: [...prev.references, createEmptyReference(`reference-${prev.references.length + 1}`)],
+      };
+    });
+  };
+
+  const handleRemoveReference = (referenceId: string) => {
+    setFormData((prev) => {
+      if (prev.references.length === 1) {
+        return {
+          ...prev,
+          referenceSourceType: '',
+          referenceTitle: '',
+          referencePage: '',
+          references: buildEmptyReferences(),
+        };
+      }
+
+      const nextReferences = prev.references.filter((reference) => reference.id !== referenceId);
+      const firstReference = nextReferences[0] ?? createEmptyReference('reference-1');
+      return {
+        ...prev,
+        referenceSourceType: firstReference.sourceType || '',
+        referenceTitle: firstReference.title || '',
+        referencePage: firstReference.page || '',
+        references: nextReferences.length > 0 ? nextReferences : buildEmptyReferences(),
+      };
+    });
+  };
 
   const processFiles = (files: FileList | null) => {
     if (!files) return;
@@ -357,7 +457,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         } else {
           setStep(1);
           setFormData({
-            submissionType: 'interesting_case',
+            submissionType: initialSubmissionType,
             initials: '',
             age: '',
             sex: 'M',
@@ -371,6 +471,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             referenceSourceType: '',
             referenceTitle: '',
             referencePage: '',
+            references: buildEmptyReferences(),
             diagnosis: '',
             date: new Date().toISOString().split('T')[0]
           });
@@ -396,14 +497,16 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const sectionHintClassName = 'mt-1 text-xs leading-5 text-slate-500';
   const segmentedPanelClassName = 'grid grid-cols-1 gap-2 md:grid-cols-3';
   const canShowReferenceFields = formData.submissionType !== 'aunt_minnie';
+  const activeReferences = formData.references.filter(hasReferenceContent);
   const imageCountLabel = `${images.length} / 8 images`;
   const submissionTypeLabel = formData.submissionType === 'rare_pathology'
     ? 'Rare Pathology'
     : formData.submissionType === 'aunt_minnie'
       ? 'Aunt Minnie'
       : 'Interesting Case';
+  const lockedSubmissionType = (existingCase?.submission_type as SubmissionType) || initialSubmissionType;
   const selectedSubmissionOption =
-    SUBMISSION_TYPE_OPTIONS.find((option) => option.id === formData.submissionType) ?? SUBMISSION_TYPE_OPTIONS[0];
+    SUBMISSION_TYPE_OPTIONS.find((option) => option.id === lockedSubmissionType) ?? SUBMISSION_TYPE_OPTIONS[0];
   const titlePlaceholder = formData.submissionType === 'rare_pathology'
     ? 'Enter pathology or syndrome name'
     : formData.submissionType === 'aunt_minnie'
@@ -517,61 +620,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         {step === 1 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
             <header className="px-1">
-              <h1 className="text-3xl font-bold text-white">Upload</h1>
+              <h1 className="text-3xl font-bold text-white">{existingCase ? `Edit ${submissionTypeLabel}` : `Upload ${submissionTypeLabel}`}</h1>
             </header>
 
             <section>
               <div className={`${sectionCardClassName} space-y-5`}>
-                <div className="space-y-1">
-                  <p className={sectionLabelClassName}>Case Identity</p>
-                  <p className={sectionHintClassName}>Choose the upload format, then name the case in the same place.</p>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-[minmax(320px,0.88fr)_minmax(420px,1.12fr)] xl:items-start">
-                  <div className="space-y-1.5">
-                    {SUBMISSION_TYPE_OPTIONS.map((option) => {
-                      const isActive = option.id === formData.submissionType;
-
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => setFormData((prev) => ({ ...prev, submissionType: option.id }))}
-                          className={`relative w-full overflow-hidden rounded-3xl border text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 ${
-                            isActive
-                              ? `${option.activeClass} px-3.5 py-2.5`
-                              : 'border-white/5 bg-white/[0.03] px-3.5 py-1.5 hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          {isActive ? (
-                            <div className="absolute inset-0 rounded-3xl overflow-hidden pointer-events-none">
-                              <div className={`absolute top-0 right-0 h-14 w-14 ${option.glowClass} blur-[32px] rounded-full -translate-y-1/3 translate-x-1/3`} />
-                            </div>
-                          ) : null}
-                          <div className="relative z-10 flex items-center gap-3">
-                            <div className={`flex ${isActive ? 'h-10 w-10 rounded-[16px]' : 'h-8.5 w-8.5 rounded-xl'} shrink-0 items-center justify-center border shadow-inner ${isActive ? option.activeIconClass : option.inactiveIconClass}`}>
-                              <span className={`material-icons ${isActive ? 'text-[18px]' : 'text-[16px]'}`}>{option.icon}</span>
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className={`${isActive ? 'text-[14px]' : 'text-[15px]'} truncate font-bold leading-tight ${isActive ? 'text-white' : 'text-slate-200'}`}>{option.label}</p>
-                              {!isActive ? <p className="mt-0.5 hidden truncate text-[12px] leading-5 text-slate-500 sm:block">{option.shortDescription}</p> : null}
-                            </div>
-                            {!isActive ? <span className="material-icons text-slate-500">chevron_right</span> : null}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="space-y-4 rounded-[28px] bg-black/10 p-2 sm:p-3">
-                    <div className="flex items-center gap-3 rounded-[22px] border border-white/6 bg-white/[0.02] px-3.5 py-3 sm:px-4">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] border shadow-inner ${selectedSubmissionOption.activeIconClass}`}>
-                        <span className="material-icons text-[18px]">{selectedSubmissionOption.icon}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-base font-bold leading-tight text-white sm:text-lg">{selectedSubmissionOption.label}</p>
-                      </div>
-                    </div>
+                <div className="rounded-[28px] bg-black/10 p-2 sm:p-3">
+                  <div className="space-y-4">
                     <div className="space-y-2 px-1 sm:px-2">
                       <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Title</label>
                       <input
@@ -825,31 +880,92 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
                 {canShowReferenceFields && (
                   <div className="max-w-3xl space-y-4">
-                    <div>
+                    <div className="flex items-center justify-between gap-3">
                       <h3 className={sectionLabelClassName}>Reference Source</h3>
+                      <button
+                        type="button"
+                        onClick={handleAddReference}
+                        disabled={formData.references.length >= MAX_REFERENCES}
+                        className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Add Reference
+                      </button>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Source Type</label>
-                      <div className="relative">
-                        <select name="referenceSourceType" value={formData.referenceSourceType} onChange={handleInputChange} className={`${inputClassName} appearance-none cursor-pointer`}>
-                          <option value="" className="bg-app text-white">Select source type</option>
-                          {REFERENCE_SOURCE_TYPES.map((type) => (
-                            <option key={type} value={type} className="bg-app text-white">{type}</option>
+                    <p className="text-xs text-slate-500">Add up to 4 optional references.</p>
+
+                    <div className="space-y-4">
+                      {formData.references.map((reference, index) => (
+                        <div key={reference.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                          <div className="mb-4 flex items-center justify-between gap-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                              Reference {index + 1}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveReference(reference.id)}
+                              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:bg-white/10 hover:text-white"
+                            >
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Source Type</label>
+                              <div className="relative">
+                                <select
+                                  value={reference.sourceType || ''}
+                                  onChange={(event) => handleReferenceChange(reference.id, 'sourceType', event.target.value)}
+                                  className={`${inputClassName} appearance-none cursor-pointer`}
+                                >
+                                  <option value="" className="bg-app text-white">Select source type</option>
+                                  {REFERENCE_SOURCE_TYPES.map((type) => (
+                                    <option key={type} value={type} className="bg-app text-white">{type}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Title / Source Name</label>
+                              <input
+                                value={reference.title || ''}
+                                onChange={(event) => handleReferenceChange(reference.id, 'title', event.target.value)}
+                                placeholder="Felson's Principles of Chest Roentgenology"
+                                className={inputClassName}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Page / Figure</label>
+                              <input
+                                value={reference.page || ''}
+                                onChange={(event) => handleReferenceChange(reference.id, 'page', event.target.value)}
+                                placeholder="p. 214"
+                                className={inputClassName}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {activeReferences.length > 0 && (
+                      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Reference Preview</p>
+                        <div className="mt-3 space-y-2">
+                          {activeReferences.map((reference, index) => (
+                            <div key={reference.id}>
+                              <p className="text-sm font-medium text-white">
+                                {index + 1}. {getReferenceSummary(reference)}
+                              </p>
+                              {reference.page && <p className="mt-1 text-xs text-slate-400">{reference.page}</p>}
+                            </div>
                           ))}
-                        </select>
+                        </div>
                       </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Title / Source Name</label>
-                      <input name="referenceTitle" value={formData.referenceTitle} onChange={handleInputChange} placeholder="Felson's Principles of Chest Roentgenology" className={inputClassName} />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Page / Figure</label>
-                      <input name="referencePage" value={formData.referencePage} onChange={handleInputChange} placeholder="p. 214" className={inputClassName} />
-                    </div>
+                    )}
                   </div>
                 )}
               </div>

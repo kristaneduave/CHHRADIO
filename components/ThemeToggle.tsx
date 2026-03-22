@@ -3,7 +3,6 @@ import { ThemePreference, useThemePreference } from '../utils/theme';
 
 const OPTIONS: { value: ThemePreference; label: string; icon: string }[] = [
   { value: 'system', label: 'System', icon: 'devices' },
-  { value: 'light', label: 'Light', icon: 'light_mode' },
   { value: 'dark', label: 'Dark', icon: 'dark_mode' },
 ];
 

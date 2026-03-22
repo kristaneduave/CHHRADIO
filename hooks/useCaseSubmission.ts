@@ -113,13 +113,23 @@ export function useCaseSubmission() {
             const imageMetadata = images.map(img => ({ description: img.description }));
             const isMinimalSubmission = formData.submissionType === 'rare_pathology' || formData.submissionType === 'aunt_minnie';
             const existingAnalysisResult = existingCase?.analysis_result ?? {};
-            const reference = formData.referenceSourceType || formData.referenceTitle || formData.referencePage
-                ? {
-                    sourceType: formData.referenceSourceType,
-                    title: formData.referenceTitle,
-                    page: formData.referencePage,
-                }
-                : undefined;
+            const references = Array.isArray(formData.references)
+                ? formData.references
+                    .map((reference: any) => ({
+                        sourceType: reference?.sourceType?.trim() || '',
+                        title: reference?.title?.trim() || '',
+                        page: reference?.page?.trim() || '',
+                    }))
+                    .filter((reference: any) => reference.sourceType || reference.title || reference.page)
+                : [];
+            const reference = references[0]
+                || (formData.referenceSourceType || formData.referenceTitle || formData.referencePage
+                    ? {
+                        sourceType: formData.referenceSourceType,
+                        title: formData.referenceTitle,
+                        page: formData.referencePage,
+                    }
+                    : undefined);
 
             const analysisResult = {
                 ...existingAnalysisResult,
@@ -135,6 +145,12 @@ export function useCaseSubmission() {
                 analysisResult.reference = reference;
             } else {
                 delete analysisResult.reference;
+            }
+
+            if (references.length > 0) {
+                analysisResult.references = references;
+            } else {
+                delete analysisResult.references;
             }
 
             const casePayload = {

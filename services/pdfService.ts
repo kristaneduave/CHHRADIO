@@ -309,7 +309,11 @@ const preparePdfImages = async (images: PdfImage[]): Promise<PdfImage[]> =>
   );
 
 const normalizeReference = (data: any): ReferenceSource | null => {
-  const source = data.reference || data.analysis_result?.reference;
+  const source =
+    data.reference ||
+    data.analysis_result?.reference ||
+    data.references?.[0] ||
+    data.analysis_result?.references?.[0];
   const reference: ReferenceSource = {
     sourceType: source?.sourceType || data.referenceSourceType,
     title: source?.title || data.referenceTitle,

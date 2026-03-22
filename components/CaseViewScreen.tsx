@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
@@ -16,6 +16,7 @@ interface CaseViewScreenProps {
 const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [imageZoom, setImageZoom] = useState(1);
     const [isOwner, setIsOwner] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
@@ -31,6 +32,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
     const [publisherName, setPublisherName] = useState('Radiologist');
+    const pinchDistanceRef = useRef<number | null>(null);
+    const pinchZoomRef = useRef(1);
 
     useEffect(() => {
         checkOwnership();
@@ -123,10 +126,24 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     }
     const openImageModal = () => {
         if (!images.length) return;
+        setImageZoom(1);
         setIsImageModalOpen(true);
     };
     const closeImageModal = () => {
         setIsImageModalOpen(false);
+        setImageZoom(1);
+        pinchDistanceRef.current = null;
+        pinchZoomRef.current = 1;
+    };
+    const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
+    const zoomInImage = () => setImageZoom((prev) => clampZoom(prev + 0.25));
+    const zoomOutImage = () => setImageZoom((prev) => clampZoom(prev - 0.25));
+    const resetImageZoom = () => setImageZoom(1);
+    const getTouchDistance = (touches: React.TouchList) => {
+        if (touches.length < 2) return null;
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.hypot(dx, dy);
     };
 
     useEffect(() => {
@@ -146,6 +163,18 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             }
             if (images.length > 1 && event.key === 'ArrowRight') {
                 goToNextImage();
+            }
+            if (event.key === '+' || event.key === '=') {
+                event.preventDefault();
+                zoomInImage();
+            }
+            if (event.key === '-' || event.key === '_') {
+                event.preventDefault();
+                zoomOutImage();
+            }
+            if (event.key === '0') {
+                event.preventDefault();
+                resetImageZoom();
             }
         };
 
@@ -172,6 +201,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     useEffect(() => {
         setCurrentImageIndex(0);
     }, [caseData?.id]);
+
+    useEffect(() => {
+        setImageZoom(1);
+        pinchDistanceRef.current = null;
+        pinchZoomRef.current = 1;
+    }, [currentImageIndex, isImageModalOpen]);
 
     useEffect(() => {
         if (images.length <= 1 || typeof window === 'undefined') {
@@ -301,21 +336,83 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     {currentImageIndex + 1} / {images.length}
                                 </p>
                             </div>
-                            <button
-                                type="button"
-                                onClick={closeImageModal}
-                                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
-                                aria-label="Close full screen image viewer"
-                            >
-                                <span className="material-icons text-[22px]">close</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 sm:inline-flex">
+                                    <button
+                                        type="button"
+                                        onClick={zoomOutImage}
+                                        disabled={imageZoom <= 1}
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"
+                                        aria-label="Zoom out"
+                                    >
+                                        <span className="material-icons text-[18px]">remove</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={resetImageZoom}
+                                        className="min-w-[4.5rem] rounded-full px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/70 transition-colors hover:bg-white/[0.08]"
+                                        aria-label="Reset zoom"
+                                    >
+                                        {Math.round(imageZoom * 100)}%
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={zoomInImage}
+                                        disabled={imageZoom >= 3}
+                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"
+                                        aria-label="Zoom in"
+                                    >
+                                        <span className="material-icons text-[18px]">add</span>
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeImageModal}
+                                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                    aria-label="Close full screen image viewer"
+                                >
+                                    <span className="material-icons text-[22px]">close</span>
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-4 sm:px-6 sm:py-6">
+                        <div
+                            className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-4 py-4 sm:px-6 sm:py-6"
+                            style={{ touchAction: 'none' }}
+                            onWheel={(event) => {
+                                if (!event.ctrlKey && !event.metaKey) return;
+                                event.preventDefault();
+                                if (event.deltaY < 0) {
+                                    zoomInImage();
+                                } else {
+                                    zoomOutImage();
+                                }
+                            }}
+                            onTouchStart={(event) => {
+                                const distance = getTouchDistance(event.touches);
+                                if (distance === null) return;
+                                pinchDistanceRef.current = distance;
+                                pinchZoomRef.current = imageZoom;
+                            }}
+                            onTouchMove={(event) => {
+                                const distance = getTouchDistance(event.touches);
+                                if (distance === null || pinchDistanceRef.current === null) return;
+                                event.preventDefault();
+                                const scaleRatio = distance / pinchDistanceRef.current;
+                                setImageZoom(clampZoom(pinchZoomRef.current * scaleRatio));
+                            }}
+                            onTouchEnd={() => {
+                                if (pinchDistanceRef.current === null) return;
+                                pinchDistanceRef.current = null;
+                                pinchZoomRef.current = imageZoom;
+                            }}
+                        >
                             <img
                                 src={images[currentImageIndex]}
-                                className="max-h-full max-w-full object-contain"
+                                className="max-h-full max-w-full select-none object-contain transition-transform duration-200 ease-out"
+                                style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center' }}
                                 alt={`Case scan ${currentImageIndex + 1}`}
+                                draggable={false}
                             />
 
                             {images.length > 1 && (
@@ -435,13 +532,14 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 )}
 
                                 {images.length > 1 && (
-                                    <div className="mt-3 flex items-center justify-between gap-3">
+                                    <div className="mt-4 rounded-[22px] bg-[#09111b]/92 p-2.5 sm:p-3">
+                                        <div className="flex items-center gap-3">
                                         <button
                                             onClick={goToPreviousImage}
-                                            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                            aria-label="Previous image"
                                         >
-                                            <span className="material-icons text-[16px]">west</span>
-                                            Previous
+                                            <span className="material-icons text-[18px]">west</span>
                                         </button>
 
                                         <div className="flex min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto px-1 py-1 custom-scrollbar">
@@ -449,7 +547,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                                 <button
                                                     key={idx}
                                                     onClick={() => setCurrentImageIndex(idx)}
-                                                    className={`relative h-12 w-16 shrink-0 overflow-hidden rounded-xl border transition-all duration-200 ${idx === currentImageIndex
+                                                    className={`relative h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-2xl border transition-all duration-200 ${idx === currentImageIndex
                                                         ? `border-white/40 ${theme.bgClass} shadow-[0_0_0_1px_rgba(255,255,255,0.14)]`
                                                         : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
                                                         }`}
@@ -469,11 +567,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                                         <button
                                             onClick={goToNextImage}
-                                            className="inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-4 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                            aria-label="Next image"
                                         >
-                                            Next
-                                            <span className="material-icons text-[16px]">east</span>
+                                            <span className="material-icons text-[18px]">east</span>
                                         </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>

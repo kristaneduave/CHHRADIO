@@ -13,6 +13,10 @@ const isThemePreference = (value: string | null): value is ThemePreference => {
 export const getStoredThemePreference = (): ThemePreference => {
   if (typeof window === 'undefined') return 'dark';
   const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (raw === 'light') {
+    window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    return 'dark';
+  }
   return isThemePreference(raw) ? raw : 'dark';
 };
 
@@ -36,8 +40,9 @@ export const applyThemePreference = (preference: ThemePreference) => {
 };
 
 const writeThemePreference = (preference: ThemePreference) => {
-  window.localStorage.setItem(THEME_STORAGE_KEY, preference);
-  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: preference }));
+  const normalizedPreference = preference === 'light' ? 'dark' : preference;
+  window.localStorage.setItem(THEME_STORAGE_KEY, normalizedPreference);
+  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: normalizedPreference }));
 };
 
 export const useThemePreference = () => {

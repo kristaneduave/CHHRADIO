@@ -11,12 +11,27 @@ interface QuizSessionProps {
 
 const optionOrder: QuizCorrectOption[] = ['A', 'B', 'C', 'D', 'E'];
 
+const getRemainingSeconds = (quiz: QuizListItem, attempt: QuizAttempt) => {
+  if (!quiz.timer_enabled || !quiz.timer_minutes) {
+    return null;
+  }
+
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000));
+  return Math.max(0, (quiz.timer_minutes * 60) - elapsedSeconds);
+};
+
 const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onSubmit, onCancel }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, QuizCorrectOption | null>>({});
-  const [secondsLeft, setSecondsLeft] = useState(quiz.timer_enabled ? (quiz.timer_minutes || 0) * 60 : null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(() => getRemainingSeconds(quiz, attempt));
   const [submitting, setSubmitting] = useState(false);
   const [timerExpired, setTimerExpired] = useState(false);
+
+  useEffect(() => {
+    const remainingSeconds = getRemainingSeconds(quiz, attempt);
+    setSecondsLeft(remainingSeconds);
+    setTimerExpired(remainingSeconds === 0 && quiz.timer_enabled);
+  }, [attempt.id, attempt.started_at, quiz.id, quiz.timer_enabled, quiz.timer_minutes]);
 
   useEffect(() => {
     if (!quiz.timer_enabled || secondsLeft === null) {
@@ -99,14 +114,14 @@ const QuizSession: React.FC<QuizSessionProps> = ({ quiz, questions, attempt, onS
             <div className={`min-w-[130px] rounded-2xl border px-4 py-3 text-center ${timerTone}`}>
               <p className="text-[10px] uppercase tracking-[0.2em]">Timer</p>
               <p className="mt-1 text-2xl font-bold">{formattedTime}</p>
-              <p className="mt-1 text-[11px]">{timerExpired ? 'Time expired. Manual submit required.' : 'Countdown warning only'}</p>
+              <p className="mt-1 text-[11px]">{timerExpired ? 'Time expired.' : 'Submission is time-checked'}</p>
             </div>
           )}
         </div>
 
         {timerExpired && (
           <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
-            The timer has reached zero. The quiz remains open so the learner can finish and submit manually, but the expired state is now visible in the session.
+            The timer has reached zero. Submission timing is checked against the recorded start time.
           </div>
         )}
       </div>

@@ -66,6 +66,22 @@ describe('pdfService helpers', () => {
     ]);
   });
 
+  it('uses the first reference from a references list during normalization', () => {
+    const normalized = __testables.normalizePdfExportData({
+      submissionType: 'interesting_case',
+      references: [
+        { sourceType: 'Book', title: 'Felson', page: 'p. 214' },
+        { sourceType: 'Journal Article', title: 'RSNA review', page: 'fig. 2' },
+      ],
+    });
+
+    expect(normalized.reference).toEqual({
+      sourceType: 'Book',
+      title: 'Felson',
+      page: 'p. 214',
+    });
+  });
+
   it('joins metadata values with clean separators', () => {
     expect(__testables.joinWithSeparator(['CT', 'Chest'], ' - ')).toBe('CT - Chest');
     expect(__testables.joinWithSeparator(['A', '', 'B'])).toBe('A | B');

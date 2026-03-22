@@ -33,6 +33,61 @@ const AUTHOR_ROLES: UserRole[] = ['admin', 'faculty'];
 let quizWorkspaceCache: QuizWorkspaceData | null = null;
 let quizWorkspacePromise: Promise<QuizWorkspaceData> | null = null;
 
+const getAuthenticatedUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    throw new Error('Not authenticated');
+  }
+
+  return user;
+};
+
+const getAttemptByIdForUser = async (attemptId: string, userId: string): Promise<QuizAttempt> => {
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('*')
+    .eq('id', attemptId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as QuizAttempt;
+};
+
+const getActiveAttemptForQuiz = async (quizId: string, userId: string): Promise<QuizAttempt | null> => {
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('*')
+    .eq('quiz_id', quizId)
+    .eq('user_id', userId)
+    .eq('status', 'in_progress')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as QuizAttempt | null) || null;
+};
+
+const computeAuthoritativeElapsedSeconds = (attempt: Pick<QuizAttempt, 'started_at' | 'timer_enabled' | 'timer_minutes'>) => {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(attempt.started_at).getTime()) / 1000));
+  const timeLimitSeconds = attempt.timer_enabled && attempt.timer_minutes
+    ? Math.max(0, attempt.timer_minutes * 60)
+    : null;
+
+  return {
+    elapsedSeconds,
+    timeLimitSeconds,
+    exceededLimit: timeLimitSeconds !== null && elapsedSeconds > timeLimitSeconds,
+  };
+};
+
 const getAvailability = (quiz: Pick<Quiz, 'status' | 'opens_at' | 'closes_at'>): QuizAvailability => {
   const now = Date.now();
   const opensAt = new Date(quiz.opens_at).getTime();
@@ -425,13 +480,15 @@ export const uploadQuizQuestionImage = async (file: File, questionIndex: number)
 };
 
 export const startQuizAttempt = async (quiz: QuizListItem) => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error('Not authenticated');
-  }
+  const user = await getAuthenticatedUser();
 
   if (!quiz.can_start) {
     throw new Error('This quiz is not currently open.');
+  }
+
+  const activeAttempt = await getActiveAttemptForQuiz(quiz.id, user.id);
+  if (activeAttempt) {
+    return activeAttempt;
   }
 
   const { data, error } = await supabase
@@ -461,6 +518,13 @@ export const submitQuizAttempt = async (
   answers: Array<{ questionId: string; selectedOption: QuizCorrectOption | null }>,
   timeSpentSeconds: number,
 ) => {
+  const user = await getAuthenticatedUser();
+  const attempt = await getAttemptByIdForUser(attemptId, user.id);
+
+  if (attempt.status !== 'in_progress') {
+    throw new Error('This quiz attempt has already been submitted or closed.');
+  }
+
   const questionMap = new Map(questions.map((question) => [question.id, question]));
   const validatedAnswers: QuizAnswer[] = answers.map((answer) => {
     const question = questionMap.get(answer.questionId);
@@ -473,6 +537,14 @@ export const submitQuizAttempt = async (
 
   const score = validatedAnswers.filter((answer) => answer.isCorrect).length;
   const percentage = questions.length ? Number(((score / questions.length) * 100).toFixed(2)) : 0;
+  const { elapsedSeconds, timeLimitSeconds, exceededLimit } = computeAuthoritativeElapsedSeconds(attempt);
+  const authoritativeTimeSpent = Math.max(timeSpentSeconds, elapsedSeconds);
+
+  if (exceededLimit) {
+    throw new Error(
+      `This timed quiz expired after ${timeLimitSeconds} seconds and can no longer be submitted from an open session.`
+    );
+  }
 
   const { data, error } = await supabase
     .from('quiz_attempts')
@@ -482,10 +554,12 @@ export const submitQuizAttempt = async (
       total_questions: questions.length,
       percentage,
       submitted_at: new Date().toISOString(),
-      time_spent_seconds: timeSpentSeconds,
+      time_spent_seconds: authoritativeTimeSpent,
       status: 'submitted',
     })
     .eq('id', attemptId)
+    .eq('user_id', user.id)
+    .eq('status', 'in_progress')
     .select('*')
     .single();
 

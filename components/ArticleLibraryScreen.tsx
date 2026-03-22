@@ -179,7 +179,7 @@ const QUICK_SEARCH_CHIPS = [
   'Pediatrics',
 ];
 
-const DESKTOP_DETAIL_MEDIA_QUERY = '(min-width: 1400px)';
+const DESKTOP_DETAIL_MEDIA_QUERY = '(min-width: 1680px)';
 const PERF_ENABLED = import.meta.env.DEV;
 const PERF_MARKS = {
   screenMount: 'radiographics-screen-mount',
@@ -1222,7 +1222,7 @@ const ArticleLibraryScreen: React.FC = () => {
 
   const canEdit = canEditArticleLibrary(currentUserRole);
   const canSyncFromDrive = form.source_kind === 'google_drive' && !!form.google_drive_file_id.trim();
-  const detailScrollContainer = isDesktopDetail ? desktopDetailScrollNode : mobileDetailScrollNode;
+  const detailScrollContainer = mobileDetailScrollNode;
   const showQuickChips = isSearchFocused || query.trim().length > 0;
   const browseItems = libraryItems.length ? libraryItems : landingItems;
 
@@ -1700,7 +1700,7 @@ const ArticleLibraryScreen: React.FC = () => {
     setIsDetailDismissed(false);
     setSelectedItem(item);
     setIsEditMode(false);
-    if (!isDesktopDetail) setIsMobileDetailOpen(true);
+    setIsMobileDetailOpen(true);
     if (isAdminPanelOpen && sourceRecord?.id !== item.guideline_id) setIsAdminPanelOpen(false);
   };
   const handleCloseDetail = () => {
@@ -1727,23 +1727,18 @@ const ArticleLibraryScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!isMobileDetailOpen && !(isDesktopDetail && selectedItem)) return undefined;
+    if (!isMobileDetailOpen) return undefined;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') handleCloseDetail();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleCloseDetail, isDesktopDetail, isMobileDetailOpen, selectedItem]);
+  }, [handleCloseDetail, isMobileDetailOpen]);
 
   useEffect(() => {
-    if (!isMobileDetailOpen || isDesktopDetail || !mobileDetailScrollNode) return;
+    if (!isMobileDetailOpen || !mobileDetailScrollNode) return;
     mobileDetailScrollNode.scrollTop = 0;
-  }, [detail?.guideline_id, isDesktopDetail, isMobileDetailOpen, mobileDetailScrollNode]);
-
-  useEffect(() => {
-    if (!isDesktopDetail || !selectedItem || !desktopDetailScrollNode) return;
-    desktopDetailScrollNode.scrollTop = 0;
-  }, [desktopDetailScrollNode, detail?.guideline_id, isDesktopDetail, selectedItem]);
+  }, [detail?.guideline_id, isMobileDetailOpen, mobileDetailScrollNode]);
 
   const buildSourceFormFromCurrentContext = (): SourceFormState => {
     if (sourceRecord) {
@@ -2535,8 +2530,8 @@ const ArticleLibraryScreen: React.FC = () => {
   const detailSourceKind = detail?.source_kind || sourceRecord?.source_kind;
   const detailSourceLabel = getSourceActionLabel(detailSourceKind);
   const hasDetailSource = Boolean(detailSourceHref);
-  const isDetailOverlayVisible = !isDesktopDetail && isMobileDetailOpen;
-  const showDockedDesktopDetail = isDesktopDetail && !!selectedItem;
+  const isDetailOverlayVisible = isMobileDetailOpen;
+  const showDockedDesktopDetail = false;
   const overlayRoot = typeof document !== 'undefined' ? document.body : null;
 
   const desktopHomeState = !debouncedQuery.trim() && !activeTopic;
@@ -2604,7 +2599,7 @@ const ArticleLibraryScreen: React.FC = () => {
 
   return (
     <div className="min-h-full bg-app px-6 pb-40 pt-6">
-      <div className="mx-auto max-w-[1440px] space-y-6">
+      <div className="mx-auto max-w-[1680px] space-y-6">
         <header className="flex items-center justify-between gap-3 pt-2">
           <h1 className="text-3xl font-bold text-white">Article Library</h1>
           {!isRoleLoading && canEdit && !isDetailOverlayVisible && !isDesktopDetail ? (
@@ -2656,7 +2651,7 @@ const ArticleLibraryScreen: React.FC = () => {
           </Suspense>
         </section>
 
-        <div className="space-y-6 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_340px] xl:items-start xl:gap-6 xl:space-y-0">
+        <div className="space-y-6 xl:grid xl:grid-cols-[280px_minmax(0,1fr)] xl:items-start xl:gap-6 xl:space-y-0 2xl:grid-cols-[280px_minmax(0,1fr)_340px]">
           <aside className="hidden xl:block xl:sticky xl:top-6">
             <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
               <div className="mb-4">
@@ -2672,7 +2667,7 @@ const ArticleLibraryScreen: React.FC = () => {
               {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
             </section>
 
-            <div className={`space-y-6 ${showDockedDesktopDetail ? 'xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(380px,0.9fr)] xl:gap-6 xl:space-y-0' : ''}`}>
+            <div className={`space-y-6 ${showDockedDesktopDetail ? '2xl:grid 2xl:grid-cols-[minmax(0,1.08fr)_minmax(420px,0.92fr)] 2xl:gap-6 2xl:space-y-0' : ''}`}>
               <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
                 {debouncedQuery.trim() ? (
                   <div className="space-y-4">
@@ -2744,16 +2739,20 @@ const ArticleLibraryScreen: React.FC = () => {
               </section>
 
               {showDockedDesktopDetail ? (
-                <div className="hidden xl:block">
-                  <div className="xl:sticky xl:top-6">
+                <div className="hidden 2xl:block">
+                  <div className="2xl:sticky 2xl:top-6">
                     {detailPanel}
                   </div>
                 </div>
               ) : null}
             </div>
+
+            <div className="hidden xl:block 2xl:hidden">
+              {desktopUtilityRail}
+            </div>
           </div>
 
-          <aside className="hidden xl:block">
+          <aside className="hidden 2xl:block">
             {desktopUtilityRail}
           </aside>
         </div>
