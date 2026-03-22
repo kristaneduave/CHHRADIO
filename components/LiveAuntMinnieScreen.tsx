@@ -30,6 +30,8 @@ interface LiveAuntMinnieScreenProps {
   onBack?: () => void;
 }
 
+const REALTIME_UNAVAILABLE_MESSAGE = 'Live Aunt Minnie realtime connection unavailable.';
+
 const createEmptyPrompt = (): LiveAuntMinniePromptInput => ({
   images: [],
   question_text: '',
@@ -165,17 +167,23 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       sessionId: currentSessionId,
       onStateChange: (nextState) => {
         if (!isMounted) return;
+        setError((previous) => (previous === REALTIME_UNAVAILABLE_MESSAGE ? null : previous));
         applyRoomState(nextState);
       },
       onError: (message) => {
         if (!isMounted) return;
+        if (message === REALTIME_UNAVAILABLE_MESSAGE) {
+          return;
+        }
         setError(message);
       },
     }).then((unsubscribe) => {
       cleanup = unsubscribe;
     }).catch((err: any) => {
       if (!isMounted) return;
-      setError(err.message || 'Unable to connect to the room.');
+      if ((err.message || '') !== REALTIME_UNAVAILABLE_MESSAGE) {
+        setError(err.message || 'Unable to connect to the room.');
+      }
     });
 
     return () => {
