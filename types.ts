@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
@@ -159,6 +159,163 @@ export interface AnalysisResult {
   imagesMetadata?: Array<{ description?: string }>;
   studyDate?: string;
   reference?: ReferenceSource;
+  references?: ReferenceSource[];
+}
+
+export type LiveAuntMinnieSessionStatus = 'draft' | 'live' | 'paused' | 'completed' | 'cancelled';
+export type LiveAuntMinnieSessionPhase = 'lobby' | 'prompt_open' | 'reveal' | 'completed';
+export type LiveAuntMinnieJudgment = 'correct' | 'partial' | 'incorrect' | 'unreviewed';
+export type LiveAuntMinnieParticipantRole = 'host' | 'participant';
+
+export interface LiveAuntMinniePromptImage {
+  id: string;
+  prompt_id: string;
+  session_id: string;
+  sort_order: number;
+  image_url: string;
+  caption: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LiveAuntMinniePrompt {
+  id: string;
+  session_id: string;
+  sort_order: number;
+  source_case_id: string | null;
+  image_url: string;
+  image_caption: string | null;
+  question_text: string | null;
+  official_answer: string;
+  answer_explanation: string | null;
+  accepted_aliases: string[];
+  images: LiveAuntMinniePromptImage[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LiveAuntMinnieSession {
+  id: string;
+  title: string;
+  created_by: string;
+  host_user_id: string;
+  status: LiveAuntMinnieSessionStatus;
+  current_prompt_index: number;
+  current_phase: LiveAuntMinnieSessionPhase;
+  prompt_count: number;
+  started_at: string | null;
+  ended_at: string | null;
+  join_code: string | null;
+  allow_late_join: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LiveAuntMinnieResponse {
+  id: string;
+  session_id: string;
+  prompt_id: string;
+  user_id: string;
+  response_text: string;
+  judgment: LiveAuntMinnieJudgment | null;
+  consultant_note: string | null;
+  submitted_at: string;
+  updated_at?: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  participant?: {
+    full_name: string | null;
+    nickname?: string | null;
+    avatar_url?: string | null;
+    role?: UserRole | null;
+  } | null;
+}
+
+export interface LiveAuntMinnieMessage {
+  id: string;
+  session_id: string;
+  prompt_id: string;
+  user_id: string;
+  body: string;
+  created_at: string;
+  updated_at?: string;
+  participant?: {
+    full_name: string | null;
+    nickname?: string | null;
+    avatar_url?: string | null;
+    role?: UserRole | null;
+  } | null;
+}
+
+export interface LiveAuntMinnieParticipant {
+  id: string;
+  session_id: string;
+  user_id: string;
+  role: LiveAuntMinnieParticipantRole;
+  joined_at: string;
+  last_seen_at: string;
+  profile?: {
+    full_name: string | null;
+    nickname?: string | null;
+    avatar_url?: string | null;
+    role?: UserRole | null;
+  } | null;
+}
+
+export interface LiveAuntMinnieRoomState {
+  session: LiveAuntMinnieSession;
+  prompts: LiveAuntMinniePrompt[];
+  responses: LiveAuntMinnieResponse[];
+  responsesByPromptId: Record<string, LiveAuntMinnieResponse[]>;
+  myResponsesByPromptId: Record<string, LiveAuntMinnieResponse | null>;
+  messages: LiveAuntMinnieMessage[];
+  messagesByPromptId: Record<string, LiveAuntMinnieMessage[]>;
+  participants: LiveAuntMinnieParticipant[];
+  onlineParticipantIds: string[];
+  participantCount: number;
+  isHost: boolean;
+  hasJoined: boolean;
+}
+
+export interface LiveAuntMinniePromptImageInput {
+  image_url: string;
+  caption?: string;
+}
+
+export interface LiveAuntMinniePromptInput {
+  id?: string;
+  source_case_id?: string | null;
+  images: LiveAuntMinniePromptImageInput[];
+  question_text?: string;
+  official_answer: string;
+  answer_explanation?: string;
+  accepted_aliases?: string[];
+}
+
+export interface LiveAuntMinnieCreatePayload {
+  title: string;
+  allowLateJoin?: boolean;
+  prompts: LiveAuntMinniePromptInput[];
+}
+
+export interface LiveAuntMinnieSubmitResponsePayload {
+  sessionId: string;
+  promptId: string;
+  responseText: string;
+}
+
+export interface LiveAuntMinnieSubmitMessagePayload {
+  sessionId: string;
+  promptId: string;
+  body: string;
+}
+
+export interface AuntMinnieCaseOption {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  diagnosis: string | null;
+  notes: string | null;
 }
 
 export interface PatientRecord {

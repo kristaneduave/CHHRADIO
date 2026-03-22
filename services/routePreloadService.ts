@@ -12,6 +12,7 @@ const memoizeImport = <T,>(loader: () => Promise<T>) => {
 
 export const loadUploadScreen = memoizeImport(() => import('../components/UploadScreen'));
 export const loadQuizScreen = memoizeImport(() => import('../components/QuizScreen'));
+export const loadLiveAuntMinnieScreen = memoizeImport(() => import('../components/LiveAuntMinnieScreen'));
 export const loadSearchScreen = memoizeImport(() => import('../components/SearchScreen'));
 export const loadCalendarScreen = memoizeImport(() => import('../components/CalendarScreen'));
 export const loadProfileScreen = memoizeImport(() => import('../components/ProfileScreen'));
@@ -27,6 +28,7 @@ export const loadMonthlyCensusPage = memoizeImport(() => import('../components/M
 const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   upload: loadUploadScreen,
   quiz: loadQuizScreen,
+  'live-aunt-minnie': loadLiveAuntMinnieScreen,
   search: loadSearchScreen,
   database: loadSearchScreen,
   calendar: loadCalendarScreen,
@@ -63,6 +65,7 @@ export const preloadMajorRouteChunks = async (): Promise<void> => {
     loadCalendarScreen(),
     loadUploadScreen(),
     loadCaseViewScreen(),
+    loadLiveAuntMinnieScreen(),
     loadAnnouncementsScreen(),
     loadResidentsCornerScreen(),
     loadResidentEndorsementsScreen(),

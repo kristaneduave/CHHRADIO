@@ -6,6 +6,7 @@ export const SCREEN_LAYOUT_CONFIG: Record<Screen, ScreenLayoutMode> = {
   dashboard: 'content',
   upload: 'wide',
   quiz: 'wide',
+  'live-aunt-minnie': 'wide',
   search: 'split',
   database: 'split',
   'activity-log': 'split',

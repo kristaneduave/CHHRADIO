@@ -16,10 +16,15 @@ import MyQuizAttempts from './quiz/MyQuizAttempts';
 import QuizLibrary from './quiz/QuizLibrary';
 import QuizResultReview from './quiz/QuizResultReview';
 import QuizSession from './quiz/QuizSession';
+import TopRightCreateAction from './TopRightCreateAction';
 
 type ScreenMode = 'library' | 'session' | 'review';
 
-const QuizScreen: React.FC = () => {
+interface QuizScreenProps {
+  onOpenLiveAuntMinnie?: () => void;
+}
+
+const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [availableQuizzes, setAvailableQuizzes] = useState<QuizListItem[]>([]);
   const [managedQuizzes, setManagedQuizzes] = useState<QuizListItem[]>([]);
@@ -180,6 +185,14 @@ const QuizScreen: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onOpenLiveAuntMinnie && (
+            <TopRightCreateAction
+              label="Live Aunt Minnie"
+              icon="live_tv"
+              compact
+              onClick={onOpenLiveAuntMinnie}
+            />
+          )}
           <span className="px-3 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-bold uppercase tracking-[0.2em] text-slate-300">
             {availableQuizzes.length} Published
           </span>

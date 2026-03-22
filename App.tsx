@@ -23,6 +23,7 @@ import {
   loadArticleLibraryScreen,
   loadCalendarScreen,
   loadCaseViewScreen,
+  loadLiveAuntMinnieScreen,
   loadMonthlyCensusPage,
   loadNewsfeedScreen,
   loadProfileScreen,
@@ -53,6 +54,7 @@ const TRACKABLE_SCREENS: Screen[] = [
   'announcements',
   'upload',
   'quiz',
+  'live-aunt-minnie',
   'residents-corner',
   'article-library',
   'resident-endorsements',
@@ -61,6 +63,7 @@ const TRACKABLE_SCREENS: Screen[] = [
 
 const UploadScreen = lazy(loadUploadScreen);
 const QuizScreen = lazy(loadQuizScreen);
+const LiveAuntMinnieScreen = lazy(loadLiveAuntMinnieScreen);
 const SearchScreen = lazy(loadSearchScreen);
 const CalendarScreen = lazy(loadCalendarScreen);
 const ProfileScreen = lazy(loadProfileScreen);
@@ -436,13 +439,16 @@ const App: React.FC = () => {
             existingCase={caseToEdit}
             initialSubmissionType={initialUploadType}
             onClose={() => {
+              const wasEditing = Boolean(caseToEdit);
               setCaseToEdit(null);
-              navigateToScreen('profile'); // Return to profile after editing/closing
+              navigateToScreen(wasEditing ? 'profile' : 'dashboard');
             }}
           />
         );
       case 'quiz':
-        return <QuizScreen />;
+        return <QuizScreen onOpenLiveAuntMinnie={() => navigateToScreen('live-aunt-minnie')} />;
+      case 'live-aunt-minnie':
+        return <LiveAuntMinnieScreen onBack={() => navigateToScreen('quiz')} />;
       case 'calendar':
         return <CalendarScreen />;
       case 'case-view':
@@ -454,7 +460,7 @@ const App: React.FC = () => {
               navigateToScreen('search');
             }}
             onEdit={() => {
-              setInitialUploadType('interesting_case');
+              setInitialUploadType((caseToEdit?.submission_type as SubmissionType) || 'interesting_case');
               navigateToScreen('upload'); // Navigate to upload for editing
             }}
           />
