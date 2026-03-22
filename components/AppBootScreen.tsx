@@ -39,27 +39,13 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
       exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.02 }}
       transition={{ duration: shouldReduceMotion ? 0.18 : 0.28, ease: 'easeOut' }}
     >
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.18),transparent_38%),radial-gradient(circle_at_bottom_left,rgba(56,189,248,0.12),transparent_34%),linear-gradient(180deg,rgba(2,6,23,0.92),rgba(6,11,22,1))]" />
-      <motion.div
-        aria-hidden="true"
-        className="absolute -left-16 top-12 h-56 w-56 rounded-full bg-cyan-400/20 blur-3xl"
-        animate={shouldReduceMotion ? { opacity: 0.35 } : { x: [0, 26, -10, 0], y: [0, -18, 12, 0], opacity: [0.32, 0.5, 0.36, 0.32] }}
-        transition={{ duration: 14, repeat: Infinity, ease: 'easeInOut' }}
-      />
-      <motion.div
-        aria-hidden="true"
-        className="absolute right-[-3rem] top-[18%] h-72 w-72 rounded-full bg-blue-500/18 blur-3xl"
-        animate={shouldReduceMotion ? { opacity: 0.3 } : { x: [0, -30, 8, 0], y: [0, 20, -14, 0], opacity: [0.28, 0.42, 0.3, 0.28] }}
-        transition={{ duration: 16, repeat: Infinity, ease: 'easeInOut' }}
-      />
       <div
         aria-hidden="true"
-        className="absolute inset-0 opacity-[0.08]"
+        className="absolute inset-0 opacity-[0.05]"
         style={{
           backgroundImage:
             'linear-gradient(rgba(148,163,184,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.18) 1px, transparent 1px)',
           backgroundSize: '32px 32px',
-          maskImage: 'linear-gradient(180deg, rgba(0,0,0,0.55), transparent 90%)',
         }}
       />
 
@@ -70,8 +56,7 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
           animate={isComplete && !shouldReduceMotion ? { opacity: 1, y: -6, scale: 1.01 } : { opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: shouldReduceMotion ? 0.16 : 0.42, ease: 'easeOut' }}
         >
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] px-6 py-8 shadow-[0_24px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl sm:px-7">
-            <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(56,189,248,0.09),transparent_38%,rgba(59,130,246,0.08))]" />
+          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-panel/95 px-6 py-8 shadow-[0_24px_80px_rgba(0,0,0,0.34)] backdrop-blur-xl sm:px-7">
             <div className="relative">
               <div className="text-center">
                 <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
@@ -130,7 +115,7 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
                   </motion.div>
                 </div>
 
-                <div className="mt-5 min-h-[5.5rem] rounded-[1.5rem] border border-cyan-400/10 bg-[linear-gradient(135deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="mt-5 min-h-[5.5rem] rounded-[1.5rem] border border-cyan-400/10 bg-app/70 px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                   <AnimatePresence mode="wait">
                     <motion.p
                       key={computedMessageKey}

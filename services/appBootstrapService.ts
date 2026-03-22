@@ -119,26 +119,26 @@ const buildResidentFunMessage = (seed: string, actions: string[]) => {
   }));
 };
 
-const buildTaskMessagePool = (taskName: AppBootstrapTaskName, actions: string[]) =>
-  buildResidentFunMessage(taskName, actions);
+const buildTaskMessagePool = (taskName: AppBootstrapTaskName, actions: string[], runSeed: string) =>
+  buildResidentFunMessage(`${runSeed}:${taskName}`, actions);
 
-const stableMessageForTask = (task?: AppBootstrapTask | null) => {
+const stableMessageForTask = (task: AppBootstrapTask | null | undefined, runSeed: string) => {
   if (!task || task.messagePool.length === 0) {
     return {
-      key: 'fallback:0',
-      text: FALLBACK_FUN_MESSAGES[0],
+      key: `fallback:${runSeed}:0`,
+      text: FALLBACK_FUN_MESSAGES[hashString(runSeed) % FALLBACK_FUN_MESSAGES.length],
     };
   }
 
-  const hash = hashString(task.name);
+  const hash = hashString(`${runSeed}:${task.name}`);
   const index = hash % task.messagePool.length;
   return {
-    key: `${task.name}:${index}`,
+    key: `${runSeed}:${task.name}:${index}`,
     text: task.messagePool[index],
   };
 };
 
-const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBootstrapTask[] => {
+const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed: string): AppBootstrapTask[] => {
   const userId = session?.user?.id || '';
   const hasUser = Boolean(userId) && !guestMode;
 
@@ -153,7 +153,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
         'switching on every screen before rounds notices.',
         'staging the big screens like coffee depends on it.',
         'lining up dashboard, search, and newsfeed in formation.',
-      ]).map((entry) => entry.text),
+      ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadMajorRouteChunks();
       },
@@ -168,7 +168,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
         'sorting the case archive before conference panic hits.',
         'indexing cases for one-keyword search heroics.',
         'making diagnostic chaos searchable.',
-      ]).map((entry) => entry.text),
+      ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadPublishedCases();
       },
@@ -183,7 +183,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
         'waking the pathology shelf up.',
         'stacking the checklists in consultant order.',
         'getting the teaching files presentable.',
-      ]).map((entry) => entry.text),
+      ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadArticleLibraryLanding();
       },
@@ -201,7 +201,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'checking if the dashboard survived duty handoff.',
               'straightening the home screen for rounds.',
               'polishing the dashboard before questions start.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchDashboardSnapshot();
             },
@@ -216,7 +216,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'sorting the newsfeed chaos.',
               'counting unread alerts before they multiply.',
               'pulling urgent notices to the front.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadNewsfeedData(userId);
             },
@@ -231,7 +231,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'straightening the profile page.',
               'polishing the profile details.',
               'setting the profile view in order.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadProfileHome(userId);
             },
@@ -246,7 +246,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'untangling the calendar.',
               'arranging the schedule for group-chat questions.',
               'getting call coverage into shape.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await CalendarService.preloadCalendarData(new Date(), 10);
             },
@@ -261,7 +261,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'replaying the latest activity.',
               'following the freshest breadcrumbs.',
               'checking who moved what.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchRecentActivity(userId, 20);
             },
@@ -276,7 +276,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
               'warming the quiz lab.',
               'stacking the quiz sessions.',
               'setting out the trick questions.',
-            ]).map((entry) => entry.text),
+            ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadQuizWorkspace();
             },
@@ -293,7 +293,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
       group: 'post-release',
       messagePool: buildTaskMessagePool('anatomy-route-chunk', [
         'quietly wheeling anatomy into the reading room for later.',
-      ]).map((entry) => entry.text),
+      ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadNonCriticalRouteChunks();
       },
@@ -307,6 +307,7 @@ const buildProgressSnapshot = (
   tasks: AppBootstrapTask[],
   results: Map<AppBootstrapTaskName, AppBootstrapTaskResult>,
   releaseReady: boolean,
+  runSeed: string,
 ): AppBootstrapProgressSnapshot => {
   const blockingTasks = tasks.filter((task) => task.blocking);
   const totalBlockingWeight = blockingTasks.reduce((sum, task) => sum + task.weight, 0) || 1;
@@ -327,7 +328,7 @@ const buildProgressSnapshot = (
     : activeTask
       ? GROUP_PHASE_LABELS[activeTask.group]
       : 'Preparing workspace';
-  const funMessage = stableMessageForTask(activeTask);
+  const funMessage = stableMessageForTask(activeTask, runSeed);
   const statusLabel = releaseReady
     ? 'Opening workspace'
     : failedBlockingTask && completedTaskCount < blockingTasks.length
@@ -353,13 +354,14 @@ export const startAppBootstrap = async (options: {
   timeoutMs?: number;
   onProgress?: (snapshot: AppBootstrapProgressSnapshot) => void;
 }): Promise<AppBootstrapResult> => {
-  const tasks = getBootstrapTasks(options.session, options.guestMode);
+  const runSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const tasks = getBootstrapTasks(options.session, options.guestMode, runSeed);
   const blockingTasks = tasks.filter((task) => task.blocking);
   const backgroundTasks = tasks.filter((task) => !task.blocking);
   const results = new Map<AppBootstrapTaskName, AppBootstrapTaskResult>();
 
   const emitProgress = (releaseReady = false) => {
-    options.onProgress?.(buildProgressSnapshot(tasks, results, releaseReady));
+    options.onProgress?.(buildProgressSnapshot(tasks, results, releaseReady, runSeed));
   };
 
   emitProgress(false);

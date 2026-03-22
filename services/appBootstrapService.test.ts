@@ -69,7 +69,7 @@ describe('appBootstrapService', () => {
   });
 
   it('includes major route chunk preload as a blocking task', () => {
-    const tasks = __testables.getBootstrapTasks(buildSession(), false);
+    const tasks = __testables.getBootstrapTasks(buildSession(), false, 'seed-a');
     const routeTask = tasks.find((task) => task.name === 'route-chunks');
 
     expect(routeTask).toMatchObject({
@@ -80,7 +80,7 @@ describe('appBootstrapService', () => {
   });
 
   it('guest mode excludes user-only blocking tasks', () => {
-    const tasks = __testables.getBootstrapTasks(null, true);
+    const tasks = __testables.getBootstrapTasks(null, true, 'seed-a');
     const names = tasks.filter((task) => task.blocking).map((task) => task.name);
 
     expect(names).toEqual([
@@ -160,13 +160,13 @@ describe('appBootstrapService', () => {
   });
 
   it('uses a stable fun message selection per task', () => {
-    const task = __testables.getBootstrapTasks(buildSession(), false).find((entry) => entry.name === 'calendar-data');
+    const task = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').find((entry) => entry.name === 'calendar-data');
 
-    expect(__testables.stableMessageForTask(task)).toEqual(__testables.stableMessageForTask(task));
+    expect(__testables.stableMessageForTask(task, 'seed-a')).toEqual(__testables.stableMessageForTask(task, 'seed-a'));
   });
 
   it('uses resident names in generated preload copy', () => {
-    const task = __testables.getBootstrapTasks(buildSession(), false).find((entry) => entry.name === 'dashboard-snapshot');
+    const task = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').find((entry) => entry.name === 'dashboard-snapshot');
     const residentRegex = new RegExp(__testables.RESIDENT_BOOT_NAMES.join('|'));
 
     expect(task?.messagePool.some((message) => residentRegex.test(message))).toBe(true);
@@ -181,5 +181,12 @@ describe('appBootstrapService', () => {
       'convincing the calendar that overnight call was character building.',
     ])[0]?.text);
     expect(messages[0]?.text.length).toBeGreaterThan(0);
+  });
+
+  it('varies resident preload copy across boot sessions', () => {
+    const taskA = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').find((entry) => entry.name === 'search-data');
+    const taskB = __testables.getBootstrapTasks(buildSession(), false, 'seed-b').find((entry) => entry.name === 'search-data');
+
+    expect(__testables.stableMessageForTask(taskA, 'seed-a').text).not.toBe(__testables.stableMessageForTask(taskB, 'seed-b').text);
   });
 });

@@ -4,6 +4,7 @@ import LoadingState from '../LoadingState';
 import type { PathologyGuidelineRequest, PathologyGuidelineRequestStatus, PathologyGuidelineRequestType } from '../../types';
 
 interface ArticleLibraryRequestsSectionProps {
+  compact?: boolean;
   canEdit: boolean;
   currentUserId: string | null;
   requests: PathologyGuidelineRequest[];
@@ -23,6 +24,7 @@ interface ArticleLibraryRequestsSectionProps {
 }
 
 const ArticleLibraryRequestsSection: React.FC<ArticleLibraryRequestsSectionProps> = ({
+  compact = false,
   canEdit,
   currentUserId,
   requests,
@@ -48,7 +50,7 @@ const ArticleLibraryRequestsSection: React.FC<ArticleLibraryRequestsSectionProps
       </div>
       <div className="space-y-3">
         <h3 className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">{canEdit ? 'Incoming requests' : 'Your requests'}</h3>
-        {isLoadingRequests ? <LoadingState compact title="Loading requests..." /> : !hasLoadedRequests && !canEdit ? <EmptyState compact icon="forum" title="Requests load on demand" description="Open the request form to load your request history." /> : requests.length ? requests.map((request) => (
+        {isLoadingRequests ? <LoadingState compact title="Loading requests..." /> : !hasLoadedRequests && !canEdit ? <div className={compact ? 'py-2' : ''}><EmptyState compact icon="forum" title="Requests load on demand" description="Open the request form to load your request history." /></div> : requests.length ? requests.map((request) => (
           <div key={request.id} className="rounded-2xl border border-white/5 bg-white/[0.03] p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -93,7 +95,7 @@ const ArticleLibraryRequestsSection: React.FC<ArticleLibraryRequestsSectionProps
               </div>
             ) : null}
           </div>
-        )) : <EmptyState compact icon="forum" title="No requests yet" description={canEdit ? 'Requests will appear here.' : 'Your requests will appear here.'} />}
+        )) : <div className={compact ? 'py-2' : ''}><EmptyState compact icon="forum" title="No requests yet" description={canEdit ? 'Requests will appear here.' : 'Your requests will appear here.'} /></div>}
       </div>
     </div>
   </section>

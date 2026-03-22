@@ -4,6 +4,7 @@ import LoadingState from '../LoadingState';
 import type { PathologyGuidelineDraftListItem } from '../../services/articleLibraryService';
 
 interface ArticleLibraryDraftsSectionProps {
+  compact?: boolean;
   isLoadingDrafts: boolean;
   editorDrafts: PathologyGuidelineDraftListItem[];
   deletingDraftVersionId: string | null;
@@ -15,6 +16,7 @@ interface ArticleLibraryDraftsSectionProps {
 }
 
 const ArticleLibraryDraftsSection: React.FC<ArticleLibraryDraftsSectionProps> = ({
+  compact = false,
   isLoadingDrafts,
   editorDrafts,
   deletingDraftVersionId,
@@ -24,7 +26,7 @@ const ArticleLibraryDraftsSection: React.FC<ArticleLibraryDraftsSectionProps> = 
   formatDateLabel,
   getSourceKindLabel,
 }) => (
-  <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
+  <section className={`rounded-3xl border border-white/5 bg-white/[0.03] backdrop-blur-sm ${compact ? 'p-4' : 'p-4'}`}>
     <div className="space-y-4">
       <div>
         <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Unpublished drafts</h2>
@@ -59,7 +61,11 @@ const ArticleLibraryDraftsSection: React.FC<ArticleLibraryDraftsSectionProps> = 
             </div>
           ))}
         </div>
-      ) : <EmptyState compact icon="edit_note" title="No unpublished drafts" description="JSON imports and manual edits will appear here until published." />}
+      ) : (
+        <div className={compact ? 'py-2' : ''}>
+          <EmptyState compact icon="edit_note" title="No unpublished drafts" description="JSON imports and manual edits will appear here until published." />
+        </div>
+      )}
     </div>
   </section>
 );

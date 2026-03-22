@@ -920,6 +920,94 @@ const TopicHubGrid: React.FC<{
     </div>
   );
 
+const TopicHubRail: React.FC<{
+  hubs: ArticleLibraryTopicHub[];
+  activeTopic: string | null;
+  onSelectTopic: (topic: string) => void;
+}> = ({ hubs, activeTopic, onSelectTopic }) => (
+  <div className="space-y-2">
+    {hubs.map((hub) => {
+      const active = hub.topic === activeTopic;
+      const c = hub.colorClass || {
+        text: 'text-cyan-400',
+        activeBg: 'bg-cyan-950/[0.16]',
+        activeBorder: 'border-cyan-400/18',
+        iconActive: 'text-cyan-200',
+        iconInactive: 'text-cyan-400/60',
+      };
+      return (
+        <button
+          key={hub.id}
+          type="button"
+          onClick={() => onSelectTopic(hub.topic === activeTopic ? '' : hub.topic)}
+          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left transition ${
+            active
+              ? `${c.activeBorder} ${c.activeBg}`
+              : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04]'
+          }`}
+        >
+          <div className="min-w-0 flex items-center gap-3">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/8 ${active ? 'bg-white/10' : 'bg-black/20'}`}>
+              <span className={`material-icons text-[20px] ${active ? c.iconActive : c.iconInactive}`}>{hub.icon}</span>
+            </div>
+            <div className="min-w-0">
+              <p className={`truncate text-sm font-semibold ${active ? 'text-white' : 'text-slate-200'}`}>{hub.topic}</p>
+              <p className="truncate text-[11px] text-slate-500">{hub.description}</p>
+            </div>
+          </div>
+          <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] ${active ? c.text : 'text-slate-500'}`}>
+            {hub.count}
+          </span>
+        </button>
+      );
+    })}
+  </div>
+);
+
+const DesktopTopicShowcase: React.FC<{
+  hubs: ArticleLibraryTopicHub[];
+  onSelectTopic: (topic: string) => void;
+}> = ({ hubs, onSelectTopic }) => {
+  const featuredHubs = hubs.filter((hub) => hub.count > 0).slice(0, 4);
+
+  if (!featuredHubs.length) {
+    return null;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {featuredHubs.map((hub) => (
+        <button
+          key={hub.id}
+          type="button"
+          onClick={() => onSelectTopic(hub.topic)}
+          className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 text-left transition hover:bg-white/[0.05]"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-2">
+              <span className="material-icons text-[22px] text-cyan-300">{hub.icon}</span>
+              <h3 className="text-base font-semibold text-white">{hub.topic}</h3>
+              <p className="text-xs leading-5 text-slate-400">{hub.activeDescription}</p>
+            </div>
+            <span className="rounded-full border border-cyan-400/16 bg-cyan-500/[0.06] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-100/80">
+              {hub.count}
+            </span>
+          </div>
+          {hub.featuredItems.length ? (
+            <div className="mt-4 space-y-2">
+              {hub.featuredItems.slice(0, 2).map((item) => (
+                <p key={item.guideline_id} className="truncate text-xs text-slate-400">
+                  {item.pathology_name}
+                </p>
+              ))}
+            </div>
+          ) : null}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 const GuidelineResultCard: React.FC<{
   item: PathologyGuidelineListItem;
   active: boolean;
@@ -1409,6 +1497,17 @@ const ArticleLibraryScreen: React.FC = () => {
       { id: 'library', title: 'Full library', description: 'All published guides in this topic.', items: displayResults },
     ].filter((section) => section.items.length);
   }, [activeHub?.activeDescription, activeTopic, debouncedQuery, displayResults]);
+
+  const recentlyUpdatedItems = useMemo(
+    () => [...browseItems]
+      .sort((left, right) => {
+        const rightTime = new Date(right.published_at || right.synced_at || 0).getTime();
+        const leftTime = new Date(left.published_at || left.synced_at || 0).getTime();
+        return rightTime - leftTime;
+      })
+      .slice(0, 6),
+    [browseItems],
+  );
 
   useEffect(() => {
     if (isLoadingLibrary || hasMeasuredFirstReadyRef.current || !topicHubs.length) return;
@@ -2436,15 +2535,79 @@ const ArticleLibraryScreen: React.FC = () => {
   const detailSourceKind = detail?.source_kind || sourceRecord?.source_kind;
   const detailSourceLabel = getSourceActionLabel(detailSourceKind);
   const hasDetailSource = Boolean(detailSourceHref);
-  const isDetailOverlayVisible = (isDesktopDetail && !!selectedItem) || (!isDesktopDetail && isMobileDetailOpen);
+  const isDetailOverlayVisible = !isDesktopDetail && isMobileDetailOpen;
+  const showDockedDesktopDetail = isDesktopDetail && !!selectedItem;
   const overlayRoot = typeof document !== 'undefined' ? document.body : null;
+
+  const desktopHomeState = !debouncedQuery.trim() && !activeTopic;
+
+  const desktopUtilityRail = (
+    <div className="space-y-4 xl:sticky xl:top-6">
+      {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
+        <div className="rounded-3xl border border-cyan-400/12 bg-cyan-950/[0.08] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-cyan-200">Editor Tools</p>
+              <p className="mt-1 text-xs text-slate-400">Drafts, requests, and article actions stay visible while browsing.</p>
+            </div>
+            <TopRightCreateAction
+              label="New article"
+              icon="add_circle"
+              onClick={openLibraryNewArticlePanel}
+              aria-label="New article"
+              compact
+              className="shrink-0"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {!isRoleLoading && canEdit ? (
+        <Suspense fallback={null}>
+          <ArticleLibraryDraftsSection
+            compact
+            isLoadingDrafts={isLoadingDrafts}
+            editorDrafts={editorDrafts}
+            deletingDraftVersionId={deletingDraftVersionId}
+            onOpenDraft={handleOpenDraftEntry}
+            onDeleteDraft={handleDeleteDraft}
+            getOriginLabel={getOriginLabel}
+            formatDateLabel={formatDateLabel}
+            getSourceKindLabel={getSourceKindLabel}
+          />
+        </Suspense>
+      ) : null}
+
+      <Suspense fallback={null}>
+        <ArticleLibraryRequestsSection
+          compact
+          canEdit={canEdit}
+          currentUserId={currentUserId}
+          requests={requests}
+          isLoadingRequests={isLoadingRequests}
+          hasLoadedRequests={hasLoadedRequests}
+          requestStatusDrafts={requestStatusDrafts}
+          requestNotesDrafts={requestNotesDrafts}
+          deletingRequestId={deletingRequestId}
+          updatingRequestId={updatingRequestId}
+          setRequestStatusDrafts={setRequestStatusDrafts}
+          setRequestNotesDrafts={setRequestNotesDrafts}
+          handleDeleteRequest={handleDeleteRequest}
+          handleUpdateRequest={handleUpdateRequest}
+          getRequestTypeLabel={getRequestTypeLabel}
+          getRequestStatusLabel={getRequestStatusLabel}
+          formatDateLabel={formatDateLabel}
+        />
+      </Suspense>
+    </div>
+  );
 
   return (
     <div className="min-h-full bg-app px-6 pb-40 pt-6">
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-[1440px] space-y-6">
         <header className="flex items-center justify-between gap-3 pt-2">
           <h1 className="text-3xl font-bold text-white">Article Library</h1>
-          {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
+          {!isRoleLoading && canEdit && !isDetailOverlayVisible && !isDesktopDetail ? (
             <TopRightCreateAction
               label="New article"
               icon="add_circle"
@@ -2493,91 +2656,109 @@ const ArticleLibraryScreen: React.FC = () => {
           </Suspense>
         </section>
 
-        <div className="space-y-6">
-          <div className="space-y-6">
+        <div className="space-y-6 xl:grid xl:grid-cols-[280px_minmax(0,1fr)_340px] xl:items-start xl:gap-6 xl:space-y-0">
+          <aside className="hidden xl:block xl:sticky xl:top-6">
             <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-              {debouncedQuery.trim() ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Search results</h2>
-                      <p className="mt-1 text-xs text-slate-400">Direct guideline hits for "{debouncedQuery.trim()}".</p>
+              <div className="mb-4">
+                <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Browse topics</h2>
+                <p className="mt-1 text-xs leading-5 text-slate-400">Use the rail to jump between teaching domains without losing context.</p>
+              </div>
+              {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubRail hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
+            </section>
+          </aside>
+
+          <div className="space-y-6">
+            <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm xl:hidden">
+              {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
+            </section>
+
+            <div className={`space-y-6 ${showDockedDesktopDetail ? 'xl:grid xl:grid-cols-[minmax(0,1.1fr)_minmax(380px,0.9fr)] xl:gap-6 xl:space-y-0' : ''}`}>
+              <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
+                {debouncedQuery.trim() ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Search results</h2>
+                        <p className="mt-1 text-xs text-slate-400">Direct guideline hits for "{debouncedQuery.trim()}".</p>
+                      </div>
+                      <button type="button" onClick={() => setQuery('')} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]">Clear</button>
                     </div>
-                    <button type="button" onClick={() => setQuery('')} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08]">Clear</button>
+                    {isLoadingResults ? <LoadingState compact title="Searching Article Library..." /> : displayResults.length ? <div className="flex flex-col gap-2">{displayResults.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={item.guideline_id === selectedItem?.guideline_id} onClick={() => handleSelectItem(item)} topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic} />)}</div> : <EmptyState compact icon="rule" title="No pathology matched that search term" description="Try a broader pathology name, synonym, or keyword." />}
                   </div>
-                  {isLoadingResults ? <LoadingState compact title="Searching Article Library..." /> : displayResults.length ? <div className="flex flex-col gap-2">{displayResults.map((item) => <GuidelineResultCard key={item.guideline_id} item={item} active={item.guideline_id === selectedItem?.guideline_id} onClick={() => handleSelectItem(item)} topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic} />)}</div> : <EmptyState compact icon="rule" title="No pathology matched that search term" description="Try a broader pathology name, synonym, or keyword." />}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {/* 'All topics' button removed for mobile-first layout */}
-                  {isLoadingLibrary ? <LoadingState compact title="Loading Article Library..." /> : <TopicHubGrid hubs={topicHubs} activeTopic={activeTopic} onSelectTopic={handleSelectTopic} />}
-                  {activeTopic ? (
+                ) : desktopHomeState ? (
+                  <div className="space-y-6">
+                    <div className="rounded-3xl border border-cyan-400/10 bg-[linear-gradient(135deg,rgba(34,211,238,0.08),rgba(255,255,255,0.02))] p-5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-200">Desktop Workspace</p>
+                      <h2 className="mt-2 text-2xl font-bold text-white">Browse by domain, scan featured guides, and keep tools in view.</h2>
+                      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">The desktop layout keeps topics on the left, reading context in the center, and editor utilities on the right so the library feels like a workstation instead of a stacked mobile feed.</p>
+                    </div>
+
                     <div className="space-y-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-white">{activeTopic}</h3>
-                        <p className="mt-1 text-xs text-slate-400">{activeHub?.activeDescription || 'Curated training guides.'}</p>
+                        <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Featured topics</h3>
+                        <p className="mt-1 text-xs text-slate-400">Jump into the busiest domains without opening a modal first.</p>
                       </div>
-                      {hubTags.length ? <div className="flex flex-wrap gap-2">{hubTags.map((tag) => <button key={tag} type="button" onClick={() => setActiveBrowseTag((prev) => (prev === tag ? null : tag))} className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${activeBrowseTag === tag ? 'border-cyan-400/24 bg-cyan-500/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'}`}>{tag}</button>)}</div> : null}
-                      <div className="space-y-3">
-                        {browseSections.map((section) => renderBrowseSection({
-                          ...section,
-                          description: section.items.length <= 2 ? '' : section.description,
-                        }))}
+                      <DesktopTopicShowcase hubs={topicHubs} onSelectTopic={handleSelectTopic} />
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <h3 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Recently updated</h3>
+                        <p className="mt-1 text-xs text-slate-400">Latest published or synced guides across the library.</p>
+                      </div>
+                      <div className="grid gap-2 xl:grid-cols-2">
+                        {recentlyUpdatedItems.map((item) => (
+                          <GuidelineResultCard
+                            key={item.guideline_id}
+                            item={item}
+                            active={item.guideline_id === selectedItem?.guideline_id}
+                            onClick={() => handleSelectItem(item)}
+                            variant="browse"
+                            topicLabel={getTrainingHubDefinition(getTrainingHubIdForItem(item)).topic}
+                          />
+                        ))}
                       </div>
                     </div>
-                  ) : null}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-3xl border border-white/5 bg-white/[0.02] p-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                        <div>
+                          <h2 className="text-lg font-semibold text-white">{activeTopic}</h2>
+                          <p className="mt-1 text-xs leading-5 text-slate-400">{activeHub?.activeDescription || 'Curated training guides.'}</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {hubTags.map((tag) => <button key={tag} type="button" onClick={() => setActiveBrowseTag((prev) => (prev === tag ? null : tag))} className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${activeBrowseTag === tag ? 'border-cyan-400/24 bg-cyan-500/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]'}`}>{tag}</button>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {browseSections.map((section) => renderBrowseSection({
+                        ...section,
+                        description: section.items.length <= 2 ? '' : section.description,
+                      }))}
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {showDockedDesktopDetail ? (
+                <div className="hidden xl:block">
+                  <div className="xl:sticky xl:top-6">
+                    {detailPanel}
+                  </div>
                 </div>
-              )}
-            </section>
+              ) : null}
+            </div>
           </div>
+
+          <aside className="hidden xl:block">
+            {desktopUtilityRail}
+          </aside>
         </div>
 
-        {!isRoleLoading && canEdit ? (
-          <Suspense fallback={null}>
-            <ArticleLibraryDraftsSection
-              isLoadingDrafts={isLoadingDrafts}
-              editorDrafts={editorDrafts}
-              deletingDraftVersionId={deletingDraftVersionId}
-              onOpenDraft={handleOpenDraftEntry}
-              onDeleteDraft={handleDeleteDraft}
-              getOriginLabel={getOriginLabel}
-              formatDateLabel={formatDateLabel}
-              getSourceKindLabel={getSourceKindLabel}
-            />
-          </Suspense>
-        ) : null}
-
-        <Suspense fallback={(
-          <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-[0.22em] text-cyan-200">Requests</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-400">{canEdit ? 'Review and manage incoming library requests.' : 'Track what you asked to be added or updated.'}</p>
-              </div>
-            </div>
-          </section>
-        )}>
-          <ArticleLibraryRequestsSection
-            canEdit={canEdit}
-            currentUserId={currentUserId}
-            requests={requests}
-            isLoadingRequests={isLoadingRequests}
-            hasLoadedRequests={hasLoadedRequests}
-            requestStatusDrafts={requestStatusDrafts}
-            requestNotesDrafts={requestNotesDrafts}
-            deletingRequestId={deletingRequestId}
-            updatingRequestId={updatingRequestId}
-            setRequestStatusDrafts={setRequestStatusDrafts}
-            setRequestNotesDrafts={setRequestNotesDrafts}
-            handleDeleteRequest={handleDeleteRequest}
-            handleUpdateRequest={handleUpdateRequest}
-            getRequestTypeLabel={getRequestTypeLabel}
-            getRequestStatusLabel={getRequestStatusLabel}
-            formatDateLabel={formatDateLabel}
-          />
-        </Suspense>
-
-        {!isRoleLoading && canEdit && !isDetailOverlayVisible ? (
+        {!isRoleLoading && canEdit && !isDetailOverlayVisible && !isDesktopDetail ? (
           <Suspense fallback={null}>
             <ArticleLibraryEditorPanel
               open={isLibraryControlPanelOpen}
@@ -2616,7 +2797,7 @@ const ArticleLibraryScreen: React.FC = () => {
         <Suspense fallback={null}>
           <ArticleLibraryDetailOverlay
             overlayRoot={overlayRoot}
-            isDesktopDetail={isDesktopDetail}
+            isDesktopDetail={false}
             isMobileDetailOpen={isMobileDetailOpen}
             hasSelectedItem={!!selectedItem}
             detailTitle={detailTitle}
