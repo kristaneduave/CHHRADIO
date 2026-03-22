@@ -4,7 +4,7 @@ import { toastError } from '../utils/toast';
 import LoadingState from './LoadingState';
 import { Skeleton } from './Skeleton';
 import EmptyState from './EmptyState';
-import { fetchPublishedCasesBundle } from '../services/publishedCasesService';
+import { fetchPublishedCasesBundle, getCachedPublishedCasesBundle } from '../services/publishedCasesService';
 import { useAppViewport } from './responsive/useViewport';
 import PageHeader from './ui/PageHeader';
 import PageShell from './ui/PageShell';
@@ -132,6 +132,7 @@ const DATABASE_LOADING_WATCHDOG_MS = 15_000;
 
 const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const viewport = useAppViewport();
+  const cachedBundle = getCachedPublishedCasesBundle();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
@@ -145,10 +146,10 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
     submissionType: '',
     datePreset: 'all',
   });
-  const [results, setResults] = useState<PatientRecord[]>([]);
-  const [allCases, setAllCases] = useState<PatientRecord[]>([]);
-  const [rawCases, setRawCases] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [results, setResults] = useState<PatientRecord[]>(cachedBundle?.records || []);
+  const [allCases, setAllCases] = useState<PatientRecord[]>(cachedBundle?.records || []);
+  const [rawCases, setRawCases] = useState<any[]>(cachedBundle?.rawCases || []);
+  const [loading, setLoading] = useState(!cachedBundle);
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
 
@@ -170,7 +171,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const fetchCasesSeqRef = useRef(0);
 
   useEffect(() => {
-    fetchCases();
+    if (!cachedBundle) {
+      fetchCases();
+    }
   }, []);
 
   useEffect(() => {

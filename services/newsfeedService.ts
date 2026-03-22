@@ -2,6 +2,15 @@ import { supabase } from './supabase';
 import { NewsfeedNotification, NotificationSeverity, Screen } from '../types';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 
+interface CachedNewsfeedData {
+  notifications: NewsfeedNotification[];
+  unreadCount: number;
+  hasMore: boolean;
+  cursor?: string;
+}
+
+const cachedNewsfeedByUser = new Map<string, CachedNewsfeedData>();
+
 const formatTimeAgo = (iso: string): string => {
   const ts = new Date(iso).getTime();
   const seconds = Math.floor((Date.now() - ts) / 1000);
@@ -105,10 +114,19 @@ export const fetchNotificationsPage = async (
     return mapRowToNotification(row, actorName);
   });
   const hasMore = rows.length > limit;
-  return {
+  const page = {
     data: hasMore ? rows.slice(0, limit) : rows,
     hasMore,
   };
+  if (!beforeCreatedAt) {
+    cachedNewsfeedByUser.set(userId, {
+      notifications: page.data,
+      unreadCount: page.data.filter((item) => !item.read).length,
+      hasMore: page.hasMore,
+      cursor: page.data.length ? page.data[page.data.length - 1].createdAt : undefined,
+    });
+  }
+  return page;
 };
 
 export const markNotificationRead = async (notificationId: string, userId: string): Promise<void> => {
@@ -284,11 +302,20 @@ export const fetchUnreadNotificationsCount = async (userId: string): Promise<num
 
 export const preloadNewsfeedData = async (userId: string): Promise<void> => {
   if (!userId) return;
-  await Promise.all([
+  const [page, unreadCount] = await Promise.all([
     fetchNotificationsPage(userId, 20),
     fetchUnreadNotificationsCount(userId),
   ]);
+  cachedNewsfeedByUser.set(userId, {
+    notifications: page.data,
+    unreadCount,
+    hasMore: page.hasMore,
+    cursor: page.data.length ? page.data[page.data.length - 1].createdAt : undefined,
+  });
 };
+
+export const getCachedNewsfeedData = (userId: string): CachedNewsfeedData | null =>
+  cachedNewsfeedByUser.get(userId) || null;
 
 export const subscribeToNotifications = (
   userId: string,

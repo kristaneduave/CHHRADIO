@@ -9,6 +9,7 @@ import {
   createPathologyGuidelineSource,
   getCurrentPathologyGuidelines,
   deletePathologyGuidelineDraft,
+  getCachedPathologyGuidelineLandingSnapshot,
   getPathologyGuidelineLandingSnapshot,
   getGuidelineDraftVersions,
   getLatestEditableDraft,
@@ -1048,13 +1049,14 @@ const ArticleLibraryQuickChips: React.FC<ArticleLibraryQuickChipsProps> = ({
 };
 
 const ArticleLibraryScreen: React.FC = () => {
+  const cachedLandingItems = getCachedPathologyGuidelineLandingSnapshot() || [];
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [results, setResults] = useState<PathologyGuidelineListItem[]>([]);
-  const [landingItems, setLandingItems] = useState<PathologyGuidelineListItem[]>([]);
-  const [libraryItems, setLibraryItems] = useState<PathologyGuidelineListItem[]>([]);
-  const [topicHubs, setTopicHubs] = useState<ArticleLibraryTopicHub[]>([]);
+  const [landingItems, setLandingItems] = useState<PathologyGuidelineListItem[]>(cachedLandingItems);
+  const [libraryItems, setLibraryItems] = useState<PathologyGuidelineListItem[]>(cachedLandingItems);
+  const [topicHubs, setTopicHubs] = useState<ArticleLibraryTopicHub[]>(buildCuratedTopicHubs(cachedLandingItems));
   const [editorDrafts, setEditorDrafts] = useState<PathologyGuidelineDraftListItem[]>([]);
   const [activeTopic, setActiveTopic] = useState<string | null>(null);
   const [activeBrowseTag, setActiveBrowseTag] = useState<string | null>(null);
@@ -1070,7 +1072,7 @@ const ArticleLibraryScreen: React.FC = () => {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
   const [isRoleLoading, setIsRoleLoading] = useState(true);
-  const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
+  const [isLoadingLibrary, setIsLoadingLibrary] = useState(cachedLandingItems.length === 0);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSavingSource, setIsSavingSource] = useState(false);
@@ -1244,7 +1246,9 @@ const ArticleLibraryScreen: React.FC = () => {
   };
 
   useEffect(() => {
-    loadLibraryCollections().catch((error) => console.error(error));
+    if (cachedLandingItems.length === 0) {
+      loadLibraryCollections().catch((error) => console.error(error));
+    }
   }, []);
 
   useEffect(() => {

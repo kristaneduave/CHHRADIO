@@ -25,6 +25,8 @@ import { getMyProfileNote, upsertMyProfileNote } from '../services/profileNotesS
 import {
   fetchHiddenAnnouncementsForProfileHome,
   fetchMyCasesForProfileHome,
+  getCachedProfileHomeWorkspace,
+  getProfileHomeWorkspace,
   fetchProfileNotePreview,
   fetchProfileRecord,
 } from '../services/profileHomeService';
@@ -34,6 +36,7 @@ import PageHeader from './ui/PageHeader';
 import PageSection from './ui/PageSection';
 
 interface ProfileScreenProps {
+  currentUserId?: string | null;
   onEditCase?: (caseItem: any) => void;
   onViewCase?: (caseItem: any) => void; // Added for navigation
 }
@@ -64,9 +67,10 @@ const formatSavedAt = (iso: string | null): string => {
   });
 };
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase, onViewCase }) => {
   const viewport = useAppViewport();
-  const [loading, setLoading] = useState(true);
+  const cachedWorkspace = currentUserId ? getCachedProfileHomeWorkspace(currentUserId) : null;
+  const [loading, setLoading] = useState(!cachedWorkspace);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
@@ -91,18 +95,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     map_status: 'At Workstation'
   });
   const [activeBadges, setActiveBadges] = useState<string[]>([]);
-  const [myCases, setMyCases] = useState<any[]>([]);
+  const [myCases, setMyCases] = useState<any[]>(cachedWorkspace?.myCases || []);
   const [loadingCases, setLoadingCases] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null); // For delete confirmation
-  const [hiddenAnnouncements, setHiddenAnnouncements] = useState<any[]>([]);
-  const [loadingHiddenAnnouncements, setLoadingHiddenAnnouncements] = useState(false);
+  const [hiddenAnnouncements, setHiddenAnnouncements] = useState<any[]>(cachedWorkspace?.hiddenAnnouncements || []);
+  const [loadingHiddenAnnouncements, setLoadingHiddenAnnouncements] = useState(!cachedWorkspace);
   const [unhidingAnnouncementId, setUnhidingAnnouncementId] = useState<string | null>(null);
-  const [hiddenNotifications, setHiddenNotifications] = useState<any[]>([]);
+  const [hiddenNotifications, setHiddenNotifications] = useState<any[]>(cachedWorkspace?.hiddenNotifications || []);
   const [unhidingNotificationId, setUnhidingNotificationId] = useState<string | null>(null);
   const [unhidingAll, setUnhidingAll] = useState(false);
-  const [profileNotesUserId, setProfileNotesUserId] = useState<string | null>(null);
-  const [noteContent, setNoteContent] = useState('');
-  const [noteLoaded, setNoteLoaded] = useState(false);
+  const [profileNotesUserId, setProfileNotesUserId] = useState<string | null>(currentUserId || null);
+  const [noteContent, setNoteContent] = useState(cachedWorkspace?.notePreview?.content || '');
+  const [noteLoaded, setNoteLoaded] = useState(Boolean(cachedWorkspace));
   const [noteSaveState, setNoteSaveState] = useState<NoteSaveState>('idle');
   const [noteLastSavedAt, setNoteLastSavedAt] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -112,11 +116,38 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
   const noteAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!cachedWorkspace?.profileRecord) return;
+    const data = cachedWorkspace.profileRecord;
+    const safeNickname = buildFallbackNickname(data.full_name, data.username, null);
+    setProfile({
+      full_name: data.full_name || '',
+      username: data.username || '',
+      bio: data.bio || '',
+      year_level: data.year_level || '',
+      specialty: 'Radiology',
+      avatar_url: data.avatar_url || '',
+      role: (data.role as UserRole) || 'resident',
+      nickname: data.nickname || safeNickname,
+      title: data.title || '',
+      motto: data.motto || '',
+      work_mode: data.work_mode || 'Focused',
+      avatar_seed: data.avatar_seed || currentUserId || '',
+      main_modality: data.main_modality || 'CT',
+      faction: data.faction || '',
+      map_status: data.map_status || 'At Workstation'
+    });
+    setActiveBadges(data.active_badges || []);
+    setNoteLastSavedAt(cachedWorkspace.notePreview?.updated_at || null);
+  }, [cachedWorkspace, currentUserId]);
+
+  useEffect(() => {
     const fetchAllData = async () => {
-      setLoading(true);
-      setLoadingCases(true);
-      setLoadingHiddenAnnouncements(true);
-      setNoteLoaded(false);
+      if (!cachedWorkspace) {
+        setLoading(true);
+        setLoadingCases(true);
+        setLoadingHiddenAnnouncements(true);
+        setNoteLoaded(false);
+      }
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
@@ -126,13 +157,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
         }
         setProfileNotesUserId(user.id);
 
-        await Promise.all([
-          fetchProfileData(user),
-          fetchMyCasesData(user),
-          fetchHiddenAnnouncementsData(user),
-          fetchHiddenNotificationsData(user),
-          fetchProfileNoteData(user),
-        ]);
+        const workspace = await getProfileHomeWorkspace(user.id);
+        applyWorkspaceData(user, workspace);
       } catch (error) {
         console.error('Error fetching profile data:', error);
         setNoteLoaded(true);
@@ -144,6 +170,40 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ onEditCase, onViewCase })
     };
     fetchAllData();
   }, []);
+
+  const applyWorkspaceData = (user: any, workspace: Awaited<ReturnType<typeof getProfileHomeWorkspace>>) => {
+    setProfileNotesUserId(user.id);
+    const data = workspace.profileRecord;
+    if (data) {
+      const safeNickname = buildFallbackNickname(data.full_name, data.username, user.email);
+      setProfile({
+        full_name: data.full_name || '',
+        username: data.username || '',
+        bio: data.bio || '',
+        year_level: data.year_level || '',
+        specialty: 'Radiology',
+        avatar_url: data.avatar_url || '',
+        role: (data.role as UserRole) || 'resident',
+        nickname: data.nickname || safeNickname,
+        title: data.title || '',
+        motto: data.motto || '',
+        work_mode: data.work_mode || 'Focused',
+        avatar_seed: data.avatar_seed || user.id,
+        main_modality: data.main_modality || 'CT',
+        faction: data.faction || '',
+        map_status: data.map_status || 'At Workstation'
+      });
+      setActiveBadges(data.active_badges || []);
+    }
+    setMyCases(workspace.myCases || []);
+    setHiddenAnnouncements(workspace.hiddenAnnouncements || []);
+    setHiddenNotifications(workspace.hiddenNotifications || []);
+    setNoteContent(workspace.notePreview?.content || '');
+    setNoteLastSavedAt(workspace.notePreview?.updated_at || null);
+    setNoteSaveState('idle');
+    setNoteError(null);
+    setNoteLoaded(true);
+  };
 
   const fetchMyCasesData = async (user: any) => {
     try {

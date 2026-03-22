@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import LoginScreen from './components/LoginScreen';
@@ -80,10 +81,12 @@ const App: React.FC = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isBootReady, setIsBootReady] = useState(false);
+  const [isBootCompleting, setIsBootCompleting] = useState(false);
   const [bootProgress, setBootProgress] = useState(0);
   const [bootStatusLabel, setBootStatusLabel] = useState('Checking session');
   const [bootPhaseLabel, setBootPhaseLabel] = useState('Resolving access');
   const [bootFunMessage, setBootFunMessage] = useState('Checking if the residents broke the dashboard again...');
+  const [bootFunMessageKey, setBootFunMessageKey] = useState('session:checking');
   const [bootTaskSummary, setBootTaskSummary] = useState({ completed: 0, total: 0 });
   const [bootPrincipalKey, setBootPrincipalKey] = useState<string | null>(null);
   const [caseToEdit, setCaseToEdit] = useState<any>(null);
@@ -91,6 +94,7 @@ const App: React.FC = () => {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
   const hasReleasedBootRef = useRef(false);
+  const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [guestMode, setGuestMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
@@ -122,6 +126,14 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  useEffect(() => {
+    return () => {
+      if (bootExitTimerRef.current) {
+        clearTimeout(bootExitTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     debugLifecycle('mount', { principalKey });
@@ -177,6 +189,7 @@ const App: React.FC = () => {
       hasReleasedBootRef.current = false;
       setBootPrincipalKey(null);
       setIsBootReady(false);
+      setIsBootCompleting(false);
       return;
     }
 
@@ -195,10 +208,12 @@ const App: React.FC = () => {
 
     hasReleasedBootRef.current = false;
     setIsBootReady(false);
+    setIsBootCompleting(false);
     setBootProgress(0);
     setBootPhaseLabel('Preparing workspace shell');
     setBootStatusLabel('Preparing workspace');
-    setBootFunMessage('Checking if the residents broke the dashboard again...');
+    setBootFunMessage('Preparing your workspace and checking the launch path.');
+    setBootFunMessageKey('bootstrap:preparing');
     setBootTaskSummary({ completed: 0, total: 0 });
 
     const runBootstrap = async () => {
@@ -211,6 +226,7 @@ const App: React.FC = () => {
           setBootStatusLabel(snapshot.statusLabel);
           setBootPhaseLabel(snapshot.phaseLabel);
           setBootFunMessage(snapshot.funMessage);
+          setBootFunMessageKey(snapshot.funMessageKey);
           setBootTaskSummary({
             completed: snapshot.completedTaskCount,
             total: snapshot.totalTaskCount,
@@ -231,8 +247,16 @@ const App: React.FC = () => {
       setBootProgress(100);
       setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
-      setBootFunMessage('Making the homepage look suspiciously prepared...');
+      setBootFunMessage('The reading room is staged and ready for entry.');
+      setBootFunMessageKey('bootstrap:complete');
+      setIsBootCompleting(true);
       setIsBootReady(true);
+      if (bootExitTimerRef.current) {
+        clearTimeout(bootExitTimerRef.current);
+      }
+      bootExitTimerRef.current = setTimeout(() => {
+        setIsBootCompleting(false);
+      }, 260);
       setBootPrincipalKey(principalKey);
       hasReleasedBootRef.current = true;
       void result.backgroundPromise.catch((error) => console.error('Background bootstrap failed:', error));
@@ -248,8 +272,16 @@ const App: React.FC = () => {
       setBootProgress(100);
       setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
-      setBootFunMessage('Opening the reading room despite one dramatic scanner...');
+      setBootFunMessage('Opening the reading room despite one dramatic scanner.');
+      setBootFunMessageKey('bootstrap:error');
+      setIsBootCompleting(true);
       setIsBootReady(true);
+      if (bootExitTimerRef.current) {
+        clearTimeout(bootExitTimerRef.current);
+      }
+      bootExitTimerRef.current = setTimeout(() => {
+        setIsBootCompleting(false);
+      }, 260);
       setBootPrincipalKey(principalKey);
       hasReleasedBootRef.current = true;
     });
@@ -440,6 +472,7 @@ const App: React.FC = () => {
       case 'profile':
         return (
           <ProfileScreen
+            currentUserId={session?.user?.id || null}
             onEditCase={(caseItem) => {
               setCaseToEdit(caseItem);
               navigateToScreen('case-view'); // Profile also goes to view mode first
@@ -460,6 +493,7 @@ const App: React.FC = () => {
       case 'newsfeed':
         return (
           <NewsfeedScreen
+            currentUserId={session?.user?.id || null}
             onNavigateToTarget={handleNewsfeedNavigate}
             onUnreadCountChange={setUnreadNotificationsCount}
           />
@@ -491,19 +525,11 @@ const App: React.FC = () => {
     }
   };
 
-  if (!isSessionResolved) {
-    return (
-      <AppBootScreen
-        progress={bootProgress}
-        statusLabel={bootStatusLabel}
-        phaseLabel={bootPhaseLabel}
-        funMessage={bootFunMessage}
-        taskSummary={bootTaskSummary}
-      />
-    );
-  }
+  const bootScreenMode = !isSessionResolved ? 'session' : 'bootstrap';
+  const shouldShowBootScreen = !isSessionResolved || ((Boolean(session) || guestMode) && (!isBootReady || isBootCompleting));
+  const canRenderAppShell = isSessionResolved && (Boolean(session) || guestMode) && isBootReady;
 
-  if (!session && !guestMode) {
+  if (isSessionResolved && !session && !guestMode) {
     return (
       <LoginScreen
         onContinueWithoutAuth={() => {
@@ -516,31 +542,38 @@ const App: React.FC = () => {
     );
   }
 
-  if (!isBootReady) {
-    return (
-      <AppBootScreen
-        progress={bootProgress}
-        statusLabel={bootStatusLabel}
-        phaseLabel={bootPhaseLabel}
-        funMessage={bootFunMessage}
-        taskSummary={bootTaskSummary}
-      />
-    );
-  }
-
   return (
     <>
-    <Layout
-      activeScreen={currentScreen}
-      setScreen={navigateToScreen}
-      prefetchScreen={prefetchScreen}
-      unreadNotificationsCount={unreadNotificationsCount}
-    >
-        <Suspense fallback={null}>
-          {renderScreen()}
-        </Suspense>
-      </Layout>
-      <ToastHost />
+      <AnimatePresence>
+        {shouldShowBootScreen ? (
+          <AppBootScreen
+            key={bootScreenMode}
+            mode={bootScreenMode}
+            progress={bootProgress}
+            statusLabel={bootStatusLabel}
+            phaseLabel={bootPhaseLabel}
+            funMessage={bootScreenMode === 'session' ? 'Checking session access and preparing a clean launch.' : bootFunMessage}
+            messageKey={bootScreenMode === 'session' ? 'session:checking' : bootFunMessageKey}
+            taskSummary={bootTaskSummary}
+            isComplete={bootScreenMode === 'bootstrap' && isBootReady}
+          />
+        ) : null}
+      </AnimatePresence>
+      {canRenderAppShell ? (
+        <>
+          <Layout
+            activeScreen={currentScreen}
+            setScreen={navigateToScreen}
+            prefetchScreen={prefetchScreen}
+            unreadNotificationsCount={unreadNotificationsCount}
+          >
+            <Suspense fallback={null}>
+              {renderScreen()}
+            </Suspense>
+          </Layout>
+          <ToastHost />
+        </>
+      ) : null}
     </>
   );
 };

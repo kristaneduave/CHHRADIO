@@ -138,7 +138,7 @@ describe('appBootstrapService', () => {
   });
 
   it('emits phase labels and fun messages in progress snapshots', async () => {
-    const snapshots: Array<{ phaseLabel: string; funMessage: string; totalTaskCount: number }> = [];
+    const snapshots: Array<{ phaseLabel: string; funMessage: string; funMessageKey: string; totalTaskCount: number }> = [];
 
     await startAppBootstrap({
       session: buildSession(),
@@ -147,6 +147,7 @@ describe('appBootstrapService', () => {
         snapshots.push({
           phaseLabel: snapshot.phaseLabel,
           funMessage: snapshot.funMessage,
+          funMessageKey: snapshot.funMessageKey,
           totalTaskCount: snapshot.totalTaskCount,
         });
       },
@@ -154,12 +155,31 @@ describe('appBootstrapService', () => {
 
     expect(snapshots.some((snapshot) => snapshot.phaseLabel.length > 0)).toBe(true);
     expect(snapshots.some((snapshot) => snapshot.funMessage.length > 0)).toBe(true);
+    expect(snapshots.some((snapshot) => snapshot.funMessageKey.length > 0)).toBe(true);
     expect(snapshots.at(-1)?.totalTaskCount).toBeGreaterThan(0);
   });
 
   it('uses a stable fun message selection per task', () => {
     const task = __testables.getBootstrapTasks(buildSession(), false).find((entry) => entry.name === 'calendar-data');
 
-    expect(__testables.stableMessageForTask(task)).toBe(__testables.stableMessageForTask(task));
+    expect(__testables.stableMessageForTask(task)).toEqual(__testables.stableMessageForTask(task));
+  });
+
+  it('uses resident names in generated preload copy', () => {
+    const task = __testables.getBootstrapTasks(buildSession(), false).find((entry) => entry.name === 'dashboard-snapshot');
+    const residentRegex = new RegExp(__testables.RESIDENT_BOOT_NAMES.join('|'));
+
+    expect(task?.messagePool.some((message) => residentRegex.test(message))).toBe(true);
+  });
+
+  it('builds deterministic resident fun messages with occasional pairs', () => {
+    const messages = __testables.buildResidentFunMessage('calendar-data', [
+      'convincing the calendar that overnight call was character building.',
+    ]);
+
+    expect(messages[0]?.text).toBe(__testables.buildResidentFunMessage('calendar-data', [
+      'convincing the calendar that overnight call was character building.',
+    ])[0]?.text);
+    expect(messages[0]?.text.length).toBeGreaterThan(0);
   });
 });

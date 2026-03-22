@@ -3,6 +3,17 @@ import { fetchHiddenAnnouncements } from './announcementVisibilityService';
 import { fetchHiddenNotificationsForUser } from './newsfeedService';
 import { fetchWithCache } from '../utils/requestCache';
 
+export interface ProfileHomeWorkspaceData {
+  profileRecord: any | null;
+  myCases: any[];
+  hiddenAnnouncements: any[];
+  hiddenNotifications: any[];
+  notePreview: { id: string; content: string; updated_at: string } | null;
+}
+
+const profileHomeWorkspaceCache = new Map<string, ProfileHomeWorkspaceData>();
+const profileHomeWorkspacePromises = new Map<string, Promise<ProfileHomeWorkspaceData>>();
+
 export const fetchProfileRecord = async (userId: string): Promise<any | null> => {
   if (!userId) return null;
   return fetchWithCache(
@@ -72,13 +83,56 @@ export const fetchProfileNotePreview = async (userId: string): Promise<{ id: str
   );
 };
 
-export const preloadProfileHome = async (userId: string): Promise<void> => {
-  if (!userId) return;
-  await Promise.all([
+export const getProfileHomeWorkspace = async (userId: string): Promise<ProfileHomeWorkspaceData> => {
+  if (!userId) {
+    return {
+      profileRecord: null,
+      myCases: [],
+      hiddenAnnouncements: [],
+      hiddenNotifications: [],
+      notePreview: null,
+    };
+  }
+  const cached = profileHomeWorkspaceCache.get(userId);
+  if (cached) {
+    return cached;
+  }
+
+  const existingPromise = profileHomeWorkspacePromises.get(userId);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const request = Promise.all([
     fetchProfileRecord(userId),
     fetchMyCasesForProfileHome(userId),
     fetchHiddenAnnouncementsForProfileHome(userId, 50),
     fetchHiddenNotificationsForUser(userId, 50),
     fetchProfileNotePreview(userId),
-  ]);
+  ])
+    .then(([profileRecord, myCases, hiddenAnnouncements, hiddenNotifications, notePreview]) => {
+      const workspace = {
+        profileRecord,
+        myCases,
+        hiddenAnnouncements,
+        hiddenNotifications,
+        notePreview,
+      };
+      profileHomeWorkspaceCache.set(userId, workspace);
+      return workspace;
+    })
+    .finally(() => {
+      profileHomeWorkspacePromises.delete(userId);
+    });
+
+  profileHomeWorkspacePromises.set(userId, request);
+  return request;
+};
+
+export const getCachedProfileHomeWorkspace = (userId: string): ProfileHomeWorkspaceData | null =>
+  profileHomeWorkspaceCache.get(userId) || null;
+
+export const preloadProfileHome = async (userId: string): Promise<void> => {
+  if (!userId) return;
+  await getProfileHomeWorkspace(userId);
 };

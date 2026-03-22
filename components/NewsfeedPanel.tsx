@@ -5,6 +5,7 @@ import { fetchRecentActivity } from '../services/activityService';
 import { fetchOnlineProfiles, subscribeToOnlineUsers } from '../services/newsfeedPresenceService';
 import {
   fetchNotificationsPage,
+  getCachedNewsfeedData,
   hideAllNotificationsForUser,
   hideNotificationForUser,
   markAllNotificationsRead,
@@ -18,13 +19,14 @@ import LoadingState from './LoadingState';
 import { useAppViewport } from './responsive/useViewport';
 
 interface NewsfeedPanelProps {
+  currentUserId?: string | null;
   variant: 'screen' | 'modal';
   onClose?: () => void;
   onNavigateToTarget?: (screen: Screen, entityId?: string | null) => void;
   onUnreadCountChange?: (count: number) => void;
 }
 
-const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavigateToTarget, onUnreadCountChange }) => {
+const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ currentUserId, variant, onClose, onNavigateToTarget, onUnreadCountChange }) => {
   const viewport = useAppViewport();
   const isDesktop = viewport === 'desktop';
   const SNAPSHOT_STALE_MS = 60_000;
@@ -38,19 +40,20 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     }
     return 'unread';
   });
-  const [userId, setUserId] = useState('');
-  const [notifications, setNotifications] = useState<NewsfeedNotification[]>([]);
+  const cachedNewsfeed = currentUserId ? getCachedNewsfeedData(currentUserId) : null;
+  const [userId, setUserId] = useState(currentUserId || '');
+  const [notifications, setNotifications] = useState<NewsfeedNotification[]>(cachedNewsfeed?.notifications || []);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const filterMenuRef = React.useRef<HTMLDivElement | null>(null);
-  const [loadingNotifications, setLoadingNotifications] = useState(true);
+  const [loadingNotifications, setLoadingNotifications] = useState(!cachedNewsfeed);
   const [hidingNotificationId, setHidingNotificationId] = useState<string | null>(null);
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState<'read' | 'hide' | null>(null);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMoreNotifications, setHasMoreNotifications] = useState(false);
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [hasMoreNotifications, setHasMoreNotifications] = useState(cachedNewsfeed?.hasMore || false);
+  const [cursor, setCursor] = useState<string | undefined>(cachedNewsfeed?.cursor);
   const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
   const [onlineUsers, setOnlineUsers] = useState<NewsfeedOnlineUser[]>([]);
   const [loadingOnline, setLoadingOnline] = useState(false);
@@ -152,14 +155,19 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
   }, [onUnreadCountChange, unreadCount, userId]);
 
   useEffect(() => {
+    if (currentUserId) {
+      setUserId(currentUserId);
+    }
+  }, [currentUserId]);
+
+  useEffect(() => {
     let cleanup = () => { };
     const init = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id || '';
+      const uid = currentUserId || (await supabase.auth.getUser()).data.user?.id || '';
       setUserId(uid);
       if (!uid) return;
 
-      await Promise.all([refreshNotifications(uid)]);
+      await Promise.all([refreshNotifications(uid, !getCachedNewsfeedData(uid))]);
       cleanup = subscribeToNotifications(uid, () => {
         refreshNotifications(uid).catch((err) => console.error('Realtime refresh failed:', err));
       });
@@ -169,7 +177,7 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
       cleanup();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!userId) return;
@@ -262,9 +270,11 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ variant, onClose, onNavig
     window.localStorage.setItem(FEED_FILTER_KEY, notificationFilter);
   }, [notificationFilter]);
 
-  const refreshNotifications = async (uid: string) => {
+  const refreshNotifications = async (uid: string, showLoading = true) => {
     try {
-      setLoadingNotifications(true);
+      if (showLoading) {
+        setLoadingNotifications(true);
+      }
       const page = await fetchNotificationsPage(uid, 20);
       setNotifications(page.data);
       setHasMoreNotifications(page.hasMore);

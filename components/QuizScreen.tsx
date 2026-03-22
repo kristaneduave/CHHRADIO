@@ -4,12 +4,9 @@ import {
   createQuiz,
   deleteQuiz,
   duplicateQuiz,
-  getCurrentUserRole,
+  getQuizWorkspaceData,
   getQuizWithQuestions,
   isQuizAuthorRole,
-  listAvailableQuizzes,
-  listManagedQuizzes,
-  listMyQuizAttempts,
   startQuizAttempt,
   submitQuizAttempt,
   updateQuiz,
@@ -37,49 +34,16 @@ const QuizScreen: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadManagedQuestionCache = async (quizzes: QuizListItem[]) => {
-    if (quizzes.length === 0) {
-      setQuizQuestions({});
-      return;
-    }
-
-    const entries = await Promise.all(
-      quizzes.map(async (quiz) => {
-        try {
-          const details = await getQuizWithQuestions(quiz.id);
-          return [quiz.id, details.questions] as const;
-        } catch {
-          return [quiz.id, []] as const;
-        }
-      }),
-    );
-
-    setQuizQuestions(Object.fromEntries(entries));
-  };
-
-  const refreshData = async () => {
+  const refreshData = async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const role = await getCurrentUserRole();
-      setUserRole(role);
-
-      const [quizList, attemptList] = await Promise.all([
-        listAvailableQuizzes(),
-        listMyQuizAttempts(),
-      ]);
-
-      setAvailableQuizzes(quizList);
-      setAttempts(attemptList);
-
-      if (isQuizAuthorRole(role)) {
-        const authorQuizzes = await listManagedQuizzes();
-        setManagedQuizzes(authorQuizzes);
-        await loadManagedQuestionCache(authorQuizzes);
-      } else {
-        setManagedQuizzes([]);
-        setQuizQuestions({});
-      }
+      const workspace = await getQuizWorkspaceData({ force });
+      setUserRole(workspace.userRole);
+      setAvailableQuizzes(workspace.availableQuizzes);
+      setAttempts(workspace.attempts);
+      setManagedQuizzes(workspace.managedQuizzes);
+      setQuizQuestions(workspace.quizQuestions);
     } catch (err: any) {
       setError(err.message || 'Failed to load quiz data.');
     } finally {
@@ -122,7 +86,7 @@ const QuizScreen: React.FC = () => {
       const submitted = await submitQuizAttempt(activeAttempt.id, activeQuestions, answers, timeSpentSeconds);
       setReviewAttempt(submitted);
       setMode('review');
-      await refreshData();
+      await refreshData(true);
     } catch (err: any) {
       setError(err.message || 'Failed to submit quiz.');
       throw err;
@@ -136,7 +100,7 @@ const QuizScreen: React.FC = () => {
     setError(null);
     try {
       await createQuiz(values);
-      await refreshData();
+      await refreshData(true);
     } catch (err: any) {
       setError(err.message || 'Failed to create quiz.');
       throw err;
@@ -150,7 +114,7 @@ const QuizScreen: React.FC = () => {
     setError(null);
     try {
       await updateQuiz(quizId, values);
-      await refreshData();
+      await refreshData(true);
     } catch (err: any) {
       setError(err.message || 'Failed to update quiz.');
       throw err;
@@ -164,7 +128,7 @@ const QuizScreen: React.FC = () => {
     setError(null);
     try {
       await duplicateQuiz(quizId);
-      await refreshData();
+      await refreshData(true);
     } catch (err: any) {
       setError(err.message || 'Failed to duplicate quiz.');
     } finally {
@@ -177,7 +141,7 @@ const QuizScreen: React.FC = () => {
     setError(null);
     try {
       await deleteQuiz(quizId);
-      await refreshData();
+      await refreshData(true);
     } catch (err: any) {
       setError(err.message || 'Failed to delete quiz.');
     } finally {
@@ -199,8 +163,7 @@ const QuizScreen: React.FC = () => {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-14 h-14 border-4 border-white/5 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-white font-semibold">Loading quiz workspace...</p>
-            <p className="text-sm text-slate-400 mt-2">Preparing resident training modules and authoring tools.</p>
+            <p className="text-white font-semibold">Loading...</p>
           </div>
         </div>
       </div>
@@ -213,7 +176,7 @@ const QuizScreen: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-white">Radiology Quiz Lab</h1>
           <p className="text-slate-400 text-sm mt-2 max-w-3xl">
-            Scheduled, case-based radiology quizzes built for resident training. Learners can practice during the open window, review explanations, and return to timed assessments without leaving the page.
+            Radiology quizzes for resident training, with draft authoring, optional schedules, and timed sessions.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

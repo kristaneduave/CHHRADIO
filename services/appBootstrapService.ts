@@ -6,6 +6,7 @@ import { fetchDashboardSnapshot } from './dashboardSnapshotService';
 import { preloadNewsfeedData } from './newsfeedService';
 import { preloadProfileHome } from './profileHomeService';
 import { preloadPublishedCases } from './publishedCasesService';
+import { preloadQuizWorkspace } from './quizService';
 import { preloadMajorRouteChunks, preloadNonCriticalRouteChunks } from './routePreloadService';
 
 export type AppBootstrapTaskName =
@@ -17,6 +18,7 @@ export type AppBootstrapTaskName =
   | 'profile-data'
   | 'article-library-data'
   | 'activity-data'
+  | 'quiz-data'
   | 'anatomy-route-chunk';
 
 type TaskStatus = 'pending' | 'running' | 'done' | 'failed';
@@ -31,6 +33,7 @@ export interface AppBootstrapProgressSnapshot {
   totalTaskCount: number;
   currentTaskName?: AppBootstrapTaskName;
   funMessage: string;
+  funMessageKey: string;
 }
 
 export interface AppBootstrapTaskResult {
@@ -71,13 +74,68 @@ const FALLBACK_FUN_MESSAGES = [
   'Making the homepage look suspiciously prepared...',
 ];
 
+const RESIDENT_BOOT_NAMES = [
+  'Tan',
+  'Tine',
+  'Gene',
+  'Pete',
+  'Algen',
+  'Pao',
+  'Kurt',
+  'Kuys',
+  'Selji',
+  'Joh',
+  'Dimmy',
+  'Adam',
+  'Kat',
+  'Kit',
+  'Von',
+  'Franco',
+  'Bern',
+  'Erikka',
+  'France',
+  'Lance',
+  'Doc Marton',
+] as const;
+
+const hashString = (value: string) =>
+  Array.from(value).reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
+
+const buildResidentFunMessage = (seed: string, actions: string[]) => {
+  const primaryIndex = hashString(`${seed}:primary`) % RESIDENT_BOOT_NAMES.length;
+  const primaryResident = RESIDENT_BOOT_NAMES[primaryIndex];
+  const groupMode = hashString(`${seed}:group`) % 5;
+  const secondaryOffset = (hashString(`${seed}:secondary`) % (RESIDENT_BOOT_NAMES.length - 1)) + 1;
+  const secondaryResident = RESIDENT_BOOT_NAMES[(primaryIndex + secondaryOffset) % RESIDENT_BOOT_NAMES.length];
+  const tertiaryOffset = (hashString(`${seed}:tertiary`) % (RESIDENT_BOOT_NAMES.length - 2)) + 2;
+  const tertiaryResident = RESIDENT_BOOT_NAMES[(primaryIndex + tertiaryOffset) % RESIDENT_BOOT_NAMES.length];
+  const residentLead = groupMode <= 1
+    ? `${primaryResident}, ${secondaryResident}, and ${tertiaryResident} are`
+    : `${primaryResident} and ${secondaryResident} are`;
+
+  return actions.map((action, index) => ({
+    key: `${seed}:${index}:${groupMode <= 1 ? 'trio' : 'pair'}`,
+    text: `${residentLead} ${action}`,
+  }));
+};
+
+const buildTaskMessagePool = (taskName: AppBootstrapTaskName, actions: string[]) =>
+  buildResidentFunMessage(taskName, actions);
+
 const stableMessageForTask = (task?: AppBootstrapTask | null) => {
   if (!task || task.messagePool.length === 0) {
-    return FALLBACK_FUN_MESSAGES[0];
+    return {
+      key: 'fallback:0',
+      text: FALLBACK_FUN_MESSAGES[0],
+    };
   }
 
-  const hash = Array.from(task.name).reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
-  return task.messagePool[hash % task.messagePool.length];
+  const hash = hashString(task.name);
+  const index = hash % task.messagePool.length;
+  return {
+    key: `${task.name}:${index}`,
+    text: task.messagePool[index],
+  };
 };
 
 const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBootstrapTask[] => {
@@ -91,11 +149,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
       weight: 26,
       blocking: true,
       group: 'route-chunks',
-      messagePool: [
-        'Hanging the films very, very digitally...',
-        'Making the homepage look suspiciously prepared...',
-        'Stocking the reading room with screen chunks...',
-      ],
+      messagePool: buildTaskMessagePool('route-chunks', [
+        'switching on every screen before rounds notices.',
+        'staging the big screens like coffee depends on it.',
+        'lining up dashboard, search, and newsfeed in formation.',
+      ]).map((entry) => entry.text),
       run: async () => {
         await preloadMajorRouteChunks();
       },
@@ -106,11 +164,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
       weight: 14,
       blocking: true,
       group: 'major-screen-data',
-      messagePool: [
-        'Indexing interesting cases before anyone asks for them...',
-        'Counting cases like it is conference tomorrow...',
-        'Alphabetizing diagnostic chaos...',
-      ],
+      messagePool: buildTaskMessagePool('search-data', [
+        'sorting the case archive before conference panic hits.',
+        'indexing cases for one-keyword search heroics.',
+        'making diagnostic chaos searchable.',
+      ]).map((entry) => entry.text),
       run: async () => {
         await preloadPublishedCases();
       },
@@ -121,11 +179,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
       weight: 8,
       blocking: true,
       group: 'major-screen-data',
-      messagePool: [
-        'Dusting off the pathology shelf...',
-        'Teaching the library to look awake...',
-        'Telling the guidelines to line up neatly...',
-      ],
+      messagePool: buildTaskMessagePool('article-library-data', [
+        'waking the pathology shelf up.',
+        'stacking the checklists in consultant order.',
+        'getting the teaching files presentable.',
+      ]).map((entry) => entry.text),
       run: async () => {
         await preloadArticleLibraryLanding();
       },
@@ -139,11 +197,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
             weight: 16,
             blocking: true,
             group: 'dashboard-data',
-            messagePool: [
-              'Checking if the residents broke the dashboard again...',
-              'Adjusting the window level of reality...',
-              'Laying out the dashboard like rounds start in five minutes...',
-            ],
+            messagePool: buildTaskMessagePool('dashboard-snapshot', [
+              'checking if the dashboard survived duty handoff.',
+              'straightening the home screen for rounds.',
+              'polishing the dashboard before questions start.',
+            ]).map((entry) => entry.text),
             run: async () => {
               await fetchDashboardSnapshot();
             },
@@ -154,11 +212,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
             weight: 10,
             blocking: true,
             group: 'major-screen-data',
-            messagePool: [
-              'Scanning the newsfeed for fresh chaos...',
-              'Checking if anyone posted another urgent reminder...',
-              'Warming the feed before the gossip cools...',
-            ],
+            messagePool: buildTaskMessagePool('unread-count-and-newsfeed', [
+              'sorting the newsfeed chaos.',
+              'counting unread alerts before they multiply.',
+              'pulling urgent notices to the front.',
+            ]).map((entry) => entry.text),
             run: async () => {
               await preloadNewsfeedData(userId);
             },
@@ -169,11 +227,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
             weight: 10,
             blocking: true,
             group: 'major-screen-data',
-            messagePool: [
-              'Straightening your profile workspace...',
-              'Polishing the profile before anyone judges it...',
-              'Making your profile look clinically organized...',
-            ],
+            messagePool: buildTaskMessagePool('profile-data', [
+              'straightening the profile page.',
+              'polishing the profile details.',
+              'setting the profile view in order.',
+            ]).map((entry) => entry.text),
             run: async () => {
               await preloadProfileHome(userId);
             },
@@ -184,11 +242,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
             weight: 8,
             blocking: true,
             group: 'major-screen-data',
-            messagePool: [
-              'Convincing the calendar to cooperate...',
-              'Reassuring the schedule that call still exists...',
-              'Arranging time as if radiology were predictable...',
-            ],
+            messagePool: buildTaskMessagePool('calendar-data', [
+              'untangling the calendar.',
+              'arranging the schedule for group-chat questions.',
+              'getting call coverage into shape.',
+            ]).map((entry) => entry.text),
             run: async () => {
               await CalendarService.preloadCalendarData(new Date(), 10);
             },
@@ -199,13 +257,28 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
             weight: 4,
             blocking: true,
             group: 'major-screen-data',
-            messagePool: [
-              'Replaying recent activity at diagnostic speed...',
-              'Checking who did something noteworthy...',
-              'Summoning the latest breadcrumbs of activity...',
-            ],
+            messagePool: buildTaskMessagePool('activity-data', [
+              'replaying the latest activity.',
+              'following the freshest breadcrumbs.',
+              'checking who moved what.',
+            ]).map((entry) => entry.text),
             run: async () => {
               await fetchRecentActivity(userId, 20);
+            },
+          },
+          {
+            name: 'quiz-data',
+            label: 'Preparing quiz workspace',
+            weight: 6,
+            blocking: true,
+            group: 'major-screen-data',
+            messagePool: buildTaskMessagePool('quiz-data', [
+              'warming the quiz lab.',
+              'stacking the quiz sessions.',
+              'setting out the trick questions.',
+            ]).map((entry) => entry.text),
+            run: async () => {
+              await preloadQuizWorkspace();
             },
           },
         ] as AppBootstrapTask[])),
@@ -218,9 +291,9 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean): AppBoot
       weight: 0,
       blocking: false,
       group: 'post-release',
-      messagePool: [
-        'Quietly wheeling anatomy into the reading room...',
-      ],
+      messagePool: buildTaskMessagePool('anatomy-route-chunk', [
+        'quietly wheeling anatomy into the reading room for later.',
+      ]).map((entry) => entry.text),
       run: async () => {
         await preloadNonCriticalRouteChunks();
       },
@@ -254,6 +327,7 @@ const buildProgressSnapshot = (
     : activeTask
       ? GROUP_PHASE_LABELS[activeTask.group]
       : 'Preparing workspace';
+  const funMessage = stableMessageForTask(activeTask);
   const statusLabel = releaseReady
     ? 'Opening workspace'
     : failedBlockingTask && completedTaskCount < blockingTasks.length
@@ -268,7 +342,8 @@ const buildProgressSnapshot = (
     completedTaskCount,
     totalTaskCount: blockingTasks.length,
     currentTaskName: activeTask?.name,
-    funMessage: stableMessageForTask(activeTask),
+    funMessage: funMessage.text,
+    funMessageKey: funMessage.key,
   };
 };
 
@@ -336,4 +411,6 @@ export const __testables = {
   buildProgressSnapshot,
   getBootstrapTasks,
   stableMessageForTask,
+  buildResidentFunMessage,
+  RESIDENT_BOOT_NAMES,
 };

@@ -14,14 +14,24 @@ import {
 } from '../types';
 
 type QuizRow = Quiz & {
-  profiles?: {
+  authorProfile?: {
     full_name: string | null;
     nickname?: string | null;
     role?: UserRole | null;
   } | null;
 };
 
+interface QuizWorkspaceData {
+  userRole: UserRole | null;
+  availableQuizzes: QuizListItem[];
+  managedQuizzes: QuizListItem[];
+  attempts: QuizAttempt[];
+  quizQuestions: Record<string, QuizQuestion[]>;
+}
+
 const AUTHOR_ROLES: UserRole[] = ['admin', 'faculty'];
+let quizWorkspaceCache: QuizWorkspaceData | null = null;
+let quizWorkspacePromise: Promise<QuizWorkspaceData> | null = null;
 
 const getAvailability = (quiz: Pick<Quiz, 'status' | 'opens_at' | 'closes_at'>): QuizAvailability => {
   const now = Date.now();
@@ -43,11 +53,44 @@ const normalizeQuiz = (row: QuizRow, questionCount = 0): QuizListItem => ({
   ...row,
   description: row.description ?? '',
   question_count: questionCount,
-  author_name: row.profiles?.nickname || row.profiles?.full_name || 'Unknown author',
-  author_role: row.profiles?.role || null,
+  author_name: row.authorProfile?.nickname || row.authorProfile?.full_name || 'Unknown author',
+  author_role: row.authorProfile?.role || null,
   availability: getAvailability(row),
   can_start: row.status === 'published' && getAvailability(row) === 'open',
 });
+
+const attachAuthorProfiles = async (rows: Quiz[]): Promise<QuizRow[]> => {
+  const authorIds = Array.from(new Set(rows.map((row) => row.created_by).filter(Boolean)));
+
+  if (authorIds.length === 0) {
+    return rows as QuizRow[];
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, nickname, role')
+    .in('id', authorIds);
+
+  if (error) {
+    throw error;
+  }
+
+  const profilesById = new Map(
+    (data || []).map((profile) => [
+      profile.id as string,
+      {
+        full_name: (profile.full_name as string | null) ?? null,
+        nickname: (profile.nickname as string | null) ?? null,
+        role: (profile.role as UserRole | null) ?? null,
+      },
+    ]),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    authorProfile: profilesById.get(row.created_by) || null,
+  }));
+};
 
 const fetchQuestionCounts = async (quizIds: string[]) => {
   if (quizIds.length === 0) {
@@ -113,6 +156,25 @@ const validateQuestionPayload = (questions: QuizQuestionFormValues[]) => {
 
 export const isQuizAuthorRole = (role: UserRole | null) => !!role && AUTHOR_ROLES.includes(role);
 
+const loadManagedQuestionCache = async (quizzes: QuizListItem[]) => {
+  if (quizzes.length === 0) {
+    return {};
+  }
+
+  const entries = await Promise.all(
+    quizzes.map(async (quiz) => {
+      try {
+        const details = await getQuizWithQuestions(quiz.id);
+        return [quiz.id, details.questions] as const;
+      } catch {
+        return [quiz.id, []] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
+};
+
 export const getCurrentUserRole = async (): Promise<UserRole | null> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -130,7 +192,7 @@ export const getCurrentUserRole = async (): Promise<UserRole | null> => {
 export const listAvailableQuizzes = async (): Promise<QuizListItem[]> => {
   const { data, error } = await supabase
     .from('quizzes')
-    .select('*, profiles:created_by(full_name, nickname, role)')
+    .select('*')
     .eq('status', 'published')
     .order('opens_at', { ascending: true });
 
@@ -138,7 +200,7 @@ export const listAvailableQuizzes = async (): Promise<QuizListItem[]> => {
     throw error;
   }
 
-  const rows = (data || []) as QuizRow[];
+  const rows = await attachAuthorProfiles((data || []) as Quiz[]);
   const counts = await fetchQuestionCounts(rows.map((row) => row.id));
 
   return rows
@@ -160,7 +222,7 @@ export const listManagedQuizzes = async (): Promise<QuizListItem[]> => {
   const role = await getCurrentUserRole();
   let query = supabase
     .from('quizzes')
-    .select('*, profiles:created_by(full_name, nickname, role)')
+    .select('*')
     .order('updated_at', { ascending: false });
 
   if (role !== 'admin') {
@@ -172,7 +234,7 @@ export const listManagedQuizzes = async (): Promise<QuizListItem[]> => {
     throw error;
   }
 
-  const rows = (data || []) as QuizRow[];
+  const rows = await attachAuthorProfiles((data || []) as Quiz[]);
   const counts = await fetchQuestionCounts(rows.map((row) => row.id));
   return rows.map((row) => normalizeQuiz(row, counts.get(row.id) || 0));
 };
@@ -180,13 +242,15 @@ export const listManagedQuizzes = async (): Promise<QuizListItem[]> => {
 export const getQuizWithQuestions = async (quizId: string): Promise<{ quiz: QuizListItem; questions: QuizQuestion[] }> => {
   const { data: quizData, error: quizError } = await supabase
     .from('quizzes')
-    .select('*, profiles:created_by(full_name, nickname, role)')
+    .select('*')
     .eq('id', quizId)
     .single();
 
   if (quizError) {
     throw quizError;
   }
+
+  const [quizWithAuthor] = await attachAuthorProfiles([quizData as Quiz]);
 
   const { data: questions, error: questionError } = await supabase
     .from('quiz_questions')
@@ -199,7 +263,7 @@ export const getQuizWithQuestions = async (quizId: string): Promise<{ quiz: Quiz
   }
 
   return {
-    quiz: normalizeQuiz(quizData as QuizRow, (questions || []).length),
+    quiz: normalizeQuiz(quizWithAuthor, (questions || []).length),
     questions: (questions || []) as QuizQuestion[],
   };
 };
@@ -227,7 +291,7 @@ export const createQuiz = async (payload: QuizAuthorFormValues): Promise<QuizLis
       created_by: user.id,
       updated_by: user.id,
     })
-    .select('*, profiles:created_by(full_name, nickname, role)')
+    .select('*')
     .single();
 
   if (error) {
@@ -235,7 +299,8 @@ export const createQuiz = async (payload: QuizAuthorFormValues): Promise<QuizLis
   }
 
   await saveQuizQuestions(data.id, payload.questions);
-  return normalizeQuiz(data as QuizRow, payload.questions.length);
+  const [quizWithAuthor] = await attachAuthorProfiles([data as Quiz]);
+  return normalizeQuiz(quizWithAuthor, payload.questions.length);
 };
 
 export const updateQuiz = async (quizId: string, payload: QuizAuthorFormValues): Promise<QuizListItem> => {
@@ -262,7 +327,7 @@ export const updateQuiz = async (quizId: string, payload: QuizAuthorFormValues):
       updated_at: new Date().toISOString(),
     })
     .eq('id', quizId)
-    .select('*, profiles:created_by(full_name, nickname, role)')
+    .select('*')
     .single();
 
   if (error) {
@@ -270,7 +335,8 @@ export const updateQuiz = async (quizId: string, payload: QuizAuthorFormValues):
   }
 
   await saveQuizQuestions(quizId, payload.questions);
-  return normalizeQuiz(data as QuizRow, payload.questions.length);
+  const [quizWithAuthor] = await attachAuthorProfiles([data as Quiz]);
+  return normalizeQuiz(quizWithAuthor, payload.questions.length);
 };
 
 export const deleteQuiz = async (quizId: string) => {
@@ -286,7 +352,7 @@ export const duplicateQuiz = async (quizId: string): Promise<QuizListItem> => {
     title: `${quiz.title} (Copy)`,
     description: quiz.description || '',
     specialty: quiz.specialty,
-    target_level: quiz.target_level,
+    target_level: 'mixed',
     timer_enabled: quiz.timer_enabled,
     timer_minutes: quiz.timer_minutes || '',
     opens_at: quiz.opens_at.slice(0, 16),
@@ -303,11 +369,11 @@ export const duplicateQuiz = async (quizId: string): Promise<QuizListItem> => {
       option_e: question.option_e || '',
       correct_option: question.correct_option,
       explanation: question.explanation || '',
-      teaching_point: question.teaching_point || '',
-      pitfall: question.pitfall || '',
-      modality: question.modality || '',
-      anatomy_region: question.anatomy_region || '',
-      difficulty: question.difficulty,
+      teaching_point: '',
+      pitfall: '',
+      modality: '',
+      anatomy_region: '',
+      difficulty: 'junior',
     })),
   };
 
@@ -479,4 +545,61 @@ export const listMyQuizAttempts = async (): Promise<QuizAttempt[]> => {
       }) === 'open' && attempt.quiz_status === 'published',
     },
   }));
+};
+
+const fetchQuizWorkspace = async (): Promise<QuizWorkspaceData> => {
+  const role = await getCurrentUserRole();
+
+  const [quizList, attemptList] = await Promise.all([
+    listAvailableQuizzes(),
+    listMyQuizAttempts(),
+  ]);
+
+  if (isQuizAuthorRole(role)) {
+    const authorQuizzes = await listManagedQuizzes();
+    const quizQuestions = await loadManagedQuestionCache(authorQuizzes);
+
+    return {
+      userRole: role,
+      availableQuizzes: quizList,
+      managedQuizzes: authorQuizzes,
+      attempts: attemptList,
+      quizQuestions,
+    };
+  }
+
+  return {
+    userRole: role,
+    availableQuizzes: quizList,
+    managedQuizzes: [],
+    attempts: attemptList,
+    quizQuestions: {},
+  };
+};
+
+export const getQuizWorkspaceData = async (options?: { force?: boolean }): Promise<QuizWorkspaceData> => {
+  const force = Boolean(options?.force);
+
+  if (!force && quizWorkspaceCache) {
+    return quizWorkspaceCache;
+  }
+
+  if (!force && quizWorkspacePromise) {
+    return quizWorkspacePromise;
+  }
+
+  quizWorkspacePromise = fetchQuizWorkspace()
+    .then((data) => {
+      quizWorkspaceCache = data;
+      return data;
+    })
+    .finally(() => {
+      quizWorkspacePromise = null;
+    });
+
+  return quizWorkspacePromise;
+};
+
+export const preloadQuizWorkspace = async (): Promise<void> => {
+  await getQuizWorkspaceData();
 };

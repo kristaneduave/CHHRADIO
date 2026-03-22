@@ -7,6 +7,9 @@ export interface PublishedCasesBundle {
   records: PatientRecord[];
 }
 
+let publishedCasesBundleCache: PublishedCasesBundle | null = null;
+let publishedCasesBundlePromise: Promise<PublishedCasesBundle> | null = null;
+
 const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): PatientRecord => {
   const submissionType = item.submission_type || 'interesting_case';
   const impressionTitle = submissionType === 'aunt_minnie'
@@ -47,6 +50,15 @@ const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): Pa
 };
 
 export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle> => {
+  if (publishedCasesBundleCache) {
+    return publishedCasesBundleCache;
+  }
+
+  if (publishedCasesBundlePromise) {
+    return publishedCasesBundlePromise;
+  }
+
+  publishedCasesBundlePromise = (async () => {
   const rawCases = await fetchWithCache(
     'published-cases:list',
     async () => {
@@ -88,12 +100,22 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
     );
   }
 
-  return {
-    rawCases,
-    records: rawCases.map((item: any) => buildPublishedCaseRecord(item, authorMap)),
-  };
+    const bundle = {
+      rawCases,
+      records: rawCases.map((item: any) => buildPublishedCaseRecord(item, authorMap)),
+    };
+
+    publishedCasesBundleCache = bundle;
+    return bundle;
+  })().finally(() => {
+    publishedCasesBundlePromise = null;
+  });
+
+  return publishedCasesBundlePromise;
 };
 
 export const preloadPublishedCases = async (): Promise<void> => {
   await fetchPublishedCasesBundle();
 };
+
+export const getCachedPublishedCasesBundle = (): PublishedCasesBundle | null => publishedCasesBundleCache;
