@@ -16,8 +16,8 @@ const NewsPageShell: React.FC<NewsPageShellProps> = ({
   feedRegion,
 }) => {
   return (
-    <div className="flex min-h-full flex-col pb-24">
-      <div className="bg-app/90 backdrop-blur-xl relative z-50">
+    <div className="relative flex min-h-full flex-col pb-24">
+      <div className="bg-[#08111a]/78 backdrop-blur-xl relative z-50">
         <div className="px-6 pt-6 pb-2">
           <div className="mx-auto w-full max-w-md">
             <header className="flex items-center justify-between min-h-[32px]">
@@ -34,7 +34,7 @@ const NewsPageShell: React.FC<NewsPageShellProps> = ({
         </div>
       </div>
 
-      <div className="px-6">
+      <div className="relative z-10 px-6">
         <div className="mx-auto w-full max-w-md">
           {feedRegion}
         </div>

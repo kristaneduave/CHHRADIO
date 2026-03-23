@@ -2600,7 +2600,7 @@ const ArticleLibraryScreen: React.FC = () => {
 
   return (
     <div
-      className="min-h-full bg-app px-6 pt-6 xl:pb-40"
+      className="min-h-full bg-transparent px-6 pt-6 xl:pb-40"
       style={{ paddingBottom: 'calc(var(--mobile-bottom-nav-clearance, 0px) - 0.35rem)' }}
     >
       <div className="mx-auto max-w-[1680px] space-y-6">

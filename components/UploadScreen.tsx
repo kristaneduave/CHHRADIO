@@ -562,7 +562,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
   }, [formData.notes]);
   return (
-    <div className="flex flex-col h-full bg-app relative">
+    <div className="flex flex-col h-full bg-transparent relative">
       {/* Screenshot Overlay */}
       {isScreenshotMode && (
         <div

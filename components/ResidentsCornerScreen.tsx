@@ -615,7 +615,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
 
     return (
         <PageShell layoutMode="wide" contentClassName="pt-6">
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-app">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-screen bg-transparent">
                 <div className="mx-auto w-full max-w-7xl space-y-6">
                     {/* ── Header: bare on background like Newsfeed ── */}
                     <div className="px-1">

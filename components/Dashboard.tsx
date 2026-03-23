@@ -173,7 +173,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onStartUpload }) => {
   );
 
   return (
-    <div className="flex flex-col flex-1 w-full min-h-full bg-app text-text-primary relative overflow-x-hidden overflow-y-auto">
+    <div className="flex flex-col flex-1 w-full min-h-full bg-transparent text-text-primary relative overflow-x-hidden overflow-y-auto">
       <div className="flex flex-col flex-1 mx-auto w-full max-w-[1180px] px-4 pt-6 sm:px-6 xl:px-8">
         <div className="flex-1 w-full flex flex-col relative" data-dashboard-viewport={viewport}>
       {/* Fiery Overdrive Screen Overlay (Optimized for mobile GPU) */}

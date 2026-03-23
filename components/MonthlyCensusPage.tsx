@@ -487,7 +487,7 @@ const MonthlyCensusPage: React.FC<MonthlyCensusPageProps> = ({ onBack, onHome, o
   );
 
   return (
-    <div className="min-h-screen bg-app px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] animate-in fade-in duration-200">
+    <div className="min-h-screen bg-transparent px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] animate-in fade-in duration-200">
       <div className="max-w-md mx-auto space-y-2">
         <form onSubmit={handleSubmit} className="space-y-2">
           <div className="px-0 py-1">

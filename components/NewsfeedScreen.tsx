@@ -10,7 +10,7 @@ interface NewsfeedScreenProps {
 
 const NewsfeedScreen: React.FC<NewsfeedScreenProps> = ({ currentUserId, onNavigateToTarget, onUnreadCountChange }) => {
   return (
-    <div className="min-h-full bg-app pb-24 xl:pb-10">
+    <div className="min-h-full bg-transparent pb-24 xl:pb-10">
       <NewsfeedPanel currentUserId={currentUserId} variant="screen" onNavigateToTarget={onNavigateToTarget} onUnreadCountChange={onUnreadCountChange} />
     </div>
   );

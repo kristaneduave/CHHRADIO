@@ -36,6 +36,7 @@ describe('Layout', () => {
 
     expect(screen.queryByText('Home')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Open Home')).toBeInTheDocument();
+    expect(screen.getByTestId('app-ambient-background')).toBeInTheDocument();
   });
 
   it('renders the desktop side rail on wide viewports', () => {
@@ -47,7 +48,7 @@ describe('Layout', () => {
       </Layout>,
     );
 
-    expect(screen.getByText('RadCore')).toBeInTheDocument();
+    expect(screen.getByTestId('app-ambient-background')).toBeInTheDocument();
     expect(screen.getByText('Home')).toBeInTheDocument();
     expect(screen.getByText('Newsfeed')).toBeInTheDocument();
   });
