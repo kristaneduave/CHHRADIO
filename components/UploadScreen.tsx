@@ -43,6 +43,8 @@ const REFERENCE_SOURCE_TYPES = [
 ];
 
 const MAX_REFERENCES = 4;
+const getCaseNotesDraftKey = (userId: string, caseId: string, submissionType: SubmissionType) =>
+  `upload:case-notes:draft:${userId}:${caseId}:${submissionType}`;
 
 type UploadReference = ReferenceSource & {
   id: string;
@@ -171,6 +173,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   );
   const [step, setStep] = useState(1); // 1: Input, 2: Result
   const [uploaderName, setUploaderName] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [isScreenshotMode, setIsScreenshotMode] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -205,6 +208,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setCurrentUserId(user.id);
         // Try to get profile name, fallback to email or 'Radiologist'
         const { data: profile } = await supabase
           .from('profiles')
@@ -217,6 +221,34 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     };
     fetchUser();
   }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const caseId = existingCase?.id ? String(existingCase.id) : 'new';
+    const draftKey = getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType);
+    const draftValue = window.localStorage.getItem(draftKey);
+    if (draftValue === null) return;
+
+    setFormData((prev) => {
+      if ((prev.notes || '') === draftValue) return prev;
+      return { ...prev, notes: draftValue };
+    });
+  }, [currentUserId, existingCase?.id, formData.submissionType]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const caseId = existingCase?.id ? String(existingCase.id) : 'new';
+    const draftKey = getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType);
+    const normalizedNotes = String(formData.notes || '');
+
+    if (normalizedNotes.trim()) {
+      window.localStorage.setItem(draftKey, normalizedNotes);
+    } else {
+      window.localStorage.removeItem(draftKey);
+    }
+  }, [currentUserId, existingCase?.id, formData.notes, formData.submissionType]);
 
   useEffect(() => {
     if (!isNotesFocusOpen) return;
@@ -452,6 +484,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       images,
       onSetFormData: (updates) => setFormData(prev => ({ ...prev, ...updates })),
       onSuccess: () => {
+        if (currentUserId) {
+          const caseId = existingCase?.id ? String(existingCase.id) : 'new';
+          window.localStorage.removeItem(getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType));
+        }
         if (onClose) {
           onClose();
         } else {
@@ -488,6 +524,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
   const handleExportPdf = async () => {
     await exportPdf(formData, customTitle, uploaderName, images);
+  };
+
+  const handleNotesChange = (value: string) => {
+    setFormData(prev => ({ ...prev, notes: value }));
   };
 
   const inputClassName = 'w-full rounded-xl border border-white/5 bg-black/40 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-primary/50 focus:ring-1 focus:ring-primary/30';
@@ -1035,7 +1075,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               <div className="flex-1 overflow-hidden px-6 py-5">
                 <RichTextEditor
                   value={formData.notes || ''}
-                  onChange={(val) => setFormData(prev => ({ ...prev, notes: val }))}
+                  onChange={handleNotesChange}
                   placeholder="Build out your teaching pearls, differential diagnosis, pitfalls, and takeaways..."
                   minHeight="52vh"
                   toolbarMode="expanded"
