@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import AppBootScreen from './AppBootScreen';
 
 describe('AppBootScreen', () => {
-  it('renders bootstrap progress and task summary', () => {
+  it('renders bootstrap progress with the fun message as the main loading copy', () => {
     render(
       <AppBootScreen
         mode="bootstrap"
@@ -20,9 +20,13 @@ describe('AppBootScreen', () => {
     expect(screen.getByText('RADCORE')).toBeInTheDocument();
     expect(screen.getByText('72%')).toBeInTheDocument();
     expect(screen.getByText('Tan is checking whether the dashboard survived the last shift change.')).toBeInTheDocument();
+    expect(screen.queryByText('Preparing dashboard')).not.toBeInTheDocument();
+    expect(screen.queryByText('Collecting dashboard essentials')).not.toBeInTheDocument();
+    expect(screen.queryByText(/tasks ready/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Operational preload/i)).not.toBeInTheDocument();
   });
 
-  it('renders neutral session copy in session mode', () => {
+  it('renders neutral session copy without technical preload labels', () => {
     render(
       <AppBootScreen
         mode="session"
@@ -34,6 +38,11 @@ describe('AppBootScreen', () => {
       />
     );
 
+    expect(screen.getByText('12%')).toBeInTheDocument();
     expect(screen.getByText('Checking session access and preparing a clean launch.')).toBeInTheDocument();
+    expect(screen.queryByText(/tasks ready/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Operational preload/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Checking session')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resolving access')).not.toBeInTheDocument();
   });
 });

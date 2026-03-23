@@ -77,6 +77,12 @@ const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
 const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
 const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
+  if (isFinalStep) return 260;
+  if (delta <= 8) return 220;
+  if (delta <= 24) return 360;
+  return 560;
+};
 
 const App: React.FC = () => {
   useThemePreference();
@@ -85,7 +91,8 @@ const App: React.FC = () => {
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isBootReady, setIsBootReady] = useState(false);
   const [isBootCompleting, setIsBootCompleting] = useState(false);
-  const [bootProgress, setBootProgress] = useState(0);
+  const [rawBootProgress, setRawBootProgress] = useState(0);
+  const [displayBootProgress, setDisplayBootProgress] = useState(0);
   const [bootStatusLabel, setBootStatusLabel] = useState('Checking session');
   const [bootPhaseLabel, setBootPhaseLabel] = useState('Resolving access');
   const [bootFunMessage, setBootFunMessage] = useState('Checking if the residents broke the dashboard again...');
@@ -98,6 +105,8 @@ const App: React.FC = () => {
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
   const hasReleasedBootRef = useRef(false);
   const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const bootProgressTweenRef = useRef<number | null>(null);
+  const displayBootProgressRef = useRef(0);
   const [guestMode, setGuestMode] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(GUEST_MODE_STORAGE_KEY) === '1';
@@ -135,8 +144,71 @@ const App: React.FC = () => {
       if (bootExitTimerRef.current) {
         clearTimeout(bootExitTimerRef.current);
       }
+      if (bootProgressTweenRef.current !== null && typeof window !== 'undefined') {
+        window.cancelAnimationFrame(bootProgressTweenRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    displayBootProgressRef.current = displayBootProgress;
+  }, [displayBootProgress]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setDisplayBootProgress(rawBootProgress);
+      return;
+    }
+
+    if (bootProgressTweenRef.current !== null) {
+      window.cancelAnimationFrame(bootProgressTweenRef.current);
+      bootProgressTweenRef.current = null;
+    }
+
+    const target = isBootReady ? 100 : Math.min(rawBootProgress, 99);
+    const current = displayBootProgressRef.current;
+
+    if (Math.abs(target - current) < 0.5) {
+      if (current !== target) {
+        setDisplayBootProgress(target);
+        displayBootProgressRef.current = target;
+      }
+      return;
+    }
+
+    const start = performance.now();
+    const initial = current;
+    const delta = target - initial;
+    const duration = getBootProgressTweenDuration(Math.abs(delta), isBootReady && target === 100);
+
+    const step = (timestamp: number) => {
+      const elapsed = timestamp - start;
+      const progress = Math.min(1, elapsed / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const nextValue = initial + delta * eased;
+      const clampedValue = delta >= 0
+        ? Math.min(nextValue, target)
+        : Math.max(nextValue, target);
+
+      displayBootProgressRef.current = clampedValue;
+      setDisplayBootProgress(clampedValue);
+
+      if (progress < 1) {
+        bootProgressTweenRef.current = window.requestAnimationFrame(step);
+      } else {
+        bootProgressTweenRef.current = null;
+      }
+    };
+
+    bootProgressTweenRef.current = window.requestAnimationFrame(step);
+
+    return () => {
+      if (bootProgressTweenRef.current !== null) {
+        window.cancelAnimationFrame(bootProgressTweenRef.current);
+        bootProgressTweenRef.current = null;
+      }
+    };
+  }, [isBootReady, rawBootProgress]);
 
   useEffect(() => {
     debugLifecycle('mount', { principalKey });
@@ -193,6 +265,8 @@ const App: React.FC = () => {
       setBootPrincipalKey(null);
       setIsBootReady(false);
       setIsBootCompleting(false);
+      setRawBootProgress(0);
+      setDisplayBootProgress(0);
       return;
     }
 
@@ -212,7 +286,8 @@ const App: React.FC = () => {
     hasReleasedBootRef.current = false;
     setIsBootReady(false);
     setIsBootCompleting(false);
-    setBootProgress(0);
+    setRawBootProgress(0);
+    setDisplayBootProgress(0);
     setBootPhaseLabel('Preparing workspace shell');
     setBootStatusLabel('Preparing workspace');
     setBootFunMessage('Preparing your workspace and checking the launch path.');
@@ -225,7 +300,7 @@ const App: React.FC = () => {
         guestMode,
         onProgress: (snapshot) => {
           if (isCancelled) return;
-          setBootProgress(snapshot.progressPct);
+          setRawBootProgress(snapshot.progressPct);
           setBootStatusLabel(snapshot.statusLabel);
           setBootPhaseLabel(snapshot.phaseLabel);
           setBootFunMessage(snapshot.funMessage);
@@ -247,7 +322,7 @@ const App: React.FC = () => {
           blocking: task.blocking,
         })),
       });
-      setBootProgress(100);
+      setRawBootProgress(100);
       setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
       setBootFunMessage('The reading room is staged and ready for entry.');
@@ -272,7 +347,7 @@ const App: React.FC = () => {
         message: error instanceof Error ? error.message : String(error),
       });
       if (isCancelled) return;
-      setBootProgress(100);
+      setRawBootProgress(100);
       setBootPhaseLabel('Opening workspace');
       setBootStatusLabel('Opening workspace');
       setBootFunMessage('Opening the reading room despite one dramatic scanner.');
@@ -555,7 +630,7 @@ const App: React.FC = () => {
           <AppBootScreen
             key={bootScreenMode}
             mode={bootScreenMode}
-            progress={bootProgress}
+            progress={displayBootProgress}
             statusLabel={bootStatusLabel}
             phaseLabel={bootPhaseLabel}
             funMessage={bootScreenMode === 'session' ? 'Checking session access and preparing a clean launch.' : bootFunMessage}

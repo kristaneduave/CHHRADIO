@@ -66,6 +66,10 @@ const buildSession = (userId = 'user-1') => ({
 describe('appBootstrapService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __testables.resetBootMessageSelectionCache();
+    if (typeof window !== 'undefined') {
+      window.localStorage.clear();
+    }
   });
 
   it('includes major route chunk preload as a blocking task', () => {
@@ -168,11 +172,13 @@ describe('appBootstrapService', () => {
   it('uses resident names in generated preload copy', () => {
     const task = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').find((entry) => entry.name === 'dashboard-snapshot');
     const residentRegex = new RegExp(__testables.RESIDENT_BOOT_NAMES.join('|'));
+    const groupRegex = new RegExp(__testables.RESIDENT_BOOT_GROUPS.join('|'));
 
     expect(task?.messagePool.some((message) => residentRegex.test(message))).toBe(true);
+    expect(task?.messagePool.some((message) => groupRegex.test(message))).toBe(true);
   });
 
-  it('builds deterministic resident fun messages with occasional pairs', () => {
+  it('builds deterministic resident fun messages across single, pair, trio, and group leads', () => {
     const messages = __testables.buildResidentFunMessage('calendar-data', [
       'convincing the calendar that overnight call was character building.',
     ]);
@@ -181,6 +187,11 @@ describe('appBootstrapService', () => {
       'convincing the calendar that overnight call was character building.',
     ])[0]?.text);
     expect(messages[0]?.text.length).toBeGreaterThan(0);
+    expect(messages.length).toBeGreaterThan(1);
+    expect(messages.some((message) => /\bis\b/.test(message.text))).toBe(true);
+    expect(messages.some((message) => /\band\b/.test(message.text))).toBe(true);
+    expect(messages.some((message) => /, .*?, and /.test(message.text))).toBe(true);
+    expect(messages.some((message) => new RegExp(__testables.RESIDENT_BOOT_GROUPS.join('|')).test(message.text))).toBe(true);
   });
 
   it('varies resident preload copy across boot sessions', () => {
@@ -188,5 +199,15 @@ describe('appBootstrapService', () => {
     const taskB = __testables.getBootstrapTasks(buildSession(), false, 'seed-b').find((entry) => entry.name === 'search-data');
 
     expect(__testables.stableMessageForTask(taskA, 'seed-a').text).not.toBe(__testables.stableMessageForTask(taskB, 'seed-b').text);
+  });
+
+  it('avoids recently used boot messages across successive runs when alternatives exist', () => {
+    const taskA = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').find((entry) => entry.name === 'dashboard-snapshot');
+    const taskB = __testables.getBootstrapTasks(buildSession(), false, 'seed-b').find((entry) => entry.name === 'dashboard-snapshot');
+
+    const first = __testables.stableMessageForTask(taskA, 'seed-a');
+    const second = __testables.stableMessageForTask(taskB, 'seed-b');
+
+    expect(first.text).not.toBe(second.text);
   });
 });

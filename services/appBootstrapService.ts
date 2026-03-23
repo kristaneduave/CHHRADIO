@@ -73,6 +73,9 @@ const FALLBACK_FUN_MESSAGES = [
   'Warming up the PACS-adjacent vibes...',
   'Making the homepage look suspiciously prepared...',
 ];
+const BOOT_MESSAGE_HISTORY_KEY = 'radcore:boot-message-history';
+const MAX_RECENT_BOOT_MESSAGES = 24;
+const bootMessageSelectionCache = new Map<string, { key: string; text: string }>();
 
 const RESIDENT_BOOT_NAMES = [
   'Tan',
@@ -97,6 +100,7 @@ const RESIDENT_BOOT_NAMES = [
   'Lance',
   'Doc Marton',
 ] as const;
+const RESIDENT_BOOT_GROUPS = ['Anims', 'Ducks', 'NZs', 'PGTT', 'KTV'] as const;
 
 const hashString = (value: string) =>
   Array.from(value).reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
@@ -104,38 +108,94 @@ const hashString = (value: string) =>
 const buildResidentFunMessage = (seed: string, actions: string[]) => {
   const primaryIndex = hashString(`${seed}:primary`) % RESIDENT_BOOT_NAMES.length;
   const primaryResident = RESIDENT_BOOT_NAMES[primaryIndex];
-  const groupMode = hashString(`${seed}:group`) % 5;
   const secondaryOffset = (hashString(`${seed}:secondary`) % (RESIDENT_BOOT_NAMES.length - 1)) + 1;
   const secondaryResident = RESIDENT_BOOT_NAMES[(primaryIndex + secondaryOffset) % RESIDENT_BOOT_NAMES.length];
   const tertiaryOffset = (hashString(`${seed}:tertiary`) % (RESIDENT_BOOT_NAMES.length - 2)) + 2;
   const tertiaryResident = RESIDENT_BOOT_NAMES[(primaryIndex + tertiaryOffset) % RESIDENT_BOOT_NAMES.length];
-  const residentLead = groupMode <= 1
-    ? `${primaryResident}, ${secondaryResident}, and ${tertiaryResident} are`
-    : `${primaryResident} and ${secondaryResident} are`;
+  const groupName = RESIDENT_BOOT_GROUPS[hashString(`${seed}:named-group`) % RESIDENT_BOOT_GROUPS.length];
+  const leadVariants = [
+    { kind: 'single', text: `${primaryResident} is` },
+    { kind: 'pair', text: `${primaryResident} and ${secondaryResident} are` },
+    { kind: 'trio', text: `${primaryResident}, ${secondaryResident}, and ${tertiaryResident} are` },
+    { kind: 'group', text: `${groupName} are` },
+  ] as const;
 
-  return actions.map((action, index) => ({
-    key: `${seed}:${index}:${groupMode <= 1 ? 'trio' : 'pair'}`,
-    text: `${residentLead} ${action}`,
-  }));
+  const introVariants = [
+    '',
+    'already ',
+    'quietly ',
+    'still ',
+  ];
+
+  return actions.flatMap((action, index) =>
+    leadVariants.flatMap((leadVariant) =>
+      introVariants.map((intro, variantIndex) => ({
+        key: `${seed}:${index}:${leadVariant.kind}:${variantIndex}`,
+        text: `${leadVariant.text} ${intro}${action}`.replace(/\s+/g, ' ').trim(),
+      }))
+    )
+  );
 };
 
 const buildTaskMessagePool = (taskName: AppBootstrapTaskName, actions: string[], runSeed: string) =>
   buildResidentFunMessage(`${runSeed}:${taskName}`, actions);
 
+const readBootMessageHistory = (): string[] => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(BOOT_MESSAGE_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((entry) => typeof entry === 'string') : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeBootMessageHistory = (history: string[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(BOOT_MESSAGE_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_RECENT_BOOT_MESSAGES)));
+  } catch {
+    // Ignore storage failures so boot copy never blocks startup.
+  }
+};
+
 const stableMessageForTask = (task: AppBootstrapTask | null | undefined, runSeed: string) => {
+  const cacheKey = `${runSeed}:${task?.name || 'fallback'}`;
+  const cached = bootMessageSelectionCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   if (!task || task.messagePool.length === 0) {
-    return {
+    const fallbackMessage = {
       key: `fallback:${runSeed}:0`,
       text: FALLBACK_FUN_MESSAGES[hashString(runSeed) % FALLBACK_FUN_MESSAGES.length],
     };
+    bootMessageSelectionCache.set(cacheKey, fallbackMessage);
+    return fallbackMessage;
   }
 
-  const hash = hashString(`${runSeed}:${task.name}`);
-  const index = hash % task.messagePool.length;
-  return {
-    key: `${runSeed}:${task.name}:${index}`,
-    text: task.messagePool[index],
+  const messageHistory = readBootMessageHistory();
+  const candidateIndexes = Array.from({ length: task.messagePool.length }, (_, index) => index);
+  const orderedIndexes = candidateIndexes
+    .map((index) => ({
+      index,
+      rank: hashString(`${runSeed}:${task.name}:${index}`),
+    }))
+    .sort((left, right) => left.rank - right.rank)
+    .map((entry) => entry.index);
+
+  const pickIndex = orderedIndexes.find((index) => !messageHistory.includes(`${task.name}:${index}`)) ?? orderedIndexes[0] ?? 0;
+  const selectedMessage = {
+    key: `${runSeed}:${task.name}:${pickIndex}`,
+    text: task.messagePool[pickIndex],
   };
+
+  writeBootMessageHistory([`${task.name}:${pickIndex}`, ...messageHistory.filter((entry) => entry !== `${task.name}:${pickIndex}`)]);
+  bootMessageSelectionCache.set(cacheKey, selectedMessage);
+  return selectedMessage;
 };
 
 const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed: string): AppBootstrapTask[] => {
@@ -150,9 +210,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
       blocking: true,
       group: 'route-chunks',
       messagePool: buildTaskMessagePool('route-chunks', [
-        'switching on every screen before rounds notices.',
-        'staging the big screens like coffee depends on it.',
-        'lining up dashboard, search, and newsfeed in formation.',
+        'switching on the main screens.',
+        'lining up dashboard, search, and newsfeed.',
+        'getting the reading-room controls to behave.',
+        'opening the major rooms.',
+        'waking the whole shell up.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadMajorRouteChunks();
@@ -165,9 +227,12 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
       blocking: true,
       group: 'major-screen-data',
       messagePool: buildTaskMessagePool('search-data', [
-        'sorting the case archive before conference panic hits.',
-        'indexing cases for one-keyword search heroics.',
+        'sorting the case archive.',
+        'indexing cases for one-keyword searches.',
         'making diagnostic chaos searchable.',
+        'lining up the teaching files.',
+        'putting the archive in order.',
+        'making the old cases easier to find.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadPublishedCases();
@@ -181,8 +246,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
       group: 'major-screen-data',
       messagePool: buildTaskMessagePool('article-library-data', [
         'waking the pathology shelf up.',
-        'stacking the checklists in consultant order.',
+        'stacking the checklists in order.',
         'getting the teaching files presentable.',
+        'straightening the article shelf.',
+        'pulling the reporting pearls together.',
+        'setting the article room up.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadArticleLibraryLanding();
@@ -198,9 +266,12 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
             blocking: true,
             group: 'dashboard-data',
             messagePool: buildTaskMessagePool('dashboard-snapshot', [
-              'checking if the dashboard survived duty handoff.',
-              'straightening the home screen for rounds.',
-              'polishing the dashboard before questions start.',
+              'checking if the dashboard survived handoff.',
+              'straightening the home screen.',
+              'polishing the dashboard.',
+              'making the front page look calmer.',
+              'lining up the home screen.',
+              'getting the command deck presentable.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchDashboardSnapshot();
@@ -214,8 +285,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('unread-count-and-newsfeed', [
               'sorting the newsfeed chaos.',
-              'counting unread alerts before they multiply.',
+              'counting unread alerts.',
               'pulling urgent notices to the front.',
+              'untangling announcements.',
+              'putting the updates where people can find them.',
+              'stacking fresh alerts.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadNewsfeedData(userId);
@@ -231,6 +305,9 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'straightening the profile page.',
               'polishing the profile details.',
               'setting the profile view in order.',
+              'making the profile corner look prepared.',
+              'arranging the resident details.',
+              'getting the personal workspace ready.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadProfileHome(userId);
@@ -244,8 +321,11 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('calendar-data', [
               'untangling the calendar.',
-              'arranging the schedule for group-chat questions.',
+              'arranging the schedule.',
               'getting call coverage into shape.',
+              'convincing the duty roster to behave.',
+              'lining up the schedule.',
+              'putting the calendar back together.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await CalendarService.preloadCalendarData(new Date(), 10);
@@ -261,6 +341,9 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'replaying the latest activity.',
               'following the freshest breadcrumbs.',
               'checking who moved what.',
+              'tracking the latest clicks.',
+              'reading the recent trail.',
+              'checking the latest movement through the portal.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchRecentActivity(userId, 20);
@@ -276,6 +359,9 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'warming the quiz lab.',
               'stacking the quiz sessions.',
               'setting out the trick questions.',
+              'lining up the quiz room.',
+              'getting the question bank ready.',
+              'preparing the quiz corner.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadQuizWorkspace();
@@ -293,6 +379,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
       group: 'post-release',
       messagePool: buildTaskMessagePool('anatomy-route-chunk', [
         'quietly wheeling anatomy into the reading room for later.',
+        'parking the anatomy atlas for later.',
+        'bringing the anatomy shelf in.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadNonCriticalRouteChunks();
@@ -415,4 +503,8 @@ export const __testables = {
   stableMessageForTask,
   buildResidentFunMessage,
   RESIDENT_BOOT_NAMES,
+  RESIDENT_BOOT_GROUPS,
+  resetBootMessageSelectionCache: () => {
+    bootMessageSelectionCache.clear();
+  },
 };
