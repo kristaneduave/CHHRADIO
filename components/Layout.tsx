@@ -265,58 +265,65 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
             }}
           >
             <div
-              className={`relative pointer-events-auto rounded-full py-1.5 px-3 overflow-hidden transition-all duration-500 ${isNavHologramActive
-                ? 'bg-[#101a28] border border-cyan-300/40 shadow-[0_0_30px_rgba(34,211,238,0.24),0_0_50px_rgba(236,72,153,0.18)] nav-hologram-shell'
-                : 'bg-[#1a232f] shadow-2xl shadow-[#040810] border border-[#2a3441]'
+              className={`relative pointer-events-auto rounded-full p-px transition-all duration-500 ${isNavHologramActive
+                ? 'border border-cyan-300/40 shadow-[0_0_30px_rgba(34,211,238,0.24),0_0_50px_rgba(236,72,153,0.18)]'
+                : 'border border-[#2a3441] shadow-2xl shadow-[#040810]'
                 }`}
             >
-              {isNavHologramActive && (
-                <>
-                  <div className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(115deg,rgba(34,211,238,0.16),rgba(255,255,255,0.05)_38%,rgba(244,114,182,0.18)_72%,rgba(59,130,246,0.16))] opacity-90" />
-                  <div className="pointer-events-none absolute inset-[1px] rounded-full border border-white/20 mix-blend-screen nav-hologram-chromatic" />
-                  <div className="pointer-events-none absolute inset-x-4 top-1/2 h-8 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_70%)] blur-xl" />
-                  <div className="pointer-events-none absolute inset-0 rounded-full nav-hologram-scanlines opacity-70" />
-                </>
-              )}
-              <div className="flex items-center gap-1">
-                {navItems.map((item) => {
-                  const isActive = activeScreen === item.screen;
-                  return (
-                    <button
-                      key={item.screen}
-                      onClick={() => {
-                        setScreen(item.screen);
-                        triggerHaptic('light');
-                      }}
-                      onMouseEnter={() => prefetchScreen?.(item.screen)}
-                      onFocus={() => prefetchScreen?.(item.screen)}
-                      onTouchStart={() => prefetchScreen?.(item.screen)}
-                      className={`flex flex-col items-center justify-center w-[54px] h-[48px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full ${isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        } ${isNavHologramActive ? 'nav-hologram-item' : ''
-                        }`}
-                      aria-label={`Open ${item.label}`}
-                    >
-                      <div className="relative flex flex-col items-center justify-center">
-                        <div className="relative">
-                          <span
-                            className="material-icons transition-all duration-300 text-[26px]"
-                          >
-                            {isActive ? item.icon : item.outlineIcon}
-                          </span>
-
-                          {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+              <div
+                className={`nav-mobile-shell relative rounded-full py-1.5 px-3 overflow-hidden ${isNavHologramActive
+                  ? 'bg-[#101a28] nav-hologram-shell'
+                  : 'bg-[#1a232f]'
+                  }`}
+              >
+                {isNavHologramActive && (
+                  <>
+                    <div className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(115deg,rgba(34,211,238,0.16),rgba(255,255,255,0.05)_38%,rgba(244,114,182,0.18)_72%,rgba(59,130,246,0.16))] opacity-90" />
+                    <div className="pointer-events-none absolute inset-[1px] rounded-full border border-white/20 mix-blend-screen nav-hologram-chromatic" />
+                    <div className="pointer-events-none absolute inset-x-4 top-1/2 h-8 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.28),transparent_70%)] blur-xl" />
+                    <div className="pointer-events-none absolute inset-0 rounded-full nav-hologram-scanlines opacity-70" />
+                  </>
+                )}
+                <div className="flex items-center gap-1">
+                  {navItems.map((item) => {
+                    const isActive = activeScreen === item.screen;
+                    return (
+                      <button
+                        key={item.screen}
+                        onClick={() => {
+                          setScreen(item.screen);
+                          triggerHaptic('light');
+                        }}
+                        onMouseEnter={() => prefetchScreen?.(item.screen)}
+                        onFocus={() => prefetchScreen?.(item.screen)}
+                        onTouchStart={() => prefetchScreen?.(item.screen)}
+                        className={`flex flex-col items-center justify-center w-[54px] h-[48px] relative group transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-full ${isActive ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                          } ${isNavHologramActive ? 'nav-hologram-item' : ''
+                          }`}
+                        aria-label={`Open ${item.label}`}
+                      >
+                        <div className="relative flex flex-col items-center justify-center">
+                          <div className="relative">
                             <span
-                              className={`absolute -top-1 -right-2 min-w-[18px] h-[16px] px-1 flex items-center justify-center rounded-[8px] bg-[#f23b55] text-[9px] font-black tracking-tight text-white shadow-sm shadow-black/30 z-10`}
-                              style={{ lineHeight: 1 }}
+                              className="material-icons transition-all duration-300 text-[26px]"
                             >
-                              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                              {isActive ? item.icon : item.outlineIcon}
                             </span>
-                          )}
+
+                            {item.screen === 'newsfeed' && unreadNotificationsCount > 0 && (
+                              <span
+                                className={`absolute -top-1 -right-2 min-w-[18px] h-[16px] px-1 flex items-center justify-center rounded-[8px] bg-[#f23b55] text-[9px] font-black tracking-tight text-white shadow-sm shadow-black/30 z-10`}
+                                style={{ lineHeight: 1 }}
+                              >
+                                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </nav>
@@ -349,6 +356,13 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
             animation: navHologramGlitch 0.32s linear infinite;
             backdrop-filter: blur(18px) saturate(150%);
             -webkit-backdrop-filter: blur(18px) saturate(150%);
+          }
+
+          .nav-mobile-shell {
+            isolation: isolate;
+            transform: translateZ(0);
+            clip-path: inset(0 round 999px);
+            -webkit-mask-image: -webkit-radial-gradient(white, black);
           }
 
           @media (max-width: 1279px) {
