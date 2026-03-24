@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
+import { createPortal } from 'react-dom';
 import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfServiceLoader';
 import { generateViberText } from '../utils/formatters';
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
@@ -13,10 +14,18 @@ interface CaseViewScreenProps {
     onEdit: () => void;
 }
 
+const SWIPE_THRESHOLD_PX = 56;
+const SWIPE_VERTICAL_TOLERANCE_PX = 48;
+const DOUBLE_TAP_DELAY_MS = 260;
+const DISMISS_SWIPE_THRESHOLD_PX = 120;
+const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
+
 const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [imageZoom, setImageZoom] = useState(1);
+    const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
+    const [isGestureActive, setIsGestureActive] = useState(false);
     const [isOwner, setIsOwner] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
@@ -32,8 +41,18 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isSubmittingComment, setIsSubmittingComment] = useState(false);
     const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
     const [publisherName, setPublisherName] = useState('Radiologist');
+    const viewerSurfaceRef = useRef<HTMLDivElement | null>(null);
+    const lastTapAtRef = useRef(0);
     const pinchDistanceRef = useRef<number | null>(null);
     const pinchZoomRef = useRef(1);
+    const pinchCenterRef = useRef({ x: 0, y: 0 });
+    const pinchStartOffsetRef = useRef({ x: 0, y: 0 });
+    const touchStartXRef = useRef<number | null>(null);
+    const touchStartYRef = useRef<number | null>(null);
+    const touchCurrentXRef = useRef<number | null>(null);
+    const touchCurrentYRef = useRef<number | null>(null);
+    const touchModeRef = useRef<'idle' | 'swipe' | 'pinch' | 'pan' | 'dismiss'>('idle');
+    const panStartOffsetRef = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         checkOwnership();
@@ -127,23 +146,88 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const openImageModal = () => {
         if (!images.length) return;
         setImageZoom(1);
+        setImageOffset({ x: 0, y: 0 });
+        setIsGestureActive(false);
         setIsImageModalOpen(true);
     };
     const closeImageModal = () => {
         setIsImageModalOpen(false);
         setImageZoom(1);
+        setImageOffset({ x: 0, y: 0 });
+        setIsGestureActive(false);
+        lastTapAtRef.current = 0;
         pinchDistanceRef.current = null;
         pinchZoomRef.current = 1;
+        pinchCenterRef.current = { x: 0, y: 0 };
+        pinchStartOffsetRef.current = { x: 0, y: 0 };
+        touchStartXRef.current = null;
+        touchStartYRef.current = null;
+        touchCurrentXRef.current = null;
+        touchCurrentYRef.current = null;
+        touchModeRef.current = 'idle';
     };
-    const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
     const zoomInImage = () => setImageZoom((prev) => clampZoom(prev + 0.25));
     const zoomOutImage = () => setImageZoom((prev) => clampZoom(prev - 0.25));
-    const resetImageZoom = () => setImageZoom(1);
+    const resetImageZoom = () => {
+        setImageZoom(1);
+        setImageOffset({ x: 0, y: 0 });
+    };
     const getTouchDistance = (touches: React.TouchList) => {
         if (touches.length < 2) return null;
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;
         return Math.hypot(dx, dy);
+    };
+    const getSurfaceRelativePoint = (clientX: number, clientY: number) => {
+        const surface = viewerSurfaceRef.current;
+        if (!surface) return { x: 0, y: 0 };
+        const rect = surface.getBoundingClientRect();
+        return {
+            x: clientX - (rect.left + rect.width / 2),
+            y: clientY - (rect.top + rect.height / 2),
+        };
+    };
+    const clampImageOffset = (offset: { x: number; y: number }, zoom: number) => {
+        const surface = viewerSurfaceRef.current;
+        if (!surface || zoom <= 1) return { x: 0, y: 0 };
+        const rect = surface.getBoundingClientRect();
+        const maxX = ((zoom - 1) * rect.width) / 2;
+        const maxY = ((zoom - 1) * rect.height) / 2;
+        return {
+            x: Math.min(maxX, Math.max(-maxX, offset.x)),
+            y: Math.min(maxY, Math.max(-maxY, offset.y)),
+        };
+    };
+    const applyEdgeResistance = (offset: { x: number; y: number }, zoom: number) => {
+        const surface = viewerSurfaceRef.current;
+        if (!surface || zoom <= 1) return { x: 0, y: 0 };
+        const rect = surface.getBoundingClientRect();
+        const maxX = ((zoom - 1) * rect.width) / 2;
+        const maxY = ((zoom - 1) * rect.height) / 2;
+        const soften = (value: number, max: number) => {
+            if (value > max) return max + (value - max) * 0.2;
+            if (value < -max) return -max + (value + max) * 0.2;
+            return value;
+        };
+        return { x: soften(offset.x, maxX), y: soften(offset.y, maxY) };
+    };
+    const getZoomedOffsetForPoint = (
+        point: { x: number; y: number },
+        startZoom: number,
+        targetZoom: number,
+        startOffset: { x: number; y: number },
+    ) => {
+        if (targetZoom <= 1 || startZoom <= 0) return { x: 0, y: 0 };
+        return clampImageOffset({
+            x: point.x - ((point.x - startOffset.x) / startZoom) * targetZoom,
+            y: point.y - ((point.y - startOffset.y) / startZoom) * targetZoom,
+        }, targetZoom);
+    };
+    const zoomViewerAtPoint = (clientX: number, clientY: number, targetZoom: number) => {
+        const point = getSurfaceRelativePoint(clientX, clientY);
+        const nextZoom = clampZoom(targetZoom);
+        setImageZoom(nextZoom);
+        setImageOffset((previous) => getZoomedOffsetForPoint(point, imageZoom, nextZoom, previous));
     };
 
     useEffect(() => {
@@ -204,9 +288,23 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     useEffect(() => {
         setImageZoom(1);
+        setImageOffset({ x: 0, y: 0 });
+        setIsGestureActive(false);
+        lastTapAtRef.current = 0;
         pinchDistanceRef.current = null;
         pinchZoomRef.current = 1;
+        pinchCenterRef.current = { x: 0, y: 0 };
+        pinchStartOffsetRef.current = { x: 0, y: 0 };
+        touchStartXRef.current = null;
+        touchStartYRef.current = null;
+        touchCurrentXRef.current = null;
+        touchCurrentYRef.current = null;
+        touchModeRef.current = 'idle';
     }, [currentImageIndex, isImageModalOpen]);
+
+    useEffect(() => {
+        setImageOffset((previous) => clampImageOffset(previous, imageZoom));
+    }, [imageZoom]);
 
     useEffect(() => {
         if (images.length <= 1 || typeof window === 'undefined') {
@@ -320,161 +418,314 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     return (
         <div className="flex flex-col h-full relative overflow-hidden antialiased text-slate-200">
-            {isImageModalOpen && images.length > 0 && (
+            {isImageModalOpen && images.length > 0 && typeof document !== 'undefined' && createPortal((
                 <div
-                    className="fixed inset-0 z-[80] flex items-center justify-center bg-black/92 px-4 py-6 backdrop-blur-md"
+                    className="fixed inset-0 z-[120] bg-slate-950/95"
                     onClick={closeImageModal}
                 >
-                    <div
-                        className="relative flex h-full max-h-[94vh] w-full max-w-[1600px] flex-col rounded-[28px] border border-white/10 bg-[#03060a] shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-4 sm:px-6">
+                    <div className="flex h-full w-full flex-col">
+                        <div
+                            className="flex items-start justify-between gap-3 px-4 py-4 sm:px-6"
+                            onClick={(event) => event.stopPropagation()}
+                        >
                             <div className="min-w-0">
-                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/45">Image Viewer</p>
-                                <p className="truncate text-sm font-semibold text-white/90">
-                                    {currentImageIndex + 1} / {images.length}
-                                </p>
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                                    <span>{currentImageIndex + 1}/{images.length}</span>
+                                </div>
+                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
+                                    <p className="mt-1 truncate text-xs text-slate-400">
+                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
+                                    </p>
+                                )}
                             </div>
                             <div className="flex items-center gap-2">
-                                <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] p-1 sm:inline-flex">
-                                    <button
-                                        type="button"
-                                        onClick={zoomOutImage}
-                                        disabled={imageZoom <= 1}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"
-                                        aria-label="Zoom out"
-                                    >
-                                        <span className="material-icons text-[18px]">remove</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={resetImageZoom}
-                                        className="min-w-[4.5rem] rounded-full px-3 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-white/70 transition-colors hover:bg-white/[0.08]"
-                                        aria-label="Reset zoom"
-                                    >
-                                        {Math.round(imageZoom * 100)}%
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={zoomInImage}
-                                        disabled={imageZoom >= 3}
-                                        className="inline-flex h-9 w-9 items-center justify-center rounded-full text-white/75 transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35"
-                                        aria-label="Zoom in"
-                                    >
-                                        <span className="material-icons text-[18px]">add</span>
-                                    </button>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={resetImageZoom}
+                                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200"
+                                    aria-label="Reset zoom"
+                                >
+                                    {Math.round(imageZoom * 100)}%
+                                </button>
                                 <button
                                     type="button"
                                     onClick={closeImageModal}
-                                    className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/80 transition-colors hover:bg-white/[0.08]"
+                                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold text-slate-100"
                                     aria-label="Close full screen image viewer"
                                 >
-                                    <span className="material-icons text-[22px]">close</span>
+                                    Close
                                 </button>
                             </div>
                         </div>
 
                         <div
+                            ref={viewerSurfaceRef}
                             className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto px-4 py-4 sm:px-6 sm:py-6"
                             style={{ touchAction: 'none' }}
                             onWheel={(event) => {
                                 if (!event.ctrlKey && !event.metaKey) return;
                                 event.preventDefault();
-                                if (event.deltaY < 0) {
-                                    zoomInImage();
-                                } else {
-                                    zoomOutImage();
-                                }
+                                const nextZoom = clampZoom(imageZoom + (event.deltaY < 0 ? 0.2 : -0.2));
+                                const point = getSurfaceRelativePoint(event.clientX, event.clientY);
+                                setImageZoom(nextZoom);
+                                setImageOffset((previous) => getZoomedOffsetForPoint(point, imageZoom, nextZoom, previous));
                             }}
                             onTouchStart={(event) => {
-                                const distance = getTouchDistance(event.touches);
-                                if (distance === null) return;
-                                pinchDistanceRef.current = distance;
-                                pinchZoomRef.current = imageZoom;
+                                if (event.touches.length >= 2) {
+                                    const distance = getTouchDistance(event.touches);
+                                    if (distance === null) return;
+                                    touchModeRef.current = 'pinch';
+                                    setIsGestureActive(true);
+                                    pinchDistanceRef.current = distance;
+                                    pinchZoomRef.current = imageZoom;
+                                    pinchStartOffsetRef.current = imageOffset;
+                                    pinchCenterRef.current = getSurfaceRelativePoint(
+                                        (event.touches[0].clientX + event.touches[1].clientX) / 2,
+                                        (event.touches[0].clientY + event.touches[1].clientY) / 2,
+                                    );
+                                    touchStartXRef.current = null;
+                                    touchStartYRef.current = null;
+                                    touchCurrentXRef.current = null;
+                                    touchCurrentYRef.current = null;
+                                    return;
+                                }
+
+                                if (event.touches.length === 1) {
+                                    const tapAt = Date.now();
+                                    if (tapAt - lastTapAtRef.current <= DOUBLE_TAP_DELAY_MS) {
+                                        event.preventDefault();
+                                        const targetZoom = imageZoom > 1.4 ? 1 : 2;
+                                        zoomViewerAtPoint(event.touches[0].clientX, event.touches[0].clientY, targetZoom);
+                                        lastTapAtRef.current = 0;
+                                        touchModeRef.current = 'idle';
+                                        touchStartXRef.current = null;
+                                        touchStartYRef.current = null;
+                                        touchCurrentXRef.current = null;
+                                        touchCurrentYRef.current = null;
+                                        return;
+                                    }
+
+                                    lastTapAtRef.current = tapAt;
+                                    touchModeRef.current = imageZoom > 1.05 ? 'pan' : 'swipe';
+                                    setIsGestureActive(imageZoom > 1.05);
+                                    touchStartXRef.current = event.touches[0].clientX;
+                                    touchStartYRef.current = event.touches[0].clientY;
+                                    touchCurrentXRef.current = event.touches[0].clientX;
+                                    touchCurrentYRef.current = event.touches[0].clientY;
+                                    panStartOffsetRef.current = imageOffset;
+                                }
                             }}
                             onTouchMove={(event) => {
-                                const distance = getTouchDistance(event.touches);
-                                if (distance === null || pinchDistanceRef.current === null) return;
-                                event.preventDefault();
-                                const scaleRatio = distance / pinchDistanceRef.current;
-                                setImageZoom(clampZoom(pinchZoomRef.current * scaleRatio));
+                                if (event.touches.length >= 2) {
+                                    const distance = getTouchDistance(event.touches);
+                                    if (distance === null || pinchDistanceRef.current === null) return;
+                                    touchModeRef.current = 'pinch';
+                                    event.preventDefault();
+                                    const scaleRatio = distance / pinchDistanceRef.current;
+                                    const nextZoom = clampZoom(pinchZoomRef.current * scaleRatio);
+                                    setImageZoom(nextZoom);
+                                    setImageOffset(
+                                        getZoomedOffsetForPoint(
+                                            pinchCenterRef.current,
+                                            pinchZoomRef.current,
+                                            nextZoom,
+                                            pinchStartOffsetRef.current,
+                                        ),
+                                    );
+                                    return;
+                                }
+
+                                if (touchModeRef.current === 'pan' && event.touches.length === 1) {
+                                    const startX = touchStartXRef.current;
+                                    const startY = touchStartYRef.current;
+                                    if (startX === null || startY === null) return;
+                                    event.preventDefault();
+                                    const deltaX = event.touches[0].clientX - startX;
+                                    const deltaY = event.touches[0].clientY - startY;
+                                    setImageOffset(
+                                        applyEdgeResistance({
+                                            x: panStartOffsetRef.current.x + deltaX,
+                                            y: panStartOffsetRef.current.y + deltaY,
+                                        }, imageZoom),
+                                    );
+                                    touchCurrentXRef.current = event.touches[0].clientX;
+                                    touchCurrentYRef.current = event.touches[0].clientY;
+                                    return;
+                                }
+
+                                if (touchModeRef.current === 'swipe' && event.touches.length === 1) {
+                                    touchCurrentXRef.current = event.touches[0].clientX;
+                                    touchCurrentYRef.current = event.touches[0].clientY;
+                                    const startX = touchStartXRef.current;
+                                    const startY = touchStartYRef.current;
+                                    if (startX === null || startY === null || imageZoom > 1.05) return;
+                                    const deltaX = touchCurrentXRef.current - startX;
+                                    const deltaY = touchCurrentYRef.current - startY;
+                                    if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY > 0) {
+                                        touchModeRef.current = 'dismiss';
+                                        event.preventDefault();
+                                        return;
+                                    }
+                                    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                                        event.preventDefault();
+                                    }
+                                    return;
+                                }
+
+                                if (touchModeRef.current === 'dismiss' && event.touches.length === 1) {
+                                    touchCurrentXRef.current = event.touches[0].clientX;
+                                    touchCurrentYRef.current = event.touches[0].clientY;
+                                    event.preventDefault();
+                                }
                             }}
                             onTouchEnd={() => {
-                                if (pinchDistanceRef.current === null) return;
+                                if (touchModeRef.current === 'pinch') {
+                                    pinchDistanceRef.current = null;
+                                    pinchZoomRef.current = imageZoom;
+                                    setIsGestureActive(false);
+                                    touchModeRef.current = 'idle';
+                                    return;
+                                }
+
+                                if (touchModeRef.current === 'pan') {
+                                    setIsGestureActive(false);
+                                    setImageOffset((previous) => clampImageOffset(previous, imageZoom));
+                                }
+
+                                if (touchModeRef.current === 'swipe') {
+                                    const startX = touchStartXRef.current;
+                                    const startY = touchStartYRef.current;
+                                    const endX = touchCurrentXRef.current;
+                                    const endY = touchCurrentYRef.current;
+
+                                    if (startX !== null && startY !== null && endX !== null && endY !== null && imageZoom <= 1.05) {
+                                        const deltaX = endX - startX;
+                                        const deltaY = endY - startY;
+                                        const horizontalSwipe = Math.abs(deltaX) >= SWIPE_THRESHOLD_PX;
+                                        const verticalEnough = Math.abs(deltaY) <= SWIPE_VERTICAL_TOLERANCE_PX;
+
+                                        if (horizontalSwipe && verticalEnough) {
+                                            if (deltaX < 0) {
+                                                goToNextImage();
+                                            } else {
+                                                goToPreviousImage();
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (touchModeRef.current === 'dismiss') {
+                                    const startY = touchStartYRef.current;
+                                    const endY = touchCurrentYRef.current;
+                                    if (startY !== null && endY !== null && endY - startY >= DISMISS_SWIPE_THRESHOLD_PX && imageZoom <= 1.05) {
+                                        closeImageModal();
+                                        return;
+                                    }
+                                }
+
                                 pinchDistanceRef.current = null;
                                 pinchZoomRef.current = imageZoom;
+                                touchStartXRef.current = null;
+                                touchStartYRef.current = null;
+                                touchCurrentXRef.current = null;
+                                touchCurrentYRef.current = null;
+                                touchModeRef.current = 'idle';
                             }}
                         >
                             <img
                                 src={images[currentImageIndex]}
-                                className="max-h-full max-w-full select-none object-contain transition-transform duration-200 ease-out"
-                                style={{ transform: `scale(${imageZoom})`, transformOrigin: 'center center' }}
+                                className={`max-h-full max-w-full select-none object-contain ${isGestureActive ? '' : 'transition-transform duration-150 ease-out'}`}
+                                style={{
+                                    transform: `translate3d(${imageOffset.x}px, ${imageOffset.y}px, 0) scale(${imageZoom})`,
+                                    transformOrigin: 'center center',
+                                    willChange: 'transform',
+                                }}
                                 alt={`Case scan ${currentImageIndex + 1}`}
                                 draggable={false}
+                                onClick={(event) => event.stopPropagation()}
                             />
 
                             {images.length > 1 && (
                                 <>
                                     <button
                                         type="button"
-                                        onClick={goToPreviousImage}
-                                        className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75 sm:left-6"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            goToPreviousImage();
+                                        }}
+                                        className="absolute left-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white sm:left-6"
                                         aria-label="Previous image"
                                     >
-                                        <span className="material-icons text-[24px]">chevron_left</span>
+                                        <span className="material-icons text-[22px]">chevron_left</span>
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={goToNextImage}
-                                        className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white shadow-[0_8px_24px_rgba(0,0,0,0.28)] backdrop-blur-md transition-colors hover:bg-black/75 sm:right-6"
+                                        onClick={(event) => {
+                                            event.stopPropagation();
+                                            goToNextImage();
+                                        }}
+                                        className="absolute right-4 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white sm:right-6"
                                         aria-label="Next image"
                                     >
-                                        <span className="material-icons text-[24px]">chevron_right</span>
+                                        <span className="material-icons text-[22px]">chevron_right</span>
                                     </button>
                                 </>
                             )}
+
+                            {images.length > 1 && (
+                                <div
+                                    className="pointer-events-none absolute inset-x-0 bottom-5 flex items-center justify-center gap-2 sm:hidden"
+                                    onClick={(event) => event.stopPropagation()}
+                                >
+                                    {images.map((image: string, idx: number) => (
+                                        <button
+                                            key={`modal-dot-${idx}-${image}`}
+                                            type="button"
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                setCurrentImageIndex(idx);
+                                            }}
+                                            className={`pointer-events-auto h-2 rounded-full transition-all ${idx === currentImageIndex ? 'w-5 bg-white' : 'w-2 bg-white/35'}`}
+                                            aria-label={`View image ${idx + 1}`}
+                                        />
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
-                        {(images.length > 1 || caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description) && (
-                            <div className="border-t border-white/8 px-4 py-4 sm:px-6">
-                                {caseData.analysis_result?.imagesMetadata?.[currentImageIndex]?.description && (
-                                    <p className="mb-4 text-center text-sm leading-relaxed text-slate-300">
-                                        {caseData.analysis_result.imagesMetadata[currentImageIndex].description}
-                                    </p>
-                                )}
-
-                                {images.length > 1 && (
-                                    <div className="flex items-center justify-center gap-2 overflow-x-auto custom-scrollbar">
-                                        {images.map((image: string, idx: number) => (
-                                            <button
-                                                key={`modal-thumb-${idx}`}
-                                                type="button"
-                                                onClick={() => setCurrentImageIndex(idx)}
-                                                className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border transition-all duration-200 ${idx === currentImageIndex
-                                                    ? `border-white/45 ${theme.bgClass} shadow-[0_0_0_1px_rgba(255,255,255,0.14)]`
-                                                    : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
-                                                    }`}
-                                                aria-label={`View image ${idx + 1}`}
-                                            >
-                                                <img
-                                                    src={image}
-                                                    alt={`Modal thumbnail ${idx + 1}`}
-                                                    className="h-full w-full object-cover opacity-80"
-                                                />
-                                                {idx === currentImageIndex && (
-                                                    <span className={`absolute inset-x-2 bottom-1 h-0.5 rounded-full ${theme.bgClass.replace('/10', '')}`} />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
+                        {images.length > 1 && (
+                            <div
+                                className="hidden border-t border-white/8 px-4 py-4 sm:block sm:px-6"
+                                onClick={(event) => event.stopPropagation()}
+                            >
+                                <div className="flex items-center justify-center gap-2 overflow-x-auto custom-scrollbar">
+                                    {images.map((image: string, idx: number) => (
+                                        <button
+                                            key={`modal-thumb-${idx}`}
+                                            type="button"
+                                            onClick={() => setCurrentImageIndex(idx)}
+                                            className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border transition-all duration-200 ${idx === currentImageIndex
+                                                ? `border-white/45 ${theme.bgClass} shadow-[0_0_0_1px_rgba(255,255,255,0.14)]`
+                                                : 'border-white/10 bg-white/[0.03] hover:border-white/20 hover:bg-white/[0.06]'
+                                                }`}
+                                            aria-label={`View image ${idx + 1}`}
+                                        >
+                                            <img
+                                                src={image}
+                                                alt={`Modal thumbnail ${idx + 1}`}
+                                                className="h-full w-full object-cover opacity-80"
+                                            />
+                                            {idx === currentImageIndex && (
+                                                <span className={`absolute inset-x-2 bottom-1 h-0.5 rounded-full ${theme.bgClass.replace('/10', '')}`} />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
-            )}
+            ), document.body)}
             {/* Floating Top Navigation Buttons */}
             <div className="absolute top-0 inset-x-0 p-4 flex flex-col gap-4 pointer-events-none z-50 mt-2">
                 <div className="flex justify-between w-full relative">

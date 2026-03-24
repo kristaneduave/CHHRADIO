@@ -1,37 +1,51 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AuntMinnieCaseOption, LiveAuntMinniePromptInput } from '../../types';
 
+type QuestionMode = 'identify' | 'diagnosis' | 'custom';
+
 interface LiveAuntMinniePromptComposerProps {
   prompt: LiveAuntMinniePromptInput;
+  questionNumber: number;
   auntMinnieCases: AuntMinnieCaseOption[];
   saving?: boolean;
-  heading?: string;
-  delaySeconds?: number | null;
   postActionLabel?: string;
-  postModeSummary?: string;
   onClose: () => void;
-  onDelaySecondsChange?: (value: number | null) => void;
   onPromptChange: (updates: Partial<LiveAuntMinniePromptInput>) => void;
   onAddPromptImage: (file: File) => Promise<void>;
   onSave: () => Promise<void>;
 }
 
+const IDENTIFY_TEMPLATE = 'Identify the structure/s.';
+const DIAGNOSIS_TEMPLATE = 'What is the diagnosis?';
+
+const getModeFromQuestionText = (value?: string): QuestionMode => {
+  const text = value?.trim() || '';
+  if (!text) return 'identify';
+  if (text === IDENTIFY_TEMPLATE || text.startsWith(IDENTIFY_TEMPLATE)) return 'identify';
+  if (text === DIAGNOSIS_TEMPLATE || text.startsWith(DIAGNOSIS_TEMPLATE)) return 'diagnosis';
+  return 'custom';
+};
+
+const getPlaceholderByMode = (mode: QuestionMode) => {
+  if (mode === 'identify') return 'Add instructions for what users should identify';
+  if (mode === 'diagnosis') return 'Add instructions or qualifiers for the diagnosis question';
+  return 'Write any question for this image set';
+};
+
 const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> = ({
   prompt,
+  questionNumber,
   auntMinnieCases,
   saving = false,
-  heading = 'New question',
-  delaySeconds = null,
   postActionLabel = 'Post',
-  postModeSummary,
   onClose,
-  onDelaySecondsChange,
   onPromptChange,
   onAddPromptImage,
   onSave,
 }) => {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState('');
+  const [questionMode, setQuestionMode] = useState<QuestionMode>(() => getModeFromQuestionText(prompt.question_text));
 
   const selectedCase = useMemo(
     () => auntMinnieCases.find((item) => item.id === selectedCaseId) || null,
@@ -43,6 +57,10 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
       setSelectedCaseId('');
     }
   }, [selectedCase, selectedCaseId]);
+
+  useEffect(() => {
+    setQuestionMode(getModeFromQuestionText(prompt.question_text));
+  }, [prompt.id, prompt.question_text]);
 
   const formatSourceLabel = (item: AuntMinnieCaseOption) => {
     if (item.submissionType === 'interesting_case') return 'Interesting Case';
@@ -69,15 +87,29 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
         ...existingImages,
         {
           image_url: imageUrl,
-          caption:
-            selectedCaseImages.length > 1
-              ? `${selected.title} ${imageIndex + 1}`
-              : selected.title,
+          caption: '',
         },
       ],
-      official_answer: prompt.official_answer || selected.diagnosis || '',
-      answer_explanation: prompt.answer_explanation || selected.notes || '',
     });
+  };
+
+  const applyQuestionMode = (mode: QuestionMode) => {
+    setQuestionMode(mode);
+
+    if (mode === 'identify') {
+      onPromptChange({ question_text: IDENTIFY_TEMPLATE });
+      return;
+    }
+
+    if (mode === 'diagnosis') {
+      onPromptChange({ question_text: DIAGNOSIS_TEMPLATE });
+      return;
+    }
+
+    const currentText = prompt.question_text?.trim() || '';
+    if (currentText === IDENTIFY_TEMPLATE || currentText === DIAGNOSIS_TEMPLATE) {
+      onPromptChange({ question_text: '' });
+    }
   };
 
   return (
@@ -86,8 +118,7 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
 
       <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
         <div>
-          <p className="text-lg font-semibold text-white">{heading}</p>
-          <p className="text-sm text-slate-400">Images first, prompt second.</p>
+          <p className="text-lg font-semibold text-white">Question {questionNumber}</p>
         </div>
         <button
           type="button"
@@ -234,43 +265,62 @@ const LiveAuntMinniePromptComposer: React.FC<LiveAuntMinniePromptComposerProps> 
           )}
         </div>
 
-        <label className="block space-y-2">
-          <span className="text-sm font-semibold text-slate-300">Prompt</span>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => applyQuestionMode('identify')}
+              className={`rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition ${
+                questionMode === 'identify'
+                  ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-100'
+                  : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              Identify structure/s
+            </button>
+            <button
+              type="button"
+              onClick={() => applyQuestionMode('diagnosis')}
+              className={`rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition ${
+                questionMode === 'diagnosis'
+                  ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-100'
+                  : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              Diagnosis?
+            </button>
+            <button
+              type="button"
+              onClick={() => applyQuestionMode('custom')}
+              className={`rounded-[18px] border px-3 py-2.5 text-sm font-semibold transition ${
+                questionMode === 'custom'
+                  ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-100'
+                  : 'border-white/10 bg-black/20 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              Custom
+            </button>
+          </div>
+
           <textarea
             value={prompt.question_text || ''}
-            onChange={(event) => onPromptChange({ question_text: event.target.value })}
-            placeholder="What should they identify?"
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              onPromptChange({ question_text: nextValue });
+              if (!nextValue.trim()) {
+                setQuestionMode('custom');
+                return;
+              }
+              setQuestionMode(getModeFromQuestionText(nextValue));
+            }}
+            placeholder={getPlaceholderByMode(questionMode)}
             className="min-h-[108px] w-full rounded-[22px] border border-white/10 bg-black/30 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10"
           />
-        </label>
+        </div>
 
-        {onDelaySecondsChange && (
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-slate-300">When to post</span>
-            <select
-              value={delaySeconds ?? ''}
-              onChange={(event) => {
-                const nextValue = event.target.value ? Number(event.target.value) : null;
-                onDelaySecondsChange(nextValue);
-              }}
-              className="w-full rounded-[20px] border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10"
-            >
-              <option value="">Immediate</option>
-              <option value="15">15 sec</option>
-              <option value="30">30 sec</option>
-              <option value="45">45 sec</option>
-              <option value="60">60 sec</option>
-            </select>
-          </label>
-        )}
       </div>
 
       <div className="mobile-sheet-footer-clearance border-t border-white/10 bg-[#101b26] px-4 py-4 sm:px-5">
-        {postModeSummary && (
-          <p className="mb-3 text-xs text-slate-400">
-            {postModeSummary}
-          </p>
-        )}
         <button
           type="button"
           onClick={() => void onSave()}

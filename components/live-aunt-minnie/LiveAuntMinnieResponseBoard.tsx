@@ -3,8 +3,10 @@ import { LiveAuntMinnieJudgment, LiveAuntMinnieResponse } from '../../types';
 
 interface LiveAuntMinnieResponseBoardProps {
   responses: LiveAuntMinnieResponse[];
-  onJudge: (responseId: string, judgment: LiveAuntMinnieJudgment) => Promise<void>;
+  onJudge?: (responseId: string, judgment: LiveAuntMinnieJudgment) => Promise<void>;
   busyResponseId?: string | null;
+  title?: string;
+  emptyLabel?: string;
 }
 
 const JUDGMENTS: LiveAuntMinnieJudgment[] = ['correct', 'partial', 'incorrect'];
@@ -23,12 +25,14 @@ const LiveAuntMinnieResponseBoard: React.FC<LiveAuntMinnieResponseBoardProps> = 
   responses,
   onJudge,
   busyResponseId,
+  title = 'Submitted Answers',
+  emptyLabel = 'Waiting for resident submissions.',
 }) => {
   return (
     <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200">Live Responses</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-cyan-200">{title}</p>
           <p className="mt-1 text-sm text-slate-400">{responses.length} submitted for this prompt.</p>
         </div>
       </div>
@@ -36,7 +40,7 @@ const LiveAuntMinnieResponseBoard: React.FC<LiveAuntMinnieResponseBoardProps> = 
       <div className="mt-4 space-y-3">
         {responses.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-slate-400">
-            Waiting for resident submissions.
+            {emptyLabel}
           </div>
         ) : (
           responses.map((response) => (
@@ -51,19 +55,21 @@ const LiveAuntMinnieResponseBoard: React.FC<LiveAuntMinnieResponseBoardProps> = 
                 </span>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {JUDGMENTS.map((judgment) => (
-                  <button
-                    key={judgment}
-                    type="button"
-                    disabled={busyResponseId === response.id}
-                    onClick={() => onJudge(response.id, judgment)}
-                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_STYLES[judgment]}`}
-                  >
-                    {judgment}
-                  </button>
-                ))}
-              </div>
+              {onJudge && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {JUDGMENTS.map((judgment) => (
+                    <button
+                      key={judgment}
+                      type="button"
+                      disabled={busyResponseId === response.id}
+                      onClick={() => onJudge(response.id, judgment)}
+                      className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_STYLES[judgment]}`}
+                    >
+                      {judgment}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}

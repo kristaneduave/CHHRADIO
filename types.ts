@@ -205,10 +205,10 @@ export interface LiveAuntMinnieSession {
   prompt_count: number;
   started_at: string | null;
   ended_at: string | null;
+  locked_at?: string | null;
+  locked_by?: string | null;
   join_code: string | null;
   allow_late_join: boolean;
-  auto_advance_interval_seconds?: number | null;
-  next_prompt_at?: string | null;
   created_at?: string;
   updated_at?: string;
 }

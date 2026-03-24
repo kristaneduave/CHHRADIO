@@ -19,6 +19,7 @@ import {
   UserRole,
 } from '../types';
 
+type RoomConnectionState = 'connecting' | 'live' | 'degraded';
 type WorkspaceData = {
   currentUserId: string;
   currentUserRole: UserRole | null;
@@ -77,7 +78,16 @@ type PersistedPromptRow = {
 };
 
 const HOST_ROLES: UserRole[] = ['admin', 'faculty', 'consultant', 'training_officer'];
-const PROMPT_PLACEHOLDER_ANSWER = 'Pending TO answer';
+const LEGACY_PROMPT_PLACEHOLDER_ANSWER = 'Pending TO answer';
+const PROMPT_PLACEHOLDER_ANSWER = 'Pending correct answer';
+
+const normalizeOfficialAnswerText = (value: string | null | undefined) => {
+  const trimmed = value?.trim() || '';
+  if (!trimmed || trimmed === LEGACY_PROMPT_PLACEHOLDER_ANSWER) {
+    return PROMPT_PLACEHOLDER_ANSWER;
+  }
+  return trimmed;
+};
 
 export const isLiveAuntMinnieHostRole = (role: UserRole | null | undefined) =>
   Boolean(role && HOST_ROLES.includes(role));
@@ -145,10 +155,10 @@ const mapSession = (row: any): LiveAuntMinnieSession => ({
   prompt_count: Number(row.prompt_count || 0),
   started_at: row.started_at || null,
   ended_at: row.ended_at || null,
+  locked_at: row.locked_at || null,
+  locked_by: row.locked_by || null,
   join_code: row.join_code || null,
   allow_late_join: Boolean(row.allow_late_join),
-  auto_advance_interval_seconds: row.auto_advance_interval_seconds ? Number(row.auto_advance_interval_seconds) : null,
-  next_prompt_at: row.next_prompt_at || null,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -191,7 +201,7 @@ const mapPrompt = (row: PromptRow): LiveAuntMinniePrompt => {
     image_url: row.image_url,
     image_caption: row.image_caption || null,
     question_text: row.question_text || null,
-    official_answer: row.official_answer,
+    official_answer: normalizeOfficialAnswerText(row.official_answer),
     answer_explanation: row.answer_explanation || null,
     accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
     images,
@@ -199,6 +209,16 @@ const mapPrompt = (row: PromptRow): LiveAuntMinniePrompt => {
     updated_at: row.updated_at,
   };
 };
+
+const sanitizePromptForParticipant = (
+  prompt: LiveAuntMinniePrompt,
+  options?: { allowAnswerKey?: boolean },
+): LiveAuntMinniePrompt => ({
+  ...prompt,
+  official_answer: options?.allowAnswerKey ? prompt.official_answer : '',
+  answer_explanation: null,
+  accepted_aliases: [],
+});
 
 const mapParticipant = (row: ParticipantRow): LiveAuntMinnieParticipant => ({
   id: row.id,
@@ -268,6 +288,231 @@ const buildMessageMap = (messages: LiveAuntMinnieMessage[]) => {
   });
 
   return { messagesByPromptId };
+};
+
+const buildRoomStateFromSlices = (
+  session: LiveAuntMinnieSession,
+  prompts: LiveAuntMinniePrompt[],
+  participants: LiveAuntMinnieParticipant[],
+  responses: LiveAuntMinnieResponse[],
+  messages: LiveAuntMinnieMessage[],
+  userId: string,
+  onlineParticipantIds: string[] = [],
+): LiveAuntMinnieRoomState => {
+  const { responsesByPromptId, myResponsesByPromptId } = buildResponseMaps(responses, userId);
+  const { messagesByPromptId } = buildMessageMap(messages);
+  const sortedPrompts = [...prompts].sort((left, right) => left.sort_order - right.sort_order);
+  const sortedParticipants = [...participants].sort(
+    (left, right) => new Date(left.joined_at).getTime() - new Date(right.joined_at).getTime(),
+  );
+
+  const isHost = session.host_user_id === userId;
+  const visiblePrompts = isHost
+    ? sortedPrompts
+    : sortedPrompts.map((prompt) =>
+        sanitizePromptForParticipant(prompt, {
+          allowAnswerKey: session.status === 'completed',
+        }),
+      );
+
+  sortedPrompts.forEach((prompt) => {
+    responsesByPromptId[prompt.id] = responsesByPromptId[prompt.id] || [];
+    myResponsesByPromptId[prompt.id] = myResponsesByPromptId[prompt.id] || null;
+    messagesByPromptId[prompt.id] = messagesByPromptId[prompt.id] || [];
+  });
+
+  return {
+    session: {
+      ...session,
+      prompt_count: visiblePrompts.length,
+    },
+    prompts: visiblePrompts,
+    responses,
+    responsesByPromptId,
+    myResponsesByPromptId,
+    messages,
+    messagesByPromptId,
+    participants: sortedParticipants,
+    onlineParticipantIds,
+    participantCount: sortedParticipants.length,
+    isHost,
+    hasJoined: isHost || sortedParticipants.some((participant) => participant.user_id === userId),
+  };
+};
+
+const ensureSessionIsAcceptingAnswers = (session: LiveAuntMinnieSession) => {
+  if (session.status === 'completed' || session.status === 'cancelled') {
+    throw new Error('This live Aunt Minnie room is no longer accepting answers.');
+  }
+
+  if (session.status !== 'live' || session.current_phase !== 'prompt_open') {
+    throw new Error('Answers are locked for this exam.');
+  }
+};
+
+const sortResponses = (responses: LiveAuntMinnieResponse[]) =>
+  [...responses].sort(
+    (left, right) => new Date(left.submitted_at).getTime() - new Date(right.submitted_at).getTime(),
+  );
+
+const sortMessages = (messages: LiveAuntMinnieMessage[]) =>
+  [...messages].sort(
+    (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
+  );
+
+const sortParticipants = (participants: LiveAuntMinnieParticipant[]) =>
+  [...participants].sort(
+    (left, right) => new Date(left.joined_at).getTime() - new Date(right.joined_at).getTime(),
+  );
+
+const withParticipantProfile = <
+  T extends { user_id: string; participant?: LiveAuntMinnieResponse['participant'] | LiveAuntMinnieMessage['participant'] | null },
+>(
+  item: T,
+  participants: LiveAuntMinnieParticipant[],
+): T => ({
+  ...item,
+  participant:
+    participants.find((participant) => participant.user_id === item.user_id)?.profile
+    || item.participant
+    || null,
+});
+
+const applySessionEventToState = (state: LiveAuntMinnieRoomState, row: any) => ({
+  ...state,
+  session: {
+    ...state.session,
+    ...mapSession(row),
+    prompt_count: state.prompts.length,
+  },
+});
+
+const applyPromptEventToState = (
+  state: LiveAuntMinnieRoomState,
+  eventType: string,
+  row: any,
+  userId: string,
+) => {
+  if (eventType !== 'UPDATE') {
+    return state;
+  }
+
+  const existingPrompt = state.prompts.find((prompt) => prompt.id === row.id);
+  if (!existingPrompt) {
+    return state;
+  }
+
+  const patchedPrompt: LiveAuntMinniePrompt = {
+    ...existingPrompt,
+    session_id: row.session_id,
+    sort_order: Number(row.sort_order || existingPrompt.sort_order || 0),
+    source_case_id: row.source_case_id || null,
+    image_url: row.image_url,
+    image_caption: row.image_caption || null,
+    question_text: row.question_text || null,
+    official_answer: normalizeOfficialAnswerText(row.official_answer),
+    answer_explanation: row.answer_explanation || null,
+    accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+
+  const nextPrompts = state.prompts
+    .map((prompt) => (prompt.id === patchedPrompt.id ? patchedPrompt : prompt))
+    .sort((left, right) => left.sort_order - right.sort_order);
+
+  return buildRoomStateFromSlices(
+    state.session,
+    nextPrompts,
+    state.participants,
+    state.responses,
+    state.messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+};
+
+const applyResponseEventToState = (
+  state: LiveAuntMinnieRoomState,
+  eventType: string,
+  row: any,
+  userId: string,
+) => {
+  const response = withParticipantProfile(mapResponse(row as ResponseRow), state.participants);
+  const nextResponses =
+    eventType === 'DELETE'
+      ? state.responses.filter((item) => item.id !== response.id)
+      : sortResponses([
+          ...state.responses.filter((item) => item.id !== response.id),
+          response,
+        ]);
+
+  return buildRoomStateFromSlices(
+    state.session,
+    state.prompts,
+    state.participants,
+    nextResponses,
+    state.messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+};
+
+const applyMessageEventToState = (
+  state: LiveAuntMinnieRoomState,
+  eventType: string,
+  row: any,
+  userId: string,
+) => {
+  const message = withParticipantProfile(mapMessage(row as MessageRow), state.participants);
+  const nextMessages =
+    eventType === 'DELETE'
+      ? state.messages.filter((item) => item.id !== message.id)
+      : sortMessages([
+          ...state.messages.filter((item) => item.id !== message.id),
+          message,
+        ]);
+
+  return buildRoomStateFromSlices(
+    state.session,
+    state.prompts,
+    state.participants,
+    state.responses,
+    nextMessages,
+    userId,
+    state.onlineParticipantIds,
+  );
+};
+
+const applyParticipantEventToState = (
+  state: LiveAuntMinnieRoomState,
+  eventType: string,
+  row: any,
+  userId: string,
+) => {
+  const participant = mapParticipant({
+    ...(row as ParticipantRow),
+    profile:
+      state.participants.find((item) => item.user_id === row.user_id)?.profile
+      || null,
+  });
+  const nextParticipants =
+    eventType === 'DELETE'
+      ? state.participants.filter((item) => item.id !== participant.id)
+      : sortParticipants([
+          ...state.participants.filter((item) => item.id !== participant.id),
+          participant,
+        ]);
+
+  return buildRoomStateFromSlices(
+    state.session,
+    state.prompts,
+    nextParticipants,
+    state.responses.map((response) => withParticipantProfile(response, nextParticipants)),
+    state.messages.map((message) => withParticipantProfile(message, nextParticipants)),
+    userId,
+    state.onlineParticipantIds,
+  );
 };
 
 const getAuthenticatedProfile = async (): Promise<{ userId: string; profile: Profile | null }> => {
@@ -408,7 +653,6 @@ const listJoinableSessions = async () => {
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .select('*')
-    .in('status', ['live', 'paused'])
     .order('updated_at', { ascending: false })
     .limit(12);
 
@@ -823,33 +1067,15 @@ export const getLiveAuntMinnieRoomState = async (
     fetchMessages(sessionId),
   ]);
 
-  const isHost = session.host_user_id === userId;
-  const { responsesByPromptId, myResponsesByPromptId } = buildResponseMaps(responses, userId);
-  const { messagesByPromptId } = buildMessageMap(messages);
-
-  prompts.forEach((prompt) => {
-    responsesByPromptId[prompt.id] = responsesByPromptId[prompt.id] || [];
-    myResponsesByPromptId[prompt.id] = myResponsesByPromptId[prompt.id] || null;
-    messagesByPromptId[prompt.id] = messagesByPromptId[prompt.id] || [];
-  });
-
-  return {
-    session: {
-      ...session,
-      prompt_count: prompts.length,
-    },
+  return buildRoomStateFromSlices(
+    session,
     prompts,
-    responses,
-    responsesByPromptId,
-    myResponsesByPromptId,
-    messages,
-    messagesByPromptId,
     participants,
+    responses,
+    messages,
+    userId,
     onlineParticipantIds,
-    participantCount: participants.length,
-    isHost,
-    hasJoined: isHost || participants.some((participant) => participant.user_id === userId),
-  };
+  );
 };
 
 export const joinLiveAuntMinnieSession = async (params: { sessionId?: string; joinCode?: string }) => {
@@ -879,13 +1105,6 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
     throw new Error('Add at least one question before starting the session.');
   }
 
-  const session = await fetchSession(sessionId);
-  const intervalSeconds = session.auto_advance_interval_seconds || null;
-  const nextPromptAt =
-    intervalSeconds && prompts.length > 1
-      ? new Date(Date.now() + intervalSeconds * 1000).toISOString()
-      : null;
-
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .update({
@@ -895,7 +1114,6 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
       prompt_count: prompts.length,
       started_at: new Date().toISOString(),
       ended_at: null,
-      next_prompt_at: nextPromptAt,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
@@ -915,8 +1133,6 @@ export const setLiveAuntMinnieAutoAdvanceInterval = async (sessionId: string, in
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .update({
-      auto_advance_interval_seconds: intervalSeconds,
-      next_prompt_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
@@ -944,6 +1160,10 @@ export const advanceLiveAuntMinniePrompt = async (sessionId: string) => {
     throw new Error('Room is not live.');
   }
 
+  if (session.current_phase !== 'prompt_open') {
+    throw new Error('Questions can only advance while answers are open.');
+  }
+
   const nextIndex = Math.min(session.current_prompt_index + 1, Math.max(prompts.length - 1, 0));
   if (nextIndex === session.current_prompt_index) {
     return session;
@@ -953,7 +1173,6 @@ export const advanceLiveAuntMinniePrompt = async (sessionId: string) => {
     .from('live_aunt_minnie_sessions')
     .update({
       current_prompt_index: nextIndex,
-      next_prompt_at: null,
       updated_at: new Date().toISOString(),
     })
     .eq('id', sessionId)
@@ -988,8 +1207,18 @@ export const setLiveAuntMinnieAnswersVisible = async (sessionId: string, visible
   return mapSession(data);
 };
 
-export const completeLiveAuntMinnieSession = async (sessionId: string) => {
+export const lockLiveAuntMinnieAnswers = async (sessionId: string) => {
   const { userId } = await getAuthenticatedProfile();
+  const session = await fetchSession(sessionId);
+
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can lock answers.');
+  }
+
+  if (session.status !== 'live' || session.current_phase !== 'prompt_open') {
+    throw new Error('Answers cannot be locked right now.');
+  }
+
   const { data, error } = await supabase
     .from('live_aunt_minnie_sessions')
     .update({
@@ -1008,6 +1237,101 @@ export const completeLiveAuntMinnieSession = async (sessionId: string) => {
   }
 
   return mapSession(data);
+};
+
+export const startLiveAuntMinnieReview = async (sessionId: string) => {
+  const { userId } = await getAuthenticatedProfile();
+  const session = await fetchSession(sessionId);
+
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can review submissions.');
+  }
+
+  if (session.status !== 'paused') {
+    throw new Error('Review can only start after answers are locked.');
+  }
+
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      status: 'live',
+      current_phase: 'reveal',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSession(data);
+};
+
+export const completeLiveAuntMinnieSession = async (sessionId: string) => {
+  const { userId } = await getAuthenticatedProfile();
+  const session = await fetchSession(sessionId);
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can end the quiz.');
+  }
+
+  if (session.status === 'completed' || session.status === 'cancelled') {
+    return session;
+  }
+
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .update({
+      status: 'completed',
+      current_phase: 'completed',
+      ended_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('host_user_id', userId)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapSession(data);
+};
+
+export const updateLiveAuntMinnieAnswerKey = async (
+  sessionId: string,
+  promptId: string,
+  payload: Pick<LiveAuntMinniePromptInput, 'official_answer' | 'answer_explanation' | 'accepted_aliases'>,
+) => {
+  const { userId, profile } = await getAuthenticatedProfile();
+  ensureHostRole(profile?.role);
+
+  const session = await fetchSession(sessionId);
+  if (session.host_user_id !== userId) {
+    throw new Error('Only the host can edit the answer key.');
+  }
+
+  if (session.status !== 'completed') {
+    throw new Error('Answer keys can only be edited after the quiz has ended.');
+  }
+
+  const { error } = await supabase
+    .from('live_aunt_minnie_prompts')
+    .update({
+      official_answer: payload.official_answer.trim() || PROMPT_PLACEHOLDER_ANSWER,
+      answer_explanation: payload.answer_explanation?.trim() || null,
+      accepted_aliases: payload.accepted_aliases || [],
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', promptId)
+    .eq('session_id', sessionId);
+
+  if (error) {
+    throw error;
+  }
 };
 
 export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
@@ -1052,9 +1376,7 @@ export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
 export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmitResponsePayload) => {
   const { userId } = await getAuthenticatedProfile();
   const session = await fetchSession(payload.sessionId);
-  if (session.status === 'completed' || session.status === 'cancelled') {
-    throw new Error('This live Aunt Minnie room is no longer accepting answers.');
-  }
+  ensureSessionIsAcceptingAnswers(session);
 
   const responseText = payload.responseText.trim();
   if (!responseText) {
@@ -1086,9 +1408,7 @@ export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmit
 export const deleteLiveAuntMinnieResponse = async (payload: Pick<LiveAuntMinnieSubmitResponsePayload, 'sessionId' | 'promptId'>) => {
   const { userId } = await getAuthenticatedProfile();
   const session = await fetchSession(payload.sessionId);
-  if (session.status === 'completed' || session.status === 'cancelled') {
-    throw new Error('This live Aunt Minnie room is no longer accepting answers.');
-  }
+  ensureSessionIsAcceptingAnswers(session);
 
   const { error } = await supabase
     .from('live_aunt_minnie_responses')
@@ -1136,15 +1456,20 @@ export const subscribeToLiveAuntMinnieRoom = async ({
   sessionId,
   onStateChange,
   onError,
+  onConnectionStateChange,
 }: {
   sessionId: string;
   onStateChange: (state: LiveAuntMinnieRoomState) => void;
   onError?: (message: string) => void;
+  onConnectionStateChange?: (state: RoomConnectionState) => void;
 }) => {
   const { userId } = await getAuthenticatedProfile();
   let lastOnlineParticipantIds: string[] = [];
   let lastState: LiveAuntMinnieRoomState | null = null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  const pendingRefreshKinds = new Set<'session' | 'prompts' | 'participants' | 'responses' | 'messages'>();
+
+  onConnectionStateChange?.('connecting');
 
   const emitPresenceState = () => {
     if (!lastState) return;
@@ -1156,19 +1481,64 @@ export const subscribeToLiveAuntMinnieRoom = async ({
       const nextState = await getLiveAuntMinnieRoomState(sessionId, lastOnlineParticipantIds);
       lastState = nextState;
       onStateChange(nextState);
+      onConnectionStateChange?.('live');
     } catch (error: any) {
+      onConnectionStateChange?.('degraded');
       onError?.(error.message || 'Live Aunt Minnie room sync failed.');
     }
   };
 
-  const queueRefresh = () => {
+  const refreshPendingSlices = async () => {
+    if (!lastState) {
+      await refresh();
+      return;
+    }
+
+    const kinds = new Set(pendingRefreshKinds);
+    pendingRefreshKinds.clear();
+
+    try {
+      const [session, prompts, participants, responses, messages] = await Promise.all([
+        kinds.has('session') ? fetchSession(sessionId) : Promise.resolve(lastState.session),
+        kinds.has('prompts') ? fetchPrompts(sessionId) : Promise.resolve(lastState.prompts),
+        kinds.has('participants') ? fetchParticipants(sessionId) : Promise.resolve(lastState.participants),
+        kinds.has('responses') ? fetchResponses(sessionId) : Promise.resolve(lastState.responses),
+        kinds.has('messages') ? fetchMessages(sessionId) : Promise.resolve(lastState.messages),
+      ]);
+
+      const nextState = buildRoomStateFromSlices(
+        session,
+        prompts,
+        participants,
+        responses,
+        messages,
+        userId,
+        lastOnlineParticipantIds,
+      );
+      lastState = nextState;
+      onStateChange(nextState);
+      onConnectionStateChange?.('live');
+    } catch (error: any) {
+      onConnectionStateChange?.('degraded');
+      onError?.(error.message || 'Live Aunt Minnie room sync failed.');
+    }
+  };
+
+  const queueRefresh = (kind: 'session' | 'prompts' | 'participants' | 'responses' | 'messages') => {
+    pendingRefreshKinds.add(kind);
     if (refreshTimer) {
       clearTimeout(refreshTimer);
     }
     refreshTimer = setTimeout(() => {
       refreshTimer = null;
-      void refresh();
-    }, 150);
+      void refreshPendingSlices();
+    }, 40);
+  };
+
+  const applyPatchedState = (nextState: LiveAuntMinnieRoomState) => {
+    lastState = nextState;
+    onStateChange(nextState);
+    onConnectionStateChange?.('live');
   };
 
   const channel: RealtimeChannel = supabase.channel(`live-aunt-minnie:${sessionId}`, {
@@ -1194,26 +1564,72 @@ export const subscribeToLiveAuntMinnieRoom = async ({
     .on('presence', { event: 'sync' }, updatePresence)
     .on('presence', { event: 'join' }, updatePresence)
     .on('presence', { event: 'leave' }, updatePresence)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_sessions', filter: `id=eq.${sessionId}` }, queueRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompts', filter: `session_id=eq.${sessionId}` }, queueRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompt_images', filter: `session_id=eq.${sessionId}` }, queueRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_participants', filter: `session_id=eq.${sessionId}` }, queueRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_responses', filter: `session_id=eq.${sessionId}` }, queueRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_messages', filter: `session_id=eq.${sessionId}` }, queueRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_sessions', filter: `id=eq.${sessionId}` }, (payload: any) => {
+      if (!lastState || !payload.new) {
+        queueRefresh('session');
+        return;
+      }
+      applyPatchedState(applySessionEventToState(lastState, payload.new));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompts', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
+      if (!lastState || payload.eventType !== 'UPDATE' || !payload.new) {
+        queueRefresh('prompts');
+        return;
+      }
+      applyPatchedState(applyPromptEventToState(lastState, payload.eventType, payload.new, userId));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompt_images', filter: `session_id=eq.${sessionId}` }, () => queueRefresh('prompts'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_participants', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
+      if (!lastState) {
+        queueRefresh('participants');
+        return;
+      }
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row) {
+        queueRefresh('participants');
+        return;
+      }
+      applyPatchedState(applyParticipantEventToState(lastState, payload.eventType, row, userId));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_responses', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
+      if (!lastState) {
+        queueRefresh('responses');
+        return;
+      }
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row) {
+        queueRefresh('responses');
+        return;
+      }
+      applyPatchedState(applyResponseEventToState(lastState, payload.eventType, row, userId));
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_messages', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
+      if (!lastState) {
+        queueRefresh('messages');
+        return;
+      }
+      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+      if (!row) {
+        queueRefresh('messages');
+        return;
+      }
+      applyPatchedState(applyMessageEventToState(lastState, payload.eventType, row, userId));
+    })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         try {
           await refresh();
-          const session = await fetchSession(sessionId);
+          const session = lastState?.session || await fetchSession(sessionId);
           await upsertParticipant(sessionId, userId, session.host_user_id === userId ? 'host' : 'participant');
           await channel.track({ user_id: userId, ts: new Date().toISOString() });
-          await refresh();
         } catch (error: any) {
+          onConnectionStateChange?.('degraded');
           onError?.(error.message || 'Unable to join the live Aunt Minnie room.');
         }
       }
 
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onConnectionStateChange?.('degraded');
         onError?.('Live Aunt Minnie realtime connection unavailable.');
       }
     });
