@@ -115,11 +115,11 @@ export const CONSULTANT_SCHEDULE: HospitalSchedule[] = [
                         { doctor: 'Dr. Chan', time: '7:01 - 7:00 AM', subtext: '(Next Day)' },
                     ],
                     Friday: [
-                        { doctor: 'Dr. Yu', time: '7:01 - 5:00 PM', subtext: '(Next Day)' },
-                        { doctor: 'Dr. Alvarez', time: '5:00 PM - 7:00 AM' },
+                        { doctor: 'Dr. Yu', time: '7:01 - 5:00 PM' },
+                        { doctor: 'Dr. Alvarez', time: '5:00 PM - 7:00 AM', subtext: '(Next Day)' },
                     ],
                     Saturday: [
-                        { doctor: 'Dr. Chan', time: '7:01 - 7:00 AM' },
+                        { doctor: 'Dr. Alvarez, Dr. Co, Dr. Reynes, Dr. Vano-Yu', time: '7:01 - 7:00 AM', subtext: '(Next Day)' },
                     ],
                     Sunday: [
                         { doctor: 'Dr. Chan', time: '7:01 - 7:00 AM', subtext: '(Next Day)' },
