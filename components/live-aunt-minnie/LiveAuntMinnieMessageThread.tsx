@@ -132,15 +132,21 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
             <textarea
               value={draftValue}
               onChange={(event) => onDraftChange(event.target.value)}
-              onBlur={() => {
-                if (isDirty && !isSubmitting) {
-                  void onSubmit(draftValue);
-                }
-              }}
               placeholder={myResponse ? 'Update your answer' : 'Type your answer'}
               disabled={isSubmitting}
               className="min-h-[72px] w-full rounded-[16px] border border-white/10 bg-black/25 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60"
             />
+          </div>
+
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => void onSubmit(draftValue)}
+              disabled={isSubmitting || (!isDirty && !(savedValue && currentValue === '')) || (!currentValue && !savedValue)}
+              className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isSubmitting ? 'Submitting...' : savedValue ? 'Update answer' : 'Submit answer'}
+            </button>
           </div>
         </div>
       ) : savedValue ? (

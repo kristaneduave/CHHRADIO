@@ -325,7 +325,7 @@ const buildRoomStateFromSlices = (
   return {
     session: {
       ...session,
-      prompt_count: visiblePrompts.length,
+      prompt_count: Math.max(session.prompt_count, visiblePrompts.length),
     },
     prompts: visiblePrompts,
     responses,
@@ -492,7 +492,18 @@ const applyPromptEventToState = (
         official_answer: normalizeOfficialAnswerText(row.official_answer),
         answer_explanation: row.answer_explanation || null,
         accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
-        images: [],
+        images: row.image_url
+          ? [{
+              id: `${row.id}:legacy`,
+              prompt_id: row.id,
+              session_id: row.session_id,
+              sort_order: 0,
+              image_url: row.image_url,
+              caption: row.image_caption || null,
+              created_at: row.created_at,
+              updated_at: row.updated_at,
+            }]
+          : [],
         created_at: row.created_at,
         updated_at: row.updated_at,
       };
@@ -1113,6 +1124,85 @@ const fetchSession = async (sessionId: string) => {
   }
 
   return mapSession(data);
+};
+
+export const getLiveAuntMinnieSessionMeta = async (sessionId: string) => {
+  const session = await fetchSession(sessionId);
+  return {
+    id: session.id,
+    status: session.status,
+    current_phase: session.current_phase,
+    current_prompt_index: session.current_prompt_index,
+    prompt_count: session.prompt_count,
+    updated_at: session.updated_at || null,
+    ended_at: session.ended_at || null,
+  };
+};
+
+export const getLiveAuntMinnieResponsesMeta = async (sessionId: string) => {
+  const [{ count, error: countError }, { data, error }] = await Promise.all([
+    supabase
+      .from('live_aunt_minnie_responses')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId),
+    supabase
+      .from('live_aunt_minnie_responses')
+      .select('id, updated_at, submitted_at')
+      .eq('session_id', sessionId)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('submitted_at', { ascending: false })
+      .limit(1),
+  ]);
+
+  if (countError) {
+    throw countError;
+  }
+
+  if (error) {
+    throw error;
+  }
+
+  const latest = data?.[0] || null;
+  return {
+    count: count || 0,
+    latest_updated_at: latest?.updated_at || latest?.submitted_at || null,
+  };
+};
+
+export const getLiveAuntMinniePromptsMeta = async (sessionId: string) => {
+  const [{ count: promptCount, error: promptCountError }, { data: promptRows, error: promptRowsError }, { data: imageRows, error: imageRowsError }] = await Promise.all([
+    supabase
+      .from('live_aunt_minnie_prompts')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId),
+    supabase
+      .from('live_aunt_minnie_prompts')
+      .select('id, updated_at, created_at')
+      .eq('session_id', sessionId)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(1),
+    supabase
+      .from('live_aunt_minnie_prompt_images')
+      .select('id, updated_at, created_at')
+      .eq('session_id', sessionId)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(1),
+  ]);
+
+  if (promptCountError) throw promptCountError;
+  if (promptRowsError) throw promptRowsError;
+  if (imageRowsError) throw imageRowsError;
+
+  const latestPromptUpdatedAt = promptRows?.[0]?.updated_at || promptRows?.[0]?.created_at || null;
+  const latestImageUpdatedAt = imageRows?.[0]?.updated_at || imageRows?.[0]?.created_at || null;
+
+  return {
+    count: promptCount || 0,
+    latest_prompt_updated_at: latestPromptUpdatedAt,
+    latest_image_updated_at: latestImageUpdatedAt,
+  };
 };
 
 const fetchPrompts = async (sessionId: string) => {

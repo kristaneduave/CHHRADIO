@@ -84,18 +84,17 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
               type="button"
               onClick={() => void onRefresh?.()}
               disabled={busyAction === 'manual-resync'}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-sm font-semibold text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+              aria-label={busyAction === 'manual-resync' ? 'Refreshing' : 'Refresh'}
+              title={busyAction === 'manual-resync' ? 'Refreshing' : 'Refresh'}
             >
-              {busyAction === 'manual-resync' ? 'Refreshing...' : 'Refresh'}
+              <span className={`material-icons text-[18px] ${busyAction === 'manual-resync' ? 'animate-spin' : ''}`}>
+                refresh
+              </span>
             </button>
             {roomSyncState !== 'live' && (
               <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
                 {roomSyncState === 'connecting' ? 'Connecting...' : 'Realtime delayed'}
-              </span>
-            )}
-            {isEnded && (
-              <span className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100">
-                Ended
               </span>
             )}
           </div>
@@ -115,9 +114,9 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
 
       {showEndedOverlay && isEnded && (
         <div className="fixed inset-0 z-[130] bg-slate-950/70 backdrop-blur-sm">
-          <div className="flex h-full items-end justify-center p-4 sm:items-center">
+          <div className="flex h-full items-center justify-center p-4">
             <div className="mobile-sheet-footer-clearance w-full max-w-md rounded-[30px] border border-white/10 bg-[#101b26] px-5 pb-5 pt-4 text-center shadow-[0_30px_80px_rgba(3,10,18,0.55)]">
-              <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/10 sm:hidden" />
+              <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/10" />
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-emerald-400/20 bg-emerald-500/10 text-emerald-100">
                 <span className="material-icons text-[24px]">check_circle</span>
               </div>

@@ -715,14 +715,6 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
           <p className="mt-2 text-sm text-slate-400">
             Your room already has questions. Refresh if they do not appear in a moment.
           </p>
-        ) : roomState.isHost && onCompose ? (
-          <button
-            type="button"
-            onClick={onCompose}
-            className="mt-4 rounded-full border border-cyan-400/20 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
-          >
-            New question
-          </button>
         ) : null}
       </section>
     );

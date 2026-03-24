@@ -15,7 +15,10 @@ import {
   createLiveAuntMinnieSession,
   deleteLiveAuntMinnieSession,
   deleteLiveAuntMinnieResponse,
+  getLiveAuntMinniePromptsMeta,
   getLiveAuntMinnieRoomState,
+  getLiveAuntMinnieResponsesMeta,
+  getLiveAuntMinnieSessionMeta,
   getLiveAuntMinnieWorkspace,
   lockLiveAuntMinnieAnswers,
   submitLiveAuntMinnieResponse,
@@ -120,14 +123,12 @@ const buildPromptFromInput = (
   };
 };
 
-const mergeHostRoomPrompts = (
+const mergeRoomPrompts = (
   previous: LiveAuntMinnieRoomState,
   next: LiveAuntMinnieRoomState,
 ): LiveAuntMinnieRoomState => {
   const shouldPreserveLockedSession =
-    previous.isHost
-    && next.isHost
-    && previous.session.id === next.session.id
+    previous.session.id === next.session.id
     && previous.session.status !== 'live'
     && next.session.status === 'live';
 
@@ -143,9 +144,7 @@ const mergeHostRoomPrompts = (
     : next.session;
 
   if (
-    !previous.isHost
-    || !next.isHost
-    || previous.session.id !== next.session.id
+    previous.session.id !== next.session.id
     || next.prompts.length >= previous.prompts.length
   ) {
     return {
@@ -213,6 +212,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [editingPromptId, setEditingPromptId] = useState<string | null>(null);
   const [composerPrompt, setComposerPrompt] = useState<LiveAuntMinniePromptInput>(createEmptyPrompt());
+  const [lockCountdownSeconds, setLockCountdownSeconds] = useState<number | null>(null);
   const roomStateRef = useRef<LiveAuntMinnieRoomState | null>(null);
   const attemptedPromptRepairRef = useRef<string | null>(null);
   const latestDraftResponsesRef = useRef<Record<string, string>>({});
@@ -221,7 +221,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
   const applyRoomState = (nextState: LiveAuntMinnieRoomState) => {
     const mergedState = roomStateRef.current
-      ? mergeHostRoomPrompts(roomStateRef.current, nextState)
+      ? mergeRoomPrompts(roomStateRef.current, nextState)
       : nextState;
     roomStateRef.current = mergedState;
     setRoomState(mergedState);
@@ -267,17 +267,18 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       return;
     }
 
-    const hasPromptMismatch = roomState.prompts.length === 0 && roomState.session.prompt_count > 0;
+    const hasPromptMismatch = roomState.prompts.length < roomState.session.prompt_count;
     if (!hasPromptMismatch) {
       attemptedPromptRepairRef.current = null;
       return;
     }
 
-    if (attemptedPromptRepairRef.current === currentSessionId) {
+    const repairKey = `${currentSessionId}:${roomState.prompts.length}:${roomState.session.prompt_count}`;
+    if (attemptedPromptRepairRef.current === repairKey) {
       return;
     }
 
-    attemptedPromptRepairRef.current = currentSessionId;
+    attemptedPromptRepairRef.current = repairKey;
     void refreshCurrentRoom(currentSessionId, roomState.onlineParticipantIds).catch(() => {
       // Keep the current UI if the repair refresh fails.
     });
@@ -364,10 +365,24 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   }, [currentSessionId]);
 
   useEffect(() => {
-    if (!currentSessionId || roomSyncState !== 'degraded') return;
+    if (!currentSessionId) return;
+
+    const isLiveRoom = roomState?.session.status === 'live';
+    const refreshIntervalMs = roomSyncState === 'degraded'
+      ? 3000
+      : isLiveRoom
+        ? 2000
+        : 3500;
+
+    if (!refreshIntervalMs) {
+      return;
+    }
 
     let cancelled = false;
     let refreshInFlight = false;
+    let sessionProbeInFlight = false;
+    let promptProbeInFlight = false;
+    let responseProbeInFlight = false;
 
     const refreshRoom = async () => {
       if (cancelled || refreshInFlight || document.visibilityState !== 'visible') {
@@ -387,13 +402,134 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       }
     };
 
+    const probeRoom = async () => {
+      if (cancelled || sessionProbeInFlight || document.visibilityState !== 'visible') {
+        return;
+      }
+
+      sessionProbeInFlight = true;
+      try {
+        const meta = await getLiveAuntMinnieSessionMeta(currentSessionId);
+        if (cancelled) return;
+
+        const currentState = roomStateRef.current;
+        if (!currentState || currentState.session.id !== currentSessionId) {
+          return;
+        }
+
+        const session = currentState.session;
+        const shouldRefresh =
+          meta.status !== session.status
+          || meta.current_phase !== session.current_phase
+          || meta.current_prompt_index !== session.current_prompt_index
+          || meta.prompt_count !== session.prompt_count
+          || (meta.prompt_count > currentState.prompts.length)
+          || (meta.updated_at || '') !== (session.updated_at || '')
+          || (meta.ended_at || '') !== (session.ended_at || '');
+
+        if (shouldRefresh) {
+          await refreshRoom();
+        }
+      } catch {
+        // Keep the current UI state if the metadata probe fails.
+      } finally {
+        sessionProbeInFlight = false;
+      }
+    };
+
+    const probeResponses = async () => {
+      if (cancelled || responseProbeInFlight || document.visibilityState !== 'visible') {
+        return;
+      }
+
+      responseProbeInFlight = true;
+      try {
+        const meta = await getLiveAuntMinnieResponsesMeta(currentSessionId);
+        if (cancelled) return;
+
+        const currentState = roomStateRef.current;
+        if (!currentState || currentState.session.id !== currentSessionId) {
+          return;
+        }
+
+        const currentResponseCount = currentState.responses.length;
+        const currentLatestResponseTimestamp = currentState.responses.reduce((latest, response) => {
+          const candidate = response.updated_at || response.submitted_at || '';
+          return candidate > latest ? candidate : latest;
+        }, '');
+
+        const shouldRefresh =
+          meta.count !== currentResponseCount
+          || (meta.latest_updated_at || '') !== currentLatestResponseTimestamp;
+
+        if (shouldRefresh) {
+          await refreshRoom();
+        }
+      } catch {
+        // Keep the current UI state if the response probe fails.
+      } finally {
+        responseProbeInFlight = false;
+      }
+    };
+
+    const probePrompts = async () => {
+      if (cancelled || promptProbeInFlight || document.visibilityState !== 'visible') {
+        return;
+      }
+
+      promptProbeInFlight = true;
+      try {
+        const meta = await getLiveAuntMinniePromptsMeta(currentSessionId);
+        if (cancelled) return;
+
+        const currentState = roomStateRef.current;
+        if (!currentState || currentState.session.id !== currentSessionId) {
+          return;
+        }
+
+        const currentPromptCount = currentState.prompts.length;
+        const currentLatestPromptTimestamp = currentState.prompts.reduce((latest, prompt) => {
+          const candidate = prompt.updated_at || prompt.created_at || '';
+          return candidate > latest ? candidate : latest;
+        }, '');
+        const currentLatestImageTimestamp = currentState.prompts.reduce((latest, prompt) => {
+          const promptLatest = prompt.images.reduce((imageLatest, image) => {
+            const candidate = image.updated_at || image.created_at || '';
+            return candidate > imageLatest ? candidate : imageLatest;
+          }, '');
+          return promptLatest > latest ? promptLatest : latest;
+        }, '');
+
+        const shouldRefresh =
+          meta.count !== currentPromptCount
+          || (meta.latest_prompt_updated_at || '') !== currentLatestPromptTimestamp
+          || (meta.latest_image_updated_at || '') !== currentLatestImageTimestamp;
+
+        if (shouldRefresh) {
+          await refreshRoom();
+        }
+      } catch {
+        // Keep the current UI state if the prompt probe fails.
+      } finally {
+        promptProbeInFlight = false;
+      }
+    };
+
     const intervalId = window.setInterval(() => {
-      void refreshRoom();
-    }, 4000);
+      if (roomSyncState === 'degraded') {
+        void refreshRoom();
+        return;
+      }
+      void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
+    }, refreshIntervalMs);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        void refreshRoom();
+        if (roomSyncState === 'degraded') {
+          void refreshRoom();
+          return;
+        }
+        void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
       }
     };
 
@@ -404,7 +540,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentSessionId, roomState?.onlineParticipantIds, roomSyncState]);
+  }, [currentSessionId, roomState?.onlineParticipantIds, roomState?.session.status, roomSyncState]);
 
   const refreshWorkspace = async () => {
     try {
@@ -429,6 +565,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setCurrentSessionId(null);
     setRoomState(null);
     setRoomSyncState('connecting');
+    setLockCountdownSeconds(null);
     roomStateRef.current = null;
     latestDraftResponsesRef.current = {};
     queuedResponseValuesRef.current = {};
@@ -475,32 +612,61 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
   const handleLockAnswers = async () => {
     if (!roomState) return;
-    const confirmed = typeof window === 'undefined'
-      ? true
-      : window.confirm('Lock all answers? This will stop all participants from editing their submissions for this exam.');
-    if (!confirmed) return;
+    if (lockCountdownSeconds !== null) return;
+    setLockCountdownSeconds(3);
+  };
 
+  useEffect(() => {
+    if (lockCountdownSeconds === null) {
+      return;
+    }
+
+    if (lockCountdownSeconds > 0) {
+      const timer = window.setTimeout(() => {
+        setLockCountdownSeconds((previous) => (previous === null ? previous : previous - 1));
+      }, 1000);
+      return () => window.clearTimeout(timer);
+    }
+
+    const currentRoomState = roomStateRef.current;
+    if (!currentRoomState) {
+      setLockCountdownSeconds(null);
+      return;
+    }
+
+    let cancelled = false;
     setBusyAction('lock-answers');
     setError(null);
-    try {
-      mutateRoomState((previous) => ({
-        ...previous,
-        session: {
-          ...previous.session,
-          status: 'completed',
-          current_phase: 'completed',
-          ended_at: new Date().toISOString(),
-        },
-      }));
-      await lockLiveAuntMinnieAnswers(roomState.session.id);
-      await refreshWorkspace();
-    } catch (err: any) {
-      await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
-      setError(err.message || 'Failed to lock answers.');
-    } finally {
-      setBusyAction(null);
-    }
-  };
+    void (async () => {
+      try {
+        mutateRoomState((previous) => ({
+          ...previous,
+          session: {
+            ...previous.session,
+            status: 'completed',
+            current_phase: 'completed',
+            ended_at: new Date().toISOString(),
+          },
+        }));
+        await lockLiveAuntMinnieAnswers(currentRoomState.session.id);
+        await refreshWorkspace();
+      } catch (err: any) {
+        await refreshCurrentRoom(currentRoomState.session.id, currentRoomState.onlineParticipantIds);
+        if (!cancelled) {
+          setError(err.message || 'Failed to lock answers.');
+        }
+      } finally {
+        if (!cancelled) {
+          setBusyAction(null);
+          setLockCountdownSeconds(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lockCountdownSeconds]);
 
   const handleDeleteSession = async (sessionId: string) => {
     setBusyAction(`delete-room:${sessionId}`);
@@ -887,7 +1053,9 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
                 busyAction={busyAction}
                 currentUserId={workspace?.currentUserId || null}
                 draftResponsesByPromptId={draftResponsesByPromptId}
+                lockCountdownSeconds={lockCountdownSeconds}
                 onBack={closeRoom}
+                onCancelLockCountdown={() => setLockCountdownSeconds(null)}
                 roomSyncState={roomSyncState}
                 onCompose={openNewPromptComposer}
                 onDraftChange={(promptId, value) =>
@@ -961,6 +1129,27 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
                   questionNumber={composerQuestionNumber}
                   saving={busyAction === 'append-question' || busyAction === 'edit-prompt' || busyAction === 'upload-image'}
                 />
+              </div>
+            </div>
+          )}
+
+          {roomState.isHost && lockCountdownSeconds !== null && lockCountdownSeconds > 0 && (
+            <div className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm">
+              <div className="flex h-full items-center justify-center p-4">
+                <div className="w-full max-w-sm rounded-[28px] border border-white/10 bg-[#101b26] p-5 text-center shadow-[0_30px_80px_rgba(3,10,18,0.55)]">
+                  <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-white/10" />
+                  <p className="text-lg font-semibold text-white">Ending exam in {lockCountdownSeconds}</p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Participants should submit their latest answers now.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setLockCountdownSeconds(null)}
+                    className="mt-5 w-full rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           )}
