@@ -166,6 +166,22 @@ export type LiveAuntMinnieSessionStatus = 'draft' | 'live' | 'paused' | 'complet
 export type LiveAuntMinnieSessionPhase = 'lobby' | 'prompt_open' | 'reveal' | 'completed';
 export type LiveAuntMinnieJudgment = 'correct' | 'partial' | 'incorrect' | 'unreviewed';
 export type LiveAuntMinnieParticipantRole = 'host' | 'participant';
+export type LiveAuntMinnieSyncState = 'connecting' | 'syncing' | 'live' | 'reconnecting' | 'degraded';
+export type LiveAuntMinniePendingMutationKind =
+  | 'create-prompt'
+  | 'update-prompt'
+  | 'submit-response'
+  | 'delete-response'
+  | 'save-answer-key'
+  | 'end-room';
+
+export interface LiveAuntMinniePendingMutation {
+  id: string;
+  kind: LiveAuntMinniePendingMutationKind;
+  targetId?: string;
+  status: 'pending' | 'confirmed' | 'failed';
+  createdAt: string;
+}
 
 export interface LiveAuntMinniePromptImage {
   id: string;

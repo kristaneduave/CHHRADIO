@@ -714,8 +714,9 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
           const next = cloneRoomState(previous);
           next.session = {
             ...next.session,
-            status: 'paused',
-            current_phase: 'prompt_open',
+            status: 'completed',
+            current_phase: 'completed',
+            ended_at: next.session.ended_at || new Date().toISOString(),
           };
           return next;
         });
@@ -908,7 +909,6 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
                       accepted_aliases: [],
                     });
                     updatePromptAnswerKeyLocally(promptId, value);
-                    await refreshCurrentRoom(roomState.session.id, roomState.onlineParticipantIds);
                   } catch (err: any) {
                     setError(err.message || 'Failed to save answer.');
                   } finally {

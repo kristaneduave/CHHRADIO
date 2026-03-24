@@ -85,8 +85,10 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   const statusLabel = isSubmitting ? 'Saving...' : isDirty ? 'Editing...' : savedValue ? 'Saved' : 'Not submitted yet';
 
   useEffect(() => {
-    setCorrectAnswerDraft(normalizedCorrectAnswer);
-  }, [normalizedCorrectAnswer]);
+    if (!isEditingCorrectAnswer) {
+      setCorrectAnswerDraft(normalizedCorrectAnswer);
+    }
+  }, [isEditingCorrectAnswer, normalizedCorrectAnswer]);
 
   useEffect(() => {
     if (normalizedCorrectAnswer) {
@@ -186,7 +188,10 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
                   )}
                   <button
                     type="button"
-                    onClick={() => setIsEditingCorrectAnswer(true)}
+                    onClick={() => {
+                      setCorrectAnswerDraft(normalizedCorrectAnswer);
+                      setIsEditingCorrectAnswer(true);
+                    }}
                     className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:bg-white/10"
                   >
                     Edit

@@ -12,6 +12,7 @@ import {
   LiveAuntMinnieResponse,
   LiveAuntMinnieRoomState,
   LiveAuntMinnieSession,
+  LiveAuntMinnieSessionStatus,
   LiveAuntMinnieSubmitMessagePayload,
   LiveAuntMinnieSubmitResponsePayload,
   Profile,
@@ -365,6 +366,14 @@ const sortParticipants = (participants: LiveAuntMinnieParticipant[]) =>
     (left, right) => new Date(left.joined_at).getTime() - new Date(right.joined_at).getTime(),
   );
 
+const timestampValue = (value?: string | null) => {
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) ? time : 0;
+};
+
+const isEndedStatus = (status: LiveAuntMinnieSessionStatus) =>
+  status === 'completed' || status === 'cancelled';
+
 const withParticipantProfile = <
   T extends { user_id: string; participant?: LiveAuntMinnieResponse['participant'] | LiveAuntMinnieMessage['participant'] | null },
 >(
@@ -378,14 +387,51 @@ const withParticipantProfile = <
     || null,
 });
 
-const applySessionEventToState = (state: LiveAuntMinnieRoomState, row: any) => ({
-  ...state,
-  session: {
-    ...state.session,
-    ...mapSession(row),
-    prompt_count: state.prompts.length,
-  },
-});
+const applySessionEventToState = (state: LiveAuntMinnieRoomState, row: any) => {
+  const incomingSession = mapSession(row);
+  const currentUpdatedAt = timestampValue(state.session.updated_at || state.session.ended_at || state.session.started_at);
+  const incomingUpdatedAt = timestampValue(incomingSession.updated_at || incomingSession.ended_at || incomingSession.started_at);
+
+  if (isEndedStatus(state.session.status) && !isEndedStatus(incomingSession.status)) {
+    return state;
+  }
+
+  if (incomingUpdatedAt && currentUpdatedAt && incomingUpdatedAt < currentUpdatedAt) {
+    return state;
+  }
+
+  return {
+    ...state,
+    session: {
+      ...state.session,
+      ...incomingSession,
+      prompt_count: Math.max(incomingSession.prompt_count, state.prompts.length),
+    },
+  };
+};
+
+const patchPromptImages = (
+  prompt: LiveAuntMinniePrompt,
+  eventType: string,
+  imageRow: any,
+): LiveAuntMinniePrompt => {
+  const image = mapPromptImage(imageRow);
+  const nextImages =
+    eventType === 'DELETE'
+      ? prompt.images.filter((item) => item.id !== image.id)
+      : [...prompt.images.filter((item) => item.id !== image.id), image].sort(
+          (left, right) => left.sort_order - right.sort_order,
+        );
+  const primaryImage = nextImages[0] || null;
+
+  return {
+    ...prompt,
+    images: nextImages,
+    image_url: primaryImage?.image_url || '',
+    image_caption: primaryImage?.caption || null,
+    updated_at: image.updated_at || prompt.updated_at,
+  };
+};
 
 const applyPromptEventToState = (
   state: LiveAuntMinnieRoomState,
@@ -393,32 +439,103 @@ const applyPromptEventToState = (
   row: any,
   userId: string,
 ) => {
-  if (eventType !== 'UPDATE') {
+  const existingPrompt = state.prompts.find((prompt) => prompt.id === row.id);
+
+  if (eventType === 'DELETE') {
+    if (!existingPrompt) {
+      return state;
+    }
+
+    return buildRoomStateFromSlices(
+      {
+        ...state.session,
+        prompt_count: Math.max(state.prompts.length - 1, 0),
+      },
+      state.prompts.filter((prompt) => prompt.id !== row.id),
+      state.participants,
+      state.responses.filter((response) => response.prompt_id !== row.id),
+      state.messages.filter((message) => message.prompt_id !== row.id),
+      userId,
+      state.onlineParticipantIds,
+    );
+  }
+
+  const currentUpdatedAt = timestampValue(existingPrompt?.updated_at || existingPrompt?.created_at);
+  const incomingUpdatedAt = timestampValue(row.updated_at || row.created_at);
+  if (existingPrompt && incomingUpdatedAt && currentUpdatedAt && incomingUpdatedAt < currentUpdatedAt) {
     return state;
   }
 
-  const existingPrompt = state.prompts.find((prompt) => prompt.id === row.id);
+  const patchedPrompt: LiveAuntMinniePrompt = existingPrompt
+    ? {
+        ...existingPrompt,
+        session_id: row.session_id,
+        sort_order: Number(row.sort_order || existingPrompt.sort_order || 0),
+        source_case_id: row.source_case_id || null,
+        image_url: row.image_url,
+        image_caption: row.image_caption || null,
+        question_text: row.question_text || null,
+        official_answer: normalizeOfficialAnswerText(row.official_answer),
+        answer_explanation: row.answer_explanation || null,
+        accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }
+    : {
+        id: row.id,
+        session_id: row.session_id,
+        sort_order: Number(row.sort_order || 0),
+        source_case_id: row.source_case_id || null,
+        image_url: row.image_url || '',
+        image_caption: row.image_caption || null,
+        question_text: row.question_text || null,
+        official_answer: normalizeOfficialAnswerText(row.official_answer),
+        answer_explanation: row.answer_explanation || null,
+        accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
+        images: [],
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      };
+
+  const nextPrompts = [
+    ...state.prompts.filter((prompt) => prompt.id !== patchedPrompt.id),
+    patchedPrompt,
+  ].sort((left, right) => left.sort_order - right.sort_order);
+
+  return buildRoomStateFromSlices(
+    {
+      ...state.session,
+      prompt_count: Math.max(state.session.prompt_count, nextPrompts.length),
+    },
+    nextPrompts,
+    state.participants,
+    state.responses,
+    state.messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+};
+
+const applyPromptImageEventToState = (
+  state: LiveAuntMinnieRoomState,
+  eventType: string,
+  row: any,
+  userId: string,
+) => {
+  const promptId = row.prompt_id as string | undefined;
+  if (!promptId) {
+    return state;
+  }
+
+  const existingPrompt = state.prompts.find((prompt) => prompt.id === promptId);
   if (!existingPrompt) {
     return state;
   }
 
-  const patchedPrompt: LiveAuntMinniePrompt = {
-    ...existingPrompt,
-    session_id: row.session_id,
-    sort_order: Number(row.sort_order || existingPrompt.sort_order || 0),
-    source_case_id: row.source_case_id || null,
-    image_url: row.image_url,
-    image_caption: row.image_caption || null,
-    question_text: row.question_text || null,
-    official_answer: normalizeOfficialAnswerText(row.official_answer),
-    answer_explanation: row.answer_explanation || null,
-    accepted_aliases: Array.isArray(row.accepted_aliases) ? row.accepted_aliases : [],
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  };
+  const patchedPrompt = patchPromptImages(existingPrompt, eventType, row);
 
   const nextPrompts = state.prompts
-    .map((prompt) => (prompt.id === patchedPrompt.id ? patchedPrompt : prompt))
+    .map((prompt) => (prompt.id === existingPrompt.id ? patchedPrompt : prompt))
     .sort((left, right) => left.sort_order - right.sort_order);
 
   return buildRoomStateFromSlices(
@@ -1467,7 +1584,9 @@ export const subscribeToLiveAuntMinnieRoom = async ({
   let lastOnlineParticipantIds: string[] = [];
   let lastState: LiveAuntMinnieRoomState | null = null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let initialSnapshotLoaded = false;
   const pendingRefreshKinds = new Set<'session' | 'prompts' | 'participants' | 'responses' | 'messages'>();
+  const bufferedEvents: Array<() => void> = [];
 
   onConnectionStateChange?.('connecting');
 
@@ -1541,6 +1660,14 @@ export const subscribeToLiveAuntMinnieRoom = async ({
     onConnectionStateChange?.('live');
   };
 
+  const bufferOrApply = (handler: () => void) => {
+    if (!initialSnapshotLoaded) {
+      bufferedEvents.push(handler);
+      return;
+    }
+    handler();
+  };
+
   const channel: RealtimeChannel = supabase.channel(`live-aunt-minnie:${sessionId}`, {
     config: {
       presence: { key: userId },
@@ -1565,60 +1692,103 @@ export const subscribeToLiveAuntMinnieRoom = async ({
     .on('presence', { event: 'join' }, updatePresence)
     .on('presence', { event: 'leave' }, updatePresence)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_sessions', filter: `id=eq.${sessionId}` }, (payload: any) => {
-      if (!lastState || !payload.new) {
-        queueRefresh('session');
-        return;
-      }
-      applyPatchedState(applySessionEventToState(lastState, payload.new));
+      bufferOrApply(() => {
+        if (!lastState || !payload.new) {
+          queueRefresh('session');
+          return;
+        }
+        applyPatchedState(applySessionEventToState(lastState, payload.new));
+      });
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompts', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
-      if (!lastState || payload.eventType !== 'UPDATE' || !payload.new) {
-        queueRefresh('prompts');
-        return;
-      }
-      applyPatchedState(applyPromptEventToState(lastState, payload.eventType, payload.new, userId));
+      bufferOrApply(() => {
+        if (!lastState) {
+          queueRefresh('prompts');
+          return;
+        }
+        const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+        if (!row) {
+          queueRefresh('prompts');
+          return;
+        }
+        const nextState = applyPromptEventToState(lastState, payload.eventType, row, userId);
+        if (nextState === lastState && payload.eventType !== 'UPDATE') {
+          queueRefresh('prompts');
+          return;
+        }
+        applyPatchedState(nextState);
+      });
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompt_images', filter: `session_id=eq.${sessionId}` }, () => queueRefresh('prompts'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompt_images', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
+      bufferOrApply(() => {
+        if (!lastState) {
+          queueRefresh('prompts');
+          return;
+        }
+        const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+        if (!row) {
+          queueRefresh('prompts');
+          return;
+        }
+        const nextState = applyPromptImageEventToState(lastState, payload.eventType, row, userId);
+        if (nextState === lastState) {
+          queueRefresh('prompts');
+          return;
+        }
+        applyPatchedState(nextState);
+      });
+    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_participants', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
-      if (!lastState) {
-        queueRefresh('participants');
-        return;
-      }
-      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
-      if (!row) {
-        queueRefresh('participants');
-        return;
-      }
-      applyPatchedState(applyParticipantEventToState(lastState, payload.eventType, row, userId));
+      bufferOrApply(() => {
+        if (!lastState) {
+          queueRefresh('participants');
+          return;
+        }
+        const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+        if (!row) {
+          queueRefresh('participants');
+          return;
+        }
+        applyPatchedState(applyParticipantEventToState(lastState, payload.eventType, row, userId));
+      });
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_responses', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
-      if (!lastState) {
-        queueRefresh('responses');
-        return;
-      }
-      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
-      if (!row) {
-        queueRefresh('responses');
-        return;
-      }
-      applyPatchedState(applyResponseEventToState(lastState, payload.eventType, row, userId));
+      bufferOrApply(() => {
+        if (!lastState) {
+          queueRefresh('responses');
+          return;
+        }
+        const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+        if (!row) {
+          queueRefresh('responses');
+          return;
+        }
+        applyPatchedState(applyResponseEventToState(lastState, payload.eventType, row, userId));
+      });
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_messages', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
-      if (!lastState) {
-        queueRefresh('messages');
-        return;
-      }
-      const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
-      if (!row) {
-        queueRefresh('messages');
-        return;
-      }
-      applyPatchedState(applyMessageEventToState(lastState, payload.eventType, row, userId));
+      bufferOrApply(() => {
+        if (!lastState) {
+          queueRefresh('messages');
+          return;
+        }
+        const row = payload.eventType === 'DELETE' ? payload.old : payload.new;
+        if (!row) {
+          queueRefresh('messages');
+          return;
+        }
+        applyPatchedState(applyMessageEventToState(lastState, payload.eventType, row, userId));
+      });
     })
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         try {
           await refresh();
+          initialSnapshotLoaded = true;
+          while (bufferedEvents.length > 0) {
+            const nextBufferedEvent = bufferedEvents.shift();
+            nextBufferedEvent?.();
+          }
           const session = lastState?.session || await fetchSession(sessionId);
           await upsertParticipant(sessionId, userId, session.host_user_id === userId ? 'host' : 'participant');
           await channel.track({ user_id: userId, ts: new Date().toISOString() });
