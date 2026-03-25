@@ -49,7 +49,7 @@ describe('AppBootScreen', () => {
       expect(screen.getByText('Tan is checking whether the dashboard survived the last shift change.')).toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(550);
+        vi.advanceTimersByTime(2100);
       });
 
       expect(screen.getByText('Tine is making the front page look less post-call.')).toBeInTheDocument();

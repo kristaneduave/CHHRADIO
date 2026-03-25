@@ -47,7 +47,7 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
     if (messagePool.length <= 1) return;
     const timer = window.setInterval(() => {
       setMessageIndex((previous) => (previous + 1) % messagePool.length);
-    }, 500);
+    }, 2000);
 
     return () => window.clearInterval(timer);
   }, [messagePool]);
@@ -152,9 +152,9 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
                     }}
-                    initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0.65, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.18 }}
+                    initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 10, filter: 'blur(8px)' }}
+                    animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: 'blur(0px)' }}
+                    transition={{ duration: shouldReduceMotion ? 0.12 : 0.34, ease: 'easeOut' }}
                   >
                     {primaryMessage}
                   </motion.p>

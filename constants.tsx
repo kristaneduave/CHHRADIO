@@ -110,6 +110,7 @@ export const SPECIALTIES = [
   'Neuroradiology',
   'Gastrointestinal',
   'Cardiology',
+  'Pediatrics',
   'Orthopedics',
   'Pulmonology',
   'Emergency Medicine',
