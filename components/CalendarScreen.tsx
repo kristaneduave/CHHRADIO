@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarEvent, EventType } from '../types';
+import { CalendarEvent, EventType, UserRole } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
-import { normalizeUserRole } from '../utils/roles';
+import { canManageCalendar, hasRole } from '../utils/roles';
 import { buildEventDateTimeRange, formatWeekRange, getWeekDays, getWeekStart, isSameDay, toLocalDateInputValue } from '../utils/calendarView';
 import { toastError, toastSuccess } from '../utils/toast';
 import TopRightCreateAction from './TopRightCreateAction';
@@ -13,6 +13,7 @@ import CalendarSchedulePanel from './calendar/CalendarSchedulePanel';
 import CalendarEventModal from './calendar/CalendarEventModal';
 import { CalendarViewScope, CalendarViewport } from './calendar/types';
 import { getAppViewport } from './responsive/useViewport';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 type ValidationErrors = {
   title?: string;
@@ -82,7 +83,8 @@ const CalendarScreen: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
   const [currentUserId, setCurrentUserId] = useState('');
-  const [userRole, setUserRole] = useState<'admin' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer'>('resident');
+  const [userRole, setUserRole] = useState<UserRole>('resident');
+  const [userRoles, setUserRoles] = useState<UserRole[]>(['resident']);
   const isMountedRef = useRef(true);
   const eventsFetchSeqRef = useRef(0);
   const searchSeqRef = useRef(0);
@@ -224,13 +226,14 @@ const CalendarScreen: React.FC = () => {
 
   useEffect(() => {
     const loadCurrentUserRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
-      const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-      if (data?.role) setUserRole(normalizeUserRole(data.role));
+      const roleState = await getCurrentUserRoleState();
+      if (roleState) {
+        setUserRole(roleState.primaryRole);
+        setUserRoles(roleState.roles);
+      }
     };
     loadCurrentUserRole();
   }, []);
@@ -405,9 +408,9 @@ const CalendarScreen: React.FC = () => {
     }));
   }, [events, selectedDate, weekDays]);
 
-  const isPrivilegedCalendarManager = ['admin', 'training_officer', 'moderator'].includes(userRole);
+  const isPrivilegedCalendarManager = canManageCalendar(userRoles);
   const canManageEvent = (event: CalendarEvent) =>
-    isPrivilegedCalendarManager || (userRole === 'consultant' && event.created_by === currentUserId);
+    isPrivilegedCalendarManager || (hasRole(userRoles, 'consultant') && event.created_by === currentUserId);
 
   const addCoverage = () => {
     if (coverageDetails.length < 5) {

@@ -10,17 +10,16 @@ import {
   updateResidentEndorsement,
 } from '../services/residentEndorsementService';
 import { createSystemNotification, fetchRecipientUserIdsByRoles } from '../services/newsfeedService';
-import { normalizeUserRole } from '../utils/roles';
+import { canAccessResidentFeatures, canModerateResidentEndorsements, canWriteResidentEndorsements } from '../utils/roles';
 import { toastError, toastSuccess } from '../utils/toast';
 import NewsPageShell from './news/NewsPageShell';
+import { getUserRoleState } from '../services/userRoleService';
 
 interface ResidentEndorsementsScreenProps {
   onBack: () => void;
 }
 
 const DEFAULT_SHIFT: DutyShift = 'AM';
-const ACCESS_ROLES: UserRole[] = ['admin', 'moderator', 'resident'];
-const PRIVILEGED_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
 const ENDORSEMENT_FILES_BUCKET = 'resident-endorsement-files';
 const ENDORSEMENT_CATEGORIES = [
   'General Radiology',
@@ -121,6 +120,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [userId, setUserId] = useState<string>('');
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
 
   const [message, setMessage] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('General Radiology');
@@ -130,9 +130,9 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
   const [editMessage, setEditMessage] = useState('');
   const [editCategory, setEditCategory] = useState<string>('General Radiology');
 
-  const canAccess = userRole ? ACCESS_ROLES.includes(userRole) : false;
-  const canWrite = userRole === 'resident' || userRole === 'admin';
-  const canModerate = userRole ? PRIVILEGED_ROLES.includes(userRole) : false;
+  const canAccess = canAccessResidentFeatures(userRoles);
+  const canWrite = canWriteResidentEndorsements(userRoles);
+  const canModerate = canModerateResidentEndorsements(userRoles);
 
   const handleMigrationUnavailable = useCallback(() => {
     setIsUnavailable(true);
@@ -169,11 +169,14 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
     } = await supabase.auth.getUser();
     if (error || !user) {
       setUserId('');
+      setUserRoles([]);
+      setUserRole(null);
       return;
     }
     setUserId(user.id);
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-    setUserRole(normalizeUserRole(profile?.role));
+    const roleState = await getUserRoleState(user.id);
+    setUserRole(roleState.primaryRole);
+    setUserRoles(roleState.roles);
   }, []);
 
   useEffect(() => {

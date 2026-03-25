@@ -7,6 +7,8 @@ import { fetchWithCache } from '../utils/requestCache';
 import LoadingState from './LoadingState';
 import { Skeleton } from './Skeleton';
 import AnimatedCounter from './AnimatedCounter';
+import { hasAnyRole } from '../utils/roles';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 const ScheduleSkeleton = () => (
   <div className="space-y-2.5 animate-in fade-in duration-500">
@@ -38,6 +40,7 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
 
   const [userId, setUserId] = useState<string>('');
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [snapshotData, setSnapshotData] = useState<DashboardSnapshotData | null>(null);
   const [snapshotErrors, setSnapshotErrors] = useState<
     Partial<Record<'announcements' | 'cases' | 'calendar' | 'leaveToday' | 'onDuty' | 'auth', string>>
@@ -51,7 +54,7 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
   const snapshotSeqRef = React.useRef(0);
   const isMountedRef = React.useRef(true);
 
-  const canEditDuty = userRole === 'admin' || userRole === 'moderator';
+  const canEditDuty = hasAnyRole(userRoles, ['admin', 'moderator']);
   const snapshotHasLeave = (snapshotData?.leaveToday.length || 0) > 0;
   const snapshotHasEvents = todayEventCount > 0;
   const snapshotHasExams = todayExamCount > 0;
@@ -71,12 +74,9 @@ const SnapshotAndOnlineWidget: React.FC<SnapshotAndOnlineWidgetProps> = ({ onNav
       if (!data?.user?.id) return;
       setUserId(data.user.id);
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', data.user.id)
-        .single();
-      setUserRole((profileData?.role as UserRole | undefined) || null);
+      const roleState = await getCurrentUserRoleState();
+      setUserRole(roleState?.primaryRole || null);
+      setUserRoles(roleState?.roles || []);
     };
     init().catch((err) => console.error('Failed to initialize dashboard widget:', err));
   }, []);

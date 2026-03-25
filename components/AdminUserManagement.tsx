@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Profile, UserRole } from '../types';
+import { ensurePrimaryRoleIncluded, normalizeUserRoles } from '../utils/roles';
 
 interface AdminUserManagementProps {
     onClose: () => void;
@@ -10,6 +11,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const ALL_ASSIGNABLE_ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
 
     useEffect(() => {
         fetchUsers();
@@ -24,7 +26,29 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                 .order('full_name', { ascending: true });
 
             if (error) throw error;
-            setUsers(data as Profile[] || []);
+
+            const profileRows = (data as Profile[] | null) || [];
+            const userIds = profileRows.map((user) => user.id);
+            let roleAssignments = new Map<string, UserRole[]>();
+
+            if (userIds.length > 0) {
+                const { data: roleRows, error: roleError } = await supabase
+                    .from('user_roles')
+                    .select('user_id, role')
+                    .in('user_id', userIds);
+
+                if (!roleError) {
+                    for (const row of (roleRows || []) as Array<{ user_id: string; role: UserRole | null }>) {
+                        const current = roleAssignments.get(row.user_id) || [];
+                        roleAssignments.set(row.user_id, normalizeUserRoles([...current, row.role]));
+                    }
+                }
+            }
+
+            setUsers(profileRows.map((user) => ({
+                ...user,
+                roles: ensurePrimaryRoleIncluded(roleAssignments.get(user.id), user.role),
+            })));
         } catch (error) {
             console.error('Error fetching users:', error);
             alert('Failed to load users');
@@ -33,23 +57,44 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
         }
     };
 
-    const updateUserRole = async (userId: string, newRole: UserRole) => {
+    const updateUserRoles = async (userId: string, primaryRole: UserRole, nextRoles: UserRole[]) => {
         try {
+            const normalizedRoles = ensurePrimaryRoleIncluded(nextRoles, primaryRole);
+
             // Optimistic update
-            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: primaryRole, roles: normalizedRoles } : u));
 
             const { error } = await supabase
                 .from('profiles')
-                .update({ role: newRole })
+                .update({ role: primaryRole })
                 .eq('id', userId);
 
-            if (error) {
-                throw error;
+            if (error) throw error;
+
+            const { error: deleteError } = await supabase
+                .from('user_roles')
+                .delete()
+                .eq('user_id', userId);
+
+            if (deleteError) {
+                const message = String(deleteError.message || '').toLowerCase();
+                if (!message.includes('relation') && !message.includes('does not exist') && !message.includes('schema cache')) {
+                    throw deleteError;
+                }
+                return;
             }
-            // Success feedback could be helpful here
+
+            const { error: insertError } = await supabase
+                .from('user_roles')
+                .insert(normalizedRoles.map((role) => ({
+                    user_id: userId,
+                    role,
+                })));
+
+            if (insertError) throw insertError;
         } catch (error: any) {
-            console.error('Error updating role:', error);
-            alert('Failed to update role: ' + error.message);
+            console.error('Error updating roles:', error);
+            alert('Failed to update roles: ' + error.message);
             fetchUsers(); // Revert on error
         }
     };
@@ -59,7 +104,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
         user.username?.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    const ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
+    const getRoleTone = (role?: UserRole | null) => (
+        role === 'admin' ? 'text-rose-400 border-rose-500/30' :
+            role === 'moderator' ? 'text-violet-300 border-violet-500/30' :
+                role === 'training_officer' ? 'text-emerald-400 border-emerald-500/30' :
+                    role === 'consultant' ? 'text-amber-400 border-amber-500/30' :
+                        'text-slate-400'
+    );
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -103,40 +154,95 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                         </div>
                     ) : (
                         filteredUsers.map(user => (
-                            <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-white/10 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0">
-                                        {user.avatar_url ? (
-                                            <img src={user.avatar_url} alt={user.username || 'User'} className="w-full h-full object-cover" />
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-500">
-                                                <span className="material-icons text-lg">person</span>
-                                            </div>
-                                        )}
+                            <div key={user.id} className="rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-white/10">
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)] lg:items-start">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                        <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0">
+                                            {user.avatar_url ? (
+                                                <img src={user.avatar_url} alt={user.username || 'User'} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-500">
+                                                    <span className="material-icons text-lg">person</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-sm font-bold text-slate-200 truncate">{user.full_name || 'Unnamed User'}</h3>
+                                            <p className="text-[10px] text-slate-500 break-all">@{user.username || 'unknown'} ?{user.year_level || 'N/A'}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <h3 className="text-sm font-bold text-slate-200">{user.full_name || 'Unnamed User'}</h3>
-                                        <p className="text-[10px] text-slate-500">@{user.username || 'unknown'} ?{user.year_level || 'N/A'}</p>
+
+                                    <div className="space-y-3">
+                                        <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start">
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Primary role</p>
+                                                </div>
+                                                <p className="text-[10px] leading-4 text-slate-500">Default identity.</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
+                                                        const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                        return (
+                                                            <button
+                                                                key={`primary-${roleOption}`}
+                                                                type="button"
+                                                                onClick={() => updateUserRoles(user.id, roleOption, ensurePrimaryRoleIncluded(user.roles, roleOption))}
+                                                                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
+                                                                    isPrimaryRole
+                                                                        ? `${getRoleTone(roleOption)} bg-white/5`
+                                                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                {roleOption.replace('_', ' ')}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Additional roles</p>
+                                                </div>
+                                                <p className="text-[10px] leading-4 text-slate-500">Active roles control permissions.</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
+                                                        const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
+                                                        const isActive = currentRoles.includes(roleOption);
+                                                        const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                        return (
+                                                            <button
+                                                                key={roleOption}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (isPrimaryRole) return;
+                                                                    const nextRoles = isActive
+                                                                        ? currentRoles.filter((role) => role !== roleOption)
+                                                                        : [...currentRoles, roleOption];
+                                                                    updateUserRoles(user.id, user.role || 'resident', nextRoles);
+                                                                }}
+                                                                disabled={isPrimaryRole}
+                                                                title={isPrimaryRole ? 'Primary role is always active.' : undefined}
+                                                                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
+                                                                    isPrimaryRole
+                                                                        ? `cursor-default ${getRoleTone(roleOption)} bg-white/5`
+                                                                        : isActive
+                                                                            ? 'border-primary/40 bg-primary/15 text-primary'
+                                                                            : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                {roleOption.replace('_', ' ')}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <p className="text-[10px] leading-4 text-slate-500">
+                                                    The primary role stays active automatically. Add roles like <span className="text-slate-400">resident + moderator</span> to combine permissions.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-
-                                <select
-                                    value={user.role || 'resident'}
-                                    onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
-                                    className={`bg-black/40 border border-white/10 rounded-lg py-1.5 px-3 text-xs font-bold uppercase tracking-wider outline-none focus:border-primary transition-colors cursor-pointer
-                                        ${user.role === 'admin' ? 'text-rose-400 border-rose-500/30' :
-                                            user.role === 'moderator' ? 'text-violet-300 border-violet-500/30' :
-                                                user.role === 'training_officer' ? 'text-emerald-400 border-emerald-500/30' :
-                                                user.role === 'consultant' ? 'text-amber-400 border-amber-500/30' :
-                                                    'text-slate-400'}`}
-                                >
-                                    <option value="resident">Resident</option>
-                                    <option value="fellow">Fellow</option>
-                                    <option value="consultant">Consultant</option>
-                                    <option value="training_officer">Training Officer</option>
-                                    <option value="moderator">Moderator</option>
-                                    <option value="admin">Admin</option>
-                                </select>
                             </div>
                         ))
                     )}

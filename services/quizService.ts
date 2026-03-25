@@ -12,6 +12,8 @@ import {
   QuizStatus,
   UserRole,
 } from '../types';
+import { getCurrentUserRoleState } from './userRoleService';
+import { hasAnyRole } from '../utils/roles';
 
 type QuizRow = Quiz & {
   authorProfile?: {
@@ -23,6 +25,7 @@ type QuizRow = Quiz & {
 
 interface QuizWorkspaceData {
   userRole: UserRole | null;
+  userRoles: UserRole[];
   availableQuizzes: QuizListItem[];
   managedQuizzes: QuizListItem[];
   attempts: QuizAttempt[];
@@ -209,7 +212,7 @@ const validateQuestionPayload = (questions: QuizQuestionFormValues[]) => {
   });
 };
 
-export const isQuizAuthorRole = (role: UserRole | null) => !!role && AUTHOR_ROLES.includes(role);
+export const isQuizAuthorRole = (role: UserRole | UserRole[] | null) => hasAnyRole(role, AUTHOR_ROLES);
 
 const loadManagedQuestionCache = async (quizzes: QuizListItem[]) => {
   if (quizzes.length === 0) {
@@ -231,17 +234,17 @@ const loadManagedQuestionCache = async (quizzes: QuizListItem[]) => {
 };
 
 export const getCurrentUserRole = async (): Promise<UserRole | null> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  const roleState = await getCurrentUserRoleState();
+  if (!roleState) {
     return null;
   }
 
-  const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-  if (error) {
-    throw error;
-  }
+  return roleState.primaryRole;
+};
 
-  return (data?.role as UserRole) || 'resident';
+export const getCurrentUserRoles = async (): Promise<UserRole[]> => {
+  const roleState = await getCurrentUserRoleState();
+  return roleState?.roles || [];
 };
 
 export const listAvailableQuizzes = async (): Promise<QuizListItem[]> => {
@@ -274,13 +277,13 @@ export const listManagedQuizzes = async (): Promise<QuizListItem[]> => {
     return [];
   }
 
-  const role = await getCurrentUserRole();
+  const roles = await getCurrentUserRoles();
   let query = supabase
     .from('quizzes')
     .select('*')
     .order('updated_at', { ascending: false });
 
-  if (role !== 'admin') {
+  if (!hasAnyRole(roles, ['admin'])) {
     query = query.eq('created_by', user.id);
   }
 
@@ -622,19 +625,22 @@ export const listMyQuizAttempts = async (): Promise<QuizAttempt[]> => {
 };
 
 const fetchQuizWorkspace = async (): Promise<QuizWorkspaceData> => {
-  const role = await getCurrentUserRole();
+  const roleState = await getCurrentUserRoleState();
+  const role = roleState?.primaryRole || null;
+  const roles = roleState?.roles || [];
 
   const [quizList, attemptList] = await Promise.all([
     listAvailableQuizzes(),
     listMyQuizAttempts(),
   ]);
 
-  if (isQuizAuthorRole(role)) {
+  if (isQuizAuthorRole(roles)) {
     const authorQuizzes = await listManagedQuizzes();
     const quizQuestions = await loadManagedQuestionCache(authorQuizzes);
 
     return {
       userRole: role,
+      userRoles: roles,
       availableQuizzes: quizList,
       managedQuizzes: authorQuizzes,
       attempts: attemptList,
@@ -644,6 +650,7 @@ const fetchQuizWorkspace = async (): Promise<QuizWorkspaceData> => {
 
   return {
     userRole: role,
+    userRoles: roles,
     availableQuizzes: quizList,
     managedQuizzes: [],
     attempts: attemptList,

@@ -11,8 +11,9 @@ import NeedleNavigatorGame from './NeedleNavigatorGame';
 import { getNeedleUserStats } from '../services/needleNavigatorService';
 import PickleballRallyGame from './PickleballRallyGame';
 import { getPickleballUserStats } from '../services/pickleballRallyService';
-import { normalizeUserRole } from '../utils/roles';
+import { canAccessResidentFeatures } from '../utils/roles';
 import PageShell from './ui/PageShell';
+import { getUserRoleState } from '../services/userRoleService';
 const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
@@ -30,6 +31,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+    const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>([]);
     const [isRoleLoading, setIsRoleLoading] = useState(true);
 
     // State for cover overrides: { [slotId]: CoverEntry[] }
@@ -44,14 +46,12 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                 const { data: { user } } = await supabase.auth.getUser();
                 setCurrentUser(user);
                 if (user?.id) {
-                    const { data: profile } = await supabase
-                        .from('profiles')
-                        .select('role')
-                        .eq('id', user.id)
-                        .maybeSingle();
-                    setCurrentUserRole(normalizeUserRole(profile?.role));
+                    const roleState = await getUserRoleState(user.id);
+                    setCurrentUserRole(roleState.primaryRole);
+                    setCurrentUserRoles(roleState.roles);
                 } else {
                     setCurrentUserRole(null);
+                    setCurrentUserRoles([]);
                 }
             } finally {
                 setIsRoleLoading(false);
@@ -157,7 +157,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
     const [pickleballStats, setPickleballStats] = useState<PickleballUserStats | null>(null);
 
     const selectedHospital = CONSULTANT_SCHEDULE.find(h => h.id === selectedHospitalId);
-    const canOpenEndorsements = currentUserRole === 'admin' || currentUserRole === 'moderator' || currentUserRole === 'resident';
+    const canOpenEndorsements = canAccessResidentFeatures(currentUserRoles);
 
     // Get current day
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];

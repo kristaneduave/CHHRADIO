@@ -412,6 +412,13 @@ export interface CalendarEvent {
 
 export type UserRole = 'admin' | 'faculty' | 'moderator' | 'consultant' | 'resident' | 'fellow' | 'training_officer';
 
+export interface UserRoleAssignment {
+  user_id: string;
+  role: UserRole;
+  created_at?: string;
+  created_by?: string | null;
+}
+
 export interface Profile {
   id: string;
   full_name: string | null;
@@ -419,7 +426,8 @@ export interface Profile {
   bio: string | null;
   year_level: string | null;
   avatar_url: string | null;
-  role: UserRole; // Added role field
+  role: UserRole; // Primary role kept for backward compatibility
+  roles?: UserRole[] | null;
   nickname?: string | null;
   title?: string | null;
   motto?: string | null;

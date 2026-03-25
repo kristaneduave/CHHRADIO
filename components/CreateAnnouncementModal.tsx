@@ -4,7 +4,7 @@ import { supabase } from '../services/supabase';
 import { Announcement } from '../types';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
 import LoadingButton from './LoadingButton';
-import { normalizeUserRole } from '../utils/roles';
+import { canManageAnyAnnouncement } from '../utils/roles';
 import { sanitizeNewsContent, sanitizeNewsTitle } from '../utils/newsTextSanitizer';
 import { toastInfo } from '../utils/toast';
 import {
@@ -13,6 +13,7 @@ import {
     normalizeCategoryForStorage,
     normalizeCategoryForUi,
 } from '../utils/newsPresentation';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
@@ -65,11 +66,9 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
             return;
         }
         const loadRole = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-            const role = normalizeUserRole(data?.role);
-            setResolvedCanSetPriorityFlags(['admin', 'training_officer', 'moderator'].includes(role));
+            const roleState = await getCurrentUserRoleState();
+            if (!roleState) return;
+            setResolvedCanSetPriorityFlags(canManageAnyAnnouncement(roleState.roles));
         };
         loadRole();
     }, [canSetPriorityFlagsProp]);

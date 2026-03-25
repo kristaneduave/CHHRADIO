@@ -8,20 +8,21 @@ interface MyQuizAttemptsProps {
 
 const MyQuizAttempts: React.FC<MyQuizAttemptsProps> = ({ attempts }) => {
   return (
-    <div className="glass-card-enhanced rounded-3xl border border-white/10 p-5">
+    <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-5 backdrop-blur-xl">
       <div className="mb-4">
-        <h3 className="text-lg font-bold text-white">My Attempts</h3>
-        <p className="text-sm text-slate-400">Recent quiz performance and review history.</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Review History</p>
+        <h3 className="mt-2 text-xl font-black tracking-tight text-white">My Attempts</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-400">Recent quiz performance and review history.</p>
       </div>
 
       {attempts.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">
+        <div className="rounded-[1.6rem] border border-dashed border-white/10 bg-black/10 p-6 text-sm leading-6 text-slate-400">
           No attempts yet. Start an open quiz to build your resident review history.
         </div>
       ) : (
         <div className="space-y-3">
           {attempts.map((attempt) => (
-            <div key={attempt.id} className="rounded-2xl bg-white/5 border border-white/5 p-4">
+            <div key={attempt.id} className="rounded-[1.6rem] border border-white/5 bg-black/10 p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-white font-semibold">{attempt.quiz?.title || 'Quiz attempt'}</p>

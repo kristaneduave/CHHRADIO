@@ -41,14 +41,14 @@ const ManageQuizzesPanel: React.FC<ManageQuizzesPanelProps> = ({
 
   return (
     <>
-      <div className="glass-card-enhanced rounded-3xl border border-white/10 p-5">
+      <div className="rounded-[2rem] border border-white/10 bg-[#08111a]/80 p-5 backdrop-blur-xl">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-5">
           <div>
             <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Manage Quizzes</p>
-            <h3 className="text-2xl font-bold text-white mt-2">Faculty Authoring Workspace</h3>
-            <p className="text-sm text-slate-400 mt-2">Create and manage quiz drafts, publishing windows, and timed assessments.</p>
+            <h3 className="mt-2 text-2xl font-black tracking-tight text-white">Faculty Authoring Workspace</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Create and manage quiz drafts, publishing windows, and timed assessments.</p>
           </div>
-          <button type="button" onClick={() => setShowCreate(true)} className="px-5 py-3 rounded-2xl bg-primary text-white font-bold">
+          <button type="button" onClick={() => setShowCreate(true)} className="rounded-[1.4rem] border border-cyan-400/20 bg-cyan-500/10 px-5 py-3 font-bold text-white">
             Create Quiz
           </button>
         </div>
@@ -71,10 +71,10 @@ const ManageQuizzesPanel: React.FC<ManageQuizzesPanelProps> = ({
 
         <div className="space-y-3">
           {filteredQuizzes.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-white/10 p-6 text-sm text-slate-400">No quizzes match this filter.</div>
+            <div className="rounded-[1.6rem] border border-dashed border-white/10 p-6 text-sm text-slate-400">No quizzes match this filter.</div>
           ) : (
             filteredQuizzes.map((quiz) => (
-              <div key={quiz.id} className="rounded-2xl bg-white/5 border border-white/5 p-4">
+              <div key={quiz.id} className="rounded-[1.6rem] border border-white/5 bg-black/10 p-4">
                 <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
                   <div>
                     <div className="flex flex-wrap gap-2 mb-2">

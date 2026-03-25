@@ -3,7 +3,7 @@ import { supabase } from '../services/supabase';
 import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
 import AnnouncementDetailModal from './AnnouncementDetailModal';
-import { getRoleLabel, normalizeUserRole } from '../utils/roles';
+import { canCreateAnnouncements, canManageAnyAnnouncement as canManageAnyAnnouncementRole, getRoleLabel, hasRole } from '../utils/roles';
 import { fetchHiddenAnnouncementIds, hideAnnouncementForUser } from '../services/announcementVisibilityService';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
@@ -22,6 +22,7 @@ import NewsCardBase from './news/NewsCardBase';
 import NewsCardBadge from './news/NewsCardBadge';
 import TopRightCreateAction from './TopRightCreateAction';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 interface AnnouncementsScreenProps {
   initialOpenAnnouncementId?: string | null;
@@ -108,7 +109,7 @@ const resolveCategoryIcon = (category: TypeFilter | 'all'): string => {
 };
 
 const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAnnouncementId, onHandledInitialOpen }) => {
-  const [userRole, setUserRole] = useState<UserRole>('resident');
+  const [userRoles, setUserRoles] = useState<UserRole[]>(['resident']);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,9 +151,9 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
     };
   }, []);
 
-  const canCreateAnnouncement = ['admin', 'training_officer', 'moderator', 'consultant'].includes(userRole);
-  const canManageAnyAnnouncement = ['admin', 'training_officer', 'moderator'].includes(userRole);
-  const canManageOwnAnnouncement = (authorId: string) => userRole === 'consultant' && currentUserId === authorId;
+  const canCreateAnnouncement = canCreateAnnouncements(userRoles);
+  const canManageAnyAnnouncement = canManageAnyAnnouncementRole(userRoles);
+  const canManageOwnAnnouncement = (authorId: string) => hasRole(userRoles, 'consultant') && currentUserId === authorId;
   const canManageAnnouncement = (authorId: string) => canManageAnyAnnouncement || canManageOwnAnnouncement(authorId);
 
   useEffect(() => {
@@ -274,8 +275,10 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
         setCurrentUserId(user.id);
         const hiddenIds = await fetchHiddenAnnouncementIds(user.id);
         setHiddenAnnouncementIds(hiddenIds);
-        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        if (data?.role) setUserRole(normalizeUserRole(data.role));
+        const roleState = await getCurrentUserRoleState();
+        if (roleState) {
+          setUserRoles(roleState.roles);
+        }
       }
       await fetchAnnouncements(0, true);
     };

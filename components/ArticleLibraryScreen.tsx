@@ -47,8 +47,9 @@ import {
   PathologyGuidelineContentType,
   UserRole,
 } from '../types';
-import { canEditArticleLibrary, normalizeUserRole } from '../utils/roles';
+import { canEditArticleLibrary } from '../utils/roles';
 import { toastError, toastInfo, toastSuccess } from '../utils/toast';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 const ArticleLibraryRequestDrawer = lazy(() => import('./article-library/ArticleLibraryRequestDrawer'));
 const ArticleLibraryDetailOverlay = lazy(() => import('./article-library/ArticleLibraryDetailOverlay'));
@@ -1159,6 +1160,7 @@ const ArticleLibraryScreen: React.FC = () => {
   const [form, setForm] = useState<SourceFormState>(DEFAULT_FORM);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
+  const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>([]);
   const [isRoleLoading, setIsRoleLoading] = useState(true);
   const [isLoadingLibrary, setIsLoadingLibrary] = useState(cachedLandingItems.length === 0);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -1220,7 +1222,7 @@ const ArticleLibraryScreen: React.FC = () => {
   const [mobileDetailScrollNode, setMobileDetailScrollNode] = useState<HTMLDivElement | null>(null);
   const [desktopDetailScrollNode, setDesktopDetailScrollNode] = useState<HTMLDivElement | null>(null);
 
-  const canEdit = canEditArticleLibrary(currentUserRole);
+  const canEdit = canEditArticleLibrary(currentUserRoles);
   const canSyncFromDrive = form.source_kind === 'google_drive' && !!form.google_drive_file_id.trim();
   const detailScrollContainer = mobileDetailScrollNode;
   const showQuickChips = isSearchFocused || query.trim().length > 0;
@@ -1272,12 +1274,16 @@ const ArticleLibraryScreen: React.FC = () => {
           if (active) {
             setCurrentUserId(null);
             setCurrentUserRole(null);
+            setCurrentUserRoles([]);
           }
           return;
         }
         if (active) setCurrentUserId(user.id);
-        const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
-        if (active) setCurrentUserRole(normalizeUserRole(data?.role));
+        const roleState = await getCurrentUserRoleState();
+        if (active && roleState) {
+          setCurrentUserRole(roleState.primaryRole);
+          setCurrentUserRoles(roleState.roles);
+        }
       } finally {
         if (active) setIsRoleLoading(false);
       }
