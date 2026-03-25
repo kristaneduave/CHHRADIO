@@ -97,6 +97,7 @@ const App: React.FC = () => {
   const [bootPhaseLabel, setBootPhaseLabel] = useState('Resolving access');
   const [bootFunMessage, setBootFunMessage] = useState('Checking if the residents broke the dashboard again...');
   const [bootFunMessageKey, setBootFunMessageKey] = useState('session:checking');
+  const [bootFunMessagePool, setBootFunMessagePool] = useState<string[]>(['Checking if the residents broke the dashboard again...']);
   const [bootTaskSummary, setBootTaskSummary] = useState({ completed: 0, total: 0 });
   const [bootPrincipalKey, setBootPrincipalKey] = useState<string | null>(null);
   const [caseToEdit, setCaseToEdit] = useState<any>(null);
@@ -292,6 +293,11 @@ const App: React.FC = () => {
     setBootStatusLabel('Preparing workspace');
     setBootFunMessage('Preparing your workspace and checking the launch path.');
     setBootFunMessageKey('bootstrap:preparing');
+    setBootFunMessagePool([
+      'Preparing your workspace and checking the launch path.',
+      'Opening the reading room with just enough professionalism.',
+      'Checking whether the portal had coffee before you did.',
+    ]);
     setBootTaskSummary({ completed: 0, total: 0 });
 
     const runBootstrap = async () => {
@@ -305,6 +311,7 @@ const App: React.FC = () => {
           setBootPhaseLabel(snapshot.phaseLabel);
           setBootFunMessage(snapshot.funMessage);
           setBootFunMessageKey(snapshot.funMessageKey);
+          setBootFunMessagePool(snapshot.funMessagePool);
           setBootTaskSummary({
             completed: snapshot.completedTaskCount,
             total: snapshot.totalTaskCount,
@@ -327,6 +334,11 @@ const App: React.FC = () => {
       setBootStatusLabel('Opening workspace');
       setBootFunMessage('The reading room is staged and ready for entry.');
       setBootFunMessageKey('bootstrap:complete');
+      setBootFunMessagePool([
+        'The reading room is staged and ready for entry.',
+        'Everything looks prepared enough to be convincing.',
+        'The portal is open and pretending this was effortless.',
+      ]);
       setIsBootCompleting(true);
       setIsBootReady(true);
       if (bootExitTimerRef.current) {
@@ -352,6 +364,11 @@ const App: React.FC = () => {
       setBootStatusLabel('Opening workspace');
       setBootFunMessage('Opening the reading room despite one dramatic scanner.');
       setBootFunMessageKey('bootstrap:error');
+      setBootFunMessagePool([
+        'Opening the reading room despite one dramatic scanner.',
+        'One dataset complained, but the portal kept walking.',
+        'We lost a little composure, not the workspace.',
+      ]);
       setIsBootCompleting(true);
       setIsBootReady(true);
       if (bootExitTimerRef.current) {
@@ -634,6 +651,7 @@ const App: React.FC = () => {
             statusLabel={bootStatusLabel}
             phaseLabel={bootPhaseLabel}
             funMessage={bootScreenMode === 'session' ? 'Checking session access and preparing a clean launch.' : bootFunMessage}
+            funMessages={bootScreenMode === 'session' ? ['Checking session access and preparing a clean launch.'] : bootFunMessagePool}
             messageKey={bootScreenMode === 'session' ? 'session:checking' : bootFunMessageKey}
             taskSummary={bootTaskSummary}
             isComplete={bootScreenMode === 'bootstrap' && isBootReady}

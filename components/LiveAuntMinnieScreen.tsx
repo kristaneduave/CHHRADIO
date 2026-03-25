@@ -20,7 +20,9 @@ import {
   getLiveAuntMinnieResponsesMeta,
   getLiveAuntMinnieSessionMeta,
   getLiveAuntMinnieWorkspace,
+  getCachedLiveAuntMinnieWorkspace,
   lockLiveAuntMinnieAnswers,
+  preloadLiveAuntMinnieWorkspace,
   submitLiveAuntMinnieResponse,
   subscribeToLiveAuntMinnieRoom,
   updateLiveAuntMinnieAnswerKey,
@@ -192,7 +194,8 @@ const isAnswersLockedError = (message: string) =>
   /answers are locked|no longer accepting answers/i.test(message);
 
 const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) => {
-  const [loading, setLoading] = useState(true);
+  const cachedWorkspace = getCachedLiveAuntMinnieWorkspace();
+  const [loading, setLoading] = useState(!cachedWorkspace);
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<{
@@ -202,7 +205,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     hostSessions: LiveAuntMinnieSession[];
     joinableSessions: LiveAuntMinnieSession[];
     auntMinnieCases: AuntMinnieCaseOption[];
-  } | null>(null);
+  } | null>(cachedWorkspace);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [roomState, setRoomState] = useState<LiveAuntMinnieRoomState | null>(null);
   const [roomSyncState, setRoomSyncState] = useState<RoomSyncState>('connecting');
@@ -307,21 +310,32 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     });
   };
 
-  const loadWorkspace = async () => {
-    setLoading(true);
+  const loadWorkspace = async (options?: { force?: boolean; preserveLoading?: boolean }) => {
+    if (!options?.preserveLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
-      const data = await getLiveAuntMinnieWorkspace();
+      const data = await getLiveAuntMinnieWorkspace({ force: options?.force });
       setWorkspace(data);
     } catch (err: any) {
       setError(err.message || 'Failed to load Aunt Minnie.');
     } finally {
-      setLoading(false);
+      if (!options?.preserveLoading) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    void loadWorkspace();
+    void preloadLiveAuntMinnieWorkspace().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void loadWorkspace({
+      force: Boolean(cachedWorkspace),
+      preserveLoading: Boolean(cachedWorkspace),
+    });
   }, []);
 
   useEffect(() => {
@@ -544,7 +558,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
   const refreshWorkspace = async () => {
     try {
-      const data = await getLiveAuntMinnieWorkspace();
+      const data = await getLiveAuntMinnieWorkspace({ force: true });
       setWorkspace(data);
     } catch {
       // Keep current UI state if workspace refresh fails.
@@ -781,6 +795,10 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const handleSubmitResponse = async (promptId: string, explicitValue?: string) => {
     const currentRoomState = roomStateRef.current;
     if (!currentRoomState) return;
+    if (currentRoomState.isHost) {
+      setError('Hosts cannot submit answers in their own Live Aunt Minnie room.');
+      return;
+    }
     const body = (explicitValue ?? latestDraftResponsesRef.current[promptId] ?? '').trim();
     const existingResponse = currentRoomState.myResponsesByPromptId[promptId];
 

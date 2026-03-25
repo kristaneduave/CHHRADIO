@@ -13,7 +13,7 @@ import PickleballRallyGame from './PickleballRallyGame';
 import { getPickleballUserStats } from '../services/pickleballRallyService';
 import { canAccessResidentFeatures } from '../utils/roles';
 import PageShell from './ui/PageShell';
-import { getUserRoleState } from '../services/userRoleService';
+import { getCachedResidentsCornerBootstrap, getResidentsCornerBootstrap } from '../services/residentsCornerService';
 const SCOPE_REMAINING = 'Remaining studies';
 
 interface ResidentsCornerScreenProps {
@@ -27,37 +27,45 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
 };
 
 const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenResidentEndorsements }) => {
+    const cachedBootstrap = getCachedResidentsCornerBootstrap();
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
-    const [currentUser, setCurrentUser] = useState<any>(null);
-    const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null);
-    const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>([]);
-    const [isRoleLoading, setIsRoleLoading] = useState(true);
+    const [currentUser, setCurrentUser] = useState<any>(cachedBootstrap?.currentUser || null);
+    const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(cachedBootstrap?.currentUserRole || null);
+    const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedBootstrap?.currentUserRoles || []);
+    const [isRoleLoading, setIsRoleLoading] = useState(!cachedBootstrap);
 
     // State for cover overrides: { [slotId]: CoverEntry[] }
-    const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>({});
+    const [coverOverrides, setCoverOverrides] = useState<Record<string, CoverEntry[]>>(cachedBootstrap?.coverOverrides || {});
 
-    const [profiles, setProfiles] = useState<Record<string, Profile>>({});
+    const [profiles, setProfiles] = useState<Record<string, Profile>>(cachedBootstrap?.profiles || {});
+
+    const loadBootstrap = async (options?: { force?: boolean; preserveRoleLoading?: boolean }) => {
+        if (!options?.preserveRoleLoading) {
+            setIsRoleLoading(true);
+        }
+
+        try {
+            const data = await getResidentsCornerBootstrap({ force: options?.force });
+            setCurrentUser(data.currentUser);
+            setCurrentUserRole(data.currentUserRole);
+            setCurrentUserRoles(data.currentUserRoles);
+            setCoverOverrides(data.coverOverrides as Record<string, CoverEntry[]>);
+            setProfiles(data.profiles);
+        } finally {
+            if (!options?.preserveRoleLoading) {
+                setIsRoleLoading(false);
+            }
+        }
+    };
 
     // Fetch user and covers on mount
     useEffect(() => {
         const init = async () => {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                setCurrentUser(user);
-                if (user?.id) {
-                    const roleState = await getUserRoleState(user.id);
-                    setCurrentUserRole(roleState.primaryRole);
-                    setCurrentUserRoles(roleState.roles);
-                } else {
-                    setCurrentUserRole(null);
-                    setCurrentUserRoles([]);
-                }
-            } finally {
-                setIsRoleLoading(false);
-            }
-            fetchCovers();
-            fetchProfiles();
+            await loadBootstrap({
+                force: Boolean(cachedBootstrap),
+                preserveRoleLoading: Boolean(cachedBootstrap),
+            });
         };
         init();
 

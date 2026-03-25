@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import AppBootScreen from './AppBootScreen';
 
 describe('AppBootScreen', () => {
@@ -12,6 +12,10 @@ describe('AppBootScreen', () => {
         statusLabel="Preparing dashboard"
         phaseLabel="Collecting dashboard essentials"
         funMessage="Tan is checking whether the dashboard survived the last shift change."
+        funMessages={[
+          'Tan is checking whether the dashboard survived the last shift change.',
+          'Tine is making the front page look less post-call.',
+        ]}
         messageKey="dashboard:tan"
         taskSummary={{ completed: 5, total: 8 }}
       />
@@ -24,6 +28,34 @@ describe('AppBootScreen', () => {
     expect(screen.queryByText('Collecting dashboard essentials')).not.toBeInTheDocument();
     expect(screen.queryByText(/tasks ready/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Operational preload/i)).not.toBeInTheDocument();
+  });
+
+  it('cycles through fun messages on a timer instead of waiting for progress changes', () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <AppBootScreen
+          mode="bootstrap"
+          progress={40}
+          statusLabel="Preparing dashboard"
+          funMessages={[
+            'Tan is checking whether the dashboard survived the last shift change.',
+            'Tine is making the front page look less post-call.',
+          ]}
+          messageKey="dashboard:cycle"
+        />
+      );
+
+      expect(screen.getByText('Tan is checking whether the dashboard survived the last shift change.')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(550);
+      });
+
+      expect(screen.getByText('Tine is making the front page look less post-call.')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders neutral session copy without technical preload labels', () => {

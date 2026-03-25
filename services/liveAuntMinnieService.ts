@@ -30,6 +30,9 @@ type WorkspaceData = {
   auntMinnieCases: AuntMinnieCaseOption[];
 };
 
+let liveAuntMinnieWorkspaceCache: WorkspaceData | null = null;
+let liveAuntMinnieWorkspacePromise: Promise<WorkspaceData> | null = null;
+
 type SessionRow = LiveAuntMinnieSession;
 
 type PromptImageRow = LiveAuntMinniePromptImage;
@@ -791,25 +794,52 @@ const listJoinableSessions = async () => {
   return ((data || []) as SessionRow[]).map(mapSession);
 };
 
-export const getLiveAuntMinnieWorkspace = async (): Promise<WorkspaceData> => {
-  const { userId, profile } = await getAuthenticatedProfile();
-  const canHost = isLiveAuntMinnieRoomManagerRole(profile?.role);
+export const getLiveAuntMinnieWorkspace = async (options?: { force?: boolean }): Promise<WorkspaceData> => {
+  const force = Boolean(options?.force);
 
-  const [hostSessions, joinableSessions, auntMinnieCases] = await Promise.all([
-    canHost ? listHostSessions(userId) : Promise.resolve([]),
-    listJoinableSessions(),
-    canHost ? listAuntMinnieCases() : Promise.resolve([]),
-  ]);
+  if (!force && liveAuntMinnieWorkspaceCache) {
+    return liveAuntMinnieWorkspaceCache;
+  }
 
-  return {
-    currentUserId: userId,
-    currentUserRole: profile?.role || null,
-    canHost,
-    hostSessions,
-    joinableSessions,
-    auntMinnieCases,
-  };
+  if (!force && liveAuntMinnieWorkspacePromise) {
+    return liveAuntMinnieWorkspacePromise;
+  }
+
+  liveAuntMinnieWorkspacePromise = (async () => {
+    const { userId, profile } = await getAuthenticatedProfile();
+    const canHost = isLiveAuntMinnieRoomManagerRole(profile?.role);
+
+    const [hostSessions, joinableSessions, auntMinnieCases] = await Promise.all([
+      canHost ? listHostSessions(userId) : Promise.resolve([]),
+      listJoinableSessions(),
+      canHost ? listAuntMinnieCases() : Promise.resolve([]),
+    ]);
+
+    return {
+      currentUserId: userId,
+      currentUserRole: profile?.role || null,
+      canHost,
+      hostSessions,
+      joinableSessions,
+      auntMinnieCases,
+    };
+  })()
+    .then((data) => {
+      liveAuntMinnieWorkspaceCache = data;
+      return data;
+    })
+    .finally(() => {
+      liveAuntMinnieWorkspacePromise = null;
+    });
+
+  return liveAuntMinnieWorkspacePromise;
 };
+
+export const preloadLiveAuntMinnieWorkspace = async (): Promise<void> => {
+  await getLiveAuntMinnieWorkspace();
+};
+
+export const getCachedLiveAuntMinnieWorkspace = (): WorkspaceData | null => liveAuntMinnieWorkspaceCache;
 
 export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreatePayload) => {
   validatePromptInputs(payload.prompts);
@@ -1583,6 +1613,9 @@ export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
 export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmitResponsePayload) => {
   const { userId } = await getAuthenticatedProfile();
   const session = await fetchSession(payload.sessionId);
+  if (session.host_user_id === userId) {
+    throw new Error('Hosts cannot submit answers in their own Live Aunt Minnie room.');
+  }
   ensureSessionIsAcceptingAnswers(session);
 
   const responseText = payload.responseText.trim();
@@ -1615,6 +1648,9 @@ export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmit
 export const deleteLiveAuntMinnieResponse = async (payload: Pick<LiveAuntMinnieSubmitResponsePayload, 'sessionId' | 'promptId'>) => {
   const { userId } = await getAuthenticatedProfile();
   const session = await fetchSession(payload.sessionId);
+  if (session.host_user_id === userId) {
+    throw new Error('Hosts cannot delete answers in their own Live Aunt Minnie room.');
+  }
   ensureSessionIsAcceptingAnswers(session);
 
   const { error } = await supabase

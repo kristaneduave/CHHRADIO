@@ -1,4 +1,8 @@
 import { Screen } from '../types';
+import { preloadArticleLibraryLanding } from './articleLibraryService';
+import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
+import { preloadQuizWorkspace } from './quizService';
+import { preloadResidentsCornerBootstrap } from './residentsCornerService';
 
 const memoizeImport = <T,>(loader: () => Promise<T>) => {
   let promise: Promise<T> | null = null;
@@ -43,8 +47,23 @@ const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   'monthly-census': loadMonthlyCensusPage,
 };
 
+const SCREEN_DATA_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
+  'article-library': preloadArticleLibraryLanding,
+  quiz: async () => {
+    await Promise.all([
+      preloadQuizWorkspace(),
+      preloadLiveAuntMinnieWorkspace(),
+    ]);
+  },
+  'live-aunt-minnie': preloadLiveAuntMinnieWorkspace,
+  'residents-corner': preloadResidentsCornerBootstrap,
+};
+
 export const preloadRouteForScreen = async (screen: Screen): Promise<void> => {
-  await SCREEN_PRELOADERS[screen]?.();
+  await Promise.all([
+    SCREEN_PRELOADERS[screen]?.(),
+    SCREEN_DATA_PRELOADERS[screen]?.(),
+  ]);
 };
 
 export const preloadTopRouteChunks = async (): Promise<void> => {

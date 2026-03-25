@@ -1,11 +1,12 @@
-import React from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 
 interface AppBootScreenProps {
   progress: number;
   statusLabel: string;
   phaseLabel?: string;
   funMessage?: string;
+  funMessages?: string[];
   mode?: 'session' | 'bootstrap';
   isComplete?: boolean;
   messageKey?: string;
@@ -18,17 +19,41 @@ interface AppBootScreenProps {
 const AppBootScreen: React.FC<AppBootScreenProps> = ({
   progress,
   funMessage,
+  funMessages,
   mode = 'bootstrap',
   isComplete = false,
   messageKey,
 }) => {
   const shouldReduceMotion = useReducedMotion();
   const normalizedProgress = Math.max(0, Math.min(100, progress));
+  const messagePool = useMemo(() => {
+    const candidates = (funMessages || []).filter((entry): entry is string => Boolean(entry && entry.trim()));
+    if (candidates.length > 0) {
+      return candidates;
+    }
+    return [funMessage || (mode === 'session'
+      ? 'Checking session access and preparing a clean launch.'
+      : 'Preparing your workspace and checking the launch path.')];
+  }, [funMessage, funMessages, mode]);
+  const [messageIndex, setMessageIndex] = useState(0);
   const displayProgressPct = Math.round(normalizedProgress);
   const progressWidth = `${normalizedProgress}%`;
   const glowWidth = `${Math.min(100, normalizedProgress + (isComplete ? 0 : normalizedProgress < 35 ? 6 : 10))}%`;
-  const computedMessageKey = messageKey || funMessage || (mode === 'session' ? 'session:boot-message' : 'boot-message');
-  const primaryMessage = funMessage || (mode === 'session'
+  useEffect(() => {
+    setMessageIndex(0);
+  }, [messageKey]);
+
+  useEffect(() => {
+    if (messagePool.length <= 1) return;
+    const timer = window.setInterval(() => {
+      setMessageIndex((previous) => (previous + 1) % messagePool.length);
+    }, 500);
+
+    return () => window.clearInterval(timer);
+  }, [messagePool]);
+
+  const computedMessageKey = `${messageKey || funMessage || (mode === 'session' ? 'session:boot-message' : 'boot-message')}:${messageIndex}`;
+  const primaryMessage = messagePool[messageIndex] || funMessage || (mode === 'session'
     ? 'Checking session access and preparing a clean launch.'
     : 'Preparing your workspace and checking the launch path.');
   const isEarlyProgress = normalizedProgress < 35;
@@ -118,24 +143,21 @@ const AppBootScreen: React.FC<AppBootScreenProps> = ({
                 </div>
 
                 <div className="mt-3 min-w-0">
-                  <AnimatePresence mode="wait">
-                    <motion.p
-                      key={computedMessageKey}
-                      className="text-[0.78rem] font-semibold leading-5 text-slate-100 sm:text-[0.84rem]"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}
-                      initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
-                      transition={{ duration: 0.24 }}
-                    >
-                      {primaryMessage}
-                    </motion.p>
-                  </AnimatePresence>
+                  <motion.p
+                    key={computedMessageKey}
+                    className="text-[0.78rem] font-semibold leading-5 text-slate-100 sm:text-[0.84rem]"
+                    style={{
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}
+                    initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0.65, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    {primaryMessage}
+                  </motion.p>
                 </div>
               </div>
             </div>

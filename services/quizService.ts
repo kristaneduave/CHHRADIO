@@ -33,8 +33,11 @@ interface QuizWorkspaceData {
 }
 
 const AUTHOR_ROLES: UserRole[] = ['admin', 'faculty'];
+type QuizLandingSnapshot = Pick<QuizWorkspaceData, 'userRole' | 'userRoles' | 'availableQuizzes' | 'attempts'>;
 let quizWorkspaceCache: QuizWorkspaceData | null = null;
 let quizWorkspacePromise: Promise<QuizWorkspaceData> | null = null;
+let quizLandingCache: QuizLandingSnapshot | null = null;
+let quizLandingPromise: Promise<QuizLandingSnapshot> | null = null;
 
 const getAuthenticatedUser = async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -624,7 +627,7 @@ export const listMyQuizAttempts = async (): Promise<QuizAttempt[]> => {
   }));
 };
 
-const fetchQuizWorkspace = async (): Promise<QuizWorkspaceData> => {
+const fetchQuizLandingSnapshot = async (): Promise<QuizLandingSnapshot> => {
   const roleState = await getCurrentUserRoleState();
   const role = roleState?.primaryRole || null;
   const roles = roleState?.roles || [];
@@ -634,26 +637,58 @@ const fetchQuizWorkspace = async (): Promise<QuizWorkspaceData> => {
     listMyQuizAttempts(),
   ]);
 
-  if (isQuizAuthorRole(roles)) {
+  return {
+    userRole: role,
+    userRoles: roles,
+    availableQuizzes: quizList,
+    attempts: attemptList,
+  };
+};
+
+const getQuizLandingSnapshot = async (options?: { force?: boolean }): Promise<QuizLandingSnapshot> => {
+  const force = Boolean(options?.force);
+
+  if (!force && quizWorkspaceCache) {
+    return quizWorkspaceCache;
+  }
+
+  if (!force && quizLandingCache) {
+    return quizLandingCache;
+  }
+
+  if (!force && quizLandingPromise) {
+    return quizLandingPromise;
+  }
+
+  quizLandingPromise = fetchQuizLandingSnapshot()
+    .then((data) => {
+      quizLandingCache = data;
+      return data;
+    })
+    .finally(() => {
+      quizLandingPromise = null;
+    });
+
+  return quizLandingPromise;
+};
+
+const fetchQuizWorkspace = async (options?: { force?: boolean }): Promise<QuizWorkspaceData> => {
+  const landingSnapshot = await getQuizLandingSnapshot(options);
+
+  if (isQuizAuthorRole(landingSnapshot.userRoles)) {
     const authorQuizzes = await listManagedQuizzes();
     const quizQuestions = await loadManagedQuestionCache(authorQuizzes);
 
     return {
-      userRole: role,
-      userRoles: roles,
-      availableQuizzes: quizList,
+      ...landingSnapshot,
       managedQuizzes: authorQuizzes,
-      attempts: attemptList,
       quizQuestions,
     };
   }
 
   return {
-    userRole: role,
-    userRoles: roles,
-    availableQuizzes: quizList,
+    ...landingSnapshot,
     managedQuizzes: [],
-    attempts: attemptList,
     quizQuestions: {},
   };
 };
@@ -669,9 +704,10 @@ export const getQuizWorkspaceData = async (options?: { force?: boolean }): Promi
     return quizWorkspacePromise;
   }
 
-  quizWorkspacePromise = fetchQuizWorkspace()
+  quizWorkspacePromise = fetchQuizWorkspace({ force })
     .then((data) => {
       quizWorkspaceCache = data;
+      quizLandingCache = data;
       return data;
     })
     .finally(() => {
@@ -682,5 +718,19 @@ export const getQuizWorkspaceData = async (options?: { force?: boolean }): Promi
 };
 
 export const preloadQuizWorkspace = async (): Promise<void> => {
-  await getQuizWorkspaceData();
+  await getQuizLandingSnapshot();
+
+  if (!quizWorkspaceCache && !quizWorkspacePromise) {
+    void getQuizWorkspaceData().catch(() => undefined);
+  }
 };
+
+export const getCachedQuizWorkspaceData = (): QuizWorkspaceData | null =>
+  quizWorkspaceCache
+  || (quizLandingCache
+    ? {
+        ...quizLandingCache,
+        managedQuizzes: [],
+        quizQuestions: {},
+      }
+    : null);

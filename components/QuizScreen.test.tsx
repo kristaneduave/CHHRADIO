@@ -5,6 +5,7 @@ import QuizScreen from './QuizScreen';
 import { QuizAttempt, QuizListItem, QuizQuestion } from '../types';
 
 const mockGetQuizWorkspaceData = vi.fn();
+const mockGetCachedQuizWorkspaceData = vi.fn();
 const mockGetQuizWithQuestions = vi.fn();
 const mockStartQuizAttempt = vi.fn();
 const mockSubmitQuizAttempt = vi.fn();
@@ -15,6 +16,7 @@ const mockDuplicateQuiz = vi.fn();
 
 vi.mock('../services/quizService', () => ({
   getQuizWorkspaceData: (...args: unknown[]) => mockGetQuizWorkspaceData(...args),
+  getCachedQuizWorkspaceData: (...args: unknown[]) => mockGetCachedQuizWorkspaceData(...args),
   getQuizWithQuestions: (...args: unknown[]) => mockGetQuizWithQuestions(...args),
   startQuizAttempt: (...args: unknown[]) => mockStartQuizAttempt(...args),
   submitQuizAttempt: (...args: unknown[]) => mockSubmitQuizAttempt(...args),
@@ -79,6 +81,7 @@ const baseQuestions: QuizQuestion[] = [];
 describe('QuizScreen', () => {
   beforeEach(() => {
     mockGetQuizWorkspaceData.mockReset();
+    mockGetCachedQuizWorkspaceData.mockReset();
     mockGetQuizWithQuestions.mockReset();
     mockStartQuizAttempt.mockReset();
     mockSubmitQuizAttempt.mockReset();
@@ -86,6 +89,7 @@ describe('QuizScreen', () => {
     mockUpdateQuiz.mockReset();
     mockDeleteQuiz.mockReset();
     mockDuplicateQuiz.mockReset();
+    mockGetCachedQuizWorkspaceData.mockReturnValue(null);
   });
 
   it('renders the landing view by default with the two primary options', async () => {

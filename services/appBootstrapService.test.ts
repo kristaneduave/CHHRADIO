@@ -8,6 +8,7 @@ const {
   preloadNewsfeedData,
   preloadProfileHome,
   preloadPublishedCases,
+  preloadLiveAuntMinnieWorkspace,
   preloadMajorRouteChunks,
   preloadNonCriticalRouteChunks,
 } = vi.hoisted(() => ({
@@ -18,6 +19,7 @@ const {
   preloadNewsfeedData: vi.fn(async () => undefined),
   preloadProfileHome: vi.fn(async () => undefined),
   preloadPublishedCases: vi.fn(async () => undefined),
+  preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
   preloadMajorRouteChunks: vi.fn(async () => undefined),
   preloadNonCriticalRouteChunks: vi.fn(async () => undefined),
 }));
@@ -50,6 +52,10 @@ vi.mock('./profileHomeService', () => ({
 
 vi.mock('./publishedCasesService', () => ({
   preloadPublishedCases,
+}));
+
+vi.mock('./liveAuntMinnieService', () => ({
+  preloadLiveAuntMinnieWorkspace,
 }));
 
 vi.mock('./routePreloadService', () => ({

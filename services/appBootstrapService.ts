@@ -7,6 +7,7 @@ import { preloadNewsfeedData } from './newsfeedService';
 import { preloadProfileHome } from './profileHomeService';
 import { preloadPublishedCases } from './publishedCasesService';
 import { preloadQuizWorkspace } from './quizService';
+import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
 import { preloadMajorRouteChunks, preloadNonCriticalRouteChunks } from './routePreloadService';
 
 export type AppBootstrapTaskName =
@@ -19,6 +20,7 @@ export type AppBootstrapTaskName =
   | 'article-library-data'
   | 'activity-data'
   | 'quiz-data'
+  | 'live-aunt-minnie-data'
   | 'anatomy-route-chunk';
 
 type TaskStatus = 'pending' | 'running' | 'done' | 'failed';
@@ -34,6 +36,7 @@ export interface AppBootstrapProgressSnapshot {
   currentTaskName?: AppBootstrapTaskName;
   funMessage: string;
   funMessageKey: string;
+  funMessagePool: string[];
 }
 
 export interface AppBootstrapTaskResult {
@@ -72,6 +75,9 @@ const FALLBACK_FUN_MESSAGES = [
   'Checking if the residents broke the dashboard again...',
   'Warming up the PACS-adjacent vibes...',
   'Making the homepage look suspiciously prepared...',
+  'Reassuring the dashboard that this is a routine opening, not a surprise audit...',
+  'Untangling three browser tabs, two coffee plans, and one suspiciously brave login...',
+  'Convincing the reading room that loading counts as movement...',
 ];
 const BOOT_MESSAGE_HISTORY_KEY = 'radcore:boot-message-history';
 const MAX_RECENT_BOOT_MESSAGES = 24;
@@ -125,6 +131,9 @@ const buildResidentFunMessage = (seed: string, actions: string[]) => {
     'already ',
     'quietly ',
     'still ',
+    'allegedly ',
+    'somehow ',
+    'very confidently ',
   ];
 
   return actions.flatMap((action, index) =>
@@ -215,6 +224,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         'getting the reading-room controls to behave.',
         'opening the major rooms.',
         'waking the whole shell up.',
+        'checking which screen will act dramatic first.',
+        'convincing the tabs to look clinically professional.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadMajorRouteChunks();
@@ -233,6 +244,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         'lining up the teaching files.',
         'putting the archive in order.',
         'making the old cases easier to find.',
+        'pretending the archive was always this organized.',
+        'teaching the database to remember where the weird cases went.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadPublishedCases();
@@ -251,6 +264,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         'straightening the article shelf.',
         'pulling the reporting pearls together.',
         'setting the article room up.',
+        'reshelving the pearls before anyone notices the mess.',
+        'making the library look like people definitely return things on time.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadArticleLibraryLanding();
@@ -272,6 +287,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'making the front page look calmer.',
               'lining up the home screen.',
               'getting the command deck presentable.',
+              'wiping the fingerprints off the command deck.',
+              'making the front page look less like post-call improvisation.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchDashboardSnapshot();
@@ -290,6 +307,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'untangling announcements.',
               'putting the updates where people can find them.',
               'stacking fresh alerts.',
+              'separating urgent notices from dramatic but non-urgent notices.',
+              'checking who posted at 2 AM with dangerous confidence.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadNewsfeedData(userId);
@@ -308,6 +327,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'making the profile corner look prepared.',
               'arranging the resident details.',
               'getting the personal workspace ready.',
+              'making the profile wall look intentional.',
+              'confirming that everyone still has a face, a role, and at least one opinion.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadProfileHome(userId);
@@ -326,6 +347,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'convincing the duty roster to behave.',
               'lining up the schedule.',
               'putting the calendar back together.',
+              'asking the calendar to stop moving things around.',
+              'double-checking whether that meeting was real or just folklore.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await CalendarService.preloadCalendarData(new Date(), 10);
@@ -344,6 +367,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'tracking the latest clicks.',
               'reading the recent trail.',
               'checking the latest movement through the portal.',
+              'investigating who touched everything five minutes before sign-out.',
+              'reconstructing the timeline like a very petty detective.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await fetchRecentActivity(userId, 20);
@@ -362,6 +387,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'lining up the quiz room.',
               'getting the question bank ready.',
               'preparing the quiz corner.',
+              'making the distractors look unfair but educational.',
+              'checking whether the answer key is behaving suspiciously well.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
               await preloadQuizWorkspace();
@@ -372,6 +399,23 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
 
   const backgroundTasks: AppBootstrapTask[] = [
     {
+      name: 'live-aunt-minnie-data',
+      label: 'Preparing Aunt Minnie workspace',
+      weight: 0,
+      blocking: false,
+      group: 'post-release',
+      messagePool: buildTaskMessagePool('live-aunt-minnie-data', [
+        'quietly opening the Aunt Minnie room in the background.',
+        'lining up the image-first session cards.',
+        'warming the live rounds board for later.',
+        'hanging the weird but teachable images on the wall.',
+        'making the image room look calm before the pattern recognition begins.',
+      ], runSeed).map((entry) => entry.text),
+      run: async () => {
+        await preloadLiveAuntMinnieWorkspace();
+      },
+    },
+    {
       name: 'anatomy-route-chunk',
       label: 'Warming Anatomy screen',
       weight: 0,
@@ -381,6 +425,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         'quietly wheeling anatomy into the reading room for later.',
         'parking the anatomy atlas for later.',
         'bringing the anatomy shelf in.',
+        'asking anatomy to stay on standby and not become the main character yet.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadNonCriticalRouteChunks();
@@ -417,6 +462,9 @@ const buildProgressSnapshot = (
       ? GROUP_PHASE_LABELS[activeTask.group]
       : 'Preparing workspace';
   const funMessage = stableMessageForTask(activeTask, runSeed);
+  const funMessagePool = activeTask?.messagePool?.length
+    ? activeTask.messagePool
+    : FALLBACK_FUN_MESSAGES;
   const statusLabel = releaseReady
     ? 'Opening workspace'
     : failedBlockingTask && completedTaskCount < blockingTasks.length
@@ -433,6 +481,7 @@ const buildProgressSnapshot = (
     currentTaskName: activeTask?.name,
     funMessage: funMessage.text,
     funMessageKey: funMessage.key,
+    funMessagePool,
   };
 };
 

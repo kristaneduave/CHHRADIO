@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { QuizAttempt, QuizAuthorFormValues, QuizCorrectOption, QuizListItem, QuizQuestion, UserRole } from '../types';
 import {
+  getCachedQuizWorkspaceData,
   createQuiz,
   deleteQuiz,
   duplicateQuiz,
@@ -29,17 +30,18 @@ interface QuizScreenProps {
 }
 
 const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
-  const [userRoles, setUserRoles] = useState<UserRole[]>([]);
-  const [availableQuizzes, setAvailableQuizzes] = useState<QuizListItem[]>([]);
-  const [managedQuizzes, setManagedQuizzes] = useState<QuizListItem[]>([]);
-  const [attempts, setAttempts] = useState<QuizAttempt[]>([]);
-  const [quizQuestions, setQuizQuestions] = useState<Record<string, QuizQuestion[]>>({});
+  const cachedWorkspace = getCachedQuizWorkspaceData();
+  const [userRoles, setUserRoles] = useState<UserRole[]>(cachedWorkspace?.userRoles || []);
+  const [availableQuizzes, setAvailableQuizzes] = useState<QuizListItem[]>(cachedWorkspace?.availableQuizzes || []);
+  const [managedQuizzes, setManagedQuizzes] = useState<QuizListItem[]>(cachedWorkspace?.managedQuizzes || []);
+  const [attempts, setAttempts] = useState<QuizAttempt[]>(cachedWorkspace?.attempts || []);
+  const [quizQuestions, setQuizQuestions] = useState<Record<string, QuizQuestion[]>>(cachedWorkspace?.quizQuestions || {});
   const [activeQuiz, setActiveQuiz] = useState<QuizListItem | null>(null);
   const [activeQuestions, setActiveQuestions] = useState<QuizQuestion[]>([]);
   const [activeAttempt, setActiveAttempt] = useState<QuizAttempt | null>(null);
   const [reviewAttempt, setReviewAttempt] = useState<QuizAttempt | null>(null);
   const [mode, setMode] = useState<ScreenMode>('landing');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedWorkspace);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manageOpen, setManageOpen] = useState(false);
