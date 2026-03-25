@@ -1,6 +1,9 @@
 import { Screen } from '../types';
 import { preloadArticleLibraryLanding } from './articleLibraryService';
+import { preloadAnnouncementsWorkspace } from './announcementsWorkspaceService';
+import { preloadCalendarWorkspace } from './calendarWorkspaceService';
 import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
+import { preloadCurrentProfileHome } from './profileHomeService';
 import { preloadQuizWorkspace } from './quizService';
 import { preloadResidentsCornerBootstrap } from './residentsCornerService';
 
@@ -49,6 +52,9 @@ const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
 
 const SCREEN_DATA_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   'article-library': preloadArticleLibraryLanding,
+  announcements: preloadAnnouncementsWorkspace,
+  calendar: preloadCalendarWorkspace,
+  profile: preloadCurrentProfileHome,
   quiz: async () => {
     await Promise.all([
       preloadQuizWorkspace(),

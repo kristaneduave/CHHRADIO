@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { NewsfeedOnlineUser, UserRole } from '../types';
 import { fetchWithCache } from '../utils/requestCache';
+import { normalizeUserRole } from '../utils/roles';
 
 interface PresencePayload {
   user_id: string;
@@ -175,7 +176,7 @@ export const fetchOnlineProfiles = async (userIds: string[]): Promise<NewsfeedOn
           (profile.full_name as string | null) ||
           buildFallbackName(profile.id as string),
         avatarUrl: (profile.avatar_url as string | null) || null,
-        role: (profile.role as UserRole | undefined) || undefined,
+        role: profile.role ? normalizeUserRole(profile.role) : undefined,
       } satisfies NewsfeedOnlineUser,
     ]),
   );

@@ -3,23 +3,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   fetchRecentActivity,
   preloadArticleLibraryLanding,
-  preloadCalendarData,
   fetchDashboardSnapshot,
   preloadNewsfeedData,
   preloadProfileHome,
   preloadPublishedCases,
   preloadLiveAuntMinnieWorkspace,
+  preloadCalendarWorkspace,
   preloadMajorRouteChunks,
   preloadNonCriticalRouteChunks,
 } = vi.hoisted(() => ({
   fetchRecentActivity: vi.fn(async () => []),
   preloadArticleLibraryLanding: vi.fn(async () => undefined),
-  preloadCalendarData: vi.fn(async () => undefined),
   fetchDashboardSnapshot: vi.fn(async () => undefined),
   preloadNewsfeedData: vi.fn(async () => undefined),
   preloadProfileHome: vi.fn(async () => undefined),
   preloadPublishedCases: vi.fn(async () => undefined),
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
+  preloadCalendarWorkspace: vi.fn(async () => undefined),
   preloadMajorRouteChunks: vi.fn(async () => undefined),
   preloadNonCriticalRouteChunks: vi.fn(async () => undefined),
 }));
@@ -32,10 +32,8 @@ vi.mock('./articleLibraryService', () => ({
   preloadArticleLibraryLanding,
 }));
 
-vi.mock('./CalendarService', () => ({
-  CalendarService: {
-    preloadCalendarData,
-  },
+vi.mock('./calendarWorkspaceService', () => ({
+  preloadCalendarWorkspace,
 }));
 
 vi.mock('./dashboardSnapshotService', () => ({

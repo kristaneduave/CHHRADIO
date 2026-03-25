@@ -34,6 +34,9 @@ import { useAppViewport } from './responsive/useViewport';
 import PageShell from './ui/PageShell';
 import PageHeader from './ui/PageHeader';
 import PageSection from './ui/PageSection';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
+import { canManageUsers, getRoleLabel } from '../utils/roles';
+import { getCurrentUserRoleState } from '../services/userRoleService';
 
 interface ProfileScreenProps {
   currentUserId?: string | null;
@@ -75,6 +78,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedWorkspace?.profileRecord?.role ? [cachedWorkspace.profileRecord.role as UserRole] : []);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const [profile, setProfile] = useState({
@@ -180,6 +184,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
         setProfileNotesUserId(user.id);
 
         const workspace = await getProfileHomeWorkspace(user.id);
+        const roleState = await getCurrentUserRoleState();
+        if (roleState) {
+          setCurrentUserRoles(roleState.roles);
+        }
         applyWorkspaceData(user, workspace);
       } catch (error) {
         console.error('Error fetching profile data:', error);
@@ -662,10 +670,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
 
   return (
     <PageShell layoutMode="split">
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500" data-profile-viewport={viewport}>
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6" data-profile-viewport={viewport}>
+      <PageHeader
+        title="Profile"
+        description="Your account, private notes, and saved activity."
+      />
       <div className="xl:grid xl:grid-cols-[340px_minmax(0,1fr)] xl:items-start xl:gap-6">
       <aside className="space-y-6 xl:sticky xl:top-6">
-      <PageSection className="space-y-6 bg-[#0a0f18]/70">
+      <PageSection className="space-y-6 bg-white/[0.03] border-white/8 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)]">
       <div className="relative mb-5 flex h-24 w-24 cursor-pointer group mx-auto z-10" onClick={() => fileInputRef.current?.click()}>
         <div className="absolute -inset-2 rounded-full bg-primary/18 blur-xl opacity-55 transition-opacity duration-300 group-hover:opacity-75" />
         <div className="absolute -inset-[3px] rounded-full border border-primary/18 opacity-70 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition-opacity duration-300 group-hover:opacity-90" />
@@ -710,7 +722,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
           <ResidentBadges activeBadges={activeBadges} />
 
           {/* Stats Box */}
-          <div className="flex justify-center md:justify-start gap-8 mt-6 bg-white/[0.02] border border-white/5 rounded-2xl p-4 md:px-8 max-w-fit shadow-xl backdrop-blur-sm">
+          <div className="flex justify-center md:justify-start gap-8 mt-6 rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4 md:px-8 max-w-fit shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-sm">
             <div className="text-center md:text-left group">
               <span className="block text-2xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
               <span className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mt-1 block transition-colors">Total Cases</span>
@@ -734,11 +746,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
         />
       )}
 
-      {message && (
-        <div className={`mt-4 px-4 py-2 rounded-xl text-xs font-bold z-10 ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-          {message.text}
-        </div>
-      )}
+      {message ? <ScreenStatusNotice message={message.text} tone={message.type} className="mt-4" /> : null}
 
       {/* Settings Block */}
       <div>
@@ -760,7 +768,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
             </div>
 
             {/* Admin Action */}
-            {profile.role === 'admin' && (
+            {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
               <button
                 onClick={() => setShowAdminPanel(true)}
                 className="w-full p-2.5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 hover:bg-rose-500/[0.08] hover:border-rose-500/20 transition-all text-left flex items-center justify-between group"
@@ -832,7 +840,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
       <main className="space-y-6 mt-6 xl:mt-0">
 
       {/* My Notes Section */}
-      <PageSection className="bg-[#0a0f18]/72">
+      <PageSection className="bg-white/[0.03] border-white/8 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)]">
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">My Notes</h2>
           <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Private to your account</span>
@@ -899,7 +907,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
       />
 
       {/* Hidden News Section */}
-      <PageSection className="bg-[#0a0f18]/72">
+      <PageSection className="bg-white/[0.03] border-white/8 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)]">
         <div className="mb-4 ml-2 flex items-center justify-between">
           <h2 className="text-[11px] font-black text-slate-500 uppercase tracking-[0.2em] mt-2">Hidden News</h2>
           {hasVisibleHiddenNews && (

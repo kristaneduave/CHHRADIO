@@ -2,18 +2,32 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const {
   preloadArticleLibraryLanding,
+  preloadAnnouncementsWorkspace,
+  preloadCalendarWorkspace,
   preloadQuizWorkspace,
   preloadLiveAuntMinnieWorkspace,
+  preloadCurrentProfileHome,
   preloadResidentsCornerBootstrap,
 } = vi.hoisted(() => ({
   preloadArticleLibraryLanding: vi.fn(async () => undefined),
+  preloadAnnouncementsWorkspace: vi.fn(async () => undefined),
+  preloadCalendarWorkspace: vi.fn(async () => undefined),
   preloadQuizWorkspace: vi.fn(async () => undefined),
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
+  preloadCurrentProfileHome: vi.fn(async () => undefined),
   preloadResidentsCornerBootstrap: vi.fn(async () => undefined),
 }));
 
 vi.mock('./articleLibraryService', () => ({
   preloadArticleLibraryLanding,
+}));
+
+vi.mock('./announcementsWorkspaceService', () => ({
+  preloadAnnouncementsWorkspace,
+}));
+
+vi.mock('./calendarWorkspaceService', () => ({
+  preloadCalendarWorkspace,
 }));
 
 vi.mock('./quizService', () => ({
@@ -22,6 +36,10 @@ vi.mock('./quizService', () => ({
 
 vi.mock('./liveAuntMinnieService', () => ({
   preloadLiveAuntMinnieWorkspace,
+}));
+
+vi.mock('./profileHomeService', () => ({
+  preloadCurrentProfileHome,
 }));
 
 vi.mock('./residentsCornerService', () => ({
@@ -34,6 +52,9 @@ describe('routePreloadService', () => {
     preloadQuizWorkspace.mockClear();
     preloadLiveAuntMinnieWorkspace.mockClear();
     preloadArticleLibraryLanding.mockClear();
+    preloadAnnouncementsWorkspace.mockClear();
+    preloadCalendarWorkspace.mockClear();
+    preloadCurrentProfileHome.mockClear();
     preloadResidentsCornerBootstrap.mockClear();
   });
 
@@ -61,6 +82,30 @@ describe('routePreloadService', () => {
     await preloadRouteForScreen('article-library');
 
     expect(preloadArticleLibraryLanding).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms calendar workspace data when preloading calendar', async () => {
+    const { preloadRouteForScreen } = await import('./routePreloadService');
+
+    await preloadRouteForScreen('calendar');
+
+    expect(preloadCalendarWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms announcements workspace data when preloading announcements', async () => {
+    const { preloadRouteForScreen } = await import('./routePreloadService');
+
+    await preloadRouteForScreen('announcements');
+
+    expect(preloadAnnouncementsWorkspace).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms current profile workspace data when preloading profile', async () => {
+    const { preloadRouteForScreen } = await import('./routePreloadService');
+
+    await preloadRouteForScreen('profile');
+
+    expect(preloadCurrentProfileHome).toHaveBeenCalledTimes(1);
   });
 
   it('warms residents corner bootstrap data when preloading residents corner', async () => {

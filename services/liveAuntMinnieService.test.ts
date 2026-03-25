@@ -5,8 +5,15 @@ describe('liveAuntMinnieService helpers', () => {
   it('recognizes host roles', () => {
     expect(__testables.isLiveAuntMinnieHostRole('consultant')).toBe(true);
     expect(__testables.isLiveAuntMinnieHostRole('faculty')).toBe(true);
+    expect(__testables.isLiveAuntMinnieHostRole(['admin', 'resident'])).toBe(true);
     expect(__testables.isLiveAuntMinnieHostRole('resident')).toBe(false);
     expect(__testables.isLiveAuntMinnieHostRole(null)).toBe(false);
+  });
+
+  it('recognizes room managers from combined roles', () => {
+    expect(__testables.isLiveAuntMinnieRoomManagerRole(['training_officer', 'resident'])).toBe(true);
+    expect(__testables.isLiveAuntMinnieRoomManagerRole(['admin', 'resident'])).toBe(true);
+    expect(__testables.isLiveAuntMinnieRoomManagerRole(['consultant', 'resident'])).toBe(false);
   });
 
   it('builds uppercase join codes', () => {

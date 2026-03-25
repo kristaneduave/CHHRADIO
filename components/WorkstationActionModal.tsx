@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CurrentWorkstationStatus } from '../types';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface WorkstationActionModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen || !workstation) return null;
 
@@ -36,12 +38,13 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
 
   const handleClaim = async () => {
     setIsSubmitting(true);
+    setError(null);
     try {
       await onClaim(workstation.id);
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert(err?.message ? `Failed to claim workstation: ${err.message}` : 'Failed to claim workstation');
+      setError(err?.message ? `Failed to claim workstation: ${err.message}` : 'Failed to claim workstation');
     } finally {
       setIsSubmitting(false);
     }
@@ -49,13 +52,14 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
 
   const handleUpdateStatus = async (message: string | null) => {
     setIsSubmitting(true);
+    setError(null);
     try {
       await onUpdateStatus(workstation.id, message);
       setCustomMessage('');
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert(err?.message ? `Failed to update status: ${err.message}` : 'Failed to update status');
+      setError(err?.message ? `Failed to update status: ${err.message}` : 'Failed to update status');
     } finally {
       setIsSubmitting(false);
     }
@@ -64,12 +68,13 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
   const handleRelease = async () => {
     if (!confirm('Are you sure you want to release this workstation?')) return;
     setIsSubmitting(true);
+    setError(null);
     try {
       await onRelease(workstation.id);
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert(err?.message ? `Failed to release workstation: ${err.message}` : 'Failed to release workstation');
+      setError(err?.message ? `Failed to release workstation: ${err.message}` : 'Failed to release workstation');
     } finally {
       setIsSubmitting(false);
     }
@@ -104,6 +109,7 @@ const WorkstationActionModal: React.FC<WorkstationActionModalProps> = ({
         </div>
 
         <div className="p-5 space-y-5">
+          {error ? <ScreenStatusNotice message={error} tone="error" /> : null}
           {isAvailable && (
             <div className="text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center mx-auto mb-2">

@@ -14,6 +14,7 @@ import {
     normalizeCategoryForUi,
 } from '../utils/newsPresentation';
 import { getCurrentUserRoleState } from '../services/userRoleService';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface CreateAnnouncementModalProps {
     onClose: () => void;
@@ -321,7 +322,7 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
                 toastInfo('Formatting updated', 'Emoji characters were removed to keep news professional.');
             }
             if (notificationDeliveryWarning) {
-                window.alert(notificationDeliveryWarning);
+                toastInfo('News saved with warning', notificationDeliveryWarning.replace(/\n+/g, ' '));
             }
         } catch (err: any) {
             console.error('Error saving announcement:', err);
@@ -360,10 +361,11 @@ const CreateAnnouncementModal: React.FC<CreateAnnouncementModalProps> = ({ onClo
 
                 <div className="p-5 space-y-6 overflow-y-auto custom-scrollbar flex-1">
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3">
-                            <span className="material-icons text-lg">error_outline</span>
-                            {error}
-                        </div>
+                        <ScreenStatusNotice
+                            message={error}
+                            tone="error"
+                            className="mb-6"
+                        />
                     )}
 
                     <form onSubmit={handleSubmit} id="create-announcement-form" className="space-y-6">

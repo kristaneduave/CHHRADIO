@@ -1,5 +1,6 @@
 import React from 'react';
 import { EventType } from '../../types';
+import InlinePillGroup from '../ui/InlinePillGroup';
 import { CalendarFilterOption, CalendarScopeOption, CalendarViewScope, CalendarViewport } from './types';
 
 interface CalendarFilterDrawerProps {
@@ -62,18 +63,14 @@ const CalendarFilterDrawer: React.FC<CalendarFilterDrawerProps> = ({
       <div className="space-y-4">
         <div className="space-y-1.5">
           <label className="block text-[11px] font-medium text-slate-300">Event type</label>
-          <select
-            value={draftFilter}
-            onChange={(e) => onDraftFilterChange(e.target.value as EventType | 'all')}
-            aria-label="Event type"
-            className="w-full appearance-none rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-[12px] text-white outline-none transition focus:border-cyan-400/35"
-          >
-            {eventTypeOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <div className="rounded-2xl border border-white/10 bg-slate-950/65 p-3">
+            <InlinePillGroup
+              options={eventTypeOptions.map((option) => option.id)}
+              value={draftFilter}
+              onChange={(value) => onDraftFilterChange(value as EventType | 'all')}
+              getLabel={(value) => eventTypeOptions.find((option) => option.id === value)?.label || value}
+            />
+          </div>
         </div>
 
         <div className="space-y-2">

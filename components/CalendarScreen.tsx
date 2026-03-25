@@ -3,7 +3,7 @@ import { CalendarEvent, EventType, UserRole } from '../types';
 import { CalendarService } from '../services/CalendarService';
 import { supabase } from '../services/supabase';
 import { createSystemNotification, fetchAllRecipientUserIds } from '../services/newsfeedService';
-import { canManageCalendar, hasRole } from '../utils/roles';
+import { canManageCalendar, getCapabilitySet, hasRole } from '../utils/roles';
 import { buildEventDateTimeRange, formatWeekRange, getWeekDays, getWeekStart, isSameDay, toLocalDateInputValue } from '../utils/calendarView';
 import { toastError, toastSuccess } from '../utils/toast';
 import TopRightCreateAction from './TopRightCreateAction';
@@ -13,6 +13,10 @@ import CalendarSchedulePanel from './calendar/CalendarSchedulePanel';
 import CalendarEventModal from './calendar/CalendarEventModal';
 import { CalendarViewScope, CalendarViewport } from './calendar/types';
 import { getAppViewport } from './responsive/useViewport';
+import { getCachedCalendarWorkspace } from '../services/calendarWorkspaceService';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
+import PageHeader from './ui/PageHeader';
+import PageShell from './ui/PageShell';
 import { getCurrentUserRoleState } from '../services/userRoleService';
 
 type ValidationErrors = {
@@ -50,13 +54,14 @@ const getCalendarViewport = (): CalendarViewport => {
 };
 
 const CalendarScreen: React.FC = () => {
+  const cachedWorkspace = getCachedCalendarWorkspace();
   const [viewport, setViewport] = useState<CalendarViewport>(getCalendarViewport);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>(cachedWorkspace?.events || []);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>(cachedWorkspace?.upcomingEvents || []);
   const [fetchError, setFetchError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<EventType | 'all'>('all');
@@ -82,9 +87,8 @@ const CalendarScreen: React.FC = () => {
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>({});
-  const [currentUserId, setCurrentUserId] = useState('');
-  const [userRole, setUserRole] = useState<UserRole>('resident');
-  const [userRoles, setUserRoles] = useState<UserRole[]>(['resident']);
+  const [currentUserId, setCurrentUserId] = useState(cachedWorkspace?.currentUserId || '');
+  const [userRoles, setUserRoles] = useState<UserRole[]>(cachedWorkspace?.userRoles || ['resident']);
   const isMountedRef = useRef(true);
   const eventsFetchSeqRef = useRef(0);
   const searchSeqRef = useRef(0);
@@ -226,17 +230,17 @@ const CalendarScreen: React.FC = () => {
 
   useEffect(() => {
     const loadCurrentUserRole = async () => {
+      if (cachedWorkspace) return;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setCurrentUserId(user.id);
       const roleState = await getCurrentUserRoleState();
       if (roleState) {
-        setUserRole(roleState.primaryRole);
         setUserRoles(roleState.roles);
       }
     };
     loadCurrentUserRole();
-  }, []);
+  }, [cachedWorkspace]);
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -408,7 +412,8 @@ const CalendarScreen: React.FC = () => {
     }));
   }, [events, selectedDate, weekDays]);
 
-  const isPrivilegedCalendarManager = canManageCalendar(userRoles);
+  const capabilities = getCapabilitySet(userRoles);
+  const isPrivilegedCalendarManager = capabilities.canManageCalendar;
   const canManageEvent = (event: CalendarEvent) =>
     isPrivilegedCalendarManager || (hasRole(userRoles, 'consultant') && event.created_by === currentUserId);
 
@@ -592,7 +597,7 @@ const CalendarScreen: React.FC = () => {
 
   const allowedTypes: EventType[] = ['leave', 'meeting', 'pcr', 'lecture', 'exam', 'pickleball'];
   const availableModalities = ['CT', 'MRI', 'XRay', 'IR', 'Utz'];
-  const panelClass = 'bg-black/40 border border-white/5 rounded-[2rem] backdrop-blur-md';
+  const panelClass = 'bg-white/[0.03] border border-white/8 rounded-[2rem] shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-md';
   const controlPillClass = 'bg-black/30 border border-white/10 rounded-2xl p-1';
   const isDesktop = viewport === 'desktop';
   const monthLabel = monthNames[month];
@@ -600,106 +605,113 @@ const CalendarScreen: React.FC = () => {
   const selectedDayChip = selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
-    <div
-      data-testid="calendar-layout"
-      data-calendar-viewport={viewport}
-      className="mobile-action-zone-clearance mx-auto min-h-screen w-full max-w-7xl animate-in fade-in duration-500 px-4 pt-5 md:px-6 xl:px-8 xl:pb-10"
-    >
-      <div className="space-y-4">
-        <header className="flex items-center justify-between gap-4 min-h-[32px]">
-          <h1 className="text-3xl font-bold text-white tracking-tight">Calendar</h1>
-          {isPrivilegedCalendarManager ? (
-            <TopRightCreateAction
-              label="Add event"
-              icon="event_available"
-              onClick={() => setShowAddEvent(true)}
-              aria-label="Create Event"
-              compact
-            />
-          ) : null}
-        </header>
-
-        <CalendarSearchBar
-          filterMenuRef={filterMenuRef}
-          searchQuery={searchQuery}
-          isFilterMenuOpen={isFilterMenuOpen}
-          activeFilter={activeFilter}
-          activeViewScope={activeViewScope}
-          activeFilterChips={activeFilterChips}
-          draftFilter={draftFilter}
-          draftViewScope={draftViewScope}
-          eventTypeOptions={EVENT_TYPE_OPTIONS}
-          viewScopeOptions={VIEW_SCOPE_OPTIONS}
-          viewport={viewport}
-          onSearchChange={setSearchQuery}
-          onClearSearch={() => {
-            setSearchQuery('');
-            setSearchError('');
-          }}
-          onToggleFilters={() => setIsFilterMenuOpen((prev) => !prev)}
-          onClearFilters={clearScheduleFilters}
-          onDraftFilterChange={setDraftFilter}
-          onDraftViewScopeChange={setDraftViewScope}
-          onResetDraftFilters={() => {
-            setDraftFilter('all');
-            setDraftViewScope('week');
-          }}
-          onApplyFilters={applyScheduleFilters}
-          onCloseFilters={() => setIsFilterMenuOpen(false)}
-        />
-
-        <div className={isDesktop ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,1fr)]' : 'space-y-4'}>
-          <CalendarSchedulePanel
-            panelClass={panelClass}
-            viewport={viewport}
-            fetchError={fetchError}
-            searchError={searchError}
-            agendaHeaderTitle={agendaHeaderTitle}
-            agendaHeaderDescription={agendaHeaderDescription}
-            agendaEvents={agendaEvents}
-            selectedDateLabel={selectedDateLabel}
-            selectedDateButtonLabel={`Add event on ${selectedDayChip}`}
-            isSearchMode={isSearchMode}
-            isPrivilegedCalendarManager={isPrivilegedCalendarManager}
-            activeFilterLabel={formatEventTypeLabel(activeFilter)}
-            activeViewScope={activeViewScope}
-            expandedEventId={expandedEventId}
-            onAddEvent={() => setShowAddEvent(true)}
-            onEditEvent={handleEditEvent}
-            onDeleteEvent={(event, e) => void handleDeleteEvent(event.id, e)}
-            onToggleActions={(eventId) => setExpandedEventId(expandedEventId === eventId ? null : eventId)}
-            canManageEvent={canManageEvent}
-            formatEventTypeLabel={formatEventTypeLabel}
-            eventTypeStyles={eventTypeStyles}
+    <PageShell layoutMode="wide">
+      <div
+        data-testid="calendar-layout"
+        data-calendar-viewport={viewport}
+        className="mobile-action-zone-clearance min-h-screen animate-in fade-in duration-500"
+      >
+        <div className="space-y-4">
+          <PageHeader
+            title="Calendar"
+            description="Schedule, leave coverage, and upcoming exams."
+            action={
+              isPrivilegedCalendarManager ? (
+                <TopRightCreateAction
+                  label="Add event"
+                  icon="event_available"
+                  onClick={() => setShowAddEvent(true)}
+                  aria-label="Create Event"
+                  compact
+                />
+              ) : null
+            }
           />
 
-          <div className={isDesktop ? 'xl:sticky xl:top-6' : ''}>
-            <CalendarMonthNavigator
+          <CalendarSearchBar
+            filterMenuRef={filterMenuRef}
+            searchQuery={searchQuery}
+            isFilterMenuOpen={isFilterMenuOpen}
+            activeFilter={activeFilter}
+            activeViewScope={activeViewScope}
+            activeFilterChips={activeFilterChips}
+            draftFilter={draftFilter}
+            draftViewScope={draftViewScope}
+            eventTypeOptions={EVENT_TYPE_OPTIONS}
+            viewScopeOptions={VIEW_SCOPE_OPTIONS}
+            viewport={viewport}
+            onSearchChange={setSearchQuery}
+            onClearSearch={() => {
+              setSearchQuery('');
+              setSearchError('');
+            }}
+            onToggleFilters={() => setIsFilterMenuOpen((prev) => !prev)}
+            onClearFilters={clearScheduleFilters}
+            onDraftFilterChange={setDraftFilter}
+            onDraftViewScopeChange={setDraftViewScope}
+            onResetDraftFilters={() => {
+              setDraftFilter('all');
+              setDraftViewScope('week');
+            }}
+            onApplyFilters={applyScheduleFilters}
+            onCloseFilters={() => setIsFilterMenuOpen(false)}
+          />
+          {fetchError ? <ScreenStatusNotice tone="error" message={fetchError} /> : null}
+          {!fetchError && searchError ? <ScreenStatusNotice tone="error" message={searchError} /> : null}
+
+          <div className={isDesktop ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,1fr)]' : 'space-y-4'}>
+            <CalendarSchedulePanel
               panelClass={panelClass}
-              controlPillClass={controlPillClass}
-              monthIndex={month}
-              monthLabel={monthLabel}
-              monthYearLabel={monthYearLabel}
-              year={year}
-              days={days}
-              padding={padding}
-              eventDotColors={eventDotColors}
-              weekRangeLabel={weekRangeLabel}
-              weekDayMeta={weekDayMeta}
-              isWeekDrawerOpen={isWeekDrawerOpen}
               viewport={viewport}
-              getEventTypesForDay={getEventTypesForDay}
-              isSelected={isSelected}
-              isToday={isToday}
-              onPrevMonth={prevMonth}
-              onNextMonth={nextMonth}
-              onToday={() => setSelectedDateAndSyncMonth(new Date())}
-              onSelectDate={setSelectedDateAndSyncMonth}
-              onPrevWeek={prevWeek}
-              onNextWeek={nextWeek}
-              onHideWeekStrip={() => setIsWeekDrawerOpen(false)}
-              onShowWeekStrip={() => setIsWeekDrawerOpen(true)}
+              fetchError={fetchError}
+              searchError={searchError}
+              agendaHeaderTitle={agendaHeaderTitle}
+              agendaHeaderDescription={agendaHeaderDescription}
+              agendaEvents={agendaEvents}
+              selectedDateLabel={selectedDateLabel}
+              selectedDateButtonLabel={`Add event on ${selectedDayChip}`}
+              isSearchMode={isSearchMode}
+              isPrivilegedCalendarManager={isPrivilegedCalendarManager}
+              activeFilterLabel={formatEventTypeLabel(activeFilter)}
+              activeViewScope={activeViewScope}
+              expandedEventId={expandedEventId}
+              onAddEvent={() => setShowAddEvent(true)}
+              onEditEvent={handleEditEvent}
+              onDeleteEvent={(event, e) => void handleDeleteEvent(event.id, e)}
+              onToggleActions={(eventId) => setExpandedEventId(expandedEventId === eventId ? null : eventId)}
+              canManageEvent={canManageEvent}
+              formatEventTypeLabel={formatEventTypeLabel}
+              eventTypeStyles={eventTypeStyles}
             />
+
+            <div className={isDesktop ? 'xl:sticky xl:top-6' : ''}>
+              <CalendarMonthNavigator
+                panelClass={panelClass}
+                controlPillClass={controlPillClass}
+                monthIndex={month}
+                monthLabel={monthLabel}
+                monthYearLabel={monthYearLabel}
+                year={year}
+                days={days}
+                padding={padding}
+                eventDotColors={eventDotColors}
+                weekRangeLabel={weekRangeLabel}
+                weekDayMeta={weekDayMeta}
+                isWeekDrawerOpen={isWeekDrawerOpen}
+                viewport={viewport}
+                getEventTypesForDay={getEventTypesForDay}
+                isSelected={isSelected}
+                isToday={isToday}
+                onPrevMonth={prevMonth}
+                onNextMonth={nextMonth}
+                onToday={() => setSelectedDateAndSyncMonth(new Date())}
+                onSelectDate={setSelectedDateAndSyncMonth}
+                onPrevWeek={prevWeek}
+                onNextWeek={nextWeek}
+                onHideWeekStrip={() => setIsWeekDrawerOpen(false)}
+                onShowWeekStrip={() => setIsWeekDrawerOpen(true)}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -740,7 +752,7 @@ const CalendarScreen: React.FC = () => {
         updateCoverageName={updateCoverageName}
         toggleCoverageModality={toggleCoverageModality}
       />
-    </div>
+    </PageShell>
   );
 };
 

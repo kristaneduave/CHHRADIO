@@ -14,8 +14,21 @@ const { mockCalendarService } = vi.hoisted(() => ({
   },
 }));
 
+const mockGetCachedCalendarWorkspace = vi.fn();
+
 vi.mock('../services/CalendarService', () => ({
   CalendarService: mockCalendarService,
+}));
+
+vi.mock('../services/calendarWorkspaceService', () => ({
+  getCachedCalendarWorkspace: (...args: unknown[]) => mockGetCachedCalendarWorkspace(...args),
+}));
+
+vi.mock('../services/userRoleService', () => ({
+  getCurrentUserRoleState: vi.fn(async () => ({
+    primaryRole: 'admin',
+    roles: ['admin'],
+  })),
 }));
 
 vi.mock('../services/newsfeedService', () => ({
@@ -65,6 +78,8 @@ describe('CalendarScreen', () => {
   beforeEach(() => {
     vi.useRealTimers();
     setViewport('mobile');
+    mockGetCachedCalendarWorkspace.mockReset();
+    mockGetCachedCalendarWorkspace.mockReturnValue(null);
     const now = new Date();
     const meetingEvent = {
       id: 'evt-meeting',
@@ -100,10 +115,39 @@ describe('CalendarScreen', () => {
   it('renders without crashing', async () => {
     render(<CalendarScreen />);
     expect(screen.getByText('Calendar')).toBeInTheDocument();
+    expect(screen.getByText('Schedule, leave coverage, and upcoming exams.')).toBeInTheDocument();
     await waitFor(() => expect(mockCalendarService.getEvents).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Open schedule filters' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Event' })).toBeInTheDocument();
     expect(screen.getByTestId('calendar-layout')).toHaveAttribute('data-calendar-viewport', 'mobile');
+  });
+
+  it('hydrates from cached workspace data on first render', async () => {
+    const now = new Date();
+    mockGetCachedCalendarWorkspace.mockReturnValue({
+      currentUserId: 'u-1',
+      userRole: 'admin',
+      userRoles: ['admin'],
+      monthKey: '2026-03',
+      events: [
+        {
+          id: 'cached-event',
+          title: 'Cached Conference',
+          start_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0).toISOString(),
+          end_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0, 0).toISOString(),
+          event_type: 'meeting',
+          is_all_day: false,
+          created_by: 'u-1',
+          coverage_details: [],
+        },
+      ],
+      upcomingEvents: [],
+    });
+
+    render(<CalendarScreen />);
+
+    expect(screen.getByText('Cached Conference')).toBeInTheDocument();
+    await waitFor(() => expect(mockCalendarService.getEvents).toHaveBeenCalled());
   });
 
   it('blocks save when title is missing', async () => {
@@ -121,7 +165,7 @@ describe('CalendarScreen', () => {
     await waitFor(() => expect(mockCalendarService.getEvents).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole('button', { name: 'Open schedule filters' }));
-    fireEvent.change(screen.getByLabelText('Event type'), { target: { value: 'exam' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Exams' }));
     fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     expect(await screen.findByText('Type: Exam')).toBeInTheDocument();

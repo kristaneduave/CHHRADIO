@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AssignOccupancyPayload, AssignableOccupant } from '../types';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface AssignOccupancyModalProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const AssignOccupancyModal: React.FC<AssignOccupancyModalProps> = ({
   const [selectedUser, setSelectedUser] = useState<AssignableOccupant | null>(null);
   const [externalName, setExternalName] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -54,10 +56,11 @@ const AssignOccupancyModal: React.FC<AssignOccupancyModalProps> = ({
 
   const submit = async () => {
     setSubmitting(true);
+    setError(null);
     try {
       if (mode === 'assigned_user') {
         if (!selectedUser) {
-          alert('Please select a user.');
+          setError('Please select a user.');
           setSubmitting(false);
           return;
         }
@@ -68,7 +71,7 @@ const AssignOccupancyModal: React.FC<AssignOccupancyModalProps> = ({
         });
       } else {
         if (!externalName.trim()) {
-          alert('Please enter a name.');
+          setError('Please enter a name.');
           setSubmitting(false);
           return;
         }
@@ -81,7 +84,7 @@ const AssignOccupancyModal: React.FC<AssignOccupancyModalProps> = ({
       onClose();
     } catch (error: any) {
       console.error(error);
-      alert(error?.message || 'Failed to assign workstation');
+      setError(error?.message || 'Failed to assign workstation');
     } finally {
       setSubmitting(false);
     }
@@ -103,6 +106,7 @@ const AssignOccupancyModal: React.FC<AssignOccupancyModalProps> = ({
         </div>
 
         <div className="p-5 space-y-4">
+          {error ? <ScreenStatusNotice message={error} tone="error" /> : null}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => {

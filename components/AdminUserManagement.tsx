@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Profile, UserRole } from '../types';
 import { ensurePrimaryRoleIncluded, normalizeUserRoles } from '../utils/roles';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface AdminUserManagementProps {
     onClose: () => void;
@@ -11,6 +12,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
+    const [statusTone, setStatusTone] = useState<'error' | 'success'>('success');
     const ALL_ASSIGNABLE_ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
 
     useEffect(() => {
@@ -20,6 +23,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
     const fetchUsers = async () => {
         try {
             setLoading(true);
+            setStatusMessage(null);
             const { data, error } = await supabase
                 .from('profiles')
                 .select('*')
@@ -51,7 +55,8 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
             })));
         } catch (error) {
             console.error('Error fetching users:', error);
-            alert('Failed to load users');
+            setStatusTone('error');
+            setStatusMessage('Failed to load users.');
         } finally {
             setLoading(false);
         }
@@ -94,9 +99,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
             if (insertError) throw insertError;
         } catch (error: any) {
             console.error('Error updating roles:', error);
-            alert('Failed to update roles: ' + error.message);
+            setStatusTone('error');
+            setStatusMessage(`Failed to update roles: ${error.message}`);
             fetchUsers(); // Revert on error
+            return;
         }
+
+        setStatusTone('success');
+        setStatusMessage('Roles updated.');
     };
 
     const filteredUsers = users.filter(user =>
@@ -139,6 +149,13 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                             className="w-full h-10 bg-transparent border-0 rounded-xl pl-[2.75rem] pr-3 text-[13px] font-bold text-white placeholder-slate-500 focus:ring-0 focus:outline-none transition-all"
                         />
                     </div>
+                    {statusMessage ? (
+                        <ScreenStatusNotice
+                            message={statusMessage}
+                            tone={statusTone}
+                            className="mt-3"
+                        />
+                    ) : null}
                 </div>
 
                 {/* List */}

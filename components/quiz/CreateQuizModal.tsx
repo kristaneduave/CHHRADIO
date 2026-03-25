@@ -4,6 +4,7 @@ import { SPECIALTIES } from '../../constants';
 import { QuizAuthorFormValues, QuizListItem, QuizQuestion, QuizQuestionFormValues } from '../../types';
 import { uploadQuizQuestionImage } from '../../services/quizService';
 import QuestionBuilder from './QuestionBuilder';
+import InlinePillGroup from '../ui/InlinePillGroup';
 
 interface CreateQuizModalProps {
   quiz?: QuizListItem | null;
@@ -227,15 +228,13 @@ const CreateQuizModal: React.FC<CreateQuizModalProps> = ({ quiz, questions = [],
 
                 <label className="block">
                   <span className="mb-2 block text-sm text-slate-300">Specialty</span>
-                  <select
-                    value={values.specialty}
-                    onChange={(e) => handleChange('specialty', e.target.value)}
-                    className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"
-                  >
-                    {SPECIALTIES.map((specialty) => (
-                      <option key={specialty} value={specialty} className="bg-slate-900">{specialty}</option>
-                    ))}
-                  </select>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <InlinePillGroup
+                      options={SPECIALTIES}
+                      value={values.specialty}
+                      onChange={(specialty) => handleChange('specialty', specialty)}
+                    />
+                  </div>
                 </label>
 
                 <fieldset className="block">

@@ -1,6 +1,7 @@
 import { AssignOccupancyPayload, AssignableOccupant, CurrentWorkstationStatus, Floor } from '../types';
 import { supabase } from './supabase';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
+import { normalizeUserRole } from '../utils/roles';
 
 const ACTIVE_WINDOW_MINUTES = 30;
 const ASSIGNED_TTL_HOURS = 8;
@@ -216,7 +217,7 @@ export const workstationMapService = {
               nickname: (profile.nickname as string | null) || null,
               fullName: (profile.full_name as string | null) || null,
               avatarUrl: (profile.avatar_url as string | null) || null,
-              role: (profile.role as any) || null,
+              role: profile.role ? normalizeUserRole(profile.role) : null,
               title: (profile.title as string | null) || null,
               motto: (profile.motto as string | null) || null,
               workMode: (profile.work_mode as string | null) || null,
@@ -272,7 +273,7 @@ export const workstationMapService = {
     return (data || []).map((profile: any) => ({
       id: String(profile.id),
       displayName: profile.nickname || profile.full_name || `User ${String(profile.id).slice(0, 6)}`,
-      role: profile.role || undefined,
+      role: profile.role ? normalizeUserRole(profile.role) : undefined,
       avatarUrl: profile.avatar_url || null,
     }));
   },

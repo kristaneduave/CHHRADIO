@@ -1,5 +1,7 @@
 import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { canManageAuntMinnieRoom, getPrimaryRole, hasAnyRole, normalizeUserRoles } from '../utils/roles';
+import { getCurrentUserRoleState } from './userRoleService';
 import {
   AuntMinnieCaseOption,
   LiveAuntMinnieMessage,
@@ -93,14 +95,14 @@ const normalizeOfficialAnswerText = (value: string | null | undefined) => {
   return trimmed;
 };
 
-export const isLiveAuntMinnieHostRole = (role: UserRole | null | undefined) =>
-  Boolean(role && HOST_ROLES.includes(role));
+export const isLiveAuntMinnieHostRole = (roleOrRoles: UserRole | UserRole[] | null | undefined) =>
+  hasAnyRole(roleOrRoles, HOST_ROLES);
 
 export const isLiveAuntMinnieTrainingOfficerRole = (role: UserRole | null | undefined) =>
   role === 'training_officer';
 
-export const isLiveAuntMinnieRoomManagerRole = (role: UserRole | null | undefined) =>
-  role === 'training_officer' || role === 'admin';
+export const isLiveAuntMinnieRoomManagerRole = (roleOrRoles: UserRole | UserRole[] | null | undefined) =>
+  canManageAuntMinnieRoom(roleOrRoles);
 
 const buildJoinCode = () =>
   Math.random().toString(36).slice(2, 6).toUpperCase() + Math.random().toString(36).slice(2, 4).toUpperCase();
@@ -646,30 +648,46 @@ const applyParticipantEventToState = (
   );
 };
 
-const getAuthenticatedProfile = async (): Promise<{ userId: string; profile: Profile | null }> => {
+const getAuthenticatedProfile = async (): Promise<{
+  userId: string;
+  profile: Profile | null;
+  primaryRole: UserRole | null;
+  roles: UserRole[];
+}> => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     throw new Error('Not authenticated');
   }
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  const [{ data, error }, roleState] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single(),
+    getCurrentUserRoleState(),
+  ]);
 
   if (error) {
     throw error;
   }
 
+  const profile = (data as Profile | null) || null;
+  const roles = roleState?.roles?.length
+    ? roleState.roles
+    : normalizeUserRoles([profile?.role]);
+  const primaryRole = roleState?.primaryRole || getPrimaryRole(roles, profile?.role);
+
   return {
     userId: user.id,
-    profile: (data as Profile | null) || null,
+    profile,
+    primaryRole,
+    roles,
   };
 };
 
-const ensureHostRole = (role: UserRole | null | undefined) => {
-  if (!isLiveAuntMinnieRoomManagerRole(role)) {
+const ensureHostRole = (roles: UserRole[] | UserRole | null | undefined) => {
+  if (!isLiveAuntMinnieRoomManagerRole(roles)) {
     throw new Error('Only the training officer or an admin can create or upload to a live Aunt Minnie room.');
   }
 };
@@ -806,8 +824,8 @@ export const getLiveAuntMinnieWorkspace = async (options?: { force?: boolean }):
   }
 
   liveAuntMinnieWorkspacePromise = (async () => {
-    const { userId, profile } = await getAuthenticatedProfile();
-    const canHost = isLiveAuntMinnieRoomManagerRole(profile?.role);
+    const { userId, profile, primaryRole, roles } = await getAuthenticatedProfile();
+    const canHost = isLiveAuntMinnieRoomManagerRole(roles);
 
     const [hostSessions, joinableSessions, auntMinnieCases] = await Promise.all([
       canHost ? listHostSessions(userId) : Promise.resolve([]),
@@ -817,7 +835,7 @@ export const getLiveAuntMinnieWorkspace = async (options?: { force?: boolean }):
 
     return {
       currentUserId: userId,
-      currentUserRole: profile?.role || null,
+      currentUserRole: primaryRole || profile?.role || null,
       canHost,
       hostSessions,
       joinableSessions,
@@ -843,8 +861,8 @@ export const getCachedLiveAuntMinnieWorkspace = (): WorkspaceData | null => live
 
 export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreatePayload) => {
   validatePromptInputs(payload.prompts);
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const joinCode = buildJoinCode();
   const { data: sessionId, error: sessionInsertError } = await supabase
@@ -909,8 +927,8 @@ export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreateP
 
 export const updateLiveAuntMinnieSession = async (sessionId: string, payload: LiveAuntMinnieCreatePayload) => {
   validatePromptInputs(payload.prompts);
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const { data: sessionData, error: sessionError } = await supabase
     .from('live_aunt_minnie_sessions')
@@ -979,8 +997,8 @@ export const appendLiveAuntMinnieQuestion = async (
   options?: { insertAfterCurrent?: boolean },
 ) => {
   validatePromptInputs([prompt]);
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const session = await fetchSession(sessionId);
   if (session.host_user_id !== userId) {
@@ -1073,8 +1091,8 @@ export const updateLiveAuntMinniePrompt = async (
   prompt: LiveAuntMinniePromptInput,
 ) => {
   validatePromptInputs([prompt]);
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const session = await fetchSession(sessionId);
   if (session.host_user_id !== userId) {
@@ -1543,8 +1561,8 @@ export const updateLiveAuntMinnieAnswerKey = async (
   promptId: string,
   payload: Pick<LiveAuntMinniePromptInput, 'official_answer' | 'answer_explanation' | 'accepted_aliases'>,
 ) => {
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const session = await fetchSession(sessionId);
   if (session.host_user_id !== userId) {
@@ -1572,8 +1590,8 @@ export const updateLiveAuntMinnieAnswerKey = async (
 };
 
 export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
-  const { userId, profile } = await getAuthenticatedProfile();
-  ensureHostRole(profile?.role);
+  const { userId, roles } = await getAuthenticatedProfile();
+  ensureHostRole(roles);
 
   const session = await fetchSession(sessionId);
   if (session.host_user_id !== userId) {

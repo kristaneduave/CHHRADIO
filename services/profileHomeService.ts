@@ -83,7 +83,7 @@ export const fetchProfileNotePreview = async (userId: string): Promise<{ id: str
   );
 };
 
-export const getProfileHomeWorkspace = async (userId: string): Promise<ProfileHomeWorkspaceData> => {
+export const getProfileHomeWorkspace = async (userId: string, options?: { force?: boolean }): Promise<ProfileHomeWorkspaceData> => {
   if (!userId) {
     return {
       profileRecord: null,
@@ -93,13 +93,14 @@ export const getProfileHomeWorkspace = async (userId: string): Promise<ProfileHo
       notePreview: null,
     };
   }
+  const force = Boolean(options?.force);
   const cached = profileHomeWorkspaceCache.get(userId);
-  if (cached) {
+  if (!force && cached) {
     return cached;
   }
 
   const existingPromise = profileHomeWorkspacePromises.get(userId);
-  if (existingPromise) {
+  if (!force && existingPromise) {
     return existingPromise;
   }
 
@@ -135,4 +136,10 @@ export const getCachedProfileHomeWorkspace = (userId: string): ProfileHomeWorksp
 export const preloadProfileHome = async (userId: string): Promise<void> => {
   if (!userId) return;
   await getProfileHomeWorkspace(userId);
+};
+
+export const preloadCurrentProfileHome = async (): Promise<void> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user?.id) return;
+  await getProfileHomeWorkspace(user.id);
 };

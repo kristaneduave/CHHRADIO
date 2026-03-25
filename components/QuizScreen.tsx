@@ -7,7 +7,6 @@ import {
   duplicateQuiz,
   getQuizWorkspaceData,
   getQuizWithQuestions,
-  isQuizAuthorRole,
   startQuizAttempt,
   submitQuizAttempt,
   updateQuiz,
@@ -21,7 +20,8 @@ import QuizLandingView from './quiz/QuizLandingView';
 import QuizSectionHeader from './quiz/QuizSectionHeader';
 import QuizManageAccess from './quiz/QuizManageAccess';
 import PageShell from './ui/PageShell';
-import { isLiveAuntMinnieHostRole } from '../services/liveAuntMinnieService';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
+import { canManageAuntMinnieRoom, canManageQuiz } from '../utils/roles';
 
 type ScreenMode = 'landing' | 'mcq-library' | 'mcq-session' | 'mcq-review' | 'aunt-minnie-hub';
 
@@ -169,8 +169,8 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
     setReviewAttempt(null);
   };
 
-  const canManage = isQuizAuthorRole(userRoles);
-  const canHostAuntMinnie = userRoles.some((role) => isLiveAuntMinnieHostRole(role));
+  const canManage = canManageQuiz(userRoles);
+  const canHostAuntMinnie = canManageAuntMinnieRoom(userRoles);
 
   if (loading) {
     return (
@@ -202,16 +202,8 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
             onOpenMcq={() => setMode('mcq-library')}
             onOpenAuntMinnie={() => setMode('aunt-minnie-hub')}
           />
-          {error ? (
-            <div className="rounded-[1.6rem] border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
-              {error}
-            </div>
-          ) : null}
-          {busy ? (
-            <div className="rounded-[1.6rem] border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-              Working on your quiz request...
-            </div>
-          ) : null}
+          {error ? <ScreenStatusNotice tone="error" message={error} /> : null}
+          {busy ? <ScreenStatusNotice message="Working on your quiz request..." /> : null}
           {canManage && manageOpen ? (
             <ManageQuizzesPanel
               quizzes={managedQuizzes}
@@ -233,16 +225,8 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
             onBack={() => setMode('landing')}
             action={manageAction}
           />
-          {error ? (
-            <div className="rounded-[1.6rem] border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
-              {error}
-            </div>
-          ) : null}
-          {busy ? (
-            <div className="rounded-[1.6rem] border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
-              Working on your quiz request...
-            </div>
-          ) : null}
+          {error ? <ScreenStatusNotice tone="error" message={error} /> : null}
+          {busy ? <ScreenStatusNotice message="Working on your quiz request..." /> : null}
           {canManage && manageOpen ? (
             <ManageQuizzesPanel
               quizzes={managedQuizzes}

@@ -33,6 +33,20 @@ export const normalizeUserRole = (role?: string | null): UserRole => {
 };
 
 export const ARTICLE_LIBRARY_EDITOR_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
+export const QUIZ_MANAGER_ROLES: UserRole[] = ['admin', 'faculty'];
+export const AUNT_MINNIE_ROOM_MANAGER_ROLES: UserRole[] = ['admin', 'training_officer'];
+
+export interface CapabilitySet {
+  canManageUsers: boolean;
+  canManageCalendar: boolean;
+  canManageQuiz: boolean;
+  canModerateResidentContent: boolean;
+  canAccessResidentFeatures: boolean;
+  canManageAuntMinnieRoom: boolean;
+  canParticipateInAuntMinnie: boolean;
+  canAuthorAnnouncements: boolean;
+  canManageAnyAnnouncement: boolean;
+}
 
 export const normalizeUserRoles = (roles: Array<string | null | undefined> | null | undefined): UserRole[] => {
   const normalized = (roles || [])
@@ -89,8 +103,40 @@ export const canManageCalendar = (roles?: UserRole[] | UserRole | null): boolean
   return hasAnyRole(roles, PRIVILEGED_MANAGER_ROLES);
 };
 
+export const canManageUsers = (roles?: UserRole[] | UserRole | null): boolean => {
+  return hasRole(Array.isArray(roles) ? roles : roles ? [roles] : [], 'admin');
+};
+
+export const canManageQuiz = (roles?: UserRole[] | UserRole | null): boolean => {
+  return hasAnyRole(roles, QUIZ_MANAGER_ROLES);
+};
+
+export const canManageAuntMinnieRoom = (roles?: UserRole[] | UserRole | null): boolean => {
+  return hasAnyRole(roles, AUNT_MINNIE_ROOM_MANAGER_ROLES);
+};
+
+export const canParticipateInAuntMinnie = (roles?: UserRole[] | UserRole | null): boolean => {
+  return normalizeUserRoles(Array.isArray(roles) ? roles : roles ? [roles] : []).length > 0;
+};
+
+export const getCapabilitySet = (roles?: UserRole[] | UserRole | null): CapabilitySet => ({
+  canManageUsers: canManageUsers(roles),
+  canManageCalendar: canManageCalendar(roles),
+  canManageQuiz: canManageQuiz(roles),
+  canModerateResidentContent: canModerateResidentEndorsements(roles),
+  canAccessResidentFeatures: canAccessResidentFeatures(roles),
+  canManageAuntMinnieRoom: canManageAuntMinnieRoom(roles),
+  canParticipateInAuntMinnie: canParticipateInAuntMinnie(roles),
+  canAuthorAnnouncements: canAuthorAnnouncements(roles),
+  canManageAnyAnnouncement: canManageAnyAnnouncement(roles),
+});
+
 export const canCreateAnnouncements = (roles?: UserRole[] | UserRole | null): boolean => {
   return hasAnyRole(roles, ['admin', 'training_officer', 'moderator', 'consultant']);
+};
+
+export const canAuthorAnnouncements = (roles?: UserRole[] | UserRole | null): boolean => {
+  return canCreateAnnouncements(roles);
 };
 
 export const canManageAnyAnnouncement = (roles?: UserRole[] | UserRole | null): boolean => {

@@ -1,7 +1,7 @@
 import { Session } from '@supabase/supabase-js';
 import { fetchRecentActivity } from './activityService';
 import { preloadArticleLibraryLanding } from './articleLibraryService';
-import { CalendarService } from './CalendarService';
+import { preloadCalendarWorkspace } from './calendarWorkspaceService';
 import { fetchDashboardSnapshot } from './dashboardSnapshotService';
 import { preloadNewsfeedData } from './newsfeedService';
 import { preloadProfileHome } from './profileHomeService';
@@ -351,7 +351,7 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
               'double-checking whether that meeting was real or just folklore.',
             ], runSeed).map((entry) => entry.text),
             run: async () => {
-              await CalendarService.preloadCalendarData(new Date(), 10);
+              await preloadCalendarWorkspace(new Date());
             },
           },
           {

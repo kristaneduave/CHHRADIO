@@ -5,6 +5,7 @@ import {
   AccountAccessRequestStatus,
   AccountAccessRequestStatusType,
 } from '../types';
+import { normalizeUserRole } from '../utils/roles';
 
 type AccountAccessRequestRow = {
   public_token: string;
@@ -23,7 +24,7 @@ const normalizeStatus = (value: unknown): AccountAccessRequestStatusType => {
 };
 
 const normalizeRole = (value: unknown): 'resident' | 'consultant' | 'fellow' => {
-  const role = String(value || '').toLowerCase();
+  const role = normalizeUserRole(String(value || ''));
   if (role === 'consultant' || role === 'fellow') return role;
   return 'resident';
 };

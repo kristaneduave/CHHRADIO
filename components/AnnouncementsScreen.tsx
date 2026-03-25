@@ -4,7 +4,7 @@ import { Announcement, UserRole } from '../types';
 import CreateAnnouncementModal from './CreateAnnouncementModal';
 import AnnouncementDetailModal from './AnnouncementDetailModal';
 import { canCreateAnnouncements, canManageAnyAnnouncement as canManageAnyAnnouncementRole, getRoleLabel, hasRole } from '../utils/roles';
-import { fetchHiddenAnnouncementIds, hideAnnouncementForUser } from '../services/announcementVisibilityService';
+import { hideAnnouncementForUser } from '../services/announcementVisibilityService';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
   NEWS_FILTER_STORAGE_KEY,
@@ -22,7 +22,7 @@ import NewsCardBase from './news/NewsCardBase';
 import NewsCardBadge from './news/NewsCardBadge';
 import TopRightCreateAction from './TopRightCreateAction';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
-import { getCurrentUserRoleState } from '../services/userRoleService';
+import { getAnnouncementsWorkspace, getCachedAnnouncementsWorkspace } from '../services/announcementsWorkspaceService';
 
 interface AnnouncementsScreenProps {
   initialOpenAnnouncementId?: string | null;
@@ -109,10 +109,17 @@ const resolveCategoryIcon = (category: TypeFilter | 'all'): string => {
 };
 
 const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAnnouncementId, onHandledInitialOpen }) => {
-  const [userRoles, setUserRoles] = useState<UserRole[]>(['resident']);
-  const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedWorkspace = getCachedAnnouncementsWorkspace();
+  const cachedHiddenIds = new Set(cachedWorkspace?.hiddenAnnouncementIds || []);
+  const cachedAnnouncements = sortAnnouncementsByPriority(
+    (cachedWorkspace?.announcements || [])
+      .map(mapAnnouncementRow)
+      .filter((item) => !cachedHiddenIds.has(item.id)),
+  );
+  const [userRoles, setUserRoles] = useState<UserRole[]>(cachedWorkspace?.userRoles || ['resident']);
+  const [currentUserId, setCurrentUserId] = useState<string>(cachedWorkspace?.currentUserId || '');
+  const [announcements, setAnnouncements] = useState<Announcement[]>(cachedAnnouncements);
+  const [loading, setLoading] = useState(!cachedWorkspace);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -122,7 +129,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const [actionMenuPostId, setActionMenuPostId] = useState<string | null>(null);
-  const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<Set<string>>(new Set());
+  const [hiddenAnnouncementIds, setHiddenAnnouncementIds] = useState<Set<string>>(cachedHiddenIds);
   const [supportsPriorityColumns, setSupportsPriorityColumns] = useState(true);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -268,19 +275,29 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   useEffect(() => {
     const bootstrap = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) {
-        setCurrentUserId(user.id);
-        const hiddenIds = await fetchHiddenAnnouncementIds(user.id);
-        setHiddenAnnouncementIds(hiddenIds);
-        const roleState = await getCurrentUserRoleState();
-        if (roleState) {
-          setUserRoles(roleState.roles);
+      try {
+        const workspace = await getAnnouncementsWorkspace({ force: Boolean(cachedWorkspace) });
+        if (!isMountedRef.current) return;
+        setCurrentUserId(workspace.currentUserId);
+        setUserRoles(workspace.userRoles);
+        const nextHiddenIds = new Set(workspace.hiddenAnnouncementIds);
+        setHiddenAnnouncementIds(nextHiddenIds);
+        startTransition(() => {
+          setAnnouncements(
+            sortAnnouncementsByPriority(workspace.announcements.map(mapAnnouncementRow)).filter(
+              (item) => !nextHiddenIds.has(item.id),
+            ),
+          );
+        });
+        setHasMore(workspace.announcements.length >= ITEMS_PER_PAGE);
+      } catch (error: any) {
+        console.error('Error bootstrapping announcements:', error);
+        toastError('Failed to load news', error?.message || 'Please refresh and try again.');
+      } finally {
+        if (isMountedRef.current) {
+          setLoading(false);
         }
       }
-      await fetchAnnouncements(0, true);
     };
     bootstrap();
   }, []);

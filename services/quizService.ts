@@ -13,7 +13,7 @@ import {
   UserRole,
 } from '../types';
 import { getCurrentUserRoleState } from './userRoleService';
-import { hasAnyRole } from '../utils/roles';
+import { hasAnyRole, normalizeUserRole } from '../utils/roles';
 
 type QuizRow = Quiz & {
   authorProfile?: {
@@ -142,7 +142,7 @@ const attachAuthorProfiles = async (rows: Quiz[]): Promise<QuizRow[]> => {
       {
         full_name: (profile.full_name as string | null) ?? null,
         nickname: (profile.nickname as string | null) ?? null,
-        role: (profile.role as UserRole | null) ?? null,
+        role: profile.role ? normalizeUserRole(profile.role) : null,
       },
     ]),
   );

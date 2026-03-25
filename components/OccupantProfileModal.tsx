@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CurrentWorkstationStatus } from '../types';
 
 import CharacterProfileCard from './CharacterProfileCard';
+import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface OccupantProfileModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ const OccupantProfileModal: React.FC<OccupantProfileModalProps> = ({
   onRelease,
 }) => {
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const expiresText = useMemo(() => {
     if (!workstation?.expires_at) return null;
     const date = new Date(workstation.expires_at);
@@ -29,12 +31,13 @@ const OccupantProfileModal: React.FC<OccupantProfileModalProps> = ({
   const handleRelease = async () => {
     if (!confirm('Release this workstation occupancy?')) return;
     setSubmitting(true);
+    setError(null);
     try {
       await onRelease(workstation.id);
       onClose();
     } catch (error) {
       console.error(error);
-      alert('Failed to release workstation');
+      setError('Failed to release workstation');
     } finally {
       setSubmitting(false);
     }
@@ -61,6 +64,7 @@ const OccupantProfileModal: React.FC<OccupantProfileModalProps> = ({
           <CharacterProfileCard workstation={workstation} />
 
           <div className="mt-4 px-1">
+            {error ? <ScreenStatusNotice message={error} tone="error" className="mb-3" /> : null}
             <div className="flex items-center justify-between text-xs text-slate-400 mb-3 px-2">
               <span><span className="font-bold text-slate-300">Station:</span> {workstation.label} ({workstation.section})</span>
               {expiresText && <span className="text-amber-500/80">Expires: {expiresText}</span>}

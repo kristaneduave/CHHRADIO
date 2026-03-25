@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { QuizCorrectOption, QuizQuestionFormValues } from '../../types';
+import InlinePillGroup from '../ui/InlinePillGroup';
 
 interface QuestionBuilderProps {
   questions: QuizQuestionFormValues[];
@@ -166,18 +167,17 @@ const QuestionBuilder: React.FC<QuestionBuilderProps> = ({ questions, onChange, 
               </label>
             </div>
 
-            <label className="block max-w-[240px]">
+            <div className="block">
               <span className="mb-2 block text-sm text-slate-300">Correct answer</span>
-              <select
-                value={question.correct_option}
-                onChange={(e) => updateQuestion(index, 'correct_option', e.target.value)}
-                className="min-h-[48px] w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"
-              >
-                {correctOptions.map((option) => (
-                  <option key={option} value={option} className="bg-slate-900">{option}</option>
-                ))}
-              </select>
-            </label>
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                <InlinePillGroup
+                  options={correctOptions}
+                  value={question.correct_option}
+                  onChange={(value) => updateQuestion(index, 'correct_option', value)}
+                  className="max-w-[320px]"
+                />
+              </div>
+            </div>
 
             <label className="block">
               <span className="mb-2 block text-sm text-slate-300">Explanation</span>

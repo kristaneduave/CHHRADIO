@@ -7,6 +7,7 @@ import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
 import { CaseComment } from '../types';
+import { toastError, toastSuccess } from '../utils/toast';
 
 interface CaseViewScreenProps {
     caseData: any;
@@ -337,7 +338,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         };
         const text = generateViberText(formattedData);
         navigator.clipboard.writeText(text).then(() => {
-            alert('Copied to clipboard! Ready to paste into Viber.');
+            toastSuccess('Copied to clipboard', 'Ready to paste into Viber.');
         });
     };
 
@@ -382,9 +383,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         } catch (e: any) {
             const message = e instanceof Error ? e.message : String(e);
             if (message.includes('Unable to load export module')) {
-                alert('Unable to load export module: ' + message);
+                toastError('Unable to load export module', message);
             } else {
-                alert('Export failed: ' + message);
+                toastError('Export failed', message);
             }
         } finally {
             setIsExportingPdf(false);

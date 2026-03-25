@@ -1,5 +1,6 @@
 import React from 'react';
 import { CurrentWorkstationStatus } from '../types';
+import { getRoleLabel, hasAnyRole, normalizeUserRole } from '../utils/roles';
 
 interface CharacterProfileCardProps {
     workstation: CurrentWorkstationStatus;
@@ -8,11 +9,12 @@ interface CharacterProfileCardProps {
 // Temporary helper to determine "RPG Class/Level" based on typical medical roles
 // We now try to use faction first, then title, then fallback to procedural
 const getCharacterClass = (name: string, role?: string | null, faction?: string | null) => {
+    const normalizedRole = normalizeUserRole(role);
     let baseClass = 'Specialist';
-    if (role === 'resident') baseClass = 'Resident';
-    if (role === 'fellow') baseClass = 'Fellow';
-    if (role === 'consultant') baseClass = 'Consultant';
-    if (role === 'admin' || role === 'moderator') baseClass = 'Overlord';
+    if (normalizedRole === 'resident') baseClass = 'Resident';
+    if (normalizedRole === 'fellow') baseClass = 'Fellow';
+    if (normalizedRole === 'consultant') baseClass = 'Consultant';
+    if (hasAnyRole(normalizedRole, ['admin', 'moderator'])) baseClass = 'Overlord';
 
     // This is a naive implementation; ideally, this comes from true user metadata/roles.
     const lowerName = name.toLowerCase();
@@ -21,22 +23,22 @@ const getCharacterClass = (name: string, role?: string | null, faction?: string 
     let bg = 'bg-sky-500/10';
     let border = 'border-sky-500/30';
 
-    if (role === 'admin' || role === 'moderator' || role === 'consultant') {
+    if (hasAnyRole(normalizedRole, ['admin', 'moderator', 'consultant'])) {
         color = 'text-purple-400';
         bg = 'bg-purple-500/10';
         border = 'border-purple-500/30';
-    } else if (role === 'fellow') {
+    } else if (normalizedRole === 'fellow') {
         color = 'text-amber-400';
         bg = 'bg-amber-500/10';
         border = 'border-amber-500/30';
-    } else if (role === 'resident') {
+    } else if (normalizedRole === 'resident') {
         color = 'text-emerald-400';
         bg = 'bg-emerald-500/10';
         border = 'border-emerald-500/30';
     }
 
     return {
-        title: faction ? `${faction} ${baseClass}` : `Level 1 ${baseClass}`,
+        title: faction ? `${faction} ${baseClass}` : `${getRoleLabel(normalizedRole)} ${baseClass}`,
         color,
         bg,
         border

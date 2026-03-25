@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarService } from '../services/CalendarService';
 import { CalendarEvent } from '../types';
+import { getRoleLabel, hasAnyRole, normalizeUserRole } from '../utils/roles';
 
 interface LeaveListProps {
     date: Date;
@@ -34,8 +35,12 @@ export const LeaveList: React.FC<LeaveListProps> = ({ date }) => {
         fetchLeaves();
     }, [date]);
 
-    const consultants = leaves.filter(l => l.user?.role === 'consultant' || l.user?.role === 'moderator' || l.user?.role === 'training_officer' || l.user?.role === 'admin');
-    const residents = leaves.filter(l => l.user?.role === 'resident');
+    const consultants = leaves.filter((leave) => hasAnyRole(normalizeUserRole(leave.user?.role), ['consultant', 'moderator', 'training_officer', 'admin']));
+    const residents = leaves.filter((leave) => normalizeUserRole(leave.user?.role) === 'resident');
+    const otherRoles = leaves.filter((leave) => {
+        const role = normalizeUserRole(leave.user?.role);
+        return !hasAnyRole(role, ['consultant', 'moderator', 'training_officer', 'admin', 'resident']);
+    });
 
     if (loading) {
         return <div className="animate-pulse flex space-y-2 flex-col p-4 opacity-50">
@@ -71,7 +76,9 @@ export const LeaveList: React.FC<LeaveListProps> = ({ date }) => {
                             </div>
                             <div className="flex-1">
                                 <p className="text-sm font-medium text-white">{item.user?.full_name}</p>
-                                <p className="text-[10px] text-slate-400">{item.title || 'On Leave'}</p>
+                                <p className="text-[10px] text-slate-400">
+                                    {getRoleLabel(item.user?.role)} · {item.title || 'On Leave'}
+                                </p>
                             </div>
                         </div>
                     ))}
@@ -88,8 +95,7 @@ export const LeaveList: React.FC<LeaveListProps> = ({ date }) => {
             </h3>
             {renderSection('Consultants', consultants)}
             {renderSection('Residents', residents)}
-            {/* Fallback for others if needed */}
-            {renderSection('Others', leaves.filter(l => !['consultant', 'moderator', 'training_officer', 'admin', 'resident'].includes(l.user?.role || '')))}
+            {renderSection('Others', otherRoles)}
         </div>
     );
 };
