@@ -289,7 +289,6 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
         <div className="space-y-5">
           <QuizSectionHeader
             title="Aunt Minnie"
-            description="Image-first sessions."
             onBack={() => setMode('landing')}
           />
           {error ? (
@@ -309,9 +308,6 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-400/16 bg-amber-500/[0.08] text-amber-200">
                     <span className="material-icons text-[21px]">visibility</span>
                   </div>
-                </div>
-                <div className="mt-5 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
-                  <p className="text-sm leading-6 text-slate-300">Live image rounds and rapid differentials.</p>
                 </div>
                 <button
                   type="button"
@@ -353,6 +349,12 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
                 </button>
               </div>
             </section>
+
+            <div
+              aria-hidden="true"
+              className="xl:hidden"
+              style={{ height: 'var(--mobile-bottom-nav-clearance)' }}
+            />
           </div>
         </div>
       ) : null}
