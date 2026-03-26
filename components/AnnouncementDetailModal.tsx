@@ -6,6 +6,7 @@ import { saveAnnouncementForUser, unsaveAnnouncementForUser } from '../services/
 import { toastError, toastSuccess } from '../utils/toast';
 import { getNewsCategoryStyleTokens } from '../utils/newsStyleTokens';
 import NewsActionChip from './news/NewsActionChip';
+import { MODAL_DISMISS_SWIPE_THRESHOLD_PX, MODAL_DISMISS_VERTICAL_TOLERANCE_PX } from '../utils/mobileGestures';
 
 interface AnnouncementDetailModalProps {
   announcement: Announcement | null;
@@ -38,8 +39,14 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
   const [moreMenuPos, setMoreMenuPos] = useState<{ top: number; left: number } | null>(null);
   const moreTriggerRef = useRef<HTMLDivElement | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const scrollBodyRef = useRef<HTMLDivElement | null>(null);
+  const dismissStartYRef = useRef<number | null>(null);
+  const dismissStartXRef = useRef<number | null>(null);
+  const dismissTrackingRef = useRef(false);
+  const [dragOffsetY, setDragOffsetY] = useState(0);
 
   const categoryStyles = getNewsCategoryStyleTokens(announcement.category);
+  const isMobileViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 1279px)').matches;
 
   useEffect(() => {
     setIsSaved(Boolean(announcement.is_saved));
@@ -252,11 +259,79 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
     };
   }, [isMoreMenuOpen, canManage]);
 
+  const resetDismissGesture = () => {
+    dismissStartYRef.current = null;
+    dismissStartXRef.current = null;
+    dismissTrackingRef.current = false;
+    setDragOffsetY(0);
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!isMobileViewport || event.touches.length !== 1) {
+      resetDismissGesture();
+      return;
+    }
+
+    if ((scrollBodyRef.current?.scrollTop || 0) > 0) {
+      resetDismissGesture();
+      return;
+    }
+
+    dismissStartYRef.current = event.touches[0].clientY;
+    dismissStartXRef.current = event.touches[0].clientX;
+    dismissTrackingRef.current = true;
+  };
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (!isMobileViewport || !dismissTrackingRef.current || event.touches.length !== 1) {
+      return;
+    }
+
+    const startY = dismissStartYRef.current;
+    const startX = dismissStartXRef.current;
+    if (startY === null || startX === null) {
+      return;
+    }
+
+    if ((scrollBodyRef.current?.scrollTop || 0) > 0) {
+      resetDismissGesture();
+      return;
+    }
+
+    const deltaY = event.touches[0].clientY - startY;
+    const deltaX = event.touches[0].clientX - startX;
+    if (deltaY <= 0) {
+      setDragOffsetY(0);
+      return;
+    }
+
+    if (Math.abs(deltaX) > MODAL_DISMISS_VERTICAL_TOLERANCE_PX) {
+      resetDismissGesture();
+      return;
+    }
+
+    setDragOffsetY(Math.min(deltaY * 0.7, MODAL_DISMISS_SWIPE_THRESHOLD_PX + 40));
+  };
+
+  const handleTouchEnd = () => {
+    const shouldDismiss = dismissTrackingRef.current && dragOffsetY >= MODAL_DISMISS_SWIPE_THRESHOLD_PX;
+    resetDismissGesture();
+    if (shouldDismiss) {
+      onClose();
+    }
+  };
+
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-app/90 backdrop-blur-md animate-in fade-in duration-200 p-4 sm:p-6" onClick={onClose}>
       <div
-        className="w-full max-w-2xl bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] sm:max-h-[90vh]"
+        data-disable-app-swipe-back="true"
+        className="w-full max-w-2xl bg-[#0B101A] border border-white/5 rounded-[2rem] sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] sm:max-h-[90vh] transition-transform"
+        style={{ transform: dragOffsetY > 0 ? `translateY(${dragOffsetY}px)` : undefined }}
         onClick={(e) => e.stopPropagation()}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         <div className="p-5 bg-black/40 border-b border-white/5 relative overflow-hidden shrink-0">
           <div className="absolute top-0 right-0 w-48 h-48 bg-sky-500/10 blur-[60px] rounded-full pointer-events-none transform -translate-y-1/2 translate-x-1/2" />
@@ -280,7 +355,7 @@ const AnnouncementDetailModal: React.FC<AnnouncementDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+        <div ref={scrollBodyRef} className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <NewsActionChip onClick={handleToggleSave} disabled={!supportsSaved || saving} icon={isSaved ? 'bookmark' : 'bookmark_border'} className="disabled:opacity-40">
               {isSaved ? 'Saved' : 'Save'}

@@ -5,6 +5,11 @@ import { triggerHaptic } from '../utils/haptics';
 import { useAppViewport } from './responsive/useViewport';
 import { getScreenLayoutMode } from './layout/screenLayoutConfig';
 import AppAmbientBackground from './AppAmbientBackground';
+import {
+  APP_EDGE_SWIPE_DISTANCE_PX,
+  APP_EDGE_SWIPE_TRIGGER_PX,
+  APP_EDGE_SWIPE_VERTICAL_TOLERANCE_PX,
+} from '../utils/mobileGestures';
 
 export const LayoutScrollContext = React.createContext<HTMLElement | null>(null);
 
@@ -12,12 +17,39 @@ interface LayoutProps {
   children: React.ReactNode;
   activeScreen: Screen;
   setScreen: (screen: Screen) => void;
+  onNavigateBack?: () => void;
+  canNavigateBack?: boolean;
   prefetchScreen?: (screen: Screen) => void;
   unreadNotificationsCount?: number;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, prefetchScreen, unreadNotificationsCount = 0 }) => {
+const isSwipeGestureBlocked = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  // Any region marked with this attribute opts out of app-shell back swipe arming.
+  return Boolean(
+    target.closest(
+      'input, textarea, select, button, a, [role="button"], [contenteditable="true"], [data-disable-app-swipe-back="true"]',
+    ),
+  );
+};
+
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  activeScreen,
+  setScreen,
+  onNavigateBack,
+  canNavigateBack = false,
+  prefetchScreen,
+  unreadNotificationsCount = 0,
+}) => {
   const mainRef = useRef<HTMLElement>(null);
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
+  const swipeEdgeRef = useRef<'left' | 'right' | null>(null);
+  const swipeBlockedRef = useRef(false);
   const [scrollContainer, setScrollContainer] = useState<HTMLElement | null>(null);
   const [isNavHologramActive, setIsNavHologramActive] = useState(false);
   const [isBottomNavHidden, setIsBottomNavHidden] = useState(false);
@@ -147,11 +179,80 @@ const Layout: React.FC<LayoutProps> = ({ children, activeScreen, setScreen, pref
     event.preventDefault();
   };
 
+  const resetSwipeGesture = () => {
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+    swipeEdgeRef.current = null;
+    swipeBlockedRef.current = false;
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (isDesktop || !canNavigateBack || event.touches.length !== 1) {
+      resetSwipeGesture();
+      return;
+    }
+
+    const touch = event.touches[0];
+    const viewportWidth = window.innerWidth;
+    const isLeftEdge = touch.clientX <= APP_EDGE_SWIPE_TRIGGER_PX;
+    const isRightEdge = touch.clientX >= viewportWidth - APP_EDGE_SWIPE_TRIGGER_PX;
+
+    if (!isLeftEdge && !isRightEdge) {
+      resetSwipeGesture();
+      return;
+    }
+
+    swipeBlockedRef.current = isSwipeGestureBlocked(event.target);
+    swipeStartXRef.current = touch.clientX;
+    swipeStartYRef.current = touch.clientY;
+    swipeEdgeRef.current = isLeftEdge ? 'left' : 'right';
+  };
+
+  const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (isDesktop || !canNavigateBack || swipeBlockedRef.current || event.touches.length !== 1) {
+      return;
+    }
+
+    const startX = swipeStartXRef.current;
+    const startY = swipeStartYRef.current;
+    const edge = swipeEdgeRef.current;
+
+    if (startX === null || startY === null || !edge) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - startX;
+    const deltaY = touch.clientY - startY;
+    const isHorizontalEnough = Math.abs(deltaY) <= APP_EDGE_SWIPE_VERTICAL_TOLERANCE_PX;
+    const completedSwipe =
+      edge === 'left'
+        ? deltaX >= APP_EDGE_SWIPE_DISTANCE_PX
+        : deltaX <= -APP_EDGE_SWIPE_DISTANCE_PX;
+
+    if (completedSwipe && isHorizontalEnough) {
+      triggerHaptic('light');
+      onNavigateBack?.();
+      resetSwipeGesture();
+    }
+  };
+
+  const handleTouchEnd = () => {
+    resetSwipeGesture();
+  };
+
   return (
     <LayoutScrollContext.Provider value={scrollContainer}>
-      <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary" style={shellStyle}>
+        <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary" style={shellStyle}>
         <AppAmbientBackground className="z-0" />
-        <div className="relative flex min-h-0 flex-1" onWheel={handleDesktopShellWheel}>
+        <div
+          className="relative flex min-h-0 flex-1"
+          onWheel={handleDesktopShellWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+        >
           {isDesktop && !hideBottomNav && (
             <aside className="hidden xl:block">
               {/* Edge-Docked Vertical Nav */}

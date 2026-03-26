@@ -21,12 +21,20 @@ import { useAppViewport } from './responsive/useViewport';
 interface NewsfeedPanelProps {
   currentUserId?: string | null;
   variant: 'screen' | 'modal';
+  refreshToken?: number;
   onClose?: () => void;
   onNavigateToTarget?: (screen: Screen, entityId?: string | null) => void;
   onUnreadCountChange?: (count: number) => void;
 }
 
-const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ currentUserId, variant, onClose, onNavigateToTarget, onUnreadCountChange }) => {
+const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({
+  currentUserId,
+  variant,
+  refreshToken = 0,
+  onClose,
+  onNavigateToTarget,
+  onUnreadCountChange,
+}) => {
   const viewport = useAppViewport();
   const isDesktop = viewport === 'desktop';
   const SNAPSHOT_STALE_MS = 60_000;
@@ -187,6 +195,16 @@ const NewsfeedPanel: React.FC<NewsfeedPanelProps> = ({ currentUserId, variant, o
     return () => clearInterval(poll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, activeTab]);
+
+  useEffect(() => {
+    if (!userId || refreshToken === 0) return;
+
+    refreshNotifications(userId, true).catch((err) => console.error('Manual refresh failed:', err));
+    if (activeTab === 'activity') {
+      loadActivity(userId).catch((err) => console.error('Activity refresh failed:', err));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, refreshToken, userId]);
 
   useEffect(() => {
     if (activeTab === 'activity' && userId) {

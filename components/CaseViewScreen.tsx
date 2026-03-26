@@ -8,6 +8,12 @@ import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
 import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
+import {
+    IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
+    IMAGE_DOUBLE_TAP_DELAY_MS,
+    IMAGE_SWIPE_THRESHOLD_PX,
+    IMAGE_SWIPE_VERTICAL_TOLERANCE_PX,
+} from '../utils/mobileGestures';
 
 interface CaseViewScreenProps {
     caseData: any;
@@ -15,10 +21,6 @@ interface CaseViewScreenProps {
     onEdit: () => void;
 }
 
-const SWIPE_THRESHOLD_PX = 56;
-const SWIPE_VERTICAL_TOLERANCE_PX = 48;
-const DOUBLE_TAP_DELAY_MS = 260;
-const DISMISS_SWIPE_THRESHOLD_PX = 120;
 const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
 
 const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit }) => {
@@ -493,7 +495,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                                 if (event.touches.length === 1) {
                                     const tapAt = Date.now();
-                                    if (tapAt - lastTapAtRef.current <= DOUBLE_TAP_DELAY_MS) {
+                                    if (tapAt - lastTapAtRef.current <= IMAGE_DOUBLE_TAP_DELAY_MS) {
                                         event.preventDefault();
                                         const targetZoom = imageZoom > 1.4 ? 1 : 2;
                                         zoomViewerAtPoint(event.touches[0].clientX, event.touches[0].clientY, targetZoom);
@@ -602,8 +604,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     if (startX !== null && startY !== null && endX !== null && endY !== null && imageZoom <= 1.05) {
                                         const deltaX = endX - startX;
                                         const deltaY = endY - startY;
-                                        const horizontalSwipe = Math.abs(deltaX) >= SWIPE_THRESHOLD_PX;
-                                        const verticalEnough = Math.abs(deltaY) <= SWIPE_VERTICAL_TOLERANCE_PX;
+                                        const horizontalSwipe = Math.abs(deltaX) >= IMAGE_SWIPE_THRESHOLD_PX;
+                                        const verticalEnough = Math.abs(deltaY) <= IMAGE_SWIPE_VERTICAL_TOLERANCE_PX;
 
                                         if (horizontalSwipe && verticalEnough) {
                                             if (deltaX < 0) {
@@ -618,7 +620,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 if (touchModeRef.current === 'dismiss') {
                                     const startY = touchStartYRef.current;
                                     const endY = touchCurrentYRef.current;
-                                    if (startY !== null && endY !== null && endY - startY >= DISMISS_SWIPE_THRESHOLD_PX && imageZoom <= 1.05) {
+                                    if (startY !== null && endY !== null && endY - startY >= IMAGE_DISMISS_SWIPE_THRESHOLD_PX && imageZoom <= 1.05) {
                                         closeImageModal();
                                         return;
                                     }

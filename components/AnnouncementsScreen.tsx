@@ -21,6 +21,7 @@ import NewsPageShell from './news/NewsPageShell';
 import NewsCardBase from './news/NewsCardBase';
 import NewsCardBadge from './news/NewsCardBadge';
 import TopRightCreateAction from './TopRightCreateAction';
+import MobilePullToRefresh from './mobile/MobilePullToRefresh';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 import { getAnnouncementsWorkspace, getCachedAnnouncementsWorkspace } from '../services/announcementsWorkspaceService';
 
@@ -162,6 +163,11 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
   const canManageAnyAnnouncement = canManageAnyAnnouncementRole(userRoles);
   const canManageOwnAnnouncement = (authorId: string) => hasRole(userRoles, 'consultant') && currentUserId === authorId;
   const canManageAnnouncement = (authorId: string) => canManageAnyAnnouncement || canManageOwnAnnouncement(authorId);
+  const refreshAnnouncementFeed = async () => {
+    invalidateCacheByPrefix('announcements:page:');
+    setPage(0);
+    await fetchAnnouncements(0, true);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -730,18 +736,19 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
 
   return (
     <>
-      <NewsPageShell
-        title="News"
-        headerAction={canCreateAnnouncement ? (
-          <TopRightCreateAction
-            label="Add news"
-            icon="post_add"
-            onClick={() => setShowCreateModal(true)}
-            aria-label="Create news"
-            compact
-          />
-        ) : null}
-        searchFilterBar={
+      <MobilePullToRefresh onRefresh={refreshAnnouncementFeed} indicatorLabel="Pull to refresh news">
+        <NewsPageShell
+          title="News"
+          headerAction={canCreateAnnouncement ? (
+            <TopRightCreateAction
+              label="Add news"
+              icon="post_add"
+              onClick={() => setShowCreateModal(true)}
+              aria-label="Create news"
+              compact
+            />
+          ) : null}
+          searchFilterBar={
           <div ref={typeMenuRef} className="relative mb-0 flex items-center gap-2">
             <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30 -mx-1.5 w-full">
               <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">
@@ -807,9 +814,9 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
               </div>
             </div>
           </div>
-        }
-        topUtilityRegion={null}
-        feedRegion={
+          }
+          topUtilityRegion={null}
+          feedRegion={
           <div className="space-y-4 pt-2">
             {loading && resultCount === 0 ? (
               <LoadingState title="Loading News..." compact />
@@ -870,8 +877,9 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ initialOpenAn
               )}
             </div>
           </div>
-        }
-      />
+          }
+        />
+      </MobilePullToRefresh>
 
       {showCreateModal && (
         <CreateAnnouncementModal

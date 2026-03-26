@@ -87,6 +87,7 @@ const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
 const App: React.FC = () => {
   useThemePreference();
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
+  const currentScreenRef = useRef<Screen>('dashboard');
   const [session, setSession] = useState<Session | null>(null);
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isBootReady, setIsBootReady] = useState(false);
@@ -104,6 +105,7 @@ const App: React.FC = () => {
   const [initialUploadType, setInitialUploadType] = useState<SubmissionType>('interesting_case');
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
+  const [navigationHistory, setNavigationHistory] = useState<Screen[]>([]);
   const hasReleasedBootRef = useRef(false);
   const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bootProgressTweenRef = useRef<number | null>(null);
@@ -139,6 +141,10 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  useEffect(() => {
+    currentScreenRef.current = currentScreen;
+  }, [currentScreen]);
 
   useEffect(() => {
     return () => {
@@ -488,14 +494,43 @@ const App: React.FC = () => {
     window.localStorage.setItem(RECENT_SCREENS_STORAGE_KEY, JSON.stringify(next));
   };
 
-  const navigateToScreen = (screen: Screen) => {
+  const navigateToScreen = (screen: Screen, options?: { replaceHistory?: boolean }) => {
+    const previousScreen = currentScreenRef.current;
+    if (screen === previousScreen) {
+      return;
+    }
+
+    if (!options?.replaceHistory) {
+      setNavigationHistory((prev) => [...prev, previousScreen].slice(-24));
+    }
+
     markSnapshotSectionsSeenForScreen(screen);
     if (screen !== 'announcements') {
       setPendingAnnouncementId(null);
     }
 
+    currentScreenRef.current = screen;
     setCurrentScreen(screen);
     updateRecentScreens(screen);
+  };
+
+  const navigateBack = () => {
+    setNavigationHistory((prev) => {
+      const previousScreen = prev[prev.length - 1];
+      if (!previousScreen) {
+        return prev;
+      }
+
+      markSnapshotSectionsSeenForScreen(previousScreen);
+      if (previousScreen !== 'announcements') {
+        setPendingAnnouncementId(null);
+      }
+
+      currentScreenRef.current = previousScreen;
+      setCurrentScreen(previousScreen);
+      updateRecentScreens(previousScreen);
+      return prev.slice(0, -1);
+    });
   };
 
   const handleNewsfeedNavigate = (screen: Screen, entityId?: string | null) => {
@@ -540,7 +575,7 @@ const App: React.FC = () => {
       case 'quiz':
         return <QuizScreen onOpenLiveAuntMinnie={() => navigateToScreen('live-aunt-minnie')} />;
       case 'live-aunt-minnie':
-        return <LiveAuntMinnieScreen onBack={() => navigateToScreen('quiz')} />;
+        return <LiveAuntMinnieScreen onBack={navigateBack} />;
       case 'calendar':
         return <CalendarScreen />;
       case 'case-view':
@@ -549,7 +584,7 @@ const App: React.FC = () => {
             caseData={caseToEdit}
             onBack={() => {
               setCaseToEdit(null);
-              navigateToScreen('search');
+              navigateBack();
             }}
             onEdit={() => {
               setInitialUploadType((caseToEdit?.submission_type as SubmissionType) || 'interesting_case');
@@ -606,12 +641,12 @@ const App: React.FC = () => {
       case 'article-library':
         return <ArticleLibraryScreen />;
       case 'resident-endorsements':
-        return <ResidentEndorsementsScreen onBack={() => navigateToScreen('residents-corner')} />;
+        return <ResidentEndorsementsScreen onBack={navigateBack} />;
       case 'monthly-census':
         return (
           <MonthlyCensusPage
             residentId={session?.user?.id || null}
-            onBack={() => navigateToScreen('residents-corner')}
+            onBack={navigateBack}
             onHome={() => navigateToScreen('dashboard')}
             onSubmitted={() => navigateToScreen('dashboard')}
           />
@@ -663,6 +698,8 @@ const App: React.FC = () => {
           <Layout
             activeScreen={currentScreen}
             setScreen={navigateToScreen}
+            onNavigateBack={navigateBack}
+            canNavigateBack={navigationHistory.length > 0}
             prefetchScreen={prefetchScreen}
             unreadNotificationsCount={unreadNotificationsCount}
           >
