@@ -46,6 +46,12 @@ const QuizLandingView: React.FC<QuizLandingViewProps> = ({
           onClick={onOpenMcq}
         />
       </div>
+
+      <div
+        aria-hidden="true"
+        className="xl:hidden"
+        style={{ height: 'var(--mobile-bottom-nav-clearance)' }}
+      />
     </div>
   );
 };
