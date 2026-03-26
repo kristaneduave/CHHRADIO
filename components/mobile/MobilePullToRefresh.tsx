@@ -34,6 +34,7 @@ const MobilePullToRefresh: React.FC<MobilePullToRefreshProps> = ({
   const hapticTriggeredRef = useRef(false);
 
   const isEnabled = viewport !== 'desktop' && !disabled;
+  const progress = Math.min(1, pullDistance / PULL_TO_REFRESH_TRIGGER_PX);
   const indicatorText = useMemo(() => {
     if (refreshing) return 'Refreshing...';
     if (pullDistance >= PULL_TO_REFRESH_TRIGGER_PX) return 'Release to refresh';
@@ -129,15 +130,27 @@ const MobilePullToRefresh: React.FC<MobilePullToRefreshProps> = ({
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center overflow-hidden"
         style={{
-          height: `${Math.max(pullDistance, refreshing ? 56 : 0)}px`,
+          height: `${Math.max(pullDistance, refreshing ? 48 : 0)}px`,
           opacity: pullDistance > 0 || refreshing ? 1 : 0,
         }}
       >
-        <div className="mt-2 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-[#091420]/85 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100 shadow-lg backdrop-blur-md">
-          <span className={`material-icons text-[15px] ${refreshing ? 'animate-spin' : ''}`}>
-            {refreshing ? 'progress_activity' : 'south'}
+        <div className="mt-2 flex flex-col items-center gap-1.5">
+          <div className="relative h-4 w-10">
+            <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/10" />
+            <div
+              className={`absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-200/35 bg-cyan-100/90 shadow-[0_0_14px_rgba(165,243,252,0.25)] transition-transform duration-200 ${refreshing ? 'animate-pulse' : ''}`}
+              style={{
+                transform: `translate(-50%, -50%) scale(${refreshing ? 1.1 : 0.65 + (progress * 0.5)})`,
+              }}
+            />
+          </div>
+          <div
+            className="h-px rounded-full bg-cyan-200/70 transition-all duration-150"
+            style={{ width: `${refreshing ? 40 : 10 + (progress * 30)}px` }}
+          />
+          <span className="text-[10px] font-medium tracking-[0.12em] text-slate-400">
+            {indicatorText}
           </span>
-          <span>{indicatorText}</span>
         </div>
       </div>
 
