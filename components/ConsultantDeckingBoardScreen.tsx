@@ -43,7 +43,12 @@ type DropTarget = {
   zone: 'pill' | 'lane' | 'unassigned';
 } | null;
 
-const DOCTOR_COLUMNS: { key: ConsultantDeckingColumnKey; label: string; accent: string }[] = [
+type ConsultantDeckingColumnMeta = {
+  key: ConsultantDeckingColumnKey;
+  label: string;
+};
+
+const DOCTOR_COLUMNS: Array<ConsultantDeckingColumnMeta & { accent: string }> = [
   { key: 'reynes', label: 'Dr. Reynes', accent: 'border-violet-300/25 bg-violet-500/[0.08] text-violet-100' },
   { key: 'alvarez', label: 'Dr. Alvarez', accent: 'border-amber-300/25 bg-amber-500/[0.08] text-amber-100' },
   { key: 'co-ng', label: 'Dr. Co-Ng', accent: 'border-emerald-300/25 bg-emerald-500/[0.08] text-emerald-100' },
@@ -77,23 +82,16 @@ const DIFFICULTY_ACCENT: Record<ConsultantDeckingDifficulty, string> = {
   hard: 'shadow-[0_0_0_1px_rgba(253,164,175,0.3),0_10px_24px_rgba(244,63,94,0.14)]',
 };
 
-const DIFFICULTY_LABEL: Record<ConsultantDeckingDifficulty, string> = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-};
-
-const SOURCE_LABEL: Record<ConsultantDeckingPatientSource, string> = {
-  inpatient: 'Inpatient',
-  er: 'ER',
-  outpatient: 'OPD',
-};
-
 const SOURCE_SYMBOL: Record<ConsultantDeckingPatientSource, string> = {
   inpatient: 'I',
   er: 'ER',
   outpatient: 'O',
 };
+
+const EXPORT_COLUMNS: ConsultantDeckingColumnMeta[] = [
+  { key: 'inbox', label: 'Unassigned patients' },
+  ...DOCTOR_COLUMNS.map(({ key, label }) => ({ key, label })),
+];
 
 const labelize = (value: string) => {
   if (value === 'er') return 'ER';
@@ -101,6 +99,62 @@ const labelize = (value: string) => {
     .split('-')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+};
+
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const formatExportDateTime = (value: Date) =>
+  value.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+const buildDeckingExportHtml = (
+  groupedEntries: Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>,
+  exportedAt: Date,
+) => {
+  const sections = EXPORT_COLUMNS.map((column) => {
+    const columnEntries = groupedEntries.get(column.key) || [];
+    const items = columnEntries.length
+      ? `<ol>${columnEntries
+          .map((entry) =>
+            `<li><strong>${escapeHtml(entry.patientName)}</strong> <span>(${escapeHtml(labelize(entry.difficulty))}, ${escapeHtml(labelize(entry.patientSource))})</span></li>`)
+          .join('')}</ol>`
+      : '<p>No patients assigned.</p>';
+
+    return `<section><h2>${escapeHtml(column.label)}</h2>${items}</section>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Consultant Decking Export</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; color: #111827; line-height: 1.5; }
+      h1 { margin-bottom: 4px; }
+      h2 { margin-top: 28px; margin-bottom: 8px; font-size: 20px; }
+      p { margin: 0 0 12px; }
+      ol { margin: 0; padding-left: 24px; }
+      li + li { margin-top: 6px; }
+      span { color: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <h1>Consultant Decking</h1>
+    <p>Exported ${escapeHtml(formatExportDateTime(exportedAt))}</p>
+    ${sections}
+  </body>
+</html>`;
 };
 
 const PatientPill: React.FC<{
@@ -166,6 +220,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [editDraft, setEditDraft] = React.useState<DraftState>(EMPTY_DRAFT);
   const [editColumnKey, setEditColumnKey] = React.useState<ConsultantDeckingColumnKey>('inbox');
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
+  const [isExporting, setIsExporting] = React.useState(false);
 
   const groupedEntries = React.useMemo(() => {
     const grouped = new Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>();
@@ -340,6 +395,29 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
   };
 
+  const handleExportSummary = () => {
+    try {
+      setIsExporting(true);
+      const exportedAt = new Date();
+      const html = buildDeckingExportHtml(groupedEntries, exportedAt);
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStamp = exportedAt.toISOString().slice(0, 10);
+      link.href = url;
+      link.download = `consultant-decking-${dateStamp}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toastSuccess('Summary exported');
+    } catch (error: any) {
+      toastError('Unable to export summary', error?.message || 'Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <PageShell layoutMode="wide" contentClassName="space-y-6">
       <PageHeader
@@ -371,8 +449,18 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             <p className="text-sm font-semibold text-white">Create patient</p>
             <p className="mt-1 text-sm text-slate-400">Add a patient, then drag the pill to the right consultant.</p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300">
-            {entries.length} active
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleExportSummary}
+              disabled={!currentUserId || loading || isExporting}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isExporting ? 'Exporting...' : 'Export summary'}
+            </button>
+            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300">
+              {entries.length} active
+            </div>
           </div>
         </div>
 
@@ -436,15 +524,6 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-slate-300">
               {unassignedEntries.length}
             </span>
-          </div>
-
-          <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-slate-400">
-            <span className={`rounded-full border px-2.5 py-1 ${DIFFICULTY_TONE.easy}`}>{DIFFICULTY_LABEL.easy}</span>
-            <span className={`rounded-full border px-2.5 py-1 ${DIFFICULTY_TONE.medium}`}>{DIFFICULTY_LABEL.medium}</span>
-            <span className={`rounded-full border px-2.5 py-1 ${DIFFICULTY_TONE.hard}`}>{DIFFICULTY_LABEL.hard}</span>
-            <span className={`rounded-full border px-2.5 py-1 ${SOURCE_TONE.inpatient}`}>{SOURCE_SYMBOL.inpatient} {SOURCE_LABEL.inpatient}</span>
-            <span className={`rounded-full border px-2.5 py-1 ${SOURCE_TONE.er}`}>{SOURCE_SYMBOL.er} {SOURCE_LABEL.er}</span>
-            <span className={`rounded-full border px-2.5 py-1 ${SOURCE_TONE.outpatient}`}>{SOURCE_SYMBOL.outpatient} {SOURCE_LABEL.outpatient}</span>
           </div>
 
           <div

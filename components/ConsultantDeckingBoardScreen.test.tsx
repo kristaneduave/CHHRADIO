@@ -54,6 +54,7 @@ describe('ConsultantDeckingBoardScreen', () => {
     toastSuccess.mockReset();
     subscribeToConsultantDeckingEntries.mockReturnValue(() => undefined);
     reorderDeckingEntries.mockImplementation((entries) => entries);
+    vi.restoreAllMocks();
   });
 
   it('blocks guests with a sign-in notice', () => {
@@ -256,5 +257,55 @@ describe('ConsultantDeckingBoardScreen', () => {
     });
 
     expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'reynes', 0);
+  });
+
+  it('exports the current board as a downloadable html summary', async () => {
+    listConsultantDeckingEntries.mockResolvedValue([
+      {
+        id: 'entry-1',
+        patientName: 'Juan Dela Cruz',
+        difficulty: 'hard',
+        patientSource: 'er',
+        columnKey: 'reynes',
+        position: 0,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+    ]);
+
+    const originalCreateElement = document.createElement.bind(document);
+    const clickSpy = vi.fn();
+    const anchor = originalCreateElement('a');
+    anchor.click = clickSpy;
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string) => {
+      if (tagName === 'a') {
+        return anchor;
+      }
+      return originalCreateElement(tagName);
+    }) as typeof document.createElement);
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      writable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      writable: true,
+      value: vi.fn(),
+    });
+    const createObjectURLSpy = vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
+    const revokeObjectURLSpy = vi.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Export summary' }));
+
+    expect(createObjectURLSpy).toHaveBeenCalled();
+    expect(anchor.download).toContain('consultant-decking-');
+    expect(anchor.download).toContain('.html');
+    expect(clickSpy).toHaveBeenCalled();
+    expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:test');
+    expect(toastSuccess).toHaveBeenCalledWith('Summary exported');
+    createElementSpy.mockRestore();
   });
 });
