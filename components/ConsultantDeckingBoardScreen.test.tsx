@@ -8,6 +8,7 @@ const {
   createConsultantDeckingEntry,
   updateConsultantDeckingEntry,
   moveConsultantDeckingEntry,
+  reorderDeckingEntries,
   deleteConsultantDeckingEntry,
   subscribeToConsultantDeckingEntries,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   createConsultantDeckingEntry: vi.fn(),
   updateConsultantDeckingEntry: vi.fn(),
   moveConsultantDeckingEntry: vi.fn(),
+  reorderDeckingEntries: vi.fn(),
   deleteConsultantDeckingEntry: vi.fn(),
   subscribeToConsultantDeckingEntries: vi.fn(),
 }));
@@ -29,6 +31,7 @@ vi.mock('../services/consultantDeckingService', () => ({
   createConsultantDeckingEntry,
   updateConsultantDeckingEntry,
   moveConsultantDeckingEntry,
+  reorderDeckingEntries,
   deleteConsultantDeckingEntry,
   subscribeToConsultantDeckingEntries,
 }));
@@ -44,11 +47,13 @@ describe('ConsultantDeckingBoardScreen', () => {
     createConsultantDeckingEntry.mockReset();
     updateConsultantDeckingEntry.mockReset();
     moveConsultantDeckingEntry.mockReset();
+    reorderDeckingEntries.mockReset();
     deleteConsultantDeckingEntry.mockReset();
     subscribeToConsultantDeckingEntries.mockReset();
     toastError.mockReset();
     toastSuccess.mockReset();
     subscribeToConsultantDeckingEntries.mockReturnValue(() => undefined);
+    reorderDeckingEntries.mockImplementation((entries) => entries);
   });
 
   it('blocks guests with a sign-in notice', () => {
@@ -58,7 +63,7 @@ describe('ConsultantDeckingBoardScreen', () => {
     expect(listConsultantDeckingEntries).not.toHaveBeenCalled();
   });
 
-  it('renders five columns and creates new cards in the inbox', async () => {
+  it('renders the unassigned section and four doctor lanes, then creates a patient pill', async () => {
     listConsultantDeckingEntries
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
@@ -79,14 +84,15 @@ describe('ConsultantDeckingBoardScreen', () => {
 
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: 'Inbox' })).toBeInTheDocument();
+    expect(await screen.findByText('Unassigned patients')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Inbox' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Reynes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Alvarez' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Co-Ng' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Vaño-Yu' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Juan Dela Cruz' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add to inbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {
       expect(createConsultantDeckingEntry).toHaveBeenCalledWith({
@@ -96,10 +102,10 @@ describe('ConsultantDeckingBoardScreen', () => {
       });
     });
 
-    expect(await screen.findByText('Juan Dela Cruz')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' })).toBeInTheDocument();
   });
 
-  it('updates cards and moves them through the editor fallback', async () => {
+  it('updates a patient and moves it to a consultant through the lightweight editor', async () => {
     listConsultantDeckingEntries
       .mockResolvedValueOnce([
         {
@@ -135,10 +141,10 @@ describe('ConsultantDeckingBoardScreen', () => {
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Edit consultant decking card' });
+    const dialog = await screen.findByRole('dialog', { name: 'Edit consultant decking patient' });
     fireEvent.change(within(dialog).getByLabelText('Edit difficulty'), { target: { value: 'medium' } });
-    fireEvent.change(within(dialog).getByLabelText('Move to column'), { target: { value: 'alvarez' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+    fireEvent.change(within(dialog).getByLabelText('Move to lane'), { target: { value: 'alvarez' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => {
       expect(updateConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', {
@@ -149,5 +155,106 @@ describe('ConsultantDeckingBoardScreen', () => {
     });
 
     expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'alvarez', 0);
+  });
+
+  it('supports returning a patient to unassigned through the editor fallback', async () => {
+    listConsultantDeckingEntries
+      .mockResolvedValueOnce([
+        {
+          id: 'entry-1',
+          patientName: 'Juan Dela Cruz',
+          difficulty: 'medium',
+          patientSource: 'inpatient',
+          columnKey: 'reynes',
+          position: 0,
+          createdBy: 'user-1',
+          updatedBy: 'user-1',
+          createdAt: '2026-03-27T00:00:00Z',
+          updatedAt: '2026-03-27T00:00:00Z',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'entry-1',
+          patientName: 'Juan Dela Cruz',
+          difficulty: 'medium',
+          patientSource: 'inpatient',
+          columnKey: 'inbox',
+          position: 0,
+          createdBy: 'user-1',
+          updatedBy: 'user-1',
+          createdAt: '2026-03-27T00:00:00Z',
+          updatedAt: '2026-03-27T00:00:00Z',
+        },
+      ]);
+    updateConsultantDeckingEntry.mockResolvedValue(undefined);
+    moveConsultantDeckingEntry.mockResolvedValue(undefined);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit consultant decking patient' });
+    fireEvent.change(within(dialog).getByLabelText('Move to lane'), { target: { value: 'inbox' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'inbox', 0);
+    });
+  });
+
+  it('moves a patient immediately on drop before the server refresh', async () => {
+    const initialEntries = [
+      {
+        id: 'entry-1',
+        patientName: 'Juan Dela Cruz',
+        difficulty: 'hard',
+        patientSource: 'er',
+        columnKey: 'inbox',
+        position: 0,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+    ];
+
+    const movedEntries = [
+      {
+        ...initialEntries[0],
+        columnKey: 'reynes',
+        position: 0,
+      },
+    ];
+
+    listConsultantDeckingEntries.mockResolvedValue(initialEntries);
+    reorderDeckingEntries.mockReturnValue(movedEntries);
+    moveConsultantDeckingEntry.mockResolvedValue(undefined);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    const pill = await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' });
+    const laneHeading = screen.getByRole('heading', { name: 'Dr. Reynes' });
+    const laneDropZone = laneHeading.parentElement?.parentElement;
+    expect(laneDropZone).not.toBeNull();
+
+    fireEvent.dragStart(pill, {
+      dataTransfer: {
+        effectAllowed: '',
+        setData: vi.fn(),
+      },
+    });
+
+    fireEvent.drop(laneDropZone as HTMLElement, {
+      dataTransfer: {
+        getData: () => 'entry-1',
+      },
+      preventDefault: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(reorderDeckingEntries).toHaveBeenCalledWith(initialEntries, 'entry-1', 'reynes', 0);
+    });
+
+    expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'reynes', 0);
   });
 });

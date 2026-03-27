@@ -164,8 +164,9 @@ describe('consultantDeckingService', () => {
     expect(reordered.filter((entry) => entry.columnKey === 'reynes').map((entry) => entry.position)).toEqual([0, 1]);
   });
 
-  it('persists reordered positions through upsert payloads on move', async () => {
-    const upsert = vi.fn().mockResolvedValue({ error: null });
+  it('persists reordered positions through row updates on move', async () => {
+    const eq = vi.fn().mockResolvedValue({ error: null });
+    const update = vi.fn(() => ({ eq }));
 
     mockFrom
       .mockReturnValueOnce(
@@ -197,14 +198,25 @@ describe('consultantDeckingService', () => {
         ]),
       )
       .mockReturnValueOnce({
-        upsert,
+        update,
+      })
+      .mockReturnValueOnce({
+        update,
       });
 
     await moveConsultantDeckingEntry('a', 'reynes', 1);
 
-    expect(upsert).toHaveBeenCalledWith([
-      { id: 'b', column_key: 'reynes', position: 0, updated_by: 'user-2' },
-      { id: 'a', column_key: 'reynes', position: 1, updated_by: 'user-1' },
-    ]);
+    expect(update).toHaveBeenNthCalledWith(1, {
+      column_key: 'reynes',
+      position: 0,
+      updated_by: 'user-2',
+    });
+    expect(eq).toHaveBeenNthCalledWith(1, 'id', 'b');
+    expect(update).toHaveBeenNthCalledWith(2, {
+      column_key: 'reynes',
+      position: 1,
+      updated_by: 'user-1',
+    });
+    expect(eq).toHaveBeenNthCalledWith(2, 'id', 'a');
   });
 });

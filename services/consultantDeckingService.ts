@@ -92,6 +92,23 @@ const requireUserId = async () => {
   return user.id;
 };
 
+const persistEntryPositions = async (
+  rows: Array<{ id: string; column_key: ConsultantDeckingColumnKey; position: number; updated_by: string | null }>,
+) => {
+  for (const row of rows) {
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .update({
+        column_key: row.column_key,
+        position: row.position,
+        updated_by: row.updated_by,
+      })
+      .eq('id', row.id);
+
+    if (error) throw error;
+  }
+};
+
 const fetchConsultantDeckingEntries = async (): Promise<ConsultantDeckingEntry[]> => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
@@ -217,8 +234,7 @@ export const deleteConsultantDeckingEntry = async (id: string): Promise<void> =>
   if (error) throw error;
 
   if (reorderedSource.length) {
-    const { error: reorderError } = await supabase.from(TABLE_NAME).upsert(reorderedSource);
-    if (reorderError) throw reorderError;
+    await persistEntryPositions(reorderedSource);
   }
 
   consultantDeckingCache = null;
@@ -283,8 +299,7 @@ export const moveConsultantDeckingEntry = async (
     updated_by: entry.id === id ? userId : entry.updatedBy,
   }));
 
-  const { error } = await supabase.from(TABLE_NAME).upsert(payload);
-  if (error) throw error;
+  await persistEntryPositions(payload);
 
   consultantDeckingCache = null;
 };
