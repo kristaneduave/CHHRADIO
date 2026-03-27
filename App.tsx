@@ -23,6 +23,7 @@ import {
   loadArticleLibraryScreen,
   loadCalendarScreen,
   loadCaseViewScreen,
+  loadConsultantDeckingBoardScreen,
   loadLiveAuntMinnieScreen,
   loadMonthlyCensusPage,
   loadNewsfeedScreen,
@@ -58,6 +59,7 @@ const TRACKABLE_SCREENS: Screen[] = [
   'residents-corner',
   'article-library',
   'resident-endorsements',
+  'consultant-decking',
   'profile',
 ];
 
@@ -71,6 +73,7 @@ const AnnouncementsScreen = lazy(loadAnnouncementsScreen);
 const CaseViewScreen = lazy(loadCaseViewScreen);
 const ResidentsCornerScreen = lazy(loadResidentsCornerScreen);
 const ResidentEndorsementsScreen = lazy(loadResidentEndorsementsScreen);
+const ConsultantDeckingBoardScreen = lazy(loadConsultantDeckingBoardScreen);
 const ArticleLibraryScreen = lazy(loadArticleLibraryScreen);
 const NewsfeedScreen = lazy(loadNewsfeedScreen);
 const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
@@ -636,12 +639,20 @@ const App: React.FC = () => {
           <ResidentsCornerScreen
             onOpenMonthlyCensus={() => navigateToScreen('monthly-census')}
             onOpenResidentEndorsements={() => navigateToScreen('resident-endorsements')}
+            onOpenConsultantDecking={() => navigateToScreen('consultant-decking')}
           />
         );
       case 'article-library':
         return <ArticleLibraryScreen />;
       case 'resident-endorsements':
         return <ResidentEndorsementsScreen onBack={navigateBack} />;
+      case 'consultant-decking':
+        return (
+          <ConsultantDeckingBoardScreen
+            currentUserId={session?.user?.id || null}
+            onBack={navigateBack}
+          />
+        );
       case 'monthly-census':
         return (
           <MonthlyCensusPage

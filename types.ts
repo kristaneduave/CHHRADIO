@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'consultant-decking' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
@@ -9,12 +9,35 @@ export type PathologyGuidelineRequestStatus = 'pending' | 'reviewed' | 'approved
 export type PathologyGuidelineContentType = 'checklist' | 'guideline' | 'review';
 
 export type ToastKind = 'success' | 'error' | 'info';
+export type ConsultantDeckingColumnKey = 'inbox' | 'reynes' | 'alvarez' | 'co-ng' | 'vano-yu';
+export type ConsultantDeckingDifficulty = 'easy' | 'medium' | 'hard';
+export type ConsultantDeckingPatientSource = 'inpatient' | 'er' | 'outpatient';
 
 export interface ToastMessage {
   id: string;
   kind: ToastKind;
   title: string;
   description?: string;
+}
+
+export interface ConsultantDeckingEntry {
+  id: string;
+  patientName: string;
+  difficulty: ConsultantDeckingDifficulty;
+  patientSource: ConsultantDeckingPatientSource;
+  columnKey: ConsultantDeckingColumnKey;
+  position: number;
+  createdBy: string | null;
+  updatedBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConsultantDeckingEntryInput {
+  patientName: string;
+  difficulty: ConsultantDeckingDifficulty;
+  patientSource: ConsultantDeckingPatientSource;
+  columnKey?: ConsultantDeckingColumnKey;
 }
 
 export interface ScreenMeta {

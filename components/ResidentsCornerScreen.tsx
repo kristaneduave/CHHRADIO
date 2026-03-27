@@ -19,6 +19,7 @@ const SCOPE_REMAINING = 'Remaining studies';
 interface ResidentsCornerScreenProps {
     onOpenMonthlyCensus?: () => void;
     onOpenResidentEndorsements?: () => void;
+    onOpenConsultantDecking?: () => void;
 }
 
 // Generate a unique ID for each slot to track overrides
@@ -26,7 +27,7 @@ const getSlotId = (hospitalId: string, modalityId: string, day: string, index: n
     return `${hospitalId}-${modalityId}-${day}-${index}`;
 };
 
-const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenResidentEndorsements }) => {
+const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMonthlyCensus, onOpenResidentEndorsements, onOpenConsultantDecking }) => {
     const cachedBootstrap = getCachedResidentsCornerBootstrap();
     const [selectedHospitalId, setSelectedHospitalId] = useState('fuente');
     const [expandedModality, setExpandedModality] = useState<string | null>(null);
@@ -186,7 +187,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
         return count + (modality.schedule[currentDayName] || []).length;
     }, 0);
     const quickActionCount =
-        4 +
+        5 +
         (needleNavigatorEnabled ? 1 : 0) +
         (pickleballEnabled ? 1 : 0) +
         (!isRoleLoading && canOpenEndorsements ? 1 : 0);
@@ -558,6 +559,17 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                         <span className="material-icons text-[14px]">checklist</span>
                     </div>
                     <h3 className="truncate text-xs font-bold text-amber-200 transition-colors group-hover:text-white">Monthly Census</h3>
+                </button>
+
+                <button
+                    onClick={() => onOpenConsultantDecking?.()}
+                    className="relative flex w-full items-center gap-2.5 overflow-hidden rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-2.5 text-left transition-all active:scale-[0.99] group hover:bg-cyan-500/[0.12]"
+                >
+                    <div className="absolute inset-0 translate-x-[-100%] bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 transition-transform duration-1000 group-hover:translate-x-[100%]"></div>
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-cyan-500/30 bg-cyan-500/20 text-cyan-300 transition-transform group-hover:scale-110">
+                        <span className="material-icons text-[14px]">view_kanban</span>
+                    </div>
+                    <h3 className="truncate text-xs font-bold text-cyan-200 transition-colors group-hover:text-white">Consultant Decking</h3>
                 </button>
 
                 <a
@@ -970,6 +982,17 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                                         <span className="material-icons text-[14px]">checklist</span>
                                     </div>
                                     <h3 className="text-xs font-bold text-amber-200 group-hover:text-white transition-colors truncate">Monthly Census</h3>
+                                </button>
+
+                                <button
+                                    onClick={() => onOpenConsultantDecking?.()}
+                                    className="w-full text-left rounded-xl border border-cyan-500/20 bg-cyan-500/[0.06] p-2.5 flex items-center gap-2.5 group hover:bg-cyan-500/[0.12] transition-all active:scale-[0.99] relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/0 via-cyan-500/10 to-cyan-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                                    <div className="w-7 h-7 shrink-0 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-300 group-hover:scale-110 transition-transform border border-cyan-500/30">
+                                        <span className="material-icons text-[14px]">view_kanban</span>
+                                    </div>
+                                    <h3 className="text-xs font-bold text-cyan-200 group-hover:text-white transition-colors truncate">Consultant Decking</h3>
                                 </button>
 
                                 <a

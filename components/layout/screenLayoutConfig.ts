@@ -16,6 +16,7 @@ export const SCREEN_LAYOUT_CONFIG: Record<Screen, ScreenLayoutMode> = {
   'case-view': 'wide',
   'residents-corner': 'wide',
   'resident-endorsements': 'content',
+  'consultant-decking': 'wide',
   'article-library': 'split',
   newsfeed: 'split',
   'monthly-census': 'wide',

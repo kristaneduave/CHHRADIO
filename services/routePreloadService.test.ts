@@ -8,6 +8,7 @@ const {
   preloadLiveAuntMinnieWorkspace,
   preloadCurrentProfileHome,
   preloadResidentsCornerBootstrap,
+  preloadConsultantDeckingEntries,
 } = vi.hoisted(() => ({
   preloadArticleLibraryLanding: vi.fn(async () => undefined),
   preloadAnnouncementsWorkspace: vi.fn(async () => undefined),
@@ -16,6 +17,7 @@ const {
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
   preloadCurrentProfileHome: vi.fn(async () => undefined),
   preloadResidentsCornerBootstrap: vi.fn(async () => undefined),
+  preloadConsultantDeckingEntries: vi.fn(async () => undefined),
 }));
 
 vi.mock('./articleLibraryService', () => ({
@@ -46,6 +48,10 @@ vi.mock('./residentsCornerService', () => ({
   preloadResidentsCornerBootstrap,
 }));
 
+vi.mock('./consultantDeckingService', () => ({
+  preloadConsultantDeckingEntries,
+}));
+
 describe('routePreloadService', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -56,6 +62,7 @@ describe('routePreloadService', () => {
     preloadCalendarWorkspace.mockClear();
     preloadCurrentProfileHome.mockClear();
     preloadResidentsCornerBootstrap.mockClear();
+    preloadConsultantDeckingEntries.mockClear();
   });
 
   it('warms quiz and aunt minnie data when preloading quiz', async () => {
@@ -114,5 +121,13 @@ describe('routePreloadService', () => {
     await preloadRouteForScreen('residents-corner');
 
     expect(preloadResidentsCornerBootstrap).toHaveBeenCalledTimes(1);
+  });
+
+  it('warms consultant decking data when preloading consultant decking', async () => {
+    const { preloadRouteForScreen } = await import('./routePreloadService');
+
+    await preloadRouteForScreen('consultant-decking');
+
+    expect(preloadConsultantDeckingEntries).toHaveBeenCalledTimes(1);
   });
 });

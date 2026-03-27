@@ -5,6 +5,7 @@ import { preloadCalendarWorkspace } from './calendarWorkspaceService';
 import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
 import { preloadCurrentProfileHome } from './profileHomeService';
 import { preloadQuizWorkspace } from './quizService';
+import { preloadConsultantDeckingEntries } from './consultantDeckingService';
 import { preloadResidentsCornerBootstrap } from './residentsCornerService';
 
 const memoizeImport = <T,>(loader: () => Promise<T>) => {
@@ -27,6 +28,7 @@ export const loadAnnouncementsScreen = memoizeImport(() => import('../components
 export const loadCaseViewScreen = memoizeImport(() => import('../components/CaseViewScreen'));
 export const loadResidentsCornerScreen = memoizeImport(() => import('../components/ResidentsCornerScreen'));
 export const loadResidentEndorsementsScreen = memoizeImport(() => import('../components/ResidentEndorsementsScreen'));
+export const loadConsultantDeckingBoardScreen = memoizeImport(() => import('../components/ConsultantDeckingBoardScreen'));
 export const loadArticleLibraryScreen = memoizeImport(() => import('../components/ArticleLibraryScreen'));
 export const loadNewsfeedScreen = memoizeImport(() => import('../components/NewsfeedScreen'));
 export const loadAnatomyScreen = memoizeImport(() => import('../components/AnatomyComingSoonScreen'));
@@ -44,6 +46,7 @@ const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   'case-view': loadCaseViewScreen,
   'residents-corner': loadResidentsCornerScreen,
   'resident-endorsements': loadResidentEndorsementsScreen,
+  'consultant-decking': loadConsultantDeckingBoardScreen,
   'article-library': loadArticleLibraryScreen,
   newsfeed: loadNewsfeedScreen,
   anatomy: loadAnatomyScreen,
@@ -63,6 +66,7 @@ const SCREEN_DATA_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = 
   },
   'live-aunt-minnie': preloadLiveAuntMinnieWorkspace,
   'residents-corner': preloadResidentsCornerBootstrap,
+  'consultant-decking': preloadConsultantDeckingEntries,
 };
 
 export const preloadRouteForScreen = async (screen: Screen): Promise<void> => {
@@ -94,6 +98,7 @@ export const preloadMajorRouteChunks = async (): Promise<void> => {
     loadAnnouncementsScreen(),
     loadResidentsCornerScreen(),
     loadResidentEndorsementsScreen(),
+    loadConsultantDeckingBoardScreen(),
     loadArticleLibraryScreen(),
     loadQuizScreen(),
     loadMonthlyCensusPage(),
