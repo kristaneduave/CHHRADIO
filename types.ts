@@ -136,6 +136,27 @@ export interface CaseComment {
   };
 }
 
+export interface AnatomyImageItem {
+  id: string;
+  section: string;
+  title: string;
+  subtitle?: string;
+  caption?: string;
+  thumbnailUrl: string;
+  imageUrl: string;
+  externalUrl?: string;
+  externalLabel?: string;
+  tags?: string[];
+  modality?: string;
+  sortOrder: number;
+}
+
+export interface AnatomySection {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export interface CaseRating {
   id: string;
   case_id: string;
