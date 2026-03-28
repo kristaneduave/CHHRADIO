@@ -510,7 +510,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
 
   const unassignedEntries = groupedEntries.get('inbox') || [];
 
-  const loadEntries = React.useCallback(async (options?: { silent?: boolean; force?: boolean }) => {
+  const loadEntries = React.useCallback(async (options?: { silent?: boolean; force?: boolean; suppressError?: boolean }) => {
     if (!currentUserId) {
       setEntries([]);
       setLoading(false);
@@ -525,7 +525,9 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       const nextEntries = await listConsultantDeckingEntries({ force: options?.force });
       setEntries(nextEntries);
     } catch (error: any) {
-      toastError('Unable to load consultant decking board', error?.message || 'Please refresh and try again.');
+      if (!options?.suppressError) {
+        toastError('Unable to load consultant decking board', error?.message || 'Please refresh and try again.');
+      }
     } finally {
       if (!options?.silent) {
         setLoading(false);
@@ -543,8 +545,34 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
 
     return subscribeToConsultantDeckingEntries(() => {
-      loadEntries({ silent: true, force: true }).catch(() => undefined);
+      loadEntries({ silent: true, force: true, suppressError: true }).catch(() => undefined);
     });
+  }, [currentUserId, loadEntries]);
+
+  React.useEffect(() => {
+    if (!currentUserId) {
+      return undefined;
+    }
+
+    const runRefresh = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      loadEntries({ silent: true, force: true, suppressError: true }).catch(() => undefined);
+    };
+
+    const intervalId = window.setInterval(runRefresh, 5000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        runRefresh();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [currentUserId, loadEntries]);
 
   const resetDraft = () => setDraft(createEmptyDraft());
