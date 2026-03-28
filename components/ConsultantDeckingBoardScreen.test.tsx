@@ -43,6 +43,7 @@ vi.mock('../utils/toast', () => ({
 
 describe('ConsultantDeckingBoardScreen', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     listConsultantDeckingEntries.mockReset();
     createConsultantDeckingEntry.mockReset();
     updateConsultantDeckingEntry.mockReset();
@@ -112,6 +113,21 @@ describe('ConsultantDeckingBoardScreen', () => {
     });
 
     expect(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' })).toBeInTheDocument();
+    expect(screen.queryByText('Create patient')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add a patient, then drag the pill to the right consultant.')).not.toBeInTheDocument();
+  });
+
+  it('defaults the draft date and time to the current local values', async () => {
+    const now = new Date();
+    const expectedDate = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now.getDate()}`.padStart(2, '0')}`;
+    const expectedTime = `${`${now.getHours()}`.padStart(2, '0')}:${`${now.getMinutes()}`.padStart(2, '0')}`;
+    listConsultantDeckingEntries.mockResolvedValue([]);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Unassigned patients')).toBeInTheDocument();
+    expect(screen.getByLabelText('Study date')).toHaveValue(expectedDate);
+    expect(screen.getByLabelText('Study time')).toHaveValue(expectedTime);
   });
 
   it('updates a patient and moves it to a consultant through the editor', async () => {
@@ -327,7 +343,7 @@ describe('ConsultantDeckingBoardScreen', () => {
 
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Export summary' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Export Summary' }));
 
     expect(createObjectURLSpy).toHaveBeenCalled();
     expect(anchor.download).toContain('consultant-decking-');
@@ -414,5 +430,39 @@ describe('ConsultantDeckingBoardScreen', () => {
       'Edit Medium OPD',
       'Edit Easy ER',
     ]);
+
+    expect(within(reyesLane as HTMLElement).getByText('Hard 2, Medium 1, Easy 1')).toBeInTheDocument();
+    expect(within(reyesLane as HTMLElement).getByText('ER 2, Inpatient 1, OPD 1')).toBeInTheDocument();
+  });
+
+  it('shows a unified disposition and difficulty pill with the real description', async () => {
+    listConsultantDeckingEntries.mockResolvedValue([
+      {
+        id: 'entry-1',
+        patientName: 'Dy, Vicente',
+        difficulty: 'hard',
+        patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:20',
+        studyDescription: 'CT angiography-PE',
+        columnKey: 'alvarez',
+        position: 0,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+    ]);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    const pill = await screen.findByRole('button', { name: 'Edit Dy, Vicente' });
+    expect(within(pill).getByText('ER • HARD')).toBeInTheDocument();
+    expect(within(pill).getByText('Dy, Vicente')).toBeInTheDocument();
+    expect(within(pill).getByText('ER • HARD')).toBeInTheDocument();
+    expect(within(pill).getByText('CT angiography-PE')).toBeInTheDocument();
+    expect(within(pill).queryByText('Study pending')).not.toBeInTheDocument();
+    expect(within(pill).queryByText('CTA')).not.toBeInTheDocument();
+    expect(within(pill).queryByText('HARD')).not.toBeInTheDocument();
   });
 });

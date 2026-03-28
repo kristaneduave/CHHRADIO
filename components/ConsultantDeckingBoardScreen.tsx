@@ -51,6 +51,13 @@ type ConsultantDeckingColumnMeta = {
   label: string;
 };
 
+type StudyFamily = 'CT' | 'CTA' | 'MRI' | 'MRA' | 'OTHER' | 'UNSET';
+
+type StudyOptionGroup = {
+  label: string;
+  options: readonly string[];
+};
+
 const DOCTOR_COLUMNS: Array<ConsultantDeckingColumnMeta & { accent: string }> = [
   { key: 'reynes', label: 'Dr. Reynes', accent: 'border-violet-300/25 bg-violet-500/[0.08] text-violet-100' },
   { key: 'alvarez', label: 'Dr. Alvarez', accent: 'border-amber-300/25 bg-amber-500/[0.08] text-amber-100' },
@@ -61,56 +68,37 @@ const DOCTOR_COLUMNS: Array<ConsultantDeckingColumnMeta & { accent: string }> = 
 const DIFFICULTY_OPTIONS: ConsultantDeckingDifficulty[] = ['easy', 'medium', 'hard'];
 const PATIENT_SOURCE_OPTIONS: ConsultantDeckingPatientSource[] = ['inpatient', 'er', 'outpatient'];
 
-const EMPTY_DRAFT: DraftState = {
-  patientName: '',
-  difficulty: 'medium',
-  patientSource: 'er',
-  studyDate: '',
-  studyTime: '',
-  studyDescription: '',
-};
-
 const DIFFICULTY_TONE: Record<ConsultantDeckingDifficulty, string> = {
-  easy: 'border-emerald-300/45 bg-emerald-400/24 text-emerald-50',
-  medium: 'border-amber-300/45 bg-amber-400/24 text-amber-50',
-  hard: 'border-rose-300/45 bg-rose-400/26 text-rose-50',
+  easy: 'border-emerald-300/70 bg-emerald-400/10 text-emerald-50',
+  medium: 'border-amber-300/75 bg-amber-400/10 text-amber-50',
+  hard: 'border-rose-300/80 bg-rose-400/10 text-rose-50',
 };
 
 const SOURCE_TONE: Record<ConsultantDeckingPatientSource, string> = {
-  inpatient: 'border-slate-200/20 bg-slate-400/15 text-slate-50',
-  er: 'border-cyan-300/30 bg-cyan-400/16 text-cyan-50',
-  outpatient: 'border-fuchsia-300/25 bg-fuchsia-400/16 text-fuchsia-50',
+  inpatient: 'border-slate-300/30 bg-slate-400/14 text-slate-50',
+  er: 'border-sky-300/30 bg-sky-400/14 text-sky-50',
+  outpatient: 'border-teal-300/30 bg-teal-400/14 text-teal-50',
 };
 
 const DIFFICULTY_ACCENT: Record<ConsultantDeckingDifficulty, string> = {
-  easy: 'shadow-[0_0_0_1px_rgba(52,211,153,0.28),0_10px_24px_rgba(16,185,129,0.12)]',
-  medium: 'shadow-[0_0_0_1px_rgba(252,211,77,0.28),0_10px_24px_rgba(245,158,11,0.12)]',
-  hard: 'shadow-[0_0_0_1px_rgba(253,164,175,0.3),0_10px_24px_rgba(244,63,94,0.14)]',
+  easy: '',
+  medium: '',
+  hard: '',
 };
 
 const SOURCE_LABEL: Record<ConsultantDeckingPatientSource, string> = {
-  inpatient: 'INPATIENT',
+  inpatient: 'IN',
   er: 'ER',
   outpatient: 'OPD',
 };
 
-const STUDY_KIND_TONE = {
-  ready: 'border-white/10 bg-white/[0.06] text-white',
-  pending: 'border-amber-300/25 bg-amber-400/10 text-amber-50',
-} as const;
-
-const getStudyKindLabel = (studyDescription?: string | null) => {
-  const normalized = (studyDescription || '').trim();
-  if (!normalized) return 'Study pending';
-
-  const upper = normalized.toUpperCase();
-  if (upper.startsWith('CT ANGIOGRAPHY') || upper.startsWith('CTA')) return 'CTA';
-  if (upper.startsWith('MRA')) return 'MRA';
-  if (upper.startsWith('MR')) return 'MRI';
-  if (upper.startsWith('CT')) return 'CT';
-  if (upper.startsWith('US')) return 'UTZ';
-  if (upper.startsWith('XR') || upper.startsWith('X-RAY')) return 'XR';
-  return normalized.split(/[\s-]+/)[0]?.slice(0, 12).toUpperCase() || 'STUDY';
+const STUDY_FAMILY_TONE: Record<StudyFamily, string> = {
+  CT: 'border-sky-300/25 bg-sky-400/12 text-sky-50',
+  CTA: 'border-cyan-300/30 bg-cyan-400/16 text-cyan-50',
+  MRI: 'border-violet-300/25 bg-violet-400/12 text-violet-50',
+  MRA: 'border-fuchsia-300/25 bg-fuchsia-400/14 text-fuchsia-50',
+  OTHER: 'border-white/10 bg-white/[0.06] text-white',
+  UNSET: 'border-amber-300/25 bg-amber-400/10 text-amber-50',
 };
 
 const DIFFICULTY_PRIORITY: Record<ConsultantDeckingDifficulty, number> = {
@@ -125,71 +113,91 @@ const SOURCE_PRIORITY: Record<ConsultantDeckingPatientSource, number> = {
   outpatient: 2,
 };
 
-const STUDY_DESCRIPTION_OPTIONS = [
-  'CT head facial',
-  'CT brain plain',
-  'CT brain with contrast',
-  'CT chest plain',
-  'CT chest with contrast',
-  'CT stonogram',
-  'CT whole abdomen plain',
-  'CT whole abdomen with contrast',
-  'CT abdomen - Urography',
-  'CT chest and whole abdomen plain',
-  'CT chest and whole abdomen with contrast',
-  'CT upper abdomen plain',
-  'CT upper abdomen with contrast',
-  'CT angiography-PE',
-  'CT neck plain',
-  'CT neck with contrast',
-  'Calcium score',
-  'CT angiography - Extremities',
-  'CT angiography - Coronary',
-  'CT hip plain',
-  'CT pelvis plain',
-  'CT lower abdomen plain',
-  'CT lower abdomen with contrast',
-  'CT spine - Lumbar',
-  'CT extremities - Leg',
-  'CT paranasal sinuses plain',
-  'CT paranasal sinuses with contrast',
-  'CT angiography - Chest',
-  'CT angiography - Brain',
-  'CT temporal fossa plain',
-  'CT angiography - Lower extremities',
-  'MR knee (left)',
-  'MR knee (right)',
-  'MR Lumbar spine plain',
-  'MR Lumbar spine plain with spine screening',
-  'MR Lumbar spine with contrast',
-  'MR brain plain',
-  'MR brain with contrast',
-  'MR thoracolumbar plain',
-  'MR Lumbar spine with spine screening',
-  'MR shoulder (left)',
-  'MR shoulder (right)',
-  'MRA brain plain',
-  'MRA brain with contrast',
-  'MRA brain plain with spine screening',
-  'MR thoracic spine plain',
-  'MR thoracic spine plain with spine screening',
-  'MR cervical spine plain',
-  'MR cervical spine plain with spine screening',
-  'MR multiparametric prostate',
-  'MR biparametric prostate',
-  'MR wrist (left)',
-  'MR wrist (right)',
-  'MR pelvis with contrast',
-  'MR pelvis plain',
-  'MR cardiac plain',
-  'MR cardiac with contrast',
-  'MR whole spine plain',
+const STUDY_OPTION_GROUPS: readonly StudyOptionGroup[] = [
+  {
+    label: 'CT',
+    options: [
+      'CT head facial',
+      'CT brain plain',
+      'CT brain with contrast',
+      'CT chest plain',
+      'CT chest with contrast',
+      'CT stonogram',
+      'CT whole abdomen plain',
+      'CT whole abdomen with contrast',
+      'CT abdomen - Urography',
+      'CT chest and whole abdomen plain',
+      'CT chest and whole abdomen with contrast',
+      'CT upper abdomen plain',
+      'CT upper abdomen with contrast',
+      'CT neck plain',
+      'CT neck with contrast',
+      'CT hip plain',
+      'CT pelvis plain',
+      'CT lower abdomen plain',
+      'CT lower abdomen with contrast',
+      'CT spine - Lumbar',
+      'CT extremities - Leg',
+      'CT paranasal sinuses plain',
+      'CT paranasal sinuses with contrast',
+      'CT temporal fossa plain',
+    ],
+  },
+  {
+    label: 'CTA',
+    options: [
+      'CT angiography-PE',
+      'CT angiography - Extremities',
+      'CT angiography - Coronary',
+      'CT angiography - Chest',
+      'CT angiography - Brain',
+      'CT angiography - Lower extremities',
+    ],
+  },
+  {
+    label: 'MRI',
+    options: [
+      'MR knee (left)',
+      'MR knee (right)',
+      'MR Lumbar spine plain',
+      'MR Lumbar spine plain with spine screening',
+      'MR Lumbar spine with contrast',
+      'MR brain plain',
+      'MR brain with contrast',
+      'MR thoracolumbar plain',
+      'MR Lumbar spine with spine screening',
+      'MR shoulder (left)',
+      'MR shoulder (right)',
+      'MR thoracic spine plain',
+      'MR thoracic spine plain with spine screening',
+      'MR cervical spine plain',
+      'MR cervical spine plain with spine screening',
+      'MR multiparametric prostate',
+      'MR biparametric prostate',
+      'MR wrist (left)',
+      'MR wrist (right)',
+      'MR pelvis with contrast',
+      'MR pelvis plain',
+      'MR cardiac plain',
+      'MR cardiac with contrast',
+      'MR whole spine plain',
+    ],
+  },
+  {
+    label: 'MRA',
+    options: [
+      'MRA brain plain',
+      'MRA brain with contrast',
+      'MRA brain plain with spine screening',
+    ],
+  },
+  {
+    label: 'Other',
+    options: ['Calcium score'],
+  },
 ] as const;
 
-const EXPORT_COLUMNS: ConsultantDeckingColumnMeta[] = [
-  { key: 'inbox', label: 'Unassigned patients' },
-  ...DOCTOR_COLUMNS.map(({ key, label }) => ({ key, label })),
-];
+const EXPORT_COLUMNS: ConsultantDeckingColumnMeta[] = DOCTOR_COLUMNS.map(({ key, label }) => ({ key, label }));
 
 const labelize = (value: string) => {
   if (value === 'er') return 'ER';
@@ -198,6 +206,28 @@ const labelize = (value: string) => {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 };
+
+const toLocalDateInputValue = (value: Date) => {
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toLocalTimeInputValue = (value: Date) => {
+  const hours = `${value.getHours()}`.padStart(2, '0');
+  const minutes = `${value.getMinutes()}`.padStart(2, '0');
+  return `${hours}:${minutes}`;
+};
+
+const createEmptyDraft = (now: Date = new Date()): DraftState => ({
+  patientName: '',
+  difficulty: 'medium',
+  patientSource: 'er',
+  studyDate: toLocalDateInputValue(now),
+  studyTime: toLocalTimeInputValue(now),
+  studyDescription: '',
+});
 
 const escapeHtml = (value: string) =>
   value
@@ -221,9 +251,8 @@ const formatStudyDate = (value?: string | null) => {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString('en-US', {
-    month: 'short',
+    month: 'numeric',
     day: 'numeric',
-    year: 'numeric',
   });
 };
 
@@ -241,7 +270,72 @@ const formatStudyTime = (value?: string | null) => {
 };
 
 const formatStudyDateTimeLabel = (entry: Pick<ConsultantDeckingEntry, 'studyDate' | 'studyTime'>) =>
-  [formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' �?') || 'Study date/time pending';
+  [formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' | ') || 'Study date/time pending';
+
+const resolveStudyFamily = (studyDescription?: string | null): StudyFamily => {
+  const normalized = (studyDescription || '').trim();
+  if (!normalized) return 'UNSET';
+
+  const upper = normalized.toUpperCase();
+  if (upper.startsWith('CT ANGIOGRAPHY') || upper.startsWith('CTA')) return 'CTA';
+  if (upper.startsWith('MRA')) return 'MRA';
+  if (upper.startsWith('MR')) return 'MRI';
+  if (upper.startsWith('CT')) return 'CT';
+  return 'OTHER';
+};
+
+const buildLaneSummary = (entries: ConsultantDeckingEntry[]) => ({
+  difficulty: {
+    hard: entries.filter((entry) => entry.difficulty === 'hard').length,
+    medium: entries.filter((entry) => entry.difficulty === 'medium').length,
+    easy: entries.filter((entry) => entry.difficulty === 'easy').length,
+  },
+  source: {
+    er: entries.filter((entry) => entry.patientSource === 'er').length,
+    inpatient: entries.filter((entry) => entry.patientSource === 'inpatient').length,
+    outpatient: entries.filter((entry) => entry.patientSource === 'outpatient').length,
+  },
+});
+
+const formatLaneSummary = (entries: ConsultantDeckingEntry[]) => {
+  const summary = buildLaneSummary(entries);
+  const difficultyParts = [
+    summary.difficulty.hard > 0 ? `Hard ${summary.difficulty.hard}` : null,
+    summary.difficulty.medium > 0 ? `Medium ${summary.difficulty.medium}` : null,
+    summary.difficulty.easy > 0 ? `Easy ${summary.difficulty.easy}` : null,
+  ].filter(Boolean);
+  const sourceParts = [
+    summary.source.er > 0 ? `ER ${summary.source.er}` : null,
+    summary.source.inpatient > 0 ? `Inpatient ${summary.source.inpatient}` : null,
+    summary.source.outpatient > 0 ? `OPD ${summary.source.outpatient}` : null,
+  ].filter(Boolean);
+
+  return {
+    difficulty: difficultyParts.join(', '),
+    source: sourceParts.join(', '),
+  };
+};
+
+const formatSourceStatus = (entry: Pick<ConsultantDeckingEntry, 'patientSource'>) =>
+  SOURCE_LABEL[entry.patientSource];
+
+const STATUS_TONE_BY_COMBINATION: Record<ConsultantDeckingPatientSource, Record<ConsultantDeckingDifficulty, string>> = {
+  inpatient: {
+    easy: 'border-slate-300/80 bg-slate-100 text-slate-900',
+    medium: 'border-slate-300/80 bg-slate-100 text-slate-900',
+    hard: 'border-slate-300/80 bg-slate-100 text-slate-900',
+  },
+  er: {
+    easy: 'border-rose-300/80 bg-rose-400 text-slate-950',
+    medium: 'border-rose-300/80 bg-rose-400 text-slate-950',
+    hard: 'border-rose-300/80 bg-rose-400 text-slate-950',
+  },
+  outpatient: {
+    easy: 'border-amber-300/80 bg-amber-300 text-amber-950',
+    medium: 'border-amber-300/80 bg-amber-300 text-amber-950',
+    hard: 'border-amber-300/80 bg-amber-300 text-amber-950',
+  },
+};
 
 const sortDeckingEntriesForDisplay = (
   entries: ConsultantDeckingEntry[],
@@ -264,16 +358,29 @@ const buildDeckingExportHtml = (
   groupedEntries: Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>,
   exportedAt: Date,
 ) => {
+  const summaryMarkup = (entries: ConsultantDeckingEntry[]) => {
+    const summary = buildLaneSummary(entries);
+    const chips = [
+      ['Hard', summary.difficulty.hard],
+      ['Medium', summary.difficulty.medium],
+      ['Easy', summary.difficulty.easy],
+      ['ER', summary.source.er],
+      ['Inpatient', summary.source.inpatient],
+      ['OPD', summary.source.outpatient],
+    ];
+
+    return '<div class="summary">' + chips.map(([label, count]) => '<span class="chip">' + escapeHtml(String(label)) + ' ' + escapeHtml(String(count)) + '</span>').join('') + '</div>';
+  };
+
   const sections = EXPORT_COLUMNS.map((column) => {
     const columnEntries = groupedEntries.get(column.key) || [];
     const items = columnEntries.length
-      ? `<ol>${columnEntries
-          .map((entry) =>
-            `<li><strong>${escapeHtml(entry.patientName)}</strong> <span>(${escapeHtml(labelize(entry.difficulty))}, ${escapeHtml(labelize(entry.patientSource))})</span><br /><span>${escapeHtml(entry.studyDescription || 'Study pending')}</span><br /><span>${escapeHtml([formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' �?') || 'Study date/time pending')}</span></li>`)
-          .join('')}</ol>`
+      ? '<ol>' + columnEntries.map((entry) =>
+          '<li><strong>' + escapeHtml(entry.patientName) + '</strong><div class="meta">' + escapeHtml(labelize(entry.patientSource)) + ' | ' + escapeHtml(labelize(entry.difficulty)) + '</div><div>' + escapeHtml(entry.studyDescription || 'Study pending') + '</div><div class="meta">' + escapeHtml(formatStudyDateTimeLabel(entry)) + '</div></li>'
+        ).join('') + '</ol>'
       : '<p>No patients assigned.</p>';
 
-    return `<section><h2>${escapeHtml(column.label)}</h2>${items}</section>`;
+    return '<section><div class="section-header"><h2>' + escapeHtml(column.label) + '</h2><span class="count">' + escapeHtml(String(columnEntries.length)) + '</span></div>' + summaryMarkup(columnEntries) + items + '</section>';
   }).join('');
 
   return `<!DOCTYPE html>
@@ -282,19 +389,25 @@ const buildDeckingExportHtml = (
     <meta charset="utf-8" />
     <title>Consultant Decking Export</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 40px; color: #111827; line-height: 1.5; }
+      body { font-family: Arial, sans-serif; margin: 32px; color: #111827; line-height: 1.5; background: #f8fafc; }
       h1 { margin-bottom: 4px; }
-      h2 { margin-top: 28px; margin-bottom: 8px; font-size: 20px; }
+      h2 { margin: 0; font-size: 18px; }
       p { margin: 0 0 12px; }
-      ol { margin: 0; padding-left: 24px; }
-      li + li { margin-top: 6px; }
-      span { color: #4b5563; }
+      .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
+      section { border: 1px solid #cbd5e1; border-radius: 20px; background: #ffffff; padding: 16px; }
+      .section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .count { border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: #475569; }
+      .summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+      .chip { border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; color: #334155; background: #f8fafc; }
+      ol { margin: 0; padding-left: 20px; }
+      li + li { margin-top: 12px; }
+      .meta { color: #64748b; font-size: 12px; }
     </style>
   </head>
   <body>
     <h1>Consultant Decking</h1>
     <p>Exported ${escapeHtml(formatExportDateTime(exportedAt))}</p>
-    ${sections}
+    <div class="grid">${sections}</div>
   </body>
 </html>`;
 };
@@ -317,58 +430,54 @@ const PatientPill: React.FC<{
   onDrop,
   isDropMarker = false,
   isDragging = false,
-}) => (
-  <div className="space-y-2">
-    {isDropMarker ? <div className="h-[3px] rounded-full bg-cyan-300/80" /> : null}
-    <div
-      role="button"
-      tabIndex={0}
-      draggable
-      onClick={() => onOpen(entry)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onOpen(entry);
-        }
-      }}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      className={`group flex w-full cursor-grab items-start gap-3 rounded-[1.75rem] border border-white/10 px-3.5 py-3 text-left transition-all hover:border-white/18 hover:bg-white/[0.06] active:cursor-grabbing ${DIFFICULTY_TONE[entry.difficulty]} ${DIFFICULTY_ACCENT[entry.difficulty]} ${
-        isDragging ? 'opacity-60' : ''
-      }`}
-      aria-label={`Edit ${entry.patientName}`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px] font-semibold tracking-[-0.01em] text-white">{entry.patientName}</span>
-          </span>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${SOURCE_TONE[entry.patientSource]}`}>
-              {SOURCE_LABEL[entry.patientSource]}
+}) => {
+  return (
+    <div className="space-y-1.5 pt-2.5">
+      {isDropMarker ? <div className="h-[3px] rounded-full bg-cyan-300/80" /> : null}
+      <div
+        role="button"
+        tabIndex={0}
+        draggable
+        onClick={() => onOpen(entry)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onOpen(entry);
+          }
+        }}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        className={`group relative flex w-full cursor-grab items-start gap-3 rounded-[1.6rem] border px-4 pb-2.5 pt-2.5 text-left transition-all hover:border-white/18 hover:bg-white/[0.06] active:cursor-grabbing ${DIFFICULTY_TONE[entry.difficulty]} ${DIFFICULTY_ACCENT[entry.difficulty]} ${
+          isDragging ? 'opacity-60' : ''
+        }`}
+        aria-label={`Edit ${entry.patientName}`}
+      >
+        <span className={`absolute right-3 top-0 -translate-y-[42%] inline-flex rounded-full border px-2.5 py-[5px] text-[10px] font-bold leading-none tracking-[0.12em] shadow-[0_8px_18px_rgba(2,6,23,0.16)] ${STATUS_TONE_BY_COMBINATION[entry.patientSource][entry.difficulty]}`}>
+          {formatSourceStatus(entry)}
+        </span>
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-right">
+          {entry.studyDate ? (
+            <span className="block text-[10px] font-medium text-white/55">
+              {formatStudyDate(entry.studyDate)}
             </span>
-            <span className="rounded-full border border-black/10 bg-black/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] text-white/90">
-              {labelize(entry.difficulty).toUpperCase()}
+          ) : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col items-start justify-center gap-0.5 text-left">
+            <span className="break-words text-[14px] font-semibold leading-tight tracking-[-0.01em] text-white">
+              {entry.patientName}
+            </span>
+            <span className="break-words text-[12px] font-normal leading-snug text-white/74">
+              {entry.studyDescription || 'Study pending'}
             </span>
           </div>
         </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${entry.studyDescription ? STUDY_KIND_TONE.ready : STUDY_KIND_TONE.pending}`}>
-            {getStudyKindLabel(entry.studyDescription)}
-          </span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-white/90">
-            {entry.studyDescription || 'Study pending'}
-          </span>
-        </div>
-        <span className="mt-2 block truncate text-[11px] text-white/70">
-          {formatStudyDateTimeLabel(entry)}
-        </span>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> = ({
   currentUserId,
@@ -377,11 +486,11 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [entries, setEntries] = React.useState<ConsultantDeckingEntry[]>([]);
   const [loading, setLoading] = React.useState(Boolean(currentUserId));
   const [isSaving, setIsSaving] = React.useState(false);
-  const [draft, setDraft] = React.useState<DraftState>(EMPTY_DRAFT);
+  const [draft, setDraft] = React.useState<DraftState>(() => createEmptyDraft());
   const [activeDrag, setActiveDrag] = React.useState<ActiveDragState>(null);
   const [dropTarget, setDropTarget] = React.useState<DropTarget>(null);
   const [editingEntry, setEditingEntry] = React.useState<ConsultantDeckingEntry | null>(null);
-  const [editDraft, setEditDraft] = React.useState<DraftState>(EMPTY_DRAFT);
+  const [editDraft, setEditDraft] = React.useState<DraftState>(() => createEmptyDraft());
   const [editColumnKey, setEditColumnKey] = React.useState<ConsultantDeckingColumnKey>('inbox');
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
@@ -440,7 +549,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     });
   }, [currentUserId, loadEntries]);
 
-  const resetDraft = () => setDraft(EMPTY_DRAFT);
+  const resetDraft = () => setDraft(createEmptyDraft());
 
   const handleCreateEntry = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -516,7 +625,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
 
   const closeEditor = () => {
     setEditingEntry(null);
-    setEditDraft(EMPTY_DRAFT);
+    setEditDraft(createEmptyDraft());
     setEditColumnKey('inbox');
     setIsSubmittingEdit(false);
   };
@@ -605,7 +714,6 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     <PageShell layoutMode="wide" contentClassName="space-y-6 pb-28 xl:pb-32">
       <PageHeader
         title="Consultant Decking"
-        description="Create patients below, then drag each pill to the assigned consultant."
         action={(
           <button
             type="button"
@@ -627,17 +735,6 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       ) : null}
 
       <PageSection className="space-y-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-white">Create patient</p>
-            <p className="mt-1 text-sm text-slate-400">Add a patient, then drag the pill to the right consultant.</p>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300">
-              {entries.length} active
-            </div>
-          </div>
-        </div>
 
         <form className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_170px_160px_minmax(0,1fr)_auto]" onSubmit={handleCreateEntry}>
           <label className="space-y-2">
@@ -715,10 +812,14 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
               aria-label="Study description"
             >
               <option value="">Select study description</option>
-              {STUDY_DESCRIPTION_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
+              {STUDY_OPTION_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </label>
@@ -810,6 +911,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
           {DOCTOR_COLUMNS.map((column) => {
             const columnEntries = groupedEntries.get(column.key) || [];
             const isDropColumn = dropTarget?.columnKey === column.key;
+            const laneSummaryText = formatLaneSummary(columnEntries);
 
             return (
               <PageSection
@@ -838,11 +940,10 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                     handleDropMove(event, column.key, columnEntries.length).catch(() => undefined);
                   }}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-base font-semibold text-white">{column.label}</h2>
-                    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${column.accent}`}>
-                      {columnEntries.length}
-                    </span>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                    <div className="h-8" />
+                    <h2 className="text-center text-base font-semibold text-white">{column.label}</h2>
+                    <div className="h-8" />
                   </div>
 
                   {loading ? (
@@ -905,6 +1006,13 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                       Drop patients here
                     </div>
                   )}
+
+                  <div className="mt-auto border-t border-white/8 pt-3">
+                    <div className="space-y-1 text-[12px] font-medium text-slate-300">
+                      <p>{laneSummaryText.difficulty}</p>
+                      <p>{laneSummaryText.source}</p>
+                    </div>
+                  </div>
                 </div>
               </PageSection>
             );
@@ -917,7 +1025,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-white">Export consultant decking summary</p>
-              <p className="mt-1 text-xs text-slate-400">Generate a clean snapshot of all assigned and unassigned studies.</p>
+              <p className="mt-1 text-xs text-slate-400">Generate a clean 4-column snapshot of the consultant lanes.</p>
             </div>
             <button
               type="button"
@@ -1026,11 +1134,15 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                   className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
                 >
                   <option value="">Select study description</option>
-                  {STUDY_DESCRIPTION_OPTIONS.map((option) => (
+                  {STUDY_OPTION_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((option) => (
                     <option key={option} value={option}>
                       {option}
                     </option>
                   ))}
+                </optgroup>
+              ))}
                 </select>
               </label>
 
@@ -1077,5 +1189,3 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
 };
 
 export default ConsultantDeckingBoardScreen;
-
-
