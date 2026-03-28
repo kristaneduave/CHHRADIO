@@ -23,6 +23,8 @@ export interface ToastMessage {
 export interface ConsultantDeckingEntry {
   id: string;
   patientName: string;
+  patientAge?: number | null;
+  patientSex?: 'M' | 'F' | null;
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
   studyDate?: string | null;
@@ -38,6 +40,8 @@ export interface ConsultantDeckingEntry {
 
 export interface ConsultantDeckingEntryInput {
   patientName: string;
+  patientAge?: number | null;
+  patientSex?: 'M' | 'F' | null;
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
   studyDate?: string;

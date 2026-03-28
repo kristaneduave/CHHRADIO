@@ -72,6 +72,8 @@ describe('ConsultantDeckingBoardScreen', () => {
         {
           id: 'entry-1',
           patientName: 'Juan Dela Cruz',
+          patientAge: 46,
+          patientSex: 'M',
           difficulty: 'hard',
           patientSource: 'er',
           studyDate: '2026-03-27',
@@ -96,6 +98,8 @@ describe('ConsultantDeckingBoardScreen', () => {
     expect(screen.getByRole('heading', { name: 'Dr. Vaño-Yu' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Juan Dela Cruz' } });
+    fireEvent.change(screen.getByLabelText('Patient age'), { target: { value: '46' } });
+    fireEvent.change(screen.getByLabelText('Patient sex'), { target: { value: 'M' } });
     fireEvent.change(screen.getByLabelText('Study date'), { target: { value: '2026-03-27' } });
     fireEvent.change(screen.getByLabelText('Study time'), { target: { value: '08:30' } });
     fireEvent.change(screen.getByLabelText('Study description'), { target: { value: 'CT brain plain' } });
@@ -104,6 +108,8 @@ describe('ConsultantDeckingBoardScreen', () => {
     await waitFor(() => {
       expect(createConsultantDeckingEntry).toHaveBeenCalledWith({
         patientName: 'Juan Dela Cruz',
+        patientAge: 46,
+        patientSex: 'M',
         difficulty: 'medium',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -136,6 +142,8 @@ describe('ConsultantDeckingBoardScreen', () => {
         {
           id: 'entry-1',
           patientName: 'Juan Dela Cruz',
+          patientAge: 46,
+          patientSex: 'M',
           difficulty: 'hard',
           patientSource: 'er',
           studyDate: '2026-03-27',
@@ -153,6 +161,8 @@ describe('ConsultantDeckingBoardScreen', () => {
         {
           id: 'entry-1',
           patientName: 'Juan Dela Cruz',
+          patientAge: 46,
+          patientSex: 'M',
           difficulty: 'medium',
           patientSource: 'er',
           studyDate: '2026-03-27',
@@ -173,6 +183,8 @@ describe('ConsultantDeckingBoardScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit consultant decking patient' });
+    fireEvent.change(within(dialog).getByLabelText('Edit patient age'), { target: { value: '47' } });
+    fireEvent.change(within(dialog).getByLabelText('Edit patient sex'), { target: { value: 'F' } });
     fireEvent.change(within(dialog).getByLabelText('Edit difficulty'), { target: { value: 'medium' } });
     fireEvent.change(within(dialog).getByLabelText('Move to lane'), { target: { value: 'alvarez' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
@@ -180,6 +192,8 @@ describe('ConsultantDeckingBoardScreen', () => {
     await waitFor(() => {
       expect(updateConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', {
         patientName: 'Juan Dela Cruz',
+        patientAge: 47,
+        patientSex: 'F',
         difficulty: 'medium',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -197,6 +211,8 @@ describe('ConsultantDeckingBoardScreen', () => {
         {
           id: 'entry-1',
           patientName: 'Juan Dela Cruz',
+          patientAge: null,
+          patientSex: null,
           difficulty: 'medium',
           patientSource: 'inpatient',
           studyDate: '2026-03-27',
@@ -214,6 +230,8 @@ describe('ConsultantDeckingBoardScreen', () => {
         {
           id: 'entry-1',
           patientName: 'Juan Dela Cruz',
+          patientAge: null,
+          patientSex: null,
           difficulty: 'medium',
           patientSource: 'inpatient',
           studyDate: '2026-03-27',
@@ -247,6 +265,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-1',
         patientName: 'Juan Dela Cruz',
+        patientAge: 46,
+        patientSex: 'M',
         difficulty: 'hard',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -306,6 +326,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-1',
         patientName: 'Juan Dela Cruz',
+        patientAge: 46,
+        patientSex: 'M',
         difficulty: 'hard',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -346,6 +368,8 @@ describe('ConsultantDeckingBoardScreen', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Export Summary' }));
 
     expect(createObjectURLSpy).toHaveBeenCalled();
+    const exportedBlob = createObjectURLSpy.mock.calls[0]?.[0] as Blob;
+    expect(exportedBlob).toBeInstanceOf(Blob);
     expect(anchor.download).toContain('consultant-decking-');
     expect(anchor.download).toContain('.html');
     expect(clickSpy).toHaveBeenCalled();
@@ -359,6 +383,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-1',
         patientName: 'Easy ER',
+        patientAge: null,
+        patientSex: null,
         difficulty: 'easy',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -374,6 +400,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-2',
         patientName: 'Hard Inpatient',
+        patientAge: null,
+        patientSex: null,
         difficulty: 'hard',
         patientSource: 'inpatient',
         studyDate: '2026-03-27',
@@ -389,6 +417,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-3',
         patientName: 'Hard ER',
+        patientAge: null,
+        patientSex: null,
         difficulty: 'hard',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -404,6 +434,8 @@ describe('ConsultantDeckingBoardScreen', () => {
       {
         id: 'entry-4',
         patientName: 'Medium OPD',
+        patientAge: null,
+        patientSex: null,
         difficulty: 'medium',
         patientSource: 'outpatient',
         studyDate: '2026-03-27',
@@ -435,11 +467,13 @@ describe('ConsultantDeckingBoardScreen', () => {
     expect(within(reyesLane as HTMLElement).getByText('ER 2, Inpatient 1, OPD 1')).toBeInTheDocument();
   });
 
-  it('shows a unified disposition and difficulty pill with the real description', async () => {
+  it('shows a source-only pill with the real description and date', async () => {
     listConsultantDeckingEntries.mockResolvedValue([
       {
         id: 'entry-1',
         patientName: 'Dy, Vicente',
+        patientAge: 56,
+        patientSex: 'M',
         difficulty: 'hard',
         patientSource: 'er',
         studyDate: '2026-03-27',
@@ -457,10 +491,10 @@ describe('ConsultantDeckingBoardScreen', () => {
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
     const pill = await screen.findByRole('button', { name: 'Edit Dy, Vicente' });
-    expect(within(pill).getByText('ER • HARD')).toBeInTheDocument();
+    expect(within(pill).getByText('ER')).toBeInTheDocument();
     expect(within(pill).getByText('Dy, Vicente')).toBeInTheDocument();
-    expect(within(pill).getByText('ER • HARD')).toBeInTheDocument();
     expect(within(pill).getByText('CT angiography-PE')).toBeInTheDocument();
+    expect(within(pill).getByText('3/27')).toBeInTheDocument();
     expect(within(pill).queryByText('Study pending')).not.toBeInTheDocument();
     expect(within(pill).queryByText('CTA')).not.toBeInTheDocument();
     expect(within(pill).queryByText('HARD')).not.toBeInTheDocument();

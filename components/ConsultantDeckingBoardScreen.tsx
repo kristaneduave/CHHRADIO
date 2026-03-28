@@ -27,6 +27,8 @@ interface ConsultantDeckingBoardScreenProps {
 
 type DraftState = {
   patientName: string;
+  patientAge: string;
+  patientSex: '' | 'M' | 'F';
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
   studyDate: string;
@@ -67,6 +69,7 @@ const DOCTOR_COLUMNS: Array<ConsultantDeckingColumnMeta & { accent: string }> = 
 
 const DIFFICULTY_OPTIONS: ConsultantDeckingDifficulty[] = ['easy', 'medium', 'hard'];
 const PATIENT_SOURCE_OPTIONS: ConsultantDeckingPatientSource[] = ['inpatient', 'er', 'outpatient'];
+const PATIENT_SEX_OPTIONS: Array<DraftState['patientSex']> = ['M', 'F'];
 
 const DIFFICULTY_TONE: Record<ConsultantDeckingDifficulty, string> = {
   easy: 'border-emerald-300/70 bg-emerald-400/10 text-emerald-50',
@@ -222,6 +225,8 @@ const toLocalTimeInputValue = (value: Date) => {
 
 const createEmptyDraft = (now: Date = new Date()): DraftState => ({
   patientName: '',
+  patientAge: '',
+  patientSex: '',
   difficulty: 'medium',
   patientSource: 'er',
   studyDate: toLocalDateInputValue(now),
@@ -236,15 +241,6 @@ const escapeHtml = (value: string) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
-
-const formatExportDateTime = (value: Date) =>
-  value.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 
 const formatStudyDate = (value?: string | null) => {
   if (!value) return null;
@@ -271,6 +267,14 @@ const formatStudyTime = (value?: string | null) => {
 
 const formatStudyDateTimeLabel = (entry: Pick<ConsultantDeckingEntry, 'studyDate' | 'studyTime'>) =>
   [formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' | ') || 'Study date/time pending';
+
+const formatAgeSex = (entry: Pick<ConsultantDeckingEntry, 'patientAge' | 'patientSex'>) => {
+  const parts = [
+    typeof entry.patientAge === 'number' ? `${entry.patientAge}` : null,
+    entry.patientSex || null,
+  ].filter(Boolean);
+  return parts.join('/') || null;
+};
 
 const resolveStudyFamily = (studyDescription?: string | null): StudyFamily => {
   const normalized = (studyDescription || '').trim();
@@ -356,31 +360,22 @@ const sortDeckingEntriesForDisplay = (
 
 const buildDeckingExportHtml = (
   groupedEntries: Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>,
-  exportedAt: Date,
 ) => {
-  const summaryMarkup = (entries: ConsultantDeckingEntry[]) => {
-    const summary = buildLaneSummary(entries);
-    const chips = [
-      ['Hard', summary.difficulty.hard],
-      ['Medium', summary.difficulty.medium],
-      ['Easy', summary.difficulty.easy],
-      ['ER', summary.source.er],
-      ['Inpatient', summary.source.inpatient],
-      ['OPD', summary.source.outpatient],
-    ];
-
-    return '<div class="summary">' + chips.map(([label, count]) => '<span class="chip">' + escapeHtml(String(label)) + ' ' + escapeHtml(String(count)) + '</span>').join('') + '</div>';
-  };
-
   const sections = EXPORT_COLUMNS.map((column) => {
     const columnEntries = groupedEntries.get(column.key) || [];
+    const buildMeta = (entry: ConsultantDeckingEntry) => {
+      const parts = [formatAgeSex(entry), formatStudyDateTimeLabel(entry)].filter(Boolean);
+      return parts.length
+        ? `<div class="meta">${parts.map((part) => `<span>${escapeHtml(part)}</span>`).join('<span class="dot">|</span>')}</div>`
+        : '';
+    };
     const items = columnEntries.length
-      ? '<ol>' + columnEntries.map((entry) =>
-          '<li><strong>' + escapeHtml(entry.patientName) + '</strong><div class="meta">' + escapeHtml(labelize(entry.patientSource)) + ' | ' + escapeHtml(labelize(entry.difficulty)) + '</div><div>' + escapeHtml(entry.studyDescription || 'Study pending') + '</div><div class="meta">' + escapeHtml(formatStudyDateTimeLabel(entry)) + '</div></li>'
-        ).join('') + '</ol>'
-      : '<p>No patients assigned.</p>';
+      ? '<div class="list">' + columnEntries.map((entry) =>
+          '<article class="item"><div class="row"><strong>' + escapeHtml(entry.patientName) + '</strong><span class="source">' + escapeHtml(labelize(entry.patientSource)) + '</span></div>' + buildMeta(entry) + '<div class="study">' + escapeHtml(entry.studyDescription || 'Study pending') + '</div></article>'
+        ).join('') + '</div>'
+      : '<p class="empty">No patients assigned.</p>';
 
-    return '<section><div class="section-header"><h2>' + escapeHtml(column.label) + '</h2><span class="count">' + escapeHtml(String(columnEntries.length)) + '</span></div>' + summaryMarkup(columnEntries) + items + '</section>';
+    return '<section><div class="section-header"><h2>' + escapeHtml(column.label) + '</h2></div>' + items + '</section>';
   }).join('');
 
   return `<!DOCTYPE html>
@@ -392,21 +387,23 @@ const buildDeckingExportHtml = (
       body { font-family: Arial, sans-serif; margin: 32px; color: #111827; line-height: 1.5; background: #f8fafc; }
       h1 { margin-bottom: 4px; }
       h2 { margin: 0; font-size: 18px; }
-      p { margin: 0 0 12px; }
+      p { margin: 0; }
       .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
-      section { border: 1px solid #cbd5e1; border-radius: 20px; background: #ffffff; padding: 16px; }
-      .section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-      .count { border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; color: #475569; }
-      .summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-      .chip { border: 1px solid #cbd5e1; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 700; color: #334155; background: #f8fafc; }
-      ol { margin: 0; padding-left: 20px; }
-      li + li { margin-top: 12px; }
-      .meta { color: #64748b; font-size: 12px; }
+      section { border: 1px solid #cbd5e1; border-radius: 20px; background: #ffffff; padding: 18px; }
+      .section-header { margin-bottom: 14px; }
+      .list { display: grid; gap: 12px; }
+      .item { border-top: 1px solid #e2e8f0; padding-top: 12px; }
+      .item:first-child { border-top: 0; padding-top: 0; }
+      .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .source { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #334155; }
+      .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; color: #64748b; font-size: 12px; }
+      .dot { color: #94a3b8; }
+      .study { margin-top: 4px; color: #0f172a; }
+      .empty { color: #64748b; font-size: 13px; }
     </style>
   </head>
   <body>
     <h1>Consultant Decking</h1>
-    <p>Exported ${escapeHtml(formatExportDateTime(exportedAt))}</p>
     <div class="grid">${sections}</div>
   </body>
 </html>`;
@@ -494,6 +491,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [editColumnKey, setEditColumnKey] = React.useState<ConsultantDeckingColumnKey>('inbox');
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
+  const [isClearingAll, setIsClearingAll] = React.useState(false);
 
   const groupedEntries = React.useMemo(() => {
     const grouped = new Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>();
@@ -572,6 +570,8 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       setIsSaving(true);
       await createConsultantDeckingEntry({
         patientName,
+        patientAge: draft.patientAge ? Number(draft.patientAge) : null,
+        patientSex: draft.patientSex || null,
         difficulty: draft.difficulty,
         patientSource: draft.patientSource,
         studyDate: draft.studyDate,
@@ -614,6 +614,8 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     setEditingEntry(entry);
     setEditDraft({
       patientName: entry.patientName,
+      patientAge: typeof entry.patientAge === 'number' ? String(entry.patientAge) : '',
+      patientSex: entry.patientSex || '',
       difficulty: entry.difficulty,
       patientSource: entry.patientSource,
       studyDate: entry.studyDate || '',
@@ -648,6 +650,8 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       setIsSubmittingEdit(true);
       await updateConsultantDeckingEntry(editingEntry.id, {
         patientName,
+        patientAge: editDraft.patientAge ? Number(editDraft.patientAge) : null,
+        patientSex: editDraft.patientSex || null,
         difficulty: editDraft.difficulty,
         patientSource: editDraft.patientSource,
         studyDate: editDraft.studyDate,
@@ -691,7 +695,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     try {
       setIsExporting(true);
       const exportedAt = new Date();
-      const html = buildDeckingExportHtml(groupedEntries, exportedAt);
+      const html = buildDeckingExportHtml(groupedEntries);
       const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -710,18 +714,52 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
   };
 
+  const handleClearAll = async () => {
+    if (!currentUserId || !entries.length) return;
+
+    try {
+      setIsClearingAll(true);
+      await Promise.all(entries.map((entry) => deleteConsultantDeckingEntry(entry.id)));
+      await loadEntries({ force: true });
+      closeEditor();
+      toastSuccess('Board cleared');
+    } catch (error: any) {
+      toastError('Unable to clear board', error?.message || 'Please try again.');
+    } finally {
+      setIsClearingAll(false);
+    }
+  };
+
   return (
     <PageShell layoutMode="wide" contentClassName="space-y-6 pb-28 xl:pb-32">
       <PageHeader
         title="Consultant Decking"
         action={(
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white"
-          >
-            Back
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleClearAll}
+              disabled={!currentUserId || loading || isClearingAll || !entries.length}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isClearingAll ? 'Clearing...' : 'Clear All'}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportSummary}
+              disabled={!currentUserId || loading || isExporting || isClearingAll}
+              className="rounded-full border border-cyan-200/30 bg-cyan-400/20 px-4 py-2 text-sm font-semibold text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-400/28 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isExporting ? 'Exporting...' : 'Export Summary'}
+            </button>
+            <button
+              type="button"
+              onClick={onBack}
+              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white"
+            >
+              Back
+            </button>
+          </div>
         )}
       />
 
@@ -736,37 +774,12 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
 
       <PageSection className="space-y-5">
 
-        <form className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_170px_160px_minmax(0,1fr)_auto]" onSubmit={handleCreateEntry}>
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Patient name</span>
-            <input
-              type="text"
-              value={draft.patientName}
-              onChange={(event) => setDraft((current) => ({ ...current, patientName: event.target.value }))}
-              placeholder="Enter patient name"
-              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-cyan-300/40"
-              aria-label="Patient name"
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Difficulty</span>
-            <select
-              value={draft.difficulty}
-              onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))}
-              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
-              aria-label="Case difficulty"
-            >
-              {DIFFICULTY_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {labelize(option)}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Source</span>
+        <form
+          className="grid gap-x-3 gap-y-2 xl:grid-cols-[108px_minmax(230px,1.65fr)_64px_84px_minmax(186px,1.05fr)_minmax(210px,1fr)_100px_88px] xl:items-end"
+          onSubmit={handleCreateEntry}
+        >
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Source</span>
             <select
               value={draft.patientSource}
               onChange={(event) => setDraft((current) => ({ ...current, patientSource: event.target.value as ConsultantDeckingPatientSource }))}
@@ -781,30 +794,88 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             </select>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Study date</span>
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Patient name</span>
             <input
-              type="date"
-              value={draft.studyDate}
-              onChange={(event) => setDraft((current) => ({ ...current, studyDate: event.target.value }))}
-              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
-              aria-label="Study date"
+              type="text"
+              value={draft.patientName}
+              onChange={(event) => setDraft((current) => ({ ...current, patientName: event.target.value }))}
+              placeholder="Enter patient name"
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-cyan-300/40"
+              aria-label="Patient name"
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Study time</span>
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Age</span>
             <input
-              type="time"
-              value={draft.studyTime}
-              onChange={(event) => setDraft((current) => ({ ...current, studyTime: event.target.value }))}
-              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
-              aria-label="Study time"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              value={draft.patientAge}
+              onChange={(event) => {
+                const nextValue = event.target.value.replace(/[^\d]/g, '');
+                if (!nextValue) {
+                  setDraft((current) => ({ ...current, patientAge: '' }));
+                  return;
+                }
+                const bounded = Math.min(Number(nextValue), 100);
+                setDraft((current) => ({ ...current, patientAge: String(bounded) }));
+              }}
+              inputMode="numeric"
+              className="w-full appearance-none rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 [appearance:textfield] focus:border-cyan-300/40 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              aria-label="Patient age"
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-xs font-semibold text-slate-400">Study description</span>
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Sex</span>
+            <select
+              value={draft.patientSex}
+              onChange={(event) => setDraft((current) => ({ ...current, patientSex: event.target.value as DraftState['patientSex'] }))}
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+              aria-label="Patient sex"
+            >
+              <option value=""></option>
+              {PATIENT_SEX_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Study schedule</span>
+            <input
+              type="datetime-local"
+              value={draft.studyDate && draft.studyTime ? `${draft.studyDate}T${draft.studyTime}` : ''}
+              onClick={(e) => {
+                try {
+                  if (typeof e.currentTarget.showPicker === 'function') {
+                    e.currentTarget.showPicker();
+                  }
+                } catch (err) {
+                  // Ignore errors, browser might not support showPicker or gesture requirement
+                }
+              }}
+              onChange={(event) => {
+                const val = event.target.value;
+                if (!val) {
+                  setDraft((current) => ({ ...current, studyDate: '', studyTime: '' }));
+                  return;
+                }
+                const [datePart, timePart] = val.split('T');
+                setDraft((current) => ({ ...current, studyDate: datePart || '', studyTime: timePart || '' }));
+              }}
+              className="w-full cursor-pointer rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-clear-button]:hidden"
+              aria-label="Study schedule"
+            />
+          </label>
+
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Study description</span>
             <select
               value={draft.studyDescription}
               onChange={(event) => setDraft((current) => ({ ...current, studyDescription: event.target.value }))}
@@ -824,10 +895,26 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             </select>
           </label>
 
+          <label className="space-y-1.5">
+            <span className="pl-1 text-xs font-semibold leading-none text-slate-400">Difficulty</span>
+            <select
+              value={draft.difficulty}
+              onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))}
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+              aria-label="Case difficulty"
+            >
+              {DIFFICULTY_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {labelize(option)}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <button
             type="submit"
             disabled={!currentUserId || isSaving}
-            className="mt-auto rounded-full border border-cyan-300/25 bg-cyan-500/12 px-5 py-3 text-sm font-semibold text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-500/16 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-auto w-full rounded-full border border-cyan-300/40 bg-cyan-500/25 px-4 py-3 text-sm font-bold text-cyan-50 shadow-[0_0_16px_rgba(6,182,212,0.2)] transition-all hover:-translate-y-px hover:border-cyan-200/50 hover:bg-cyan-400/35 hover:shadow-[0_0_24px_rgba(6,182,212,0.35)] active:translate-y-0 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 disabled:hover:scale-100 disabled:hover:border-cyan-300/40 disabled:hover:bg-cyan-500/25 disabled:hover:shadow-[0_0_16px_rgba(6,182,212,0.2)]"
           >
             {isSaving ? 'Adding...' : 'Add'}
           </button>
@@ -1020,27 +1107,15 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
         </div>
       </div>
 
-      <div className="sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-40">
-        <div className="rounded-[1.5rem] border border-cyan-300/20 bg-[#09111d]/88 p-3 shadow-[0_20px_60px_rgba(2,8,18,0.5)] backdrop-blur-xl">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-white">Export consultant decking summary</p>
-              <p className="mt-1 text-xs text-slate-400">Generate a clean 4-column snapshot of the consultant lanes.</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleExportSummary}
-              disabled={!currentUserId || loading || isExporting}
-              className="w-full rounded-full border border-cyan-200/30 bg-cyan-400/20 px-5 py-3 text-sm font-semibold text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-400/28 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-[220px]"
-            >
-              {isExporting ? 'Exporting...' : 'Export Summary'}
-            </button>
-          </div>
-        </div>
-      </div>
       {editingEntry ? (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/72 px-4 pb-4 pt-10 sm:items-center" role="dialog" aria-modal="true" aria-label="Edit consultant decking patient">
-          <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-[#0b1220] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+        <div
+          className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/72 px-4 pb-4 pt-10 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit consultant decking patient"
+          onClick={closeEditor}
+        >
+          <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-[#0b1220] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]" onClick={(event) => event.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">Edit patient</h2>
@@ -1066,6 +1141,38 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                   className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
                 />
               </label>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-xs font-semibold text-slate-400">Age</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={editDraft.patientAge}
+                    onChange={(event) => setEditDraft((current) => ({ ...current, patientAge: event.target.value }))}
+                    aria-label="Edit patient age"
+                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-xs font-semibold text-slate-400">Sex</span>
+                  <select
+                    value={editDraft.patientSex}
+                    onChange={(event) => setEditDraft((current) => ({ ...current, patientSex: event.target.value as DraftState['patientSex'] }))}
+                    aria-label="Edit patient sex"
+                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+                  >
+                    <option value="">Select sex</option>
+                    {PATIENT_SEX_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="block space-y-2">
@@ -1101,29 +1208,33 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                 </label>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block space-y-2">
-                  <span className="text-xs font-semibold text-slate-400">Study date</span>
-                  <input
-                    type="date"
-                    value={editDraft.studyDate}
-                    onChange={(event) => setEditDraft((current) => ({ ...current, studyDate: event.target.value }))}
-                    aria-label="Edit study date"
-                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
-                  />
-                </label>
-
-                <label className="block space-y-2">
-                  <span className="text-xs font-semibold text-slate-400">Study time</span>
-                  <input
-                    type="time"
-                    value={editDraft.studyTime}
-                    onChange={(event) => setEditDraft((current) => ({ ...current, studyTime: event.target.value }))}
-                    aria-label="Edit study time"
-                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
-                  />
-                </label>
-              </div>
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold text-slate-400">Study schedule</span>
+                <input
+                  type="datetime-local"
+                  value={editDraft.studyDate && editDraft.studyTime ? `${editDraft.studyDate}T${editDraft.studyTime}` : ''}
+                  onClick={(e) => {
+                    try {
+                      if (typeof e.currentTarget.showPicker === 'function') {
+                        e.currentTarget.showPicker();
+                      }
+                    } catch (err) {
+                      // Ignore errors
+                    }
+                  }}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    if (!val) {
+                      setEditDraft((current) => ({ ...current, studyDate: '', studyTime: '' }));
+                      return;
+                    }
+                    const [datePart, timePart] = val.split('T');
+                    setEditDraft((current) => ({ ...current, studyDate: datePart || '', studyTime: timePart || '' }));
+                  }}
+                  aria-label="Edit study schedule"
+                  className="w-full cursor-pointer rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40 [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-clear-button]:hidden"
+                />
+              </label>
 
               <label className="block space-y-2">
                 <span className="text-xs font-semibold text-slate-400">Study description</span>

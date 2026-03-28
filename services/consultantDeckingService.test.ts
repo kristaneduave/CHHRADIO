@@ -50,6 +50,8 @@ describe('consultantDeckingService', () => {
         {
           id: 'b',
           patient_name: '  Juan   Dela Cruz ',
+          patient_age: 46,
+          patient_sex: 'M',
           difficulty: 'hard',
           patient_source: 'er',
           study_date: '2026-03-27',
@@ -65,6 +67,8 @@ describe('consultantDeckingService', () => {
         {
           id: 'a',
           patient_name: ' Ana Santos ',
+          patient_age: null,
+          patient_sex: null,
           difficulty: 'easy',
           patient_source: 'outpatient',
           study_date: null,
@@ -85,6 +89,8 @@ describe('consultantDeckingService', () => {
     expect(entries.map((entry) => entry.id)).toEqual(['a', 'b']);
     expect(entries[0].patientName).toBe('Ana Santos');
     expect(entries[1].patientName).toBe('Juan Dela Cruz');
+    expect(entries[1].patientAge).toBe(46);
+    expect(entries[1].patientSex).toBe('M');
     expect(entries[1].studyDescription).toBe('CT brain plain');
   });
 
@@ -99,6 +105,8 @@ describe('consultantDeckingService', () => {
           {
             id: 'existing',
             patient_name: 'Existing Patient',
+            patient_age: 58,
+            patient_sex: 'F',
             difficulty: 'medium',
             patient_source: 'inpatient',
             study_date: '2026-03-26',
@@ -119,6 +127,8 @@ describe('consultantDeckingService', () => {
 
     const result = await createConsultantDeckingEntry({
       patientName: '  Juan   Dela Cruz ',
+      patientAge: 46,
+      patientSex: 'M',
       difficulty: 'hard',
       patientSource: 'er',
       studyDate: '2026-03-27',
@@ -129,6 +139,8 @@ describe('consultantDeckingService', () => {
     expect(result.id).toBe('new-entry');
     expect(insert).toHaveBeenCalledWith({
       patient_name: 'Juan Dela Cruz',
+      patient_age: 46,
+      patient_sex: 'M',
       difficulty: 'hard',
       patient_source: 'er',
       study_date: '2026-03-27',
@@ -147,6 +159,8 @@ describe('consultantDeckingService', () => {
         {
           id: 'a',
           patientName: 'Alpha',
+          patientAge: 34,
+          patientSex: 'F',
           difficulty: 'easy',
           patientSource: 'inpatient',
           studyDate: '2026-03-27',
@@ -162,6 +176,8 @@ describe('consultantDeckingService', () => {
         {
           id: 'b',
           patientName: 'Bravo',
+          patientAge: 51,
+          patientSex: 'M',
           difficulty: 'medium',
           patientSource: 'er',
           studyDate: '2026-03-27',
@@ -196,6 +212,8 @@ describe('consultantDeckingService', () => {
           {
             id: 'a',
             patient_name: 'Alpha',
+            patient_age: 34,
+            patient_sex: 'F',
             difficulty: 'easy',
             patient_source: 'inpatient',
             study_date: '2026-03-27',
@@ -211,6 +229,8 @@ describe('consultantDeckingService', () => {
           {
             id: 'b',
             patient_name: 'Bravo',
+            patient_age: 51,
+            patient_sex: 'M',
             difficulty: 'medium',
             patient_source: 'er',
             study_date: '2026-03-27',

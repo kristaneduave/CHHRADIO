@@ -16,6 +16,8 @@ const VALID_PATIENT_SOURCES: ConsultantDeckingPatientSource[] = ['inpatient', 'e
 type ConsultantDeckingRow = {
   id: string;
   patient_name: string;
+  patient_age: number | null;
+  patient_sex: 'M' | 'F' | null;
   difficulty: ConsultantDeckingDifficulty;
   patient_source: ConsultantDeckingPatientSource;
   study_date: string | null;
@@ -34,6 +36,11 @@ let consultantDeckingPromise: Promise<ConsultantDeckingEntry[]> | null = null;
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ');
 const normalizeStudyDescription = (value: string) => value.trim().replace(/\s+/g, ' ');
+const normalizeAge = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const normalized = Math.trunc(value);
+  return normalized > 0 ? normalized : null;
+};
 
 const assertDifficulty = (value: string): ConsultantDeckingDifficulty => {
   if (VALID_DIFFICULTIES.includes(value as ConsultantDeckingDifficulty)) {
@@ -76,6 +83,8 @@ const sortEntries = (entries: ConsultantDeckingEntry[]) =>
 const mapRow = (row: ConsultantDeckingRow): ConsultantDeckingEntry => ({
   id: String(row.id),
   patientName: normalizeName(String(row.patient_name || '')),
+  patientAge: typeof row.patient_age === 'number' ? row.patient_age : null,
+  patientSex: row.patient_sex === 'M' || row.patient_sex === 'F' ? row.patient_sex : null,
   difficulty: assertDifficulty(String(row.difficulty || '')),
   patientSource: assertPatientSource(String(row.patient_source || '')),
   studyDate: row.study_date || null,
@@ -178,6 +187,8 @@ export const createConsultantDeckingEntry = async (input: ConsultantDeckingEntry
 
   const payload = {
     patient_name: patientName,
+    patient_age: normalizeAge(input.patientAge),
+    patient_sex: input.patientSex || null,
     difficulty: input.difficulty,
     patient_source: input.patientSource,
     study_date: input.studyDate || null,
@@ -212,6 +223,10 @@ export const updateConsultantDeckingEntry = async (
     }
     payload.patient_name = patientName;
   }
+  if (typeof patch.patientAge === 'number') payload.patient_age = normalizeAge(patch.patientAge);
+  if (patch.patientAge === null) payload.patient_age = null;
+  if (patch.patientSex === 'M' || patch.patientSex === 'F') payload.patient_sex = patch.patientSex;
+  if (patch.patientSex === null) payload.patient_sex = null;
   if (typeof patch.difficulty === 'string') payload.difficulty = patch.difficulty;
   if (typeof patch.patientSource === 'string') payload.patient_source = patch.patientSource;
   if (typeof patch.studyDate === 'string') payload.study_date = patch.studyDate || null;
