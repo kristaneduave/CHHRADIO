@@ -202,6 +202,13 @@ const STUDY_OPTION_GROUPS: readonly StudyOptionGroup[] = [
 
 const EXPORT_COLUMNS: ConsultantDeckingColumnMeta[] = DOCTOR_COLUMNS.map(({ key, label }) => ({ key, label }));
 
+const EXPORT_HEADER_ACCENT: Record<Exclude<ConsultantDeckingColumnKey, 'inbox'>, { background: string; text: string; border: string; glow: string }> = {
+  reynes: { background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)', text: '#5b21b6', border: '#c4b5fd', glow: 'rgba(139, 92, 246, 0.18)' },
+  alvarez: { background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)', text: '#b45309', border: '#fcd34d', glow: 'rgba(245, 158, 11, 0.18)' },
+  'co-ng': { background: 'linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)', text: '#047857', border: '#86efac', glow: 'rgba(34, 197, 94, 0.16)' },
+  'vano-yu': { background: 'linear-gradient(135deg, #ffe4e6 0%, #fecdd3 100%)', text: '#be123c', border: '#fda4af', glow: 'rgba(244, 63, 94, 0.18)' },
+};
+
 const labelize = (value: string) => {
   if (value === 'er') return 'ER';
   return value
@@ -267,6 +274,22 @@ const formatStudyTime = (value?: string | null) => {
 
 const formatStudyDateTimeLabel = (entry: Pick<ConsultantDeckingEntry, 'studyDate' | 'studyTime'>) =>
   [formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' | ') || 'Study date/time pending';
+
+const formatExportStudyDateTime = (entry: Pick<ConsultantDeckingEntry, 'studyDate' | 'studyTime'>) => {
+  if (!entry.studyDate || !entry.studyTime) return 'Study date/time pending';
+  const parsed = new Date(`${entry.studyDate}T${entry.studyTime}`);
+  if (Number.isNaN(parsed.getTime())) {
+    return `${entry.studyDate} ${entry.studyTime}`;
+  }
+
+  return parsed.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
 
 const formatAgeSex = (entry: Pick<ConsultantDeckingEntry, 'patientAge' | 'patientSex'>) => {
   const parts = [
@@ -363,48 +386,133 @@ const buildDeckingExportHtml = (
 ) => {
   const sections = EXPORT_COLUMNS.map((column) => {
     const columnEntries = groupedEntries.get(column.key) || [];
-    const buildMeta = (entry: ConsultantDeckingEntry) => {
-      const parts = [formatAgeSex(entry), formatStudyDateTimeLabel(entry)].filter(Boolean);
-      return parts.length
-        ? `<div class="meta">${parts.map((part) => `<span>${escapeHtml(part)}</span>`).join('<span class="dot">|</span>')}</div>`
-        : '';
-    };
+    const accent = EXPORT_HEADER_ACCENT[column.key as Exclude<ConsultantDeckingColumnKey, 'inbox'>];
     const items = columnEntries.length
       ? '<div class="list">' + columnEntries.map((entry) =>
-          '<article class="item"><div class="row"><strong>' + escapeHtml(entry.patientName) + '</strong><span class="source">' + escapeHtml(labelize(entry.patientSource)) + '</span></div>' + buildMeta(entry) + '<div class="study">' + escapeHtml(entry.studyDescription || 'Study pending') + '</div></article>'
+          '<article class="item"><div class="row"><strong>' + escapeHtml(labelize(entry.patientSource).toUpperCase()) + ' - ' + escapeHtml(entry.patientName) + (formatAgeSex(entry) ? ' ' + escapeHtml(formatAgeSex(entry)) : '') + '</strong></div><div class="study">' + escapeHtml((entry.studyDescription || 'Study pending').toUpperCase()) + '</div><div class="meta"><span>' + escapeHtml(formatExportStudyDateTime(entry)) + '</span></div></article>'
         ).join('') + '</div>'
       : '<p class="empty">No patients assigned.</p>';
 
-    return '<section><div class="section-header"><h2>' + escapeHtml(column.label) + '</h2></div>' + items + '</section>';
+    return '<section><div class="section-header" style="background:' + accent.background + ';color:' + accent.text + ';border-color:' + accent.border + ';--header-glow:' + accent.glow + ';"><h2>' + escapeHtml(column.label) + '</h2></div>' + items + '</section>';
   }).join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>Consultant Decking Export</title>
+    <title>CT Fuente deck (Saturday 7 am to Sunday 7 am)</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 32px; color: #111827; line-height: 1.5; background: #f8fafc; }
-      h1 { margin-bottom: 4px; }
-      h2 { margin: 0; font-size: 18px; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+        margin: 0;
+        color: #0f172a;
+        line-height: 1.15;
+        background: #ffffff;
+      }
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #0f172a;
+      }
       p { margin: 0; }
-      .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; align-items: start; }
-      section { border: 1px solid #cbd5e1; border-radius: 20px; background: #ffffff; padding: 18px; }
-      .section-header { margin-bottom: 14px; }
-      .list { display: grid; gap: 12px; }
-      .item { border-top: 1px solid #e2e8f0; padding-top: 12px; }
+      .canvas { padding: 14px; }
+      .sheet {
+        width: 1380px;
+        min-height: 860px;
+        margin: 0 auto;
+        border: 2px solid rgba(30, 41, 59, 0.8);
+        border-radius: 0;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
+        padding: 14px 12px 14px 14px;
+        box-shadow:
+          0 22px 50px rgba(15, 23, 42, 0.16),
+          0 0 0 8px rgba(255, 255, 255, 0.45);
+      }
+      .sheet-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 2px 0 10px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid rgba(51, 65, 85, 0.24);
+        text-align: center;
+      }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
+      section {
+        border: 1px solid rgba(51, 65, 85, 0.2);
+        border-radius: 0;
+        background: rgba(255, 255, 255, 0.88);
+        padding: 8px 5px 8px 8px;
+        min-height: 395px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      }
+      .section-header {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        margin: -1px 0 8px;
+        padding: 7px 12px;
+        border: 1px solid #94a3b8;
+        border-radius: 0;
+        box-shadow: 0 10px 22px var(--header-glow);
+      }
+      h2 {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .list { display: grid; gap: 4px; }
+      .item {
+        border-top: 1px solid rgba(148, 163, 184, 0.28);
+        padding: 5px 2px 0 1px;
+      }
       .item:first-child { border-top: 0; padding-top: 0; }
-      .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-      .source { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: #334155; }
-      .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; color: #64748b; font-size: 12px; }
-      .dot { color: #94a3b8; }
-      .study { margin-top: 4px; color: #0f172a; }
-      .empty { color: #64748b; font-size: 13px; }
+      .row { display: block; }
+      .row strong {
+        font-size: 13.2px;
+        line-height: 1.12;
+        word-break: break-word;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #0f172a;
+      }
+      .meta {
+        display: block;
+        margin-top: 3px;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 600;
+      }
+      .study {
+        margin-top: 3px;
+        color: #1e293b;
+        font-size: 11.6px;
+        line-height: 1.18;
+        word-break: break-word;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+      }
+      .empty { color: #64748b; font-size: 11px; }
     </style>
   </head>
   <body>
-    <h1>Consultant Decking</h1>
-    <div class="grid">${sections}</div>
+    <div class="canvas">
+        <div class="sheet">
+          <div class="sheet-header">
+            <h1>CT Fuente deck (Saturday 7 am to Sunday 7 am)</h1>
+          </div>
+          <div class="grid">${sections}</div>
+        </div>
+    </div>
   </body>
 </html>`;
 };
@@ -722,19 +830,18 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const handleExportSummary = () => {
     try {
       setIsExporting(true);
-      const exportedAt = new Date();
       const html = buildDeckingExportHtml(groupedEntries);
-      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      const dateStamp = exportedAt.toISOString().slice(0, 10);
-      link.href = url;
-      link.download = `consultant-decking-${dateStamp}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      toastSuccess('Summary exported');
+      const exportWindow = window.open('', 'consultant-decking-export', 'width=1480,height=980,resizable=yes,scrollbars=yes');
+
+      if (!exportWindow) {
+        throw new Error('Popup blocked. Please allow popups for this site and try again.');
+      }
+
+      exportWindow.document.open();
+      exportWindow.document.write(html);
+      exportWindow.document.close();
+      exportWindow.focus();
+      toastSuccess('Screenshot view opened');
     } catch (error: any) {
       toastError('Unable to export summary', error?.message || 'Please try again.');
     } finally {
