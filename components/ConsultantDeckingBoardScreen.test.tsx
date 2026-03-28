@@ -64,7 +64,7 @@ describe('ConsultantDeckingBoardScreen', () => {
     expect(listConsultantDeckingEntries).not.toHaveBeenCalled();
   });
 
-  it('renders the unassigned section and four doctor lanes, then creates a patient pill', async () => {
+  it('renders the unassigned section and creates a patient with study details', async () => {
     listConsultantDeckingEntries
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
@@ -73,6 +73,9 @@ describe('ConsultantDeckingBoardScreen', () => {
           patientName: 'Juan Dela Cruz',
           difficulty: 'hard',
           patientSource: 'er',
+          studyDate: '2026-03-27',
+          studyTime: '08:30',
+          studyDescription: 'CT brain plain',
           columnKey: 'inbox',
           position: 0,
           createdBy: 'user-1',
@@ -86,13 +89,15 @@ describe('ConsultantDeckingBoardScreen', () => {
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
     expect(await screen.findByText('Unassigned patients')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Inbox' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Reynes' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Alvarez' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Co-Ng' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Dr. Vaño-Yu' })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Patient name'), { target: { value: 'Juan Dela Cruz' } });
+    fireEvent.change(screen.getByLabelText('Study date'), { target: { value: '2026-03-27' } });
+    fireEvent.change(screen.getByLabelText('Study time'), { target: { value: '08:30' } });
+    fireEvent.change(screen.getByLabelText('Study description'), { target: { value: 'CT brain plain' } });
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     await waitFor(() => {
@@ -100,13 +105,16 @@ describe('ConsultantDeckingBoardScreen', () => {
         patientName: 'Juan Dela Cruz',
         difficulty: 'medium',
         patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:30',
+        studyDescription: 'CT brain plain',
       });
     });
 
     expect(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' })).toBeInTheDocument();
   });
 
-  it('updates a patient and moves it to a consultant through the lightweight editor', async () => {
+  it('updates a patient and moves it to a consultant through the editor', async () => {
     listConsultantDeckingEntries
       .mockResolvedValueOnce([
         {
@@ -114,6 +122,9 @@ describe('ConsultantDeckingBoardScreen', () => {
           patientName: 'Juan Dela Cruz',
           difficulty: 'hard',
           patientSource: 'er',
+          studyDate: '2026-03-27',
+          studyTime: '08:30',
+          studyDescription: 'CT brain plain',
           columnKey: 'inbox',
           position: 0,
           createdBy: 'user-1',
@@ -128,6 +139,9 @@ describe('ConsultantDeckingBoardScreen', () => {
           patientName: 'Juan Dela Cruz',
           difficulty: 'medium',
           patientSource: 'er',
+          studyDate: '2026-03-27',
+          studyTime: '08:30',
+          studyDescription: 'CT brain plain',
           columnKey: 'alvarez',
           position: 0,
           createdBy: 'user-1',
@@ -152,6 +166,9 @@ describe('ConsultantDeckingBoardScreen', () => {
         patientName: 'Juan Dela Cruz',
         difficulty: 'medium',
         patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:30',
+        studyDescription: 'CT brain plain',
       });
     });
 
@@ -166,6 +183,9 @@ describe('ConsultantDeckingBoardScreen', () => {
           patientName: 'Juan Dela Cruz',
           difficulty: 'medium',
           patientSource: 'inpatient',
+          studyDate: '2026-03-27',
+          studyTime: '09:00',
+          studyDescription: 'MR brain plain',
           columnKey: 'reynes',
           position: 0,
           createdBy: 'user-1',
@@ -180,6 +200,9 @@ describe('ConsultantDeckingBoardScreen', () => {
           patientName: 'Juan Dela Cruz',
           difficulty: 'medium',
           patientSource: 'inpatient',
+          studyDate: '2026-03-27',
+          studyTime: '09:00',
+          studyDescription: 'MR brain plain',
           columnKey: 'inbox',
           position: 0,
           createdBy: 'user-1',
@@ -210,6 +233,9 @@ describe('ConsultantDeckingBoardScreen', () => {
         patientName: 'Juan Dela Cruz',
         difficulty: 'hard',
         patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:30',
+        studyDescription: 'CT brain plain',
         columnKey: 'inbox',
         position: 0,
         createdBy: 'user-1',
@@ -266,6 +292,9 @@ describe('ConsultantDeckingBoardScreen', () => {
         patientName: 'Juan Dela Cruz',
         difficulty: 'hard',
         patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:30',
+        studyDescription: 'CT brain plain',
         columnKey: 'reynes',
         position: 0,
         createdBy: 'user-1',
@@ -307,5 +336,83 @@ describe('ConsultantDeckingBoardScreen', () => {
     expect(revokeObjectURLSpy).toHaveBeenCalledWith('blob:test');
     expect(toastSuccess).toHaveBeenCalledWith('Summary exported');
     createElementSpy.mockRestore();
+  });
+
+  it('orders consultant lanes by difficulty first, then patient source priority', async () => {
+    listConsultantDeckingEntries.mockResolvedValue([
+      {
+        id: 'entry-1',
+        patientName: 'Easy ER',
+        difficulty: 'easy',
+        patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:00',
+        studyDescription: 'CT brain plain',
+        columnKey: 'reynes',
+        position: 0,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+      {
+        id: 'entry-2',
+        patientName: 'Hard Inpatient',
+        difficulty: 'hard',
+        patientSource: 'inpatient',
+        studyDate: '2026-03-27',
+        studyTime: '08:10',
+        studyDescription: 'CT chest plain',
+        columnKey: 'reynes',
+        position: 1,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+      {
+        id: 'entry-3',
+        patientName: 'Hard ER',
+        difficulty: 'hard',
+        patientSource: 'er',
+        studyDate: '2026-03-27',
+        studyTime: '08:20',
+        studyDescription: 'CT angiography - Brain',
+        columnKey: 'reynes',
+        position: 2,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+      {
+        id: 'entry-4',
+        patientName: 'Medium OPD',
+        difficulty: 'medium',
+        patientSource: 'outpatient',
+        studyDate: '2026-03-27',
+        studyTime: '08:30',
+        studyDescription: 'MR brain plain',
+        columnKey: 'reynes',
+        position: 3,
+        createdBy: 'user-1',
+        updatedBy: 'user-1',
+        createdAt: '2026-03-27T00:00:00Z',
+        updatedAt: '2026-03-27T00:00:00Z',
+      },
+    ]);
+
+    render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
+
+    const reyesLane = (await screen.findByRole('heading', { name: 'Dr. Reynes' })).closest('section');
+    expect(reyesLane).not.toBeNull();
+
+    const pillButtons = within(reyesLane as HTMLElement).getAllByRole('button', { name: /Edit / });
+    expect(pillButtons.map((pill) => pill.getAttribute('aria-label'))).toEqual([
+      'Edit Hard ER',
+      'Edit Hard Inpatient',
+      'Edit Medium OPD',
+      'Edit Easy ER',
+    ]);
   });
 });

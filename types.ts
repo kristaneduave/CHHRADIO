@@ -25,6 +25,9 @@ export interface ConsultantDeckingEntry {
   patientName: string;
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
+  studyDate?: string | null;
+  studyTime?: string | null;
+  studyDescription?: string | null;
   columnKey: ConsultantDeckingColumnKey;
   position: number;
   createdBy: string | null;
@@ -37,6 +40,9 @@ export interface ConsultantDeckingEntryInput {
   patientName: string;
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
+  studyDate?: string;
+  studyTime?: string;
+  studyDescription?: string;
   columnKey?: ConsultantDeckingColumnKey;
 }
 

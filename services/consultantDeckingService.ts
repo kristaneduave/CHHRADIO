@@ -18,6 +18,9 @@ type ConsultantDeckingRow = {
   patient_name: string;
   difficulty: ConsultantDeckingDifficulty;
   patient_source: ConsultantDeckingPatientSource;
+  study_date: string | null;
+  study_time: string | null;
+  study_description: string | null;
   column_key: ConsultantDeckingColumnKey;
   position: number;
   created_by: string | null;
@@ -30,6 +33,7 @@ let consultantDeckingCache: ConsultantDeckingEntry[] | null = null;
 let consultantDeckingPromise: Promise<ConsultantDeckingEntry[]> | null = null;
 
 const normalizeName = (value: string) => value.trim().replace(/\s+/g, ' ');
+const normalizeStudyDescription = (value: string) => value.trim().replace(/\s+/g, ' ');
 
 const assertDifficulty = (value: string): ConsultantDeckingDifficulty => {
   if (VALID_DIFFICULTIES.includes(value as ConsultantDeckingDifficulty)) {
@@ -74,6 +78,9 @@ const mapRow = (row: ConsultantDeckingRow): ConsultantDeckingEntry => ({
   patientName: normalizeName(String(row.patient_name || '')),
   difficulty: assertDifficulty(String(row.difficulty || '')),
   patientSource: assertPatientSource(String(row.patient_source || '')),
+  studyDate: row.study_date || null,
+  studyTime: row.study_time || null,
+  studyDescription: row.study_description ? normalizeStudyDescription(String(row.study_description)) : null,
   columnKey: assertColumnKey(String(row.column_key || '')),
   position: Number(row.position || 0),
   createdBy: row.created_by || null,
@@ -173,6 +180,9 @@ export const createConsultantDeckingEntry = async (input: ConsultantDeckingEntry
     patient_name: patientName,
     difficulty: input.difficulty,
     patient_source: input.patientSource,
+    study_date: input.studyDate || null,
+    study_time: input.studyTime || null,
+    study_description: input.studyDescription ? normalizeStudyDescription(input.studyDescription) : null,
     column_key: columnKey,
     position: nextPosition,
     created_by: userId,
@@ -204,6 +214,11 @@ export const updateConsultantDeckingEntry = async (
   }
   if (typeof patch.difficulty === 'string') payload.difficulty = patch.difficulty;
   if (typeof patch.patientSource === 'string') payload.patient_source = patch.patientSource;
+  if (typeof patch.studyDate === 'string') payload.study_date = patch.studyDate || null;
+  if (typeof patch.studyTime === 'string') payload.study_time = patch.studyTime || null;
+  if (typeof patch.studyDescription === 'string') {
+    payload.study_description = patch.studyDescription ? normalizeStudyDescription(patch.studyDescription) : null;
+  }
   if (typeof patch.columnKey === 'string') payload.column_key = patch.columnKey;
 
   const { error } = await supabase.from(TABLE_NAME).update(payload).eq('id', id);
@@ -321,5 +336,6 @@ export const subscribeToConsultantDeckingEntries = (onChange: () => void) => {
 export const __testables = {
   COLUMN_ORDER,
   normalizeName,
+  normalizeStudyDescription,
   reorderDeckingEntries,
 };

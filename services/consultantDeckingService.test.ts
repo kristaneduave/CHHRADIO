@@ -52,6 +52,9 @@ describe('consultantDeckingService', () => {
           patient_name: '  Juan   Dela Cruz ',
           difficulty: 'hard',
           patient_source: 'er',
+          study_date: '2026-03-27',
+          study_time: '08:30',
+          study_description: '  CT   brain plain ',
           column_key: 'alvarez',
           position: 1,
           created_by: 'user-1',
@@ -64,6 +67,9 @@ describe('consultantDeckingService', () => {
           patient_name: ' Ana Santos ',
           difficulty: 'easy',
           patient_source: 'outpatient',
+          study_date: null,
+          study_time: null,
+          study_description: null,
           column_key: 'inbox',
           position: 0,
           created_by: 'user-1',
@@ -79,6 +85,7 @@ describe('consultantDeckingService', () => {
     expect(entries.map((entry) => entry.id)).toEqual(['a', 'b']);
     expect(entries[0].patientName).toBe('Ana Santos');
     expect(entries[1].patientName).toBe('Juan Dela Cruz');
+    expect(entries[1].studyDescription).toBe('CT brain plain');
   });
 
   it('creates new cards at the end of the inbox by default', async () => {
@@ -94,6 +101,9 @@ describe('consultantDeckingService', () => {
             patient_name: 'Existing Patient',
             difficulty: 'medium',
             patient_source: 'inpatient',
+            study_date: '2026-03-26',
+            study_time: '11:15',
+            study_description: 'MR brain plain',
             column_key: 'inbox',
             position: 0,
             created_by: 'user-1',
@@ -111,6 +121,9 @@ describe('consultantDeckingService', () => {
       patientName: '  Juan   Dela Cruz ',
       difficulty: 'hard',
       patientSource: 'er',
+      studyDate: '2026-03-27',
+      studyTime: '08:30',
+      studyDescription: '  CT  brain plain ',
     });
 
     expect(result.id).toBe('new-entry');
@@ -118,6 +131,9 @@ describe('consultantDeckingService', () => {
       patient_name: 'Juan Dela Cruz',
       difficulty: 'hard',
       patient_source: 'er',
+      study_date: '2026-03-27',
+      study_time: '08:30',
+      study_description: 'CT brain plain',
       column_key: 'inbox',
       position: 1,
       created_by: 'user-1',
@@ -133,6 +149,9 @@ describe('consultantDeckingService', () => {
           patientName: 'Alpha',
           difficulty: 'easy',
           patientSource: 'inpatient',
+          studyDate: '2026-03-27',
+          studyTime: '08:00',
+          studyDescription: 'MR brain plain',
           columnKey: 'inbox',
           position: 0,
           createdBy: 'user-1',
@@ -145,6 +164,9 @@ describe('consultantDeckingService', () => {
           patientName: 'Bravo',
           difficulty: 'medium',
           patientSource: 'er',
+          studyDate: '2026-03-27',
+          studyTime: '08:15',
+          studyDescription: 'CT chest plain',
           columnKey: 'reynes',
           position: 0,
           createdBy: 'user-1',
@@ -176,6 +198,9 @@ describe('consultantDeckingService', () => {
             patient_name: 'Alpha',
             difficulty: 'easy',
             patient_source: 'inpatient',
+            study_date: '2026-03-27',
+            study_time: '08:00',
+            study_description: 'MR brain plain',
             column_key: 'inbox',
             position: 0,
             created_by: 'user-1',
@@ -188,6 +213,9 @@ describe('consultantDeckingService', () => {
             patient_name: 'Bravo',
             difficulty: 'medium',
             patient_source: 'er',
+            study_date: '2026-03-27',
+            study_time: '08:15',
+            study_description: 'CT chest plain',
             column_key: 'reynes',
             position: 0,
             created_by: 'user-1',
