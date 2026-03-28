@@ -29,6 +29,9 @@ type DraftState = {
   patientName: string;
   difficulty: ConsultantDeckingDifficulty;
   patientSource: ConsultantDeckingPatientSource;
+  studyDate: string;
+  studyTime: string;
+  studyDescription: string;
 };
 
 type ActiveDragState = {
@@ -62,6 +65,9 @@ const EMPTY_DRAFT: DraftState = {
   patientName: '',
   difficulty: 'medium',
   patientSource: 'er',
+  studyDate: '',
+  studyTime: '',
+  studyDescription: '',
 };
 
 const DIFFICULTY_TONE: Record<ConsultantDeckingDifficulty, string> = {
@@ -71,9 +77,9 @@ const DIFFICULTY_TONE: Record<ConsultantDeckingDifficulty, string> = {
 };
 
 const SOURCE_TONE: Record<ConsultantDeckingPatientSource, string> = {
-  inpatient: 'border-slate-300/15 bg-slate-500/10 text-slate-100',
-  er: 'border-cyan-300/25 bg-cyan-500/12 text-cyan-100',
-  outpatient: 'border-fuchsia-300/20 bg-fuchsia-500/12 text-fuchsia-100',
+  inpatient: 'border-slate-200/20 bg-slate-400/15 text-slate-50',
+  er: 'border-cyan-300/30 bg-cyan-400/16 text-cyan-50',
+  outpatient: 'border-fuchsia-300/25 bg-fuchsia-400/16 text-fuchsia-50',
 };
 
 const DIFFICULTY_ACCENT: Record<ConsultantDeckingDifficulty, string> = {
@@ -82,11 +88,103 @@ const DIFFICULTY_ACCENT: Record<ConsultantDeckingDifficulty, string> = {
   hard: 'shadow-[0_0_0_1px_rgba(253,164,175,0.3),0_10px_24px_rgba(244,63,94,0.14)]',
 };
 
-const SOURCE_SYMBOL: Record<ConsultantDeckingPatientSource, string> = {
-  inpatient: 'I',
+const SOURCE_LABEL: Record<ConsultantDeckingPatientSource, string> = {
+  inpatient: 'INPATIENT',
   er: 'ER',
-  outpatient: 'O',
+  outpatient: 'OPD',
 };
+
+const STUDY_KIND_TONE = {
+  ready: 'border-white/10 bg-white/[0.06] text-white',
+  pending: 'border-amber-300/25 bg-amber-400/10 text-amber-50',
+} as const;
+
+const getStudyKindLabel = (studyDescription?: string | null) => {
+  const normalized = (studyDescription || '').trim();
+  if (!normalized) return 'Study pending';
+
+  const upper = normalized.toUpperCase();
+  if (upper.startsWith('CT ANGIOGRAPHY') || upper.startsWith('CTA')) return 'CTA';
+  if (upper.startsWith('MRA')) return 'MRA';
+  if (upper.startsWith('MR')) return 'MRI';
+  if (upper.startsWith('CT')) return 'CT';
+  if (upper.startsWith('US')) return 'UTZ';
+  if (upper.startsWith('XR') || upper.startsWith('X-RAY')) return 'XR';
+  return normalized.split(/[\s-]+/)[0]?.slice(0, 12).toUpperCase() || 'STUDY';
+};
+
+const DIFFICULTY_PRIORITY: Record<ConsultantDeckingDifficulty, number> = {
+  hard: 0,
+  medium: 1,
+  easy: 2,
+};
+
+const SOURCE_PRIORITY: Record<ConsultantDeckingPatientSource, number> = {
+  er: 0,
+  inpatient: 1,
+  outpatient: 2,
+};
+
+const STUDY_DESCRIPTION_OPTIONS = [
+  'CT head facial',
+  'CT brain plain',
+  'CT brain with contrast',
+  'CT chest plain',
+  'CT chest with contrast',
+  'CT stonogram',
+  'CT whole abdomen plain',
+  'CT whole abdomen with contrast',
+  'CT abdomen - Urography',
+  'CT chest and whole abdomen plain',
+  'CT chest and whole abdomen with contrast',
+  'CT upper abdomen plain',
+  'CT upper abdomen with contrast',
+  'CT angiography-PE',
+  'CT neck plain',
+  'CT neck with contrast',
+  'Calcium score',
+  'CT angiography - Extremities',
+  'CT angiography - Coronary',
+  'CT hip plain',
+  'CT pelvis plain',
+  'CT lower abdomen plain',
+  'CT lower abdomen with contrast',
+  'CT spine - Lumbar',
+  'CT extremities - Leg',
+  'CT paranasal sinuses plain',
+  'CT paranasal sinuses with contrast',
+  'CT angiography - Chest',
+  'CT angiography - Brain',
+  'CT temporal fossa plain',
+  'CT angiography - Lower extremities',
+  'MR knee (left)',
+  'MR knee (right)',
+  'MR Lumbar spine plain',
+  'MR Lumbar spine plain with spine screening',
+  'MR Lumbar spine with contrast',
+  'MR brain plain',
+  'MR brain with contrast',
+  'MR thoracolumbar plain',
+  'MR Lumbar spine with spine screening',
+  'MR shoulder (left)',
+  'MR shoulder (right)',
+  'MRA brain plain',
+  'MRA brain with contrast',
+  'MRA brain plain with spine screening',
+  'MR thoracic spine plain',
+  'MR thoracic spine plain with spine screening',
+  'MR cervical spine plain',
+  'MR cervical spine plain with spine screening',
+  'MR multiparametric prostate',
+  'MR biparametric prostate',
+  'MR wrist (left)',
+  'MR wrist (right)',
+  'MR pelvis with contrast',
+  'MR pelvis plain',
+  'MR cardiac plain',
+  'MR cardiac with contrast',
+  'MR whole spine plain',
+] as const;
 
 const EXPORT_COLUMNS: ConsultantDeckingColumnMeta[] = [
   { key: 'inbox', label: 'Unassigned patients' },
@@ -118,6 +216,50 @@ const formatExportDateTime = (value: Date) =>
     minute: '2-digit',
   });
 
+const formatStudyDate = (value?: string | null) => {
+  if (!value) return null;
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const formatStudyTime = (value?: string | null) => {
+  if (!value) return null;
+  const [hours, minutes] = value.split(':');
+  if (!hours || !minutes) return value;
+  const parsed = new Date();
+  parsed.setHours(Number(hours), Number(minutes), 0, 0);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+const formatStudyDateTimeLabel = (entry: Pick<ConsultantDeckingEntry, 'studyDate' | 'studyTime'>) =>
+  [formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' �?') || 'Study date/time pending';
+
+const sortDeckingEntriesForDisplay = (
+  entries: ConsultantDeckingEntry[],
+  columnKey: ConsultantDeckingColumnKey,
+) =>
+  [...entries].sort((left, right) => {
+    if (columnKey !== 'inbox') {
+      const difficultyGap = DIFFICULTY_PRIORITY[left.difficulty] - DIFFICULTY_PRIORITY[right.difficulty];
+      if (difficultyGap !== 0) return difficultyGap;
+
+      const sourceGap = SOURCE_PRIORITY[left.patientSource] - SOURCE_PRIORITY[right.patientSource];
+      if (sourceGap !== 0) return sourceGap;
+    }
+
+    if (left.position !== right.position) return left.position - right.position;
+    return left.patientName.localeCompare(right.patientName);
+  });
+
 const buildDeckingExportHtml = (
   groupedEntries: Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>,
   exportedAt: Date,
@@ -127,7 +269,7 @@ const buildDeckingExportHtml = (
     const items = columnEntries.length
       ? `<ol>${columnEntries
           .map((entry) =>
-            `<li><strong>${escapeHtml(entry.patientName)}</strong> <span>(${escapeHtml(labelize(entry.difficulty))}, ${escapeHtml(labelize(entry.patientSource))})</span></li>`)
+            `<li><strong>${escapeHtml(entry.patientName)}</strong> <span>(${escapeHtml(labelize(entry.difficulty))}, ${escapeHtml(labelize(entry.patientSource))})</span><br /><span>${escapeHtml(entry.studyDescription || 'Study pending')}</span><br /><span>${escapeHtml([formatStudyDate(entry.studyDate), formatStudyTime(entry.studyTime)].filter(Boolean).join(' �?') || 'Study date/time pending')}</span></li>`)
           .join('')}</ol>`
       : '<p>No patients assigned.</p>';
 
@@ -193,15 +335,37 @@ const PatientPill: React.FC<{
       onDragEnd={onDragEnd}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`group inline-flex w-full cursor-grab items-center gap-2 rounded-full border border-white/10 px-3 py-2 text-left transition-all hover:border-white/18 hover:bg-white/[0.06] active:cursor-grabbing ${DIFFICULTY_TONE[entry.difficulty]} ${DIFFICULTY_ACCENT[entry.difficulty]} ${
+      className={`group flex w-full cursor-grab items-start gap-3 rounded-[1.75rem] border border-white/10 px-3.5 py-3 text-left transition-all hover:border-white/18 hover:bg-white/[0.06] active:cursor-grabbing ${DIFFICULTY_TONE[entry.difficulty]} ${DIFFICULTY_ACCENT[entry.difficulty]} ${
         isDragging ? 'opacity-60' : ''
       }`}
       aria-label={`Edit ${entry.patientName}`}
     >
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-white">{entry.patientName}</span>
-      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${SOURCE_TONE[entry.patientSource]}`}>
-        {SOURCE_SYMBOL[entry.patientSource]}
-      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold tracking-[-0.01em] text-white">{entry.patientName}</span>
+          </span>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${SOURCE_TONE[entry.patientSource]}`}>
+              {SOURCE_LABEL[entry.patientSource]}
+            </span>
+            <span className="rounded-full border border-black/10 bg-black/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] text-white/90">
+              {labelize(entry.difficulty).toUpperCase()}
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] ${entry.studyDescription ? STUDY_KIND_TONE.ready : STUDY_KIND_TONE.pending}`}>
+            {getStudyKindLabel(entry.studyDescription)}
+          </span>
+          <span className="min-w-0 truncate text-[12px] font-medium text-white/90">
+            {entry.studyDescription || 'Study pending'}
+          </span>
+        </div>
+        <span className="mt-2 block truncate text-[11px] text-white/70">
+          {formatStudyDateTimeLabel(entry)}
+        </span>
+      </div>
     </div>
   </div>
 );
@@ -231,7 +395,9 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       current.push(entry);
       grouped.set(entry.columnKey, current);
     });
-    grouped.forEach((columnEntries) => columnEntries.sort((left, right) => left.position - right.position));
+    grouped.forEach((columnEntries, columnKey) => {
+      grouped.set(columnKey, sortDeckingEntriesForDisplay(columnEntries, columnKey));
+    });
     return grouped;
   }, [entries]);
 
@@ -288,6 +454,10 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       toastError('Patient name required', 'Please enter the patient name before adding a patient.');
       return;
     }
+    if (!draft.studyDate || !draft.studyTime || !draft.studyDescription) {
+      toastError('Study details required', 'Please complete the study date, time, and description.');
+      return;
+    }
 
     try {
       setIsSaving(true);
@@ -295,6 +465,9 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
         patientName,
         difficulty: draft.difficulty,
         patientSource: draft.patientSource,
+        studyDate: draft.studyDate,
+        studyTime: draft.studyTime,
+        studyDescription: draft.studyDescription,
       });
       resetDraft();
       await loadEntries({ force: true });
@@ -334,6 +507,9 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       patientName: entry.patientName,
       difficulty: entry.difficulty,
       patientSource: entry.patientSource,
+      studyDate: entry.studyDate || '',
+      studyTime: entry.studyTime || '',
+      studyDescription: entry.studyDescription || '',
     });
     setEditColumnKey(entry.columnKey);
   };
@@ -354,6 +530,10 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       toastError('Patient name required', 'Please enter the patient name before saving.');
       return;
     }
+    if (!editDraft.studyDate || !editDraft.studyTime || !editDraft.studyDescription) {
+      toastError('Study details required', 'Please complete the study date, time, and description.');
+      return;
+    }
 
     try {
       setIsSubmittingEdit(true);
@@ -361,6 +541,9 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
         patientName,
         difficulty: editDraft.difficulty,
         patientSource: editDraft.patientSource,
+        studyDate: editDraft.studyDate,
+        studyTime: editDraft.studyTime,
+        studyDescription: editDraft.studyDescription,
       });
 
       if (editColumnKey !== editingEntry.columnKey) {
@@ -419,7 +602,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   };
 
   return (
-    <PageShell layoutMode="wide" contentClassName="space-y-6">
+    <PageShell layoutMode="wide" contentClassName="space-y-6 pb-28 xl:pb-32">
       <PageHeader
         title="Consultant Decking"
         description="Create patients below, then drag each pill to the assigned consultant."
@@ -450,21 +633,13 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             <p className="mt-1 text-sm text-slate-400">Add a patient, then drag the pill to the right consultant.</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={handleExportSummary}
-              disabled={!currentUserId || loading || isExporting}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-1.5 text-xs font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isExporting ? 'Exporting...' : 'Export summary'}
-            </button>
             <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-slate-300">
               {entries.length} active
             </div>
           </div>
         </div>
 
-        <form className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_auto]" onSubmit={handleCreateEntry}>
+        <form className="grid gap-3 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_170px_160px_minmax(0,1fr)_auto]" onSubmit={handleCreateEntry}>
           <label className="space-y-2">
             <span className="text-xs font-semibold text-slate-400">Patient name</span>
             <input
@@ -504,6 +679,45 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
               {PATIENT_SOURCE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
                   {labelize(option)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold text-slate-400">Study date</span>
+            <input
+              type="date"
+              value={draft.studyDate}
+              onChange={(event) => setDraft((current) => ({ ...current, studyDate: event.target.value }))}
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+              aria-label="Study date"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold text-slate-400">Study time</span>
+            <input
+              type="time"
+              value={draft.studyTime}
+              onChange={(event) => setDraft((current) => ({ ...current, studyTime: event.target.value }))}
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+              aria-label="Study time"
+            />
+          </label>
+
+          <label className="space-y-2">
+            <span className="text-xs font-semibold text-slate-400">Study description</span>
+            <select
+              value={draft.studyDescription}
+              onChange={(event) => setDraft((current) => ({ ...current, studyDescription: event.target.value }))}
+              className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+              aria-label="Study description"
+            >
+              <option value="">Select study description</option>
+              {STUDY_DESCRIPTION_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
                 </option>
               ))}
             </select>
@@ -698,6 +912,24 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
         </div>
       </div>
 
+      <div className="sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-40">
+        <div className="rounded-[1.5rem] border border-cyan-300/20 bg-[#09111d]/88 p-3 shadow-[0_20px_60px_rgba(2,8,18,0.5)] backdrop-blur-xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-white">Export consultant decking summary</p>
+              <p className="mt-1 text-xs text-slate-400">Generate a clean snapshot of all assigned and unassigned studies.</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleExportSummary}
+              disabled={!currentUserId || loading || isExporting}
+              className="w-full rounded-full border border-cyan-200/30 bg-cyan-400/20 px-5 py-3 text-sm font-semibold text-cyan-50 transition-colors hover:border-cyan-200/45 hover:bg-cyan-400/28 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:min-w-[220px]"
+            >
+              {isExporting ? 'Exporting...' : 'Export Summary'}
+            </button>
+          </div>
+        </div>
+      </div>
       {editingEntry ? (
         <div className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/72 px-4 pb-4 pt-10 sm:items-center" role="dialog" aria-modal="true" aria-label="Edit consultant decking patient">
           <div className="w-full max-w-md rounded-[1.75rem] border border-white/10 bg-[#0b1220] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
@@ -761,6 +993,47 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                 </label>
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-2">
+                  <span className="text-xs font-semibold text-slate-400">Study date</span>
+                  <input
+                    type="date"
+                    value={editDraft.studyDate}
+                    onChange={(event) => setEditDraft((current) => ({ ...current, studyDate: event.target.value }))}
+                    aria-label="Edit study date"
+                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+                  />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-xs font-semibold text-slate-400">Study time</span>
+                  <input
+                    type="time"
+                    value={editDraft.studyTime}
+                    onChange={(event) => setEditDraft((current) => ({ ...current, studyTime: event.target.value }))}
+                    aria-label="Edit study time"
+                    className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+                  />
+                </label>
+              </div>
+
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold text-slate-400">Study description</span>
+                <select
+                  value={editDraft.studyDescription}
+                  onChange={(event) => setEditDraft((current) => ({ ...current, studyDescription: event.target.value }))}
+                  aria-label="Edit study description"
+                  className="w-full rounded-full border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none transition-colors focus:border-cyan-300/40"
+                >
+                  <option value="">Select study description</option>
+                  {STUDY_DESCRIPTION_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
               <label className="block space-y-2">
                 <span className="text-xs font-semibold text-slate-400">Move to</span>
                 <select
@@ -804,3 +1077,5 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
 };
 
 export default ConsultantDeckingBoardScreen;
+
+
