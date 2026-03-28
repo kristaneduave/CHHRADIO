@@ -326,7 +326,7 @@ export const moveConsultantDeckingEntry = async (
     id: entry.id,
     column_key: entry.columnKey,
     position: entry.position,
-    updated_by: entry.id === id ? userId : entry.updatedBy,
+    updated_by: userId,
   }));
 
   await persistEntryPositions(payload);

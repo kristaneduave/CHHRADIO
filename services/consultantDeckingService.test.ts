@@ -257,7 +257,7 @@ describe('consultantDeckingService', () => {
     expect(update).toHaveBeenNthCalledWith(1, {
       column_key: 'reynes',
       position: 0,
-      updated_by: 'user-2',
+      updated_by: 'user-1',
     });
     expect(eq).toHaveBeenNthCalledWith(1, 'id', 'b');
     expect(update).toHaveBeenNthCalledWith(2, {
