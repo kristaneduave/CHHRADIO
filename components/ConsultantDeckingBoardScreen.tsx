@@ -465,7 +465,7 @@ const buildDeckingExportHtml = (
       }
       h2 {
         margin: 0;
-        font-size: 16px;
+        font-size: 17px;
         line-height: 1.05;
         font-weight: 800;
         letter-spacing: -0.02em;
@@ -478,7 +478,7 @@ const buildDeckingExportHtml = (
       .item:first-child { border-top: 0; padding-top: 0; }
       .row { display: block; }
       .row strong {
-        font-size: 13.2px;
+        font-size: 14.6px;
         line-height: 1.12;
         word-break: break-word;
         font-weight: 800;
@@ -489,13 +489,13 @@ const buildDeckingExportHtml = (
         display: block;
         margin-top: 3px;
         color: #64748b;
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
       }
       .study {
         margin-top: 3px;
         color: #1e293b;
-        font-size: 11.6px;
+        font-size: 12.6px;
         line-height: 1.18;
         word-break: break-word;
         font-weight: 700;
