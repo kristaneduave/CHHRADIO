@@ -5,6 +5,14 @@ import {
   ConsultantDeckingEntryInput,
   ConsultantDeckingPatientSource,
 } from '../types';
+
+export type ArchivedDeckingSession = {
+  id: string;
+  title: string;
+  entriesSnapshot: ConsultantDeckingEntry[];
+  createdAt: string;
+  createdBy: string | null;
+};
 import { supabase } from './supabase';
 
 const TABLE_NAME = 'consultant_decking_entries';
@@ -353,4 +361,40 @@ export const __testables = {
   normalizeName,
   normalizeStudyDescription,
   reorderDeckingEntries,
+};
+
+export const createArchivedDeckingSession = async (
+  title: string,
+  entriesSnapshot: ConsultantDeckingEntry[],
+): Promise<{ id: string }> => {
+  const userId = await requireUserId();
+  const { data, error } = await supabase
+    .from('archived_consultant_decking_sessions')
+    .insert({
+      title: title.trim(),
+      entries_snapshot: entriesSnapshot,
+      created_by: userId,
+    })
+    .select('id')
+    .single();
+
+  if (error) throw error;
+  return { id: String(data.id) };
+};
+
+export const listArchivedDeckingSessions = async (): Promise<ArchivedDeckingSession[]> => {
+  const { data, error } = await supabase
+    .from('archived_consultant_decking_sessions')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data || []).map((row) => ({
+    id: String(row.id),
+    title: String(row.title),
+    entriesSnapshot: row.entries_snapshot as ConsultantDeckingEntry[],
+    createdAt: String(row.created_at),
+    createdBy: row.created_by || null,
+  }));
 };

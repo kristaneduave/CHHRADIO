@@ -6,13 +6,16 @@ import {
   ConsultantDeckingPatientSource,
 } from '../types';
 import {
+  createArchivedDeckingSession,
   createConsultantDeckingEntry,
   deleteConsultantDeckingEntry,
+  listArchivedDeckingSessions,
   listConsultantDeckingEntries,
   moveConsultantDeckingEntry,
   reorderDeckingEntries,
   subscribeToConsultantDeckingEntries,
   updateConsultantDeckingEntry,
+  type ArchivedDeckingSession,
 } from '../services/consultantDeckingService';
 import { toastError, toastSuccess } from '../utils/toast';
 import PageHeader from './ui/PageHeader';
@@ -613,6 +616,23 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [isSubmittingEdit, setIsSubmittingEdit] = React.useState(false);
   const [isExporting, setIsExporting] = React.useState(false);
   const [isClearingAll, setIsClearingAll] = React.useState(false);
+  const [isArchiving, setIsArchiving] = React.useState(false);
+  const [isArchivesOpen, setIsArchivesOpen] = React.useState(false);
+  const [archivedSessions, setArchivedSessions] = React.useState<ArchivedDeckingSession[]>([]);
+  const [isLoadingArchives, setIsLoadingArchives] = React.useState(false);
+
+  const openArchivesModal = async () => {
+    setIsArchivesOpen(true);
+    setIsLoadingArchives(true);
+    try {
+      const fetchArchives = await listArchivedDeckingSessions();
+      setArchivedSessions(fetchArchives);
+    } catch (error: any) {
+      toastError('Unable to load archives', error?.message);
+    } finally {
+      setIsLoadingArchives(false);
+    }
+  };
 
   const groupedEntries = React.useMemo(() => {
     const grouped = new Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>();
@@ -840,7 +860,26 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
   };
 
-  const handleExportSummary = () => {
+  const handleSaveSession = async () => {
+    if (!entries.length) return;
+    const title = window.prompt(
+      'Enter the title for this decking session:',
+      'CT Fuente deck (Saturday 7 am to Sunday 7 am)'
+    );
+    if (!title) return;
+
+    try {
+      setIsArchiving(true);
+      await createArchivedDeckingSession(title, entries);
+      toastSuccess('Session saved securely to archives');
+    } catch (error: any) {
+      toastError('Unable to save session', error?.message || 'Please try again.');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
+  const handleExportSummary = async () => {
     const title = window.prompt(
       'Enter the title for the decking summary:',
       'CT Fuente deck (Saturday 7 am to Sunday 7 am)'
@@ -869,6 +908,19 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     } finally {
       setIsExporting(false);
     }
+
+    const shouldArchive = window.confirm('Would you also like to save this session snapshot to the archives?');
+    if (shouldArchive) {
+      try {
+        setIsArchiving(true);
+        await createArchivedDeckingSession(title || 'Consultant Decking Summary', entries);
+        toastSuccess('Session saved to archives');
+      } catch (error: any) {
+        toastError('Unable to archive session', error?.message || 'Please try again.');
+      } finally {
+        setIsArchiving(false);
+      }
+    }
   };
 
   const handleClearAll = async () => {
@@ -893,6 +945,22 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
         title="Consultant Decking"
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={openArchivesModal}
+              disabled={!currentUserId || loading}
+              className="rounded-full border border-violet-200/30 bg-violet-400/20 px-4 py-2 text-sm font-semibold text-violet-100 transition-colors hover:border-violet-200/45 hover:bg-violet-400/28 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Archives
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveSession}
+              disabled={!currentUserId || loading || isArchiving || !entries.length}
+              className="rounded-full border border-sky-300/30 bg-sky-400/20 px-4 py-2 text-sm font-semibold text-sky-100 transition-colors hover:border-sky-300/45 hover:bg-sky-400/28 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isArchiving ? 'Saving...' : 'Save Session'}
+            </button>
             <button
               type="button"
               onClick={handleClearAll}
@@ -1449,6 +1517,75 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isArchivesOpen ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/72 px-4 pb-4 pt-10 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setIsArchivesOpen(false)}
+        >
+          <div className="flex w-full max-w-2xl flex-col max-h-[85vh] rounded-[1.75rem] border border-white/10 bg-[#0b1220] p-5 shadow-[0_30px_80px_rgba(0,0,0,0.45)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Archived Sessions</h2>
+                <p className="mt-1 text-sm text-slate-400">View and print past saved decks.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsArchivesOpen(false)}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-semibold text-slate-200 transition-colors hover:border-white/20 hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#334155 transparent' }}>
+              {isLoadingArchives ? (
+                <div className="flex h-32 items-center justify-center text-sm text-slate-400">Loading archives...</div>
+              ) : archivedSessions.length === 0 ? (
+                <div className="flex h-32 items-center justify-center text-sm text-slate-400">No archived sessions found.</div>
+              ) : (
+                <div className="grid gap-3">
+                  {archivedSessions.map((session) => (
+                    <div key={session.id} className="flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-slate-900/40 p-4 transition-colors hover:bg-slate-900/60">
+                      <div>
+                        <h3 className="font-semibold text-white">{session.title}</h3>
+                        <p className="text-xs text-slate-400 mt-1">Saved on {new Date(session.createdAt).toLocaleString()} • {session.entriesSnapshot.length} patients</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snapshotGrouped = new Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>();
+                          snapshotGrouped.set('inbox', []);
+                          DOCTOR_COLUMNS.forEach((column) => snapshotGrouped.set(column.key, []));
+                          session.entriesSnapshot.forEach((entry) => {
+                            const current = snapshotGrouped.get(entry.columnKey) || [];
+                            current.push(entry);
+                            snapshotGrouped.set(entry.columnKey, current);
+                          });
+                          
+                          const html = buildDeckingExportHtml(snapshotGrouped, session.title);
+                          const exportWindow = window.open('', 'consultant-decking-export', 'width=1480,height=980,resizable=yes,scrollbars=yes');
+                          if (exportWindow) {
+                            exportWindow.document.open();
+                            exportWindow.document.write(html);
+                            exportWindow.document.close();
+                            exportWindow.focus();
+                          }
+                        }}
+                        className="rounded-full border border-cyan-300/30 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/20 transition-colors"
+                      >
+                        View &amp; Print
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
