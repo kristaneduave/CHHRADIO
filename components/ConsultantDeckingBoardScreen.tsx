@@ -381,11 +381,24 @@ const sortDeckingEntriesForDisplay = (
     return left.patientName.localeCompare(right.patientName);
   });
 
+const sortExportEntries = (entries: ConsultantDeckingEntry[]) =>
+  [...entries].sort((left, right) => {
+    const sourceGap = SOURCE_PRIORITY[left.patientSource] - SOURCE_PRIORITY[right.patientSource];
+    if (sourceGap !== 0) return sourceGap;
+
+    const difficultyGap = DIFFICULTY_PRIORITY[left.difficulty] - DIFFICULTY_PRIORITY[right.difficulty];
+    if (difficultyGap !== 0) return difficultyGap;
+
+    if (left.position !== right.position) return left.position - right.position;
+    return left.patientName.localeCompare(right.patientName);
+  });
+
 const buildDeckingExportHtml = (
   groupedEntries: Map<ConsultantDeckingColumnKey, ConsultantDeckingEntry[]>,
+  exportTitle: string,
 ) => {
   const sections = EXPORT_COLUMNS.map((column) => {
-    const columnEntries = groupedEntries.get(column.key) || [];
+    const columnEntries = sortExportEntries(groupedEntries.get(column.key) || []);
     const accent = EXPORT_HEADER_ACCENT[column.key as Exclude<ConsultantDeckingColumnKey, 'inbox'>];
     const items = columnEntries.length
       ? '<div class="list">' + columnEntries.map((entry) =>
@@ -400,7 +413,7 @@ const buildDeckingExportHtml = (
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>CT Fuente deck (Saturday 7 am to Sunday 7 am)</title>
+    <title>${escapeHtml(exportTitle)}</title>
     <style>
       * { box-sizing: border-box; }
       body {
@@ -508,7 +521,7 @@ const buildDeckingExportHtml = (
     <div class="canvas">
         <div class="sheet">
           <div class="sheet-header">
-            <h1>CT Fuente deck (Saturday 7 am to Sunday 7 am)</h1>
+            <h1>${escapeHtml(exportTitle)}</h1>
           </div>
           <div class="grid">${sections}</div>
         </div>
@@ -828,9 +841,18 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   };
 
   const handleExportSummary = () => {
+    const title = window.prompt(
+      'Enter the title for the decking summary:',
+      'CT Fuente deck (Saturday 7 am to Sunday 7 am)'
+    );
+
+    if (title === null) {
+      return;
+    }
+
     try {
       setIsExporting(true);
-      const html = buildDeckingExportHtml(groupedEntries);
+      const html = buildDeckingExportHtml(groupedEntries, title || 'Consultant Decking Summary');
       const exportWindow = window.open('', 'consultant-decking-export', 'width=1480,height=980,resizable=yes,scrollbars=yes');
 
       if (!exportWindow) {
