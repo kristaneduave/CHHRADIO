@@ -1,10 +1,34 @@
 import { supabase } from './supabase';
 import { CalendarEvent, EventType } from '../types';
 import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
+import { STATIC_CALENDAR_EVENTS } from './calendarStaticEvents';
 
 const normalizeIds = (ids: Iterable<string>): string[] => Array.from(new Set(ids)).filter(Boolean).sort();
 const escapeForIlike = (value: string) => value.replace(/[%_,]/g, (char) => `\\${char}`);
 const sanitizeUuidList = (ids: string[]) => ids.filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+const eventOverlapsRange = (event: Pick<CalendarEvent, 'start_time' | 'end_time'>, start: Date, end: Date) => {
+    const eventStart = new Date(event.start_time);
+    const eventEnd = new Date(event.end_time || event.start_time);
+    return eventStart <= end && eventEnd >= start;
+};
+const sortByStartTime = (left: Pick<CalendarEvent, 'start_time'>, right: Pick<CalendarEvent, 'start_time'>) =>
+    new Date(left.start_time).getTime() - new Date(right.start_time).getTime();
+const mergeCalendarEvents = (databaseEvents: CalendarEvent[], staticEvents: CalendarEvent[]) => {
+    const byId = new Map<string, CalendarEvent>();
+    [...databaseEvents, ...staticEvents].forEach((event) => byId.set(event.id, event));
+    return Array.from(byId.values()).sort(sortByStartTime);
+};
+const filterStaticEventsByRange = (start: Date, end: Date, filters?: { type?: EventType[] }) =>
+    STATIC_CALENDAR_EVENTS.filter((event) => {
+        if (filters?.type && filters.type.length > 0 && !filters.type.includes(event.event_type)) return false;
+        return eventOverlapsRange(event, start, end);
+    });
+const searchStaticEvents = (normalizedQuery: string) =>
+    STATIC_CALENDAR_EVENTS.filter((event) => {
+        const coverage = (event.coverage_details || []).map((detail) => detail.name || '').join(' ');
+        const haystack = `${event.title} ${event.description || ''} ${coverage}`.toLowerCase();
+        return haystack.includes(normalizedQuery);
+    }).sort(sortByStartTime);
 
 export const buildCalendarSearchOrClause = (normalizedQuery: string, userIds: string[]): string => {
     const escaped = escapeForIlike(normalizedQuery);
@@ -103,7 +127,9 @@ export const CalendarService = {
             { ttlMs: 20_000, allowStaleWhileRevalidate: true },
         );
         if (error) throw error;
-        return hydrateEventsWithProfiles(events || []);
+        const hydratedEvents = await hydrateEventsWithProfiles(events || []);
+        const staticEvents = filterStaticEventsByRange(startDate, endDate, filters);
+        return mergeCalendarEvents(hydratedEvents, staticEvents);
     },
 
     async createEvent(event: Omit<CalendarEvent, 'id' | 'created_at' | 'created_by' | 'covered_user'>) {
@@ -185,8 +211,9 @@ export const CalendarService = {
         );
 
         if (eventsError) throw eventsError;
-        if (!events || events.length === 0) return [];
-        return hydrateEventsWithProfiles(events);
+        const hydratedEvents = await hydrateEventsWithProfiles(events || []);
+        const staticEvents = filterStaticEventsByRange(startOfDay, endOfDay, { type: ['leave'] });
+        return mergeCalendarEvents(hydratedEvents, staticEvents);
     },
 
     // We can keep this or deprecate it since the agenda view might use filter
@@ -204,7 +231,12 @@ export const CalendarService = {
             { ttlMs: 15_000, allowStaleWhileRevalidate: true },
         );
         if (error) throw error;
-        return hydrateEventsWithProfiles(data || []);
+        const hydratedEvents = await hydrateEventsWithProfiles(data || []);
+        const staticEvents = STATIC_CALENDAR_EVENTS
+            .filter((event) => new Date(event.end_time) >= now)
+            .sort(sortByStartTime)
+            .slice(0, limit);
+        return mergeCalendarEvents(hydratedEvents, staticEvents).slice(0, limit);
     },
 
     async searchEvents(query: string) {
@@ -241,7 +273,8 @@ export const CalendarService = {
             },
             { ttlMs: 15_000, allowStaleWhileRevalidate: true },
         );
-        return hydrateEventsWithProfiles(cached || []);
+        const hydratedEvents = await hydrateEventsWithProfiles(cached || []);
+        return mergeCalendarEvents(hydratedEvents, searchStaticEvents(normalizedQuery));
     },
 
     async preloadCalendarData(date: Date, upcomingLimit = 10) {
