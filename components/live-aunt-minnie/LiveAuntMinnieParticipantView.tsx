@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { LiveAuntMinnieRoomState } from '../../types';
+import { LiveAuntMinnieRoomState, LiveAuntMinnieSyncState } from '../../types';
 import LiveAuntMinnieQuestionFeed from './LiveAuntMinnieQuestionFeed';
 
 interface LiveAuntMinnieParticipantViewProps {
   onBack?: () => void;
   currentUserId: string | null;
   draftResponsesByPromptId: Record<string, string>;
+  responseStatusByPromptId: Record<string, 'typing' | 'saving' | 'saved' | 'retry failed'>;
   roomState: LiveAuntMinnieRoomState;
   submittingPromptIds: Record<string, boolean>;
   busyAction?: string | null;
-  roomSyncState?: 'connecting' | 'live' | 'degraded';
+  roomSyncState?: LiveAuntMinnieSyncState;
   onDraftChange: (promptId: string, value: string) => void;
   onRefresh?: () => Promise<void>;
   onSubmitResponse: (promptId: string, value?: string) => Promise<void>;
@@ -19,6 +20,7 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
   onBack,
   currentUserId,
   draftResponsesByPromptId,
+  responseStatusByPromptId,
   roomState,
   submittingPromptIds,
   busyAction,
@@ -30,6 +32,15 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
   const [showEndedOverlay, setShowEndedOverlay] = useState(false);
   const previousStatusRef = useRef(roomState.session.status);
   const isEnded = roomState.session.status !== 'live';
+  const currentQuestionNumber = Math.min(roomState.session.current_prompt_index + 1, Math.max(roomState.session.prompt_count, 1));
+  const totalQuestionCount = Math.max(roomState.session.prompt_count, roomState.prompts.length, 1);
+  const syncBannerCopy: Record<LiveAuntMinnieSyncState, string> = {
+    connecting: 'Joining the room and syncing your exam shell.',
+    syncing: 'Questions are loading. You can stay on this screen.',
+    live: 'Synced. Drafts stay on this device until you submit.',
+    reconnecting: 'Reconnecting to the live tally. Your draft stays on this device.',
+    degraded: 'Realtime is delayed. Your draft stays local while we retry sync.',
+  };
 
   useEffect(() => {
     const previousStatus = previousStatusRef.current;
@@ -92,12 +103,28 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
                 refresh
               </span>
             </button>
-            {roomSyncState !== 'live' && (
-              <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-100">
-                {roomSyncState === 'connecting' ? 'Connecting...' : 'Realtime delayed'}
-              </span>
-            )}
+            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+              roomSyncState === 'live'
+                ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100'
+                : 'border-amber-400/20 bg-amber-500/10 text-amber-100'
+            }`}>
+              {roomSyncState === 'live'
+                ? 'Synced'
+                : roomSyncState === 'syncing'
+                  ? 'Syncing...'
+                  : roomSyncState === 'reconnecting'
+                    ? 'Reconnecting...'
+                    : roomSyncState === 'connecting'
+                      ? 'Connecting...'
+                      : 'Realtime delayed'}
+            </span>
           </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
+          <div className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">
+            Question {currentQuestionNumber} of {totalQuestionCount}
+          </div>
+          <p className="text-xs text-slate-400">{syncBannerCopy[roomSyncState || 'connecting']}</p>
         </div>
       </section>
 
@@ -106,6 +133,8 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
         canAnswer={roomState.session.status === 'live' && roomState.session.current_phase === 'prompt_open'}
         currentUserId={currentUserId}
         draftResponsesByPromptId={draftResponsesByPromptId}
+        responseStatusByPromptId={responseStatusByPromptId}
+        syncState={roomSyncState}
         onDraftChange={onDraftChange}
         onSubmitResponse={onSubmitResponse}
         roomState={roomState}

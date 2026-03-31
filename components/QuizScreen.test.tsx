@@ -13,6 +13,7 @@ const mockCreateQuiz = vi.fn();
 const mockUpdateQuiz = vi.fn();
 const mockDeleteQuiz = vi.fn();
 const mockDuplicateQuiz = vi.fn();
+const mockPreloadCurrentLiveAuntMinnieRoom = vi.fn();
 
 vi.mock('../services/quizService', () => ({
   getQuizWorkspaceData: (...args: unknown[]) => mockGetQuizWorkspaceData(...args),
@@ -30,6 +31,7 @@ vi.mock('../services/quizService', () => ({
 vi.mock('../services/liveAuntMinnieService', () => ({
   isLiveAuntMinnieHostRole: (role: string | null | undefined) =>
     ['admin', 'faculty', 'consultant', 'training_officer'].includes(String(role || '')),
+  preloadCurrentLiveAuntMinnieRoom: (...args: unknown[]) => mockPreloadCurrentLiveAuntMinnieRoom(...args),
 }));
 
 vi.mock('./quiz/QuizSession', () => ({
@@ -89,6 +91,7 @@ describe('QuizScreen', () => {
     mockUpdateQuiz.mockReset();
     mockDeleteQuiz.mockReset();
     mockDuplicateQuiz.mockReset();
+    mockPreloadCurrentLiveAuntMinnieRoom.mockReset();
     mockGetCachedQuizWorkspaceData.mockReturnValue(null);
   });
 
@@ -152,5 +155,26 @@ describe('QuizScreen', () => {
 
     expect(await screen.findByText('Faculty Authoring Workspace')).toBeInTheDocument();
     expect(screen.queryByText('Manage Quizzes')).toBeInTheDocument();
+  });
+
+  it('preloads the latest live aunt minnie room before navigation', async () => {
+    mockGetQuizWorkspaceData.mockResolvedValue({
+      userRoles: ['resident'],
+      userRole: 'resident',
+      availableQuizzes: [baseQuiz],
+      managedQuizzes: [],
+      attempts: [baseAttempt],
+      quizQuestions: {},
+    });
+    mockPreloadCurrentLiveAuntMinnieRoom.mockResolvedValue(undefined);
+    const onOpenLiveAuntMinnie = vi.fn();
+
+    render(<QuizScreen onOpenLiveAuntMinnie={onOpenLiveAuntMinnie} />);
+
+    fireEvent.click(await screen.findByText('Aunt Minnie'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
+
+    expect(mockPreloadCurrentLiveAuntMinnieRoom).toHaveBeenCalledTimes(1);
+    expect(onOpenLiveAuntMinnie).toHaveBeenCalledTimes(1);
   });
 });

@@ -2,7 +2,7 @@ import { Screen } from '../types';
 import { preloadArticleLibraryLanding } from './articleLibraryService';
 import { preloadAnnouncementsWorkspace } from './announcementsWorkspaceService';
 import { preloadCalendarWorkspace } from './calendarWorkspaceService';
-import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
+import { preloadCurrentLiveAuntMinnieRoom, preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
 import { preloadCurrentProfileHome } from './profileHomeService';
 import { preloadQuizWorkspace } from './quizService';
 import { preloadConsultantDeckingEntries } from './consultantDeckingService';
@@ -62,9 +62,15 @@ const SCREEN_DATA_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = 
     await Promise.all([
       preloadQuizWorkspace(),
       preloadLiveAuntMinnieWorkspace(),
+      preloadCurrentLiveAuntMinnieRoom(),
     ]);
   },
-  'live-aunt-minnie': preloadLiveAuntMinnieWorkspace,
+  'live-aunt-minnie': async () => {
+    await Promise.all([
+      preloadLiveAuntMinnieWorkspace(),
+      preloadCurrentLiveAuntMinnieRoom(),
+    ]);
+  },
   'residents-corner': preloadResidentsCornerBootstrap,
   'consultant-decking': preloadConsultantDeckingEntries,
 };

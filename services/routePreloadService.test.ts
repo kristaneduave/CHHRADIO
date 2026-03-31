@@ -6,6 +6,7 @@ const {
   preloadCalendarWorkspace,
   preloadQuizWorkspace,
   preloadLiveAuntMinnieWorkspace,
+  preloadCurrentLiveAuntMinnieRoom,
   preloadCurrentProfileHome,
   preloadResidentsCornerBootstrap,
   preloadConsultantDeckingEntries,
@@ -15,6 +16,7 @@ const {
   preloadCalendarWorkspace: vi.fn(async () => undefined),
   preloadQuizWorkspace: vi.fn(async () => undefined),
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
+  preloadCurrentLiveAuntMinnieRoom: vi.fn(async () => undefined),
   preloadCurrentProfileHome: vi.fn(async () => undefined),
   preloadResidentsCornerBootstrap: vi.fn(async () => undefined),
   preloadConsultantDeckingEntries: vi.fn(async () => undefined),
@@ -38,6 +40,7 @@ vi.mock('./quizService', () => ({
 
 vi.mock('./liveAuntMinnieService', () => ({
   preloadLiveAuntMinnieWorkspace,
+  preloadCurrentLiveAuntMinnieRoom,
 }));
 
 vi.mock('./profileHomeService', () => ({
@@ -57,6 +60,7 @@ describe('routePreloadService', () => {
     vi.resetModules();
     preloadQuizWorkspace.mockClear();
     preloadLiveAuntMinnieWorkspace.mockClear();
+    preloadCurrentLiveAuntMinnieRoom.mockClear();
     preloadArticleLibraryLanding.mockClear();
     preloadAnnouncementsWorkspace.mockClear();
     preloadCalendarWorkspace.mockClear();
@@ -72,6 +76,7 @@ describe('routePreloadService', () => {
 
     expect(preloadQuizWorkspace).toHaveBeenCalledTimes(1);
     expect(preloadLiveAuntMinnieWorkspace).toHaveBeenCalledTimes(1);
+    expect(preloadCurrentLiveAuntMinnieRoom).toHaveBeenCalledTimes(1);
   });
 
   it('warms aunt minnie data when preloading the live aunt minnie screen', async () => {
@@ -81,6 +86,7 @@ describe('routePreloadService', () => {
 
     expect(preloadQuizWorkspace).not.toHaveBeenCalled();
     expect(preloadLiveAuntMinnieWorkspace).toHaveBeenCalledTimes(1);
+    expect(preloadCurrentLiveAuntMinnieRoom).toHaveBeenCalledTimes(1);
   });
 
   it('warms article library landing data when preloading article library', async () => {

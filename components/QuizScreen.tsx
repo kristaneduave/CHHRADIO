@@ -11,6 +11,7 @@ import {
   submitQuizAttempt,
   updateQuiz,
 } from '../services/quizService';
+import { preloadCurrentLiveAuntMinnieRoom } from '../services/liveAuntMinnieService';
 import ManageQuizzesPanel from './quiz/ManageQuizzesPanel';
 import MyQuizAttempts from './quiz/MyQuizAttempts';
 import QuizLibrary from './quiz/QuizLibrary';
@@ -171,6 +172,10 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
 
   const canManage = canManageQuiz(userRoles);
   const canHostAuntMinnie = canManageAuntMinnieRoom(userRoles);
+  const handleOpenAuntMinnie = () => {
+    void preloadCurrentLiveAuntMinnieRoom().catch(() => undefined);
+    onOpenLiveAuntMinnie?.();
+  };
 
   if (loading) {
     return (
@@ -311,7 +316,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => onOpenLiveAuntMinnie?.()}
+                  onClick={handleOpenAuntMinnie}
                   disabled={!onOpenLiveAuntMinnie}
                   className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-amber-400/18 bg-amber-500/[0.08] px-4 text-sm font-semibold text-white transition hover:bg-amber-500/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
                 >
@@ -341,7 +346,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => onOpenLiveAuntMinnie?.()}
+                  onClick={handleOpenAuntMinnie}
                   disabled={!onOpenLiveAuntMinnie}
                   className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
                 >

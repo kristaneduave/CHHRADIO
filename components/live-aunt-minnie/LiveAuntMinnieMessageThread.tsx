@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { LiveAuntMinnieResponse } from '../../types';
+import { LiveAuntMinnieResponse, LiveAuntMinnieSyncState } from '../../types';
 
 interface LiveAuntMinnieMessageThreadProps {
   currentUserId: string | null;
@@ -9,6 +9,8 @@ interface LiveAuntMinnieMessageThreadProps {
   myResponse: LiveAuntMinnieResponse | null;
   canAnswer: boolean;
   answerMode: 'editable' | 'locked-summary' | 'host-review';
+  responseStatus?: 'typing' | 'saving' | 'saved' | 'retry failed';
+  syncState?: LiveAuntMinnieSyncState;
   correctAnswer?: string | null;
   canEditCorrectAnswer?: boolean;
   isSavingCorrectAnswer?: boolean;
@@ -50,6 +52,8 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   myResponse,
   canAnswer,
   answerMode,
+  responseStatus,
+  syncState,
   correctAnswer,
   canEditCorrectAnswer = false,
   isSavingCorrectAnswer = false,
@@ -82,7 +86,14 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   const savedValue = (myResponse?.response_text || '').trim();
   const currentValue = draftValue.trim();
   const isDirty = currentValue !== savedValue;
-  const statusLabel = isSubmitting ? 'Saving...' : isDirty ? 'Editing...' : savedValue ? 'Saved' : 'Not submitted yet';
+  const statusLabel = (() => {
+    if (isSubmitting || responseStatus === 'saving') return 'Saving...';
+    if (responseStatus === 'retry failed') return 'Retry failed';
+    if ((syncState === 'reconnecting' || syncState === 'degraded') && isDirty) return 'Reconnecting...';
+    if (responseStatus === 'typing' || isDirty) return 'Typing...';
+    if (responseStatus === 'saved' || savedValue) return 'Saved';
+    return 'Not submitted yet';
+  })();
 
   useEffect(() => {
     if (!isEditingCorrectAnswer) {
@@ -111,9 +122,11 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
             <p className="text-sm font-semibold text-white">Your answer</p>
             <span
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                isSubmitting
+                statusLabel === 'Saving...'
                   ? 'border-amber-400/20 bg-amber-500/10 text-amber-100'
-                  : isDirty
+                  : statusLabel === 'Retry failed'
+                    ? 'border-rose-400/20 bg-rose-500/10 text-rose-100'
+                    : statusLabel === 'Typing...' || statusLabel === 'Reconnecting...'
                     ? 'border-cyan-400/20 bg-cyan-500/10 text-cyan-100'
                     : 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100'
               }`}
@@ -136,6 +149,9 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
               disabled={isSubmitting}
               className="min-h-[72px] w-full rounded-[16px] border border-white/10 bg-black/25 px-4 py-3 text-base text-white outline-none transition focus:border-cyan-400/30 focus:ring-2 focus:ring-cyan-400/10 disabled:cursor-not-allowed disabled:opacity-60"
             />
+            <p className="mt-2 text-xs text-slate-500">
+              Drafts stay on this device until you submit.
+            </p>
           </div>
 
           <div className="flex justify-end">
@@ -294,6 +310,8 @@ export default React.memo(
     && previous.isSubmitting === next.isSubmitting
     && previous.canAnswer === next.canAnswer
     && previous.answerMode === next.answerMode
+    && previous.responseStatus === next.responseStatus
+    && previous.syncState === next.syncState
     && previous.correctAnswer === next.correctAnswer
     && previous.canEditCorrectAnswer === next.canEditCorrectAnswer
     && previous.isSavingCorrectAnswer === next.isSavingCorrectAnswer

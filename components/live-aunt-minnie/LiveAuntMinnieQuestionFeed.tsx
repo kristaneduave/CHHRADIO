@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LiveAuntMinnieParticipant, LiveAuntMinniePrompt, LiveAuntMinnieResponse, LiveAuntMinnieRoomState } from '../../types';
+import { LiveAuntMinnieParticipant, LiveAuntMinniePrompt, LiveAuntMinnieResponse, LiveAuntMinnieRoomState, LiveAuntMinnieSyncState } from '../../types';
 import LiveAuntMinnieMessageThread from './LiveAuntMinnieMessageThread';
 import {
   IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
@@ -13,10 +13,12 @@ interface LiveAuntMinnieQuestionFeedProps {
   currentUserId: string | null;
   roomState: LiveAuntMinnieRoomState;
   draftResponsesByPromptId: Record<string, string>;
+  responseStatusByPromptId?: Record<string, 'typing' | 'saving' | 'saved' | 'retry failed'>;
   submittingPromptIds: Record<string, boolean>;
   busyAction?: string | null;
   canAnswer: boolean;
   answerMode?: 'editable' | 'locked-summary' | 'host-review';
+  syncState?: LiveAuntMinnieSyncState;
   answerKeyDrafts?: Record<string, string>;
   canEditCorrectAnswers?: boolean;
   canEditPosts?: boolean;
@@ -35,9 +37,6 @@ const formatPromptTimestamp = (value?: string) => {
     second: '2-digit',
   });
 };
-
-const getAnswerCountLabel = (responses: LiveAuntMinnieResponse[]) =>
-  `${responses.length} ${responses.length === 1 ? 'answer' : 'answers'}`;
 
 const responseListSignature = (responses: LiveAuntMinnieResponse[]) =>
   responses
@@ -90,14 +89,15 @@ interface LiveAuntMinniePromptCardProps {
   prompt: LiveAuntMinniePrompt;
   promptNumber: number;
   currentUserId: string | null;
-  allResponses: LiveAuntMinnieResponse[];
   responses: LiveAuntMinnieResponse[];
   myResponse: LiveAuntMinnieResponse | null;
   draftValue: string;
+  responseStatus?: 'typing' | 'saving' | 'saved' | 'retry failed';
   isSubmitting: boolean;
   isReadOnly: boolean;
   canAnswer: boolean;
   answerMode: 'editable' | 'locked-summary' | 'host-review';
+  syncState?: LiveAuntMinnieSyncState;
   canEditCorrectAnswers: boolean;
   isSavingCorrectAnswer: boolean;
   canEditPosts: boolean;
@@ -112,14 +112,15 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
   prompt,
   promptNumber,
   currentUserId,
-  allResponses,
   responses,
   myResponse,
   draftValue,
+  responseStatus,
   isSubmitting,
   isReadOnly,
   canAnswer,
   answerMode,
+  syncState,
   canEditCorrectAnswers,
   isSavingCorrectAnswer,
   canEditPosts,
@@ -170,10 +171,11 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
           className="min-w-[85%] snap-start overflow-hidden rounded-[22px] border border-white/10 bg-black/30 text-left sm:min-w-[320px]"
         >
           <div className="relative">
+            <div className="aspect-[4/3] w-full bg-slate-900/60" />
             <img
               src={image.image_url}
               alt={image.caption || `Question ${promptNumber} image ${imageIndex + 1}`}
-              className="h-56 w-full object-cover sm:h-72"
+              className="absolute inset-0 h-full w-full object-cover"
               loading="lazy"
               decoding="async"
             />
@@ -195,6 +197,8 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
       myResponse={myResponse}
       canAnswer={canAnswer}
       answerMode={answerMode}
+      responseStatus={responseStatus}
+      syncState={syncState}
       correctAnswer={prompt.official_answer}
       canEditCorrectAnswer={canEditCorrectAnswers}
       isSavingCorrectAnswer={isSavingCorrectAnswer}
@@ -215,17 +219,18 @@ const MemoizedLiveAuntMinniePromptCard = React.memo(
     && previous.prompt.images.length === next.prompt.images.length
     && previous.promptNumber === next.promptNumber
     && previous.draftValue === next.draftValue
+    && previous.responseStatus === next.responseStatus
     && previous.isSubmitting === next.isSubmitting
     && previous.isReadOnly === next.isReadOnly
     && previous.canAnswer === next.canAnswer
     && previous.answerMode === next.answerMode
+    && previous.syncState === next.syncState
     && previous.canEditCorrectAnswers === next.canEditCorrectAnswers
     && previous.isSavingCorrectAnswer === next.isSavingCorrectAnswer
     && previous.canEditPosts === next.canEditPosts
     && (previous.myResponse?.id || null) === (next.myResponse?.id || null)
     && (previous.myResponse?.updated_at || previous.myResponse?.submitted_at || null)
       === (next.myResponse?.updated_at || next.myResponse?.submitted_at || null)
-    && responseListSignature(previous.allResponses) === responseListSignature(next.allResponses)
     && responseListSignature(previous.responses) === responseListSignature(next.responses),
 );
 
@@ -233,10 +238,12 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
   currentUserId,
   roomState,
   draftResponsesByPromptId,
+  responseStatusByPromptId,
   submittingPromptIds,
   busyAction,
   canAnswer,
   answerMode,
+  syncState,
   answerKeyDrafts,
   canEditCorrectAnswers = false,
   canEditPosts = false,
@@ -411,6 +418,56 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
     () => roomState.prompts,
     [roomState.prompts],
   );
+
+  const promptViewModels = useMemo(() => {
+    return visiblePrompts.map((prompt, index) => {
+      const myResponse = roomState.myResponsesByPromptId[prompt.id] || null;
+      const shouldShowAllParticipantResponses = isReadOnly || roomState.isHost;
+      const allResponses = roomState.responsesByPromptId[prompt.id] || [];
+      const responses = shouldShowAllParticipantResponses
+        ? buildParticipantResponses(prompt.id, roomState.participants, allResponses)
+        : myResponse
+          ? [myResponse]
+          : [];
+
+      return {
+        prompt,
+        promptNumber: index + 1,
+        draftValue: draftResponsesByPromptId[prompt.id] || '',
+        myResponse,
+        responses,
+        responseStatus: responseStatusByPromptId?.[prompt.id],
+        isSubmitting: Boolean(submittingPromptIds[prompt.id]),
+      };
+    });
+  }, [
+    visiblePrompts,
+    roomState.myResponsesByPromptId,
+    roomState.responsesByPromptId,
+    roomState.participants,
+    roomState.isHost,
+    isReadOnly,
+    draftResponsesByPromptId,
+    responseStatusByPromptId,
+    submittingPromptIds,
+  ]);
+
+  useEffect(() => {
+    const currentPrompt = roomState.prompts[roomState.session.current_prompt_index];
+    const currentImage = currentPrompt?.images[0]?.image_url;
+    if (!currentImage) return;
+
+    const heroImage = new Image();
+    heroImage.decoding = 'async';
+    heroImage.src = currentImage;
+    heroImage.onload = () => {
+      currentPrompt.images.slice(1, 3).forEach((image) => {
+        const nextImage = new Image();
+        nextImage.decoding = 'async';
+        nextImage.src = image.image_url;
+      });
+    };
+  }, [roomState.prompts, roomState.session.current_prompt_index]);
 
   const viewerContent = activePrompt && activeImages[viewerImageIndex] ? (
     <div
@@ -706,18 +763,21 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
     const isSyncingPrompts = roomState.session.prompt_count > 0;
     return (
       <section className="rounded-[28px] border border-dashed border-white/10 bg-white/[0.03] p-5 text-center sm:p-7">
-        <p className="text-base font-semibold text-white">
-          {isSyncingPrompts
-            ? 'Syncing questions...'
-            : roomState.isHost
-              ? 'Post your first question'
-              : 'No questions yet'}
-        </p>
         {isSyncingPrompts ? (
-          <p className="mt-2 text-sm text-slate-400">
-            Your room already has questions. Refresh if they do not appear in a moment.
+          <div className="space-y-4 text-left">
+            <div className="mx-auto h-4 w-36 animate-pulse rounded-full bg-white/10" />
+            <div className="space-y-3 rounded-[24px] border border-white/8 bg-white/[0.02] p-4">
+              <div className="h-4 w-24 animate-pulse rounded-full bg-cyan-500/20" />
+              <div className="h-7 w-3/4 animate-pulse rounded-2xl bg-white/10" />
+              <div className="aspect-[4/3] w-full animate-pulse rounded-[20px] bg-slate-900/70" />
+              <div className="h-20 w-full animate-pulse rounded-[18px] bg-white/5" />
+            </div>
+          </div>
+        ) : (
+          <p className="text-base font-semibold text-white">
+            {roomState.isHost ? 'Post your first question' : 'No questions yet'}
           </p>
-        ) : null}
+        )}
       </section>
     );
   }
@@ -725,30 +785,20 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
   return (
     <>
       <div className="space-y-4">
-        {visiblePrompts.map((prompt, index) => {
-          const allResponses = roomState.responsesByPromptId[prompt.id] || [];
-          const allParticipantResponses = buildParticipantResponses(prompt.id, roomState.participants, allResponses);
-          const myResponse = roomState.myResponsesByPromptId[prompt.id] || null;
-          const responses = isReadOnly
-            ? allParticipantResponses
-            : roomState.isHost
-            ? allParticipantResponses
-            : myResponse
-              ? [myResponse]
-              : [];
+        {promptViewModels.map(({ prompt, promptNumber, draftValue, myResponse, responses, responseStatus, isSubmitting }) => {
           return (
             <MemoizedLiveAuntMinniePromptCard
               key={prompt.id}
-              allResponses={allResponses}
               canAnswer={canAnswer}
               canEditCorrectAnswers={canEditCorrectAnswers}
               isSavingCorrectAnswer={busyAction === `save-answer-key:${prompt.id}`}
               canEditPosts={canEditPosts}
               currentUserId={currentUserId}
-              draftValue={draftResponsesByPromptId[prompt.id] || ''}
+              draftValue={draftValue}
+              responseStatus={responseStatus}
               answerMode={resolvedAnswerMode}
               isReadOnly={isReadOnly}
-              isSubmitting={Boolean(submittingPromptIds[prompt.id])}
+              isSubmitting={isSubmitting}
               myResponse={myResponse}
               onDraftChange={onDraftChange}
               onEditPrompt={onEditPrompt}
@@ -759,8 +809,9 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
               onSaveCorrectAnswer={onSaveCorrectAnswer}
               onSubmitResponse={onSubmitResponse}
               prompt={prompt}
-              promptNumber={index + 1}
+              promptNumber={promptNumber}
               responses={responses}
+              syncState={syncState}
             />
           );
         })}

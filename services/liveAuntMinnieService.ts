@@ -15,6 +15,7 @@ import {
   LiveAuntMinnieRoomState,
   LiveAuntMinnieSession,
   LiveAuntMinnieSessionStatus,
+  LiveAuntMinnieSyncState,
   LiveAuntMinnieSubmitMessagePayload,
   LiveAuntMinnieSubmitResponsePayload,
   Profile,
@@ -22,7 +23,7 @@ import {
   UserRole,
 } from '../types';
 
-type RoomConnectionState = 'connecting' | 'live' | 'degraded';
+type RoomConnectionState = LiveAuntMinnieSyncState;
 type WorkspaceData = {
   currentUserId: string;
   currentUserRole: UserRole | null;
@@ -34,6 +35,15 @@ type WorkspaceData = {
 
 let liveAuntMinnieWorkspaceCache: WorkspaceData | null = null;
 let liveAuntMinnieWorkspacePromise: Promise<WorkspaceData> | null = null;
+const liveAuntMinnieRoomBootstrapCache = new Map<string, LiveAuntMinnieRoomState>();
+
+const clearLiveAuntMinnieRoomCache = (sessionId?: string) => {
+  if (sessionId) {
+    liveAuntMinnieRoomBootstrapCache.delete(sessionId);
+    return;
+  }
+  liveAuntMinnieRoomBootstrapCache.clear();
+};
 
 type SessionRow = LiveAuntMinnieSession;
 
@@ -371,6 +381,9 @@ const sortParticipants = (participants: LiveAuntMinnieParticipant[]) =>
     (left, right) => new Date(left.joined_at).getTime() - new Date(right.joined_at).getTime(),
   );
 
+const sortPrompts = (prompts: LiveAuntMinniePrompt[]) =>
+  [...prompts].sort((left, right) => left.sort_order - right.sort_order);
+
 const timestampValue = (value?: string | null) => {
   const time = value ? new Date(value).getTime() : 0;
   return Number.isFinite(time) ? time : 0;
@@ -378,6 +391,11 @@ const timestampValue = (value?: string | null) => {
 
 const isEndedStatus = (status: LiveAuntMinnieSessionStatus) =>
   status === 'completed' || status === 'cancelled';
+
+const isParticipantLivePromptOpenSession = (
+  session: Pick<LiveAuntMinnieSession, 'status' | 'current_phase'>,
+  isHost: boolean,
+) => !isHost && session.status === 'live' && session.current_phase === 'prompt_open';
 
 const withParticipantProfile = <
   T extends { user_id: string; participant?: LiveAuntMinnieResponse['participant'] | LiveAuntMinnieMessage['participant'] | null },
@@ -579,16 +597,26 @@ const applyResponseEventToState = (
           ...state.responses.filter((item) => item.id !== response.id),
           response,
         ]);
+  const nextResponsesByPromptId = {
+    ...state.responsesByPromptId,
+    [response.prompt_id]: sortResponses(nextResponses.filter((item) => item.prompt_id === response.prompt_id)),
+  };
+  const nextMyResponsesByPromptId = { ...state.myResponsesByPromptId };
 
-  return buildRoomStateFromSlices(
-    state.session,
-    state.prompts,
-    state.participants,
-    nextResponses,
-    state.messages,
-    userId,
-    state.onlineParticipantIds,
-  );
+  if (!(response.prompt_id in nextMyResponsesByPromptId)) {
+    nextMyResponsesByPromptId[response.prompt_id] = null;
+  }
+  if (response.user_id === userId) {
+    nextMyResponsesByPromptId[response.prompt_id] =
+      nextResponsesByPromptId[response.prompt_id].find((item) => item.user_id === userId) || null;
+  }
+
+  return {
+    ...state,
+    responses: nextResponses,
+    responsesByPromptId: nextResponsesByPromptId,
+    myResponsesByPromptId: nextMyResponsesByPromptId,
+  };
 };
 
 const applyMessageEventToState = (
@@ -606,15 +634,14 @@ const applyMessageEventToState = (
           message,
         ]);
 
-  return buildRoomStateFromSlices(
-    state.session,
-    state.prompts,
-    state.participants,
-    state.responses,
-    nextMessages,
-    userId,
-    state.onlineParticipantIds,
-  );
+  return {
+    ...state,
+    messages: nextMessages,
+    messagesByPromptId: {
+      ...state.messagesByPromptId,
+      [message.prompt_id]: sortMessages(nextMessages.filter((item) => item.prompt_id === message.prompt_id)),
+    },
+  };
 };
 
 const applyParticipantEventToState = (
@@ -922,6 +949,7 @@ export const createLiveAuntMinnieSession = async (payload: LiveAuntMinnieCreateP
   }
 
   await upsertParticipant(sessionData.id, userId, 'host');
+  clearLiveAuntMinnieRoomCache(sessionData.id);
   return sessionData;
 };
 
@@ -988,6 +1016,7 @@ export const updateLiveAuntMinnieSession = async (sessionId: string, payload: Li
     }
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(sessionData);
 };
 
@@ -1082,6 +1111,7 @@ export const appendLiveAuntMinnieQuestion = async (
     throw sessionUpdateError;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return promptData.id as string;
 };
 
@@ -1154,6 +1184,7 @@ export const updateLiveAuntMinniePrompt = async (
       throw imageError;
     }
   }
+  clearLiveAuntMinnieRoomCache(sessionId);
 };
 
 const fetchSession = async (sessionId: string) => {
@@ -1171,6 +1202,7 @@ const fetchSession = async (sessionId: string) => {
     throw new Error('Live Aunt Minnie room not found.');
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1295,6 +1327,36 @@ const fetchResponses = async (sessionId: string) => {
   return ((data || []) as ResponseRow[]).map(mapResponse);
 };
 
+const fetchResponsesForPrompt = async (sessionId: string, promptId: string) => {
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_responses')
+    .select('*, participant:user_id(full_name, nickname, avatar_url, role)')
+    .eq('session_id', sessionId)
+    .eq('prompt_id', promptId)
+    .order('submitted_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data || []) as ResponseRow[]).map(mapResponse);
+};
+
+const fetchResponsesForUser = async (sessionId: string, userId: string) => {
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_responses')
+    .select('*, participant:user_id(full_name, nickname, avatar_url, role)')
+    .eq('session_id', sessionId)
+    .eq('user_id', userId)
+    .order('submitted_at', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return ((data || []) as ResponseRow[]).map(mapResponse);
+};
+
 const fetchMessages = async (sessionId: string) => {
   const { data, error } = await supabase
     .from('live_aunt_minnie_messages')
@@ -1309,10 +1371,66 @@ const fetchMessages = async (sessionId: string) => {
   return ((data || []) as MessageRow[]).map(mapMessage);
 };
 
-export const getLiveAuntMinnieRoomState = async (
+const getCurrentPrompt = (session: LiveAuntMinnieSession, prompts: LiveAuntMinniePrompt[]) =>
+  prompts[Math.max(0, Math.min(session.current_prompt_index, Math.max(prompts.length - 1, 0)))] || null;
+
+export const getLiveAuntMinnieRoomBootstrap = async (
+  sessionId: string,
+  onlineParticipantIds: string[] = [],
+  options?: { force?: boolean },
+): Promise<LiveAuntMinnieRoomState> => {
+  if (!options?.force && liveAuntMinnieRoomBootstrapCache.has(sessionId)) {
+    return liveAuntMinnieRoomBootstrapCache.get(sessionId)!;
+  }
+
+  const { userId } = await getAuthenticatedProfile();
+  const [session, prompts] = await Promise.all([
+    fetchSession(sessionId),
+    fetchPrompts(sessionId),
+  ]);
+  const isHost = session.host_user_id === userId;
+
+  if (isHost) {
+    const fullState = await getLiveAuntMinnieRoomState(sessionId, onlineParticipantIds, { force: true });
+    liveAuntMinnieRoomBootstrapCache.set(sessionId, fullState);
+    return fullState;
+  }
+
+  const bootstrapState = buildRoomStateFromSlices(
+    session,
+    prompts,
+    [],
+    await fetchResponsesForUser(sessionId, userId),
+    [],
+    userId,
+    onlineParticipantIds,
+  );
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, bootstrapState);
+  return bootstrapState;
+};
+
+export const hydrateLiveAuntMinnieRoomDeferred = async (
   sessionId: string,
   onlineParticipantIds: string[] = [],
 ): Promise<LiveAuntMinnieRoomState> => {
+  const nextState = await getLiveAuntMinnieRoomState(sessionId, onlineParticipantIds, { force: true });
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
+  return nextState;
+};
+
+export const getLiveAuntMinnieRoomState = async (
+  sessionId: string,
+  onlineParticipantIds: string[] = [],
+  options?: { force?: boolean },
+): Promise<LiveAuntMinnieRoomState> => {
+  if (!options?.force && liveAuntMinnieRoomBootstrapCache.has(sessionId)) {
+    const cached = liveAuntMinnieRoomBootstrapCache.get(sessionId)!;
+    return {
+      ...cached,
+      onlineParticipantIds,
+    };
+  }
+
   const { userId } = await getAuthenticatedProfile();
   const [session, prompts, participants, responses, messages] = await Promise.all([
     fetchSession(sessionId),
@@ -1322,7 +1440,7 @@ export const getLiveAuntMinnieRoomState = async (
     fetchMessages(sessionId),
   ]);
 
-  return buildRoomStateFromSlices(
+  const nextState = buildRoomStateFromSlices(
     session,
     prompts,
     participants,
@@ -1331,6 +1449,65 @@ export const getLiveAuntMinnieRoomState = async (
     userId,
     onlineParticipantIds,
   );
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
+  return nextState;
+};
+
+export const getLiveAuntMinniePromptResponseMeta = async (sessionId: string, promptId: string) => {
+  const [{ count, error: countError }, { data, error }] = await Promise.all([
+    supabase
+      .from('live_aunt_minnie_responses')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', sessionId)
+      .eq('prompt_id', promptId),
+    supabase
+      .from('live_aunt_minnie_responses')
+      .select('id, updated_at, submitted_at')
+      .eq('session_id', sessionId)
+      .eq('prompt_id', promptId)
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .order('submitted_at', { ascending: false })
+      .limit(1),
+  ]);
+
+  if (countError) throw countError;
+  if (error) throw error;
+
+  const latest = data?.[0] || null;
+  return {
+    count: count || 0,
+    latest_updated_at: latest?.updated_at || latest?.submitted_at || null,
+  };
+};
+
+export const refreshLiveAuntMinnieRoomResponses = async (
+  sessionId: string,
+  state: LiveAuntMinnieRoomState,
+): Promise<LiveAuntMinnieRoomState> => {
+  const { userId } = await getAuthenticatedProfile();
+  const shouldUseParticipantSlice = isParticipantLivePromptOpenSession(state.session, state.isHost);
+  const currentPrompt = getCurrentPrompt(state.session, state.prompts);
+  const responses = shouldUseParticipantSlice
+    ? await fetchResponsesForUser(sessionId, userId)
+    : await fetchResponses(sessionId);
+  const nextState = buildRoomStateFromSlices(
+    state.session,
+    sortPrompts(state.prompts),
+    state.participants,
+    currentPrompt || !shouldUseParticipantSlice ? responses : responses,
+    state.messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
+  return nextState;
+};
+
+export const preloadCurrentLiveAuntMinnieRoom = async (): Promise<void> => {
+  const workspace = await getLiveAuntMinnieWorkspace();
+  const session = workspace.joinableSessions.find((item) => item.status === 'live') || workspace.joinableSessions[0];
+  if (!session) return;
+  await getLiveAuntMinnieRoomBootstrap(session.id);
 };
 
 export const joinLiveAuntMinnieSession = async (params: { sessionId?: string; joinCode?: string }) => {
@@ -1380,6 +1557,7 @@ export const startLiveAuntMinnieSession = async (sessionId: string) => {
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1399,6 +1577,7 @@ export const setLiveAuntMinnieAutoAdvanceInterval = async (sessionId: string, in
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1439,6 +1618,7 @@ export const advanceLiveAuntMinniePrompt = async (sessionId: string) => {
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1459,6 +1639,7 @@ export const setLiveAuntMinnieAnswersVisible = async (sessionId: string, visible
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1491,6 +1672,7 @@ export const lockLiveAuntMinnieAnswers = async (sessionId: string) => {
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(sessionId);
   return mapSession(data);
 };
 
@@ -1587,6 +1769,7 @@ export const updateLiveAuntMinnieAnswerKey = async (
   if (error) {
     throw error;
   }
+  clearLiveAuntMinnieRoomCache(sessionId);
 };
 
 export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
@@ -1626,6 +1809,7 @@ export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
   if (sessionDeleteError) {
     throw sessionDeleteError;
   }
+  clearLiveAuntMinnieRoomCache(sessionId);
 };
 
 export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmitResponsePayload) => {
@@ -1660,6 +1844,7 @@ export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmit
     throw error;
   }
 
+  clearLiveAuntMinnieRoomCache(payload.sessionId);
   return mapResponse(data as ResponseRow);
 };
 
@@ -1681,6 +1866,7 @@ export const deleteLiveAuntMinnieResponse = async (payload: Pick<LiveAuntMinnieS
   if (error) {
     throw error;
   }
+  clearLiveAuntMinnieRoomCache(payload.sessionId);
 };
 
 export const submitLiveAuntMinnieMessage = async (payload: LiveAuntMinnieSubmitMessagePayload) => {
@@ -1718,15 +1904,17 @@ export const subscribeToLiveAuntMinnieRoom = async ({
   onStateChange,
   onError,
   onConnectionStateChange,
+  initialState,
 }: {
   sessionId: string;
   onStateChange: (state: LiveAuntMinnieRoomState) => void;
   onError?: (message: string) => void;
   onConnectionStateChange?: (state: RoomConnectionState) => void;
+  initialState?: LiveAuntMinnieRoomState | null;
 }) => {
   const { userId } = await getAuthenticatedProfile();
   let lastOnlineParticipantIds: string[] = [];
-  let lastState: LiveAuntMinnieRoomState | null = null;
+  let lastState: LiveAuntMinnieRoomState | null = initialState || null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let initialSnapshotLoaded = false;
   const pendingRefreshKinds = new Set<'session' | 'prompts' | 'participants' | 'responses' | 'messages'>();
@@ -1741,7 +1929,9 @@ export const subscribeToLiveAuntMinnieRoom = async ({
 
   const refresh = async () => {
     try {
-      const nextState = await getLiveAuntMinnieRoomState(sessionId, lastOnlineParticipantIds);
+      const nextState = lastState
+        ? await hydrateLiveAuntMinnieRoomDeferred(sessionId, lastOnlineParticipantIds)
+        : await getLiveAuntMinnieRoomBootstrap(sessionId, lastOnlineParticipantIds);
       lastState = nextState;
       onStateChange(nextState);
       onConnectionStateChange?.('live');
@@ -1765,7 +1955,13 @@ export const subscribeToLiveAuntMinnieRoom = async ({
         kinds.has('session') ? fetchSession(sessionId) : Promise.resolve(lastState.session),
         kinds.has('prompts') ? fetchPrompts(sessionId) : Promise.resolve(lastState.prompts),
         kinds.has('participants') ? fetchParticipants(sessionId) : Promise.resolve(lastState.participants),
-        kinds.has('responses') ? fetchResponses(sessionId) : Promise.resolve(lastState.responses),
+        kinds.has('responses')
+          ? (
+            isParticipantLivePromptOpenSession(lastState.session, lastState.isHost)
+              ? fetchResponsesForUser(sessionId, userId)
+              : fetchResponses(sessionId)
+          )
+          : Promise.resolve(lastState.responses),
         kinds.has('messages') ? fetchMessages(sessionId) : Promise.resolve(lastState.messages),
       ]);
 
@@ -1779,6 +1975,7 @@ export const subscribeToLiveAuntMinnieRoom = async ({
         lastOnlineParticipantIds,
       );
       lastState = nextState;
+      liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
       onStateChange(nextState);
       onConnectionStateChange?.('live');
     } catch (error: any) {
@@ -1800,6 +1997,7 @@ export const subscribeToLiveAuntMinnieRoom = async ({
 
   const applyPatchedState = (nextState: LiveAuntMinnieRoomState) => {
     lastState = nextState;
+    liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
     onStateChange(nextState);
     onConnectionStateChange?.('live');
   };
@@ -1841,7 +2039,13 @@ export const subscribeToLiveAuntMinnieRoom = async ({
           queueRefresh('session');
           return;
         }
-        applyPatchedState(applySessionEventToState(lastState, payload.new));
+        const nextState = applySessionEventToState(lastState, payload.new);
+        applyPatchedState(nextState);
+        if (!nextState.isHost && nextState.session.status !== 'live') {
+          queueRefresh('participants');
+          queueRefresh('responses');
+          queueRefresh('messages');
+        }
       });
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'live_aunt_minnie_prompts', filter: `session_id=eq.${sessionId}` }, (payload: any) => {
@@ -1927,7 +2131,22 @@ export const subscribeToLiveAuntMinnieRoom = async ({
     .subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
         try {
-          await refresh();
+          if (lastState) {
+            onStateChange(lastState);
+            onConnectionStateChange?.('syncing');
+            void hydrateLiveAuntMinnieRoomDeferred(sessionId, lastOnlineParticipantIds)
+              .then((nextState) => {
+                lastState = nextState;
+                onStateChange(nextState);
+                onConnectionStateChange?.('live');
+              })
+              .catch((error: any) => {
+                onConnectionStateChange?.('degraded');
+                onError?.(error.message || 'Live Aunt Minnie room sync failed.');
+              });
+          } else {
+            await refresh();
+          }
           initialSnapshotLoaded = true;
           while (bufferedEvents.length > 0) {
             const nextBufferedEvent = bufferedEvents.shift();
@@ -1943,7 +2162,7 @@ export const subscribeToLiveAuntMinnieRoom = async ({
       }
 
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        onConnectionStateChange?.('degraded');
+        onConnectionStateChange?.('reconnecting');
         onError?.('Live Aunt Minnie realtime connection unavailable.');
       }
     });
