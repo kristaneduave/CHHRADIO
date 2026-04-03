@@ -72,6 +72,7 @@ const LANE_NAME_LIMIT = 48;
 const TAB_TITLE_LIMIT = 64;
 const TAB_DESCRIPTION_LIMIT = 96;
 const SYSTEM_TAB_IDS = new Set(['tab-1', 'tab-2', 'tab-3']);
+const MAX_CONSULTANTS_ON_DECK = 4;
 
 const STUDY_OPTION_GROUPS = [
   { label: 'CT', options: ['CT head facial', 'CT brain plain', 'CT brain with contrast', 'CT chest plain', 'CT chest with contrast', 'CT stonogram', 'CT whole abdomen plain', 'CT whole abdomen with contrast', 'CT abdomen - Urography'] },
@@ -270,6 +271,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [creatingTab, setCreatingTab] = React.useState(false);
   const [newTabTitle, setNewTabTitle] = React.useState('');
   const [showAddTab, setShowAddTab] = React.useState(false);
+  const [newDeckConsultants, setNewDeckConsultants] = React.useState<string[]>(['']);
   const [savingLaneId, setSavingLaneId] = React.useState<string | null>(null);
   const [savingTabId, setSavingTabId] = React.useState<string | null>(null);
   const [activeDrag, setActiveDrag] = React.useState<ActiveDragState>(null);
@@ -489,8 +491,13 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     setCreatingTab(true);
     try {
       const { id } = await createConsultantDeckingTab({ title: newTabTitle.trim() });
+      const consultantNames = newDeckConsultants.map((value) => value.trim()).filter(Boolean).slice(0, MAX_CONSULTANTS_ON_DECK);
+      for (const consultantName of consultantNames) {
+        await createConsultantDeckingLane({ tabId: id, label: consultantName });
+      }
       setNewTabTitle('');
       setShowAddTab(false);
+      setNewDeckConsultants(['']);
       toastSuccess('New deck tab added.');
       setActiveTabId(id);
       await loadWorkspace({ force: true, silent: true });
@@ -499,6 +506,18 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     } finally {
       setCreatingTab(false);
     }
+  };
+
+  const handleAddDeckConsultantField = () => {
+    setNewDeckConsultants((current) => (current.length >= MAX_CONSULTANTS_ON_DECK ? current : [...current, '']));
+  };
+
+  const handleDeckConsultantChange = (index: number, value: string) => {
+    setNewDeckConsultants((current) => current.map((item, itemIndex) => itemIndex === index ? value.slice(0, LANE_NAME_LIMIT) : item));
+  };
+
+  const handleRemoveDeckConsultantField = (index: number) => {
+    setNewDeckConsultants((current) => current.length === 1 ? [''] : current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const handleDeleteTab = async (tab: ConsultantDeckingTab) => {
@@ -696,15 +715,40 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       {!tabs.length && (
         <div className="flex min-h-[56vh] items-center justify-center py-10">
           <div className="w-full max-w-3xl rounded-[2rem] border border-white/[0.05] bg-[radial-gradient(circle_at_top,rgba(45,88,110,0.28),rgba(20,26,34,0.94)_42%)] px-8 py-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-            <span className="material-icons mb-5 text-[52px] text-cyan-200/35">dashboard_customize</span>
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.34em] text-cyan-200/55">Create Your First Deck</p>
-            <h3 className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white">What deck are you creating?</h3>
-            <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-7 text-slate-400">Use a clear title so everyone immediately knows the site and shift coverage. Example: <span className="font-semibold text-slate-200">CT Fuente Cover (Sat-Sun 7AM-7AM)</span></p>
-            <div className="mx-auto mt-8 flex max-w-2xl flex-col gap-3 rounded-[1.5rem] border border-white/[0.06] bg-[#0f141c]/85 p-4 sm:flex-row sm:items-center">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500/12 text-cyan-200">
-                <span className="material-icons text-[24px]">add</span>
+            <p className="mx-auto mt-3 max-w-2xl text-[15px] leading-7 text-slate-400">Use a clear deck title. Example: <span className="font-semibold text-slate-200">CT Fuente Cover (Sat-Sun 7AM-7AM)</span></p>
+            <div className="mx-auto mt-8 flex max-w-2xl flex-col gap-3 rounded-[1.5rem] border border-white/[0.06] bg-[#0f141c]/85 p-4">
+              <input value={newTabTitle} onChange={(e) => setNewTabTitle(e.target.value.slice(0, TAB_TITLE_LIMIT))} onKeyDown={(e) => { if(e.key === 'Enter') handleCreateTab() }} placeholder="CT Fuente Cover (Sat-Sun 7AM-7AM)" className="h-12 w-full rounded-2xl border border-white/10 bg-[#0a0f17] px-5 text-[15px] font-medium text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:outline-none" />
+              <div className="rounded-[1.25rem] border border-white/6 bg-[#0a0f17] p-3 text-left">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-slate-200">Consultants on deck</p>
+                  </div>
+                  <button type="button" onClick={handleAddDeckConsultantField} disabled={newDeckConsultants.length >= MAX_CONSULTANTS_ON_DECK} className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold text-slate-300 disabled:opacity-40 hover:bg-white/[0.08]">
+                    Add more
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {newDeckConsultants.map((consultant, index) => (
+                    <div key={`deck-consultant-${index}`} className="flex items-center gap-2">
+                      <input
+                        value={consultant}
+                        onChange={(event) => handleDeckConsultantChange(index, event.target.value)}
+                        placeholder={`Consultant ${index + 1}`}
+                        className="h-11 flex-1 rounded-xl border border-white/10 bg-[#0f141c] px-4 text-[14px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveDeckConsultantField(index)}
+                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-slate-400 hover:bg-white/[0.08] hover:text-slate-200"
+                        aria-label={`Remove consultant ${index + 1}`}
+                      >
+                        <span className="material-icons text-[18px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <input value={newTabTitle} onChange={(e) => setNewTabTitle(e.target.value.slice(0, TAB_TITLE_LIMIT))} onKeyDown={(e) => { if(e.key === 'Enter') handleCreateTab() }} placeholder="CT Fuente Cover (Sat-Sun 7AM-7AM)" className="h-12 flex-1 rounded-2xl border border-white/10 bg-[#0a0f17] px-5 text-[15px] font-medium text-white placeholder:text-slate-500 focus:border-cyan-500/50 focus:outline-none" />
               <button type="button" onClick={handleCreateTab} disabled={creatingTab || !newTabTitle.trim()} className="h-12 rounded-2xl border border-cyan-400/20 bg-[#2b5a6c] px-6 text-[14px] font-bold text-cyan-50 transition-colors disabled:opacity-50 hover:bg-cyan-700">Create deck</button>
             </div>
           </div>
