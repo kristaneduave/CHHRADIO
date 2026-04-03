@@ -9,9 +9,33 @@ export type PathologyGuidelineRequestStatus = 'pending' | 'reviewed' | 'approved
 export type PathologyGuidelineContentType = 'checklist' | 'guideline' | 'review';
 
 export type ToastKind = 'success' | 'error' | 'info';
-export type ConsultantDeckingColumnKey = 'inbox' | 'reynes' | 'alvarez' | 'co-ng' | 'vano-yu';
+export type ConsultantDeckingLaneId = string;
+export type ConsultantDeckingTabId = string;
 export type ConsultantDeckingDifficulty = 'easy' | 'medium' | 'hard';
 export type ConsultantDeckingPatientSource = 'inpatient' | 'er' | 'outpatient';
+export type ConsultantDeckingPriority = 'routine' | 'priority' | 'urgent' | 'stat';
+
+export interface ConsultantDeckingTab {
+  id: ConsultantDeckingTabId;
+  title: string;
+  description?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  maxLanes: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ConsultantDeckingLane {
+  id: ConsultantDeckingLaneId;
+  tabId: ConsultantDeckingTabId;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+  accentToken?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface ToastMessage {
   id: string;
@@ -25,12 +49,15 @@ export interface ConsultantDeckingEntry {
   patientName: string;
   patientAge?: number | null;
   patientSex?: 'M' | 'F' | null;
+  tabId: ConsultantDeckingTabId;
   difficulty: ConsultantDeckingDifficulty;
+  priorityLevel: ConsultantDeckingPriority;
   patientSource: ConsultantDeckingPatientSource;
   studyDate?: string | null;
   studyTime?: string | null;
   studyDescription?: string | null;
-  columnKey: ConsultantDeckingColumnKey;
+  briefImpression?: string | null;
+  laneId: ConsultantDeckingLaneId;
   position: number;
   createdBy: string | null;
   updatedBy: string | null;
@@ -42,12 +69,15 @@ export interface ConsultantDeckingEntryInput {
   patientName: string;
   patientAge?: number | null;
   patientSex?: 'M' | 'F' | null;
+  tabId: ConsultantDeckingTabId;
   difficulty: ConsultantDeckingDifficulty;
+  priorityLevel: ConsultantDeckingPriority;
   patientSource: ConsultantDeckingPatientSource;
   studyDate?: string;
   studyTime?: string;
   studyDescription?: string;
-  columnKey?: ConsultantDeckingColumnKey;
+  briefImpression?: string;
+  laneId?: ConsultantDeckingLaneId;
 }
 
 export interface ScreenMeta {
