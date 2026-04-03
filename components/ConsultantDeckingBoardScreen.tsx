@@ -856,20 +856,20 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
               </select>
             </label>
             <label className="flex flex-col gap-1.5 w-[110px]">
-              <span className="pl-1 text-[11px] font-medium text-slate-400">Difficulty</span>
-              <select value={draft.difficulty} onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
-                {DIFFICULTY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1.5 w-[110px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Priority</span>
               <select value={draft.priorityLevel} onChange={(event) => setDraft((current) => ({ ...current, priorityLevel: event.target.value as ConsultantDeckingPriority }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
                 {PRIORITY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
               </select>
             </label>
+            <label className="flex flex-col gap-1.5 w-[110px]">
+              <span className="pl-1 text-[11px] font-medium text-slate-400">Difficulty</span>
+              <select value={draft.difficulty} onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
+                {DIFFICULTY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
+              </select>
+            </label>
             <label className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
-              <span className="pl-1 text-[11px] font-medium text-slate-400">Brief impression</span>
-              <input type="text" value={draft.briefImpression} maxLength={BRIEF_IMPRESSION_LIMIT} onChange={(event) => setDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} placeholder="Shown on hover..." className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
+              <span className="pl-1 text-[11px] font-medium text-slate-400">Why this difficulty?</span>
+              <input type="text" value={draft.briefImpression} maxLength={BRIEF_IMPRESSION_LIMIT} onChange={(event) => setDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} placeholder="Why is this case easy, medium, or hard? ex. difficult impression, many findings" className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
             </label>
             <button type="submit" className="h-[42px] min-w-[170px] shrink-0 rounded-full border border-cyan-500/30 bg-[#2b5a6c] px-5 text-[13px] font-bold text-cyan-50 transition-colors hover:bg-cyan-700">Add patient</button>
           </div>
@@ -1044,15 +1044,15 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                 </select>
               </label>
               <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-semibold text-slate-400">Priority</span>
-                <select value={editDraft.priorityLevel} onChange={(event) => setEditDraft((current) => ({ ...current, priorityLevel: event.target.value as ConsultantDeckingPriority }))} aria-label="Edit priority" className="w-full rounded-full border border-white/10 bg-slate-950/50 px-5 py-3 text-sm text-white">
-                  {PRIORITY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
-                </select>
-              </label>
-              <label className="space-y-2 md:col-span-2">
                 <span className="text-xs font-semibold text-slate-400">Difficulty</span>
                 <select value={editDraft.difficulty} onChange={(event) => setEditDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))} aria-label="Edit difficulty" className="w-full rounded-full border border-white/10 bg-slate-950/50 px-5 py-3 text-sm text-white">
                   {DIFFICULTY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
+                </select>
+              </label>
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-xs font-semibold text-slate-400">Priority</span>
+                <select value={editDraft.priorityLevel} onChange={(event) => setEditDraft((current) => ({ ...current, priorityLevel: event.target.value as ConsultantDeckingPriority }))} aria-label="Edit priority" className="w-full rounded-full border border-white/10 bg-slate-950/50 px-5 py-3 text-sm text-white">
+                  {PRIORITY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
                 </select>
               </label>
               <label className="space-y-2 md:col-span-2">
@@ -1077,8 +1077,8 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
                 </select>
               </label>
               <label className="space-y-2 md:col-span-6">
-                <span className="text-xs font-semibold text-slate-400">Brief impression</span>
-                <textarea value={editDraft.briefImpression} onChange={(event) => setEditDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} aria-label="Edit brief impression" rows={3} className="w-full rounded-[1.25rem] border border-white/10 bg-slate-950/50 px-5 py-4 text-sm text-white" />
+                <span className="text-xs font-semibold text-slate-400">Why this difficulty?</span>
+                <textarea value={editDraft.briefImpression} onChange={(event) => setEditDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} aria-label="Edit difficulty reason" placeholder="Why is this case easy, medium, or hard? ex. difficult impression, many findings" rows={3} className="w-full rounded-[1.25rem] border border-white/10 bg-slate-950/50 px-5 py-4 text-sm text-white placeholder:text-slate-600" />
               </label>
               <label className="space-y-2 md:col-span-6">
                 <span className="text-xs font-semibold text-slate-400">Move to lane</span>
