@@ -271,6 +271,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [newTabTitle, setNewTabTitle] = React.useState('');
   const [showAddTab, setShowAddTab] = React.useState(false);
   const [newDeckConsultants, setNewDeckConsultants] = React.useState<string[]>(['']);
+  const [editingLaneId, setEditingLaneId] = React.useState<string | null>(null);
   const [savingLaneId, setSavingLaneId] = React.useState<string | null>(null);
   const [savingTabId, setSavingTabId] = React.useState<string | null>(null);
   const [activeDrag, setActiveDrag] = React.useState<ActiveDragState>(null);
@@ -565,6 +566,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     setSavingLaneId(laneId);
     try {
       await updateConsultantDeckingLane(laneId, { label: laneLabelDrafts[laneId] });
+      setEditingLaneId(null);
       toastSuccess('Consultant lane updated.');
       await loadWorkspace({ force: true, silent: true });
     } catch (error: any) {
@@ -591,9 +593,13 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   };
 
   const handleArchiveLane = async (laneId: string) => {
+    const lane = lanes.find((item) => item.id === laneId);
+    if (!lane) return;
+    if (!window.confirm(`Delete consultant column "${lane.label}"? Patients in it will move back to Unassigned patients.`)) return;
     setSavingLaneId(laneId);
     try {
       await archiveConsultantDeckingLane(laneId);
+      setEditingLaneId(null);
       toastSuccess('Consultant lane archived.');
       await loadWorkspace({ force: true, silent: true });
     } catch (error: any) {
@@ -658,6 +664,24 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
   };
 
+  const handleClearAll = async () => {
+    if (!activeTab) return;
+    if (!activeEntries.length) {
+      toastError('Nothing to clear', 'This deck has no patients yet.');
+      return;
+    }
+    if (!window.confirm(`Clear all patients from "${activeTab.title}"? This will remove every patient in this deck.`)) return;
+    try {
+      await Promise.all(activeEntries.map((entry) => deleteConsultantDeckingEntry(entry.id)));
+      setEntries((current) => current.filter((entry) => entry.tabId !== activeTab.id));
+      toastSuccess('Deck cleared.');
+      scheduleWorkspaceRefresh({ force: true, silent: true, delayMs: 60 });
+    } catch (error: any) {
+      await loadWorkspace({ force: true, silent: true });
+      toastError('Unable to clear deck', error?.message || 'Please try again.');
+    }
+  };
+
   const handleExportSummary = React.useCallback(() => {
     if (!activeTab) {
       toastError('Unable to export summary', 'No active deck tab selected.');
@@ -684,7 +708,7 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             <>
               <button type="button" onClick={() => { setIsArchivesOpen(true); void loadArchives(); }} className="rounded-full bg-white/5 border border-white/[0.08] px-4 py-[9px] text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">Archives</button>
               <button type="button" onClick={() => void handleArchiveDeck()} className="rounded-full bg-white/5 border border-white/[0.08] px-4 py-[9px] text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">Save Session</button>
-              <button type="button" className="rounded-full bg-white/5 border border-white/[0.08] px-4 py-[9px] text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">Clear All</button>
+              <button type="button" onClick={() => void handleClearAll()} className="rounded-full bg-white/5 border border-white/[0.08] px-4 py-[9px] text-sm font-semibold text-slate-300 transition-colors hover:bg-white/10 hover:text-white">Clear All</button>
               <button type="button" onClick={handleExportSummary} className="rounded-full border border-cyan-400/20 bg-[#163a4a] px-4 py-[9px] text-sm font-semibold text-cyan-50 transition-colors hover:bg-[#1a4a5e]">Export Summary</button>
             </>
           ) : null}
@@ -879,11 +903,77 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
           const laneEntries = groupedEntries.get(lane.id) || [];
           const isLaneDropActive = dropTarget?.tabId === activeTabId && dropTarget?.laneId === lane.id;
           const isLaneRecentlyDropped = recentDrop?.tabId === activeTabId && recentDrop?.laneId === lane.id;
+          const isEditingLane = editingLaneId === lane.id;
+          const laneLabelDraft = laneLabelDrafts[lane.id] ?? lane.label;
+          const isLaneSaving = savingLaneId === lane.id;
           return (
             <div key={lane.id} className={`flex flex-1 min-w-[220px] max-w-[320px] min-h-[340px] flex-col rounded-[1.5rem] border bg-[#141922] p-5 shadow-lg transition-all duration-200 ${isLaneDropActive ? 'border-cyan-300/45 bg-[#16212d] shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_24px_48px_rgba(8,145,178,0.14)] -translate-y-[2px]' : isLaneRecentlyDropped ? 'border-emerald-300/25 shadow-[0_18px_40px_rgba(16,185,129,0.10)]' : 'border-white/[0.04]'}`} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: lane.id, index: laneEntries.length }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, lane.id, laneEntries.length); }}>
-              <div className="mb-4 text-center">
-                <h3 className={`text-[15px] font-bold tracking-tight transition-colors ${isLaneDropActive ? 'text-cyan-100' : 'text-white'}`}>{lane.label}</h3>
-                <p className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] transition-opacity ${isLaneDropActive ? 'text-cyan-300/80 opacity-100' : 'pointer-events-none opacity-0'}`}>Release to drop</p>
+              <div className="mb-4">
+                {isEditingLane ? (
+                  <div className="space-y-2">
+                    <input
+                      autoFocus
+                      value={laneLabelDraft}
+                      onChange={(event) => setLaneLabelDrafts((current) => ({ ...current, [lane.id]: event.target.value.slice(0, LANE_NAME_LIMIT) }))}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && laneLabelDraft.trim()) void handleRenameLane(lane.id);
+                        if (event.key === 'Escape') {
+                          setEditingLaneId(null);
+                          setLaneLabelDrafts((current) => ({ ...current, [lane.id]: lane.label }));
+                        }
+                      }}
+                      className="h-[38px] w-full rounded-xl border border-white/10 bg-slate-950/80 px-3 text-center text-[13px] font-semibold text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none"
+                      placeholder="Consultant name"
+                    />
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleRenameLane(lane.id)}
+                        disabled={isLaneSaving || !laneLabelDraft.trim()}
+                        className="rounded-lg bg-cyan-700/60 px-3 py-1.5 text-[11px] font-bold text-cyan-50 transition-colors hover:bg-cyan-600 disabled:opacity-40"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLaneId(null);
+                          setLaneLabelDrafts((current) => ({ ...current, [lane.id]: lane.label }));
+                        }}
+                        className="rounded-lg bg-white/5 px-3 py-1.5 text-[11px] font-bold text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleArchiveLane(lane.id)}
+                        disabled={isLaneSaving}
+                        className="rounded-lg bg-rose-500/10 px-3 py-1.5 text-[11px] font-bold text-rose-200 transition-colors hover:bg-rose-500/20 disabled:opacity-40"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="w-8" />
+                      <div className="min-w-0 flex-1">
+                        <h3 className={`truncate text-[15px] font-bold tracking-tight transition-colors ${isLaneDropActive ? 'text-cyan-100' : 'text-white'}`}>{lane.label}</h3>
+                        <p className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] transition-opacity ${isLaneDropActive ? 'text-cyan-300/80 opacity-100' : 'pointer-events-none opacity-0'}`}>Release to drop</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingLaneId(lane.id)}
+                        className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white/8 hover:text-white"
+                        aria-label={`Edit ${lane.label}`}
+                        title={`Edit ${lane.label}`}
+                      >
+                        <span className="material-icons text-[16px]">edit</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className={`flex flex-1 flex-col rounded-[1.25rem] border border-dashed bg-[#0d1219]/60 pb-3 transition-all duration-200 ${isLaneDropActive ? 'border-cyan-300/45 bg-cyan-400/[0.05]' : isLaneRecentlyDropped ? 'border-emerald-300/25' : 'border-white/[0.06]'}`}>
