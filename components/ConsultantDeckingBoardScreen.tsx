@@ -21,6 +21,7 @@ import {
   listConsultantDeckingLanes,
   listConsultantDeckingTabs,
   moveConsultantDeckingEntry,
+  reorderDeckingEntries,
   reorderConsultantDeckingLanes,
   reorderConsultantDeckingTabs,
   subscribeToConsultantDeckingEntries,
@@ -62,6 +63,7 @@ type FilterDifficulty = ConsultantDeckingDifficulty | 'all';
 type FilterPriority = ConsultantDeckingPriority | 'all';
 type ActiveDragState = { entryId: string; sourceTabId: ConsultantDeckingTabId; sourceLaneId: ConsultantDeckingLaneId; sourceIndex: number } | null;
 type DropTarget = { tabId: ConsultantDeckingTabId; laneId: ConsultantDeckingLaneId; index: number } | null;
+type RecentDropState = { entryId: string; tabId: ConsultantDeckingTabId; laneId: ConsultantDeckingLaneId } | null;
 
 const DIFFICULTY_OPTIONS: ConsultantDeckingDifficulty[] = ['easy', 'medium', 'hard'];
 const PRIORITY_OPTIONS: ConsultantDeckingPriority[] = ['routine', 'priority', 'urgent', 'stat'];
@@ -179,8 +181,12 @@ const PatientPill: React.FC<{
   onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
   isDropMarker?: boolean;
   isDragging?: boolean;
-}> = ({ entry, viewMode, onOpen, onDragStart, onDragEnd, onDragOver, onDrop, isDropMarker = false, isDragging = false }) => {
+  isDropActive?: boolean;
+  isRecentlyDropped?: boolean;
+}> = ({ entry, viewMode, onOpen, onDragStart, onDragEnd, onDragOver, onDrop, isDropMarker = false, isDragging = false, isDropActive = false, isRecentlyDropped = false }) => {
   const isEmergency = entry.priorityLevel === 'stat' || entry.priorityLevel === 'urgent';
+  const shouldSwapToImpression = entry.difficulty === 'hard' || Boolean(entry.briefImpression);
+  const hoverImpressionText = entry.briefImpression || 'Not specified';
   
   return (
     <div className="space-y-1 pt-1.5">
@@ -195,7 +201,7 @@ const PatientPill: React.FC<{
         onDragEnd={onDragEnd} 
         onDragOver={onDragOver} 
         onDrop={onDrop} 
-        className={`group flex w-full cursor-grab flex-col overflow-hidden rounded-[1.4rem] border ${isEmergency ? 'border-rose-500/30' : 'border-white/[0.08]'} bg-gradient-to-b from-[#18202b] to-[#141b24] shadow-lg text-left transition-all duration-300 hover:bg-[#1a2331] hover:shadow-2xl hover:-translate-y-[2px] ${isDragging ? 'opacity-50 blur-[1px] scale-[0.98]' : ''} ${isEmergency ? 'hover:shadow-rose-500/10' : 'hover:shadow-black/50'}`} 
+        className={`group flex w-full cursor-grab flex-col overflow-hidden rounded-[1.4rem] border ${isEmergency ? 'border-rose-500/30' : 'border-white/[0.08]'} bg-gradient-to-b from-[#18202b] to-[#141b24] shadow-lg text-left transition-all duration-300 hover:bg-[#1a2331] hover:shadow-2xl hover:-translate-y-[2px] ${isDragging ? 'opacity-50 blur-[1px] scale-[0.98]' : ''} ${isDropActive ? 'scale-[1.01] border-cyan-300/45 shadow-[0_16px_40px_rgba(34,211,238,0.16)]' : ''} ${isRecentlyDropped ? 'border-emerald-300/45 shadow-[0_0_0_1px_rgba(110,231,183,0.22),0_18px_42px_rgba(16,185,129,0.14)]' : ''} ${isEmergency ? 'hover:shadow-rose-500/10' : 'hover:shadow-black/50'}`} 
         aria-label={`Edit ${entry.patientName}`}
       >
         {/* Top Accent Line for Difficulty */}
@@ -220,25 +226,18 @@ const PatientPill: React.FC<{
           </div>
           
           <div className="mt-0.5 rounded-[0.95rem] border border-white/[0.03] bg-black/25 px-3 py-1.5">
-             <p className="line-clamp-2 text-[11px] leading-snug text-slate-300 font-medium tracking-wide">
-               {entry.studyDescription || 'Study pending'}
+             <p className="line-clamp-2 text-[11px] leading-snug text-slate-300 font-medium tracking-wide transition-colors duration-200 group-hover:text-white/95">
+               {shouldSwapToImpression ? (
+                 <>
+                   <span className="group-hover:hidden">{entry.studyDescription || 'Study pending'}</span>
+                   <span className="hidden group-hover:inline">{hoverImpressionText}</span>
+                 </>
+               ) : (
+                 entry.studyDescription || 'Study pending'
+               )}
              </p>
           </div>
         </div>
-
-        {/* Expandable Hover Impression Note */}
-        {Boolean(entry.briefImpression) && (
-          <div className="grid grid-rows-[0fr] transition-[grid-template-rows] duration-[400ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:grid-rows-[1fr]">
-            <div className="overflow-hidden">
-              <div className="border-t border-white/[0.08] bg-[#0d121a]/80 px-3 py-2.5 opacity-0 transition-opacity duration-500 delay-100 group-hover:opacity-100">
-                <div className="mb-1 flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-widest text-cyan-400/90 drop-shadow-sm">
-                  <span className="material-icons text-[12px]">tips_and_updates</span> Impression Note
-                </div>
-                <p className="text-[11px] leading-relaxed text-slate-300/90 font-medium">{entry.briefImpression}</p>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -276,12 +275,15 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const [savingTabId, setSavingTabId] = React.useState<string | null>(null);
   const [activeDrag, setActiveDrag] = React.useState<ActiveDragState>(null);
   const [dropTarget, setDropTarget] = React.useState<DropTarget>(null);
+  const [recentDrop, setRecentDrop] = React.useState<RecentDropState>(null);
   const [archivedSessions, setArchivedSessions] = React.useState<ArchivedDeckingSession[]>([]);
   const [isArchivesOpen, setIsArchivesOpen] = React.useState(false);
   const [isLoadingArchives, setIsLoadingArchives] = React.useState(false);
   const [isSummaryOpen, setIsSummaryOpen] = React.useState(false);
   const studyDateInputRef = React.useRef<HTMLInputElement | null>(null);
   const studyTimeInputRef = React.useRef<HTMLInputElement | null>(null);
+  const refreshTimeoutRef = React.useRef<number | null>(null);
+  const recentDropTimeoutRef = React.useRef<number | null>(null);
 
   const loadWorkspace = React.useCallback(async (options?: { force?: boolean; silent?: boolean }) => {
     if (!currentUserId) {
@@ -317,11 +319,34 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
     }
   }, [currentUserId]);
 
+  const scheduleWorkspaceRefresh = React.useCallback((options?: { force?: boolean; silent?: boolean; delayMs?: number }) => {
+    if (refreshTimeoutRef.current) window.clearTimeout(refreshTimeoutRef.current);
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      React.startTransition(() => {
+        void loadWorkspace({ force: options?.force, silent: options?.silent });
+      });
+      refreshTimeoutRef.current = null;
+    }, options?.delayMs ?? 120);
+  }, [loadWorkspace]);
+
+  const markRecentDrop = React.useCallback((entryId: string, tabId: ConsultantDeckingTabId, laneId: ConsultantDeckingLaneId) => {
+    setRecentDrop({ entryId, tabId, laneId });
+    if (recentDropTimeoutRef.current) window.clearTimeout(recentDropTimeoutRef.current);
+    recentDropTimeoutRef.current = window.setTimeout(() => {
+      setRecentDrop(null);
+      recentDropTimeoutRef.current = null;
+    }, 950);
+  }, []);
+
   React.useEffect(() => { void loadWorkspace({ force: true }); }, [loadWorkspace]);
   React.useEffect(() => {
     if (!currentUserId) return undefined;
-    return subscribeToConsultantDeckingEntries(() => { void loadWorkspace({ force: true, silent: true }); });
-  }, [currentUserId, loadWorkspace]);
+    return subscribeToConsultantDeckingEntries(() => { scheduleWorkspaceRefresh({ force: true, silent: true, delayMs: 90 }); });
+  }, [currentUserId, scheduleWorkspaceRefresh]);
+  React.useEffect(() => () => {
+    if (refreshTimeoutRef.current) window.clearTimeout(refreshTimeoutRef.current);
+    if (recentDropTimeoutRef.current) window.clearTimeout(recentDropTimeoutRef.current);
+  }, []);
   React.useEffect(() => {
     setDraft((current) => ({ ...current, tabId: activeTabId, laneId: getInboxLaneIdForTab(activeTabId) }));
   }, [activeTabId]);
@@ -609,14 +634,18 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
   const handleDropMove = async (event: React.DragEvent<HTMLDivElement>, tabId: ConsultantDeckingTabId, laneId: ConsultantDeckingLaneId, index: number) => {
     event.preventDefault();
     if (!activeDrag) return;
+    const { entryId } = activeDrag;
+    const nextEntries = reorderDeckingEntries(entries, entryId, tabId, laneId, index);
+    setEntries(nextEntries);
+    markRecentDrop(entryId, tabId, laneId);
+    setActiveDrag(null);
+    setDropTarget(null);
     try {
-      await moveConsultantDeckingEntry(activeDrag.entryId, tabId, laneId, index);
-      await loadWorkspace({ force: true, silent: true });
+      await moveConsultantDeckingEntry(entryId, tabId, laneId, index);
+      scheduleWorkspaceRefresh({ force: true, silent: true, delayMs: 60 });
     } catch (error: any) {
+      await loadWorkspace({ force: true, silent: true });
       toastError('Unable to move patient', error?.message || 'Please try again.');
-    } finally {
-      setActiveDrag(null);
-      setDropTarget(null);
     }
   };
 
@@ -829,14 +858,14 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
           <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-white/[0.1] px-2 text-[11px] font-bold text-white/70">{unassignedEntries.length}</span>
         </div>
 
-        <div className="min-h-[90px] rounded-[1.25rem] border border-dashed border-white/[0.08] bg-[#11141a]" onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: getInboxLaneIdForTab(activeTabId), index: unassignedEntries.length }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, getInboxLaneIdForTab(activeTabId), unassignedEntries.length); }}>
+        <div className={`min-h-[90px] rounded-[1.25rem] border border-dashed bg-[#11141a] transition-all duration-200 ${dropTarget?.tabId === activeTabId && dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) ? 'border-cyan-300/55 bg-cyan-400/[0.06] shadow-[0_0_0_1px_rgba(34,211,238,0.16),0_22px_42px_rgba(6,182,212,0.12)]' : recentDrop?.tabId === activeTabId && recentDrop?.laneId === getInboxLaneIdForTab(activeTabId) ? 'border-emerald-300/35 bg-emerald-400/[0.04]' : 'border-white/[0.08]'}`} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: getInboxLaneIdForTab(activeTabId), index: unassignedEntries.length }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, getInboxLaneIdForTab(activeTabId), unassignedEntries.length); }}>
           {unassignedEntries.length ? (
             <div className="flex flex-wrap gap-3 p-3">
-              {unassignedEntries.map((entry, index) => <div key={entry.id} className="w-full max-w-[320px]"><PatientPill entry={entry} viewMode={viewMode} onOpen={openEditor} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setActiveDrag({ entryId: entry.id, sourceTabId: entry.tabId, sourceLaneId: entry.laneId, sourceIndex: index }); }} onDragEnd={() => { setActiveDrag(null); setDropTarget(null); }} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: getInboxLaneIdForTab(activeTabId), index }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, getInboxLaneIdForTab(activeTabId), index); }} isDropMarker={dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) && dropTarget.index === index} isDragging={activeDrag?.entryId === entry.id} /></div>)}
+              {unassignedEntries.map((entry, index) => <div key={entry.id} className="w-full max-w-[320px]"><PatientPill entry={entry} viewMode={viewMode} onOpen={openEditor} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setActiveDrag({ entryId: entry.id, sourceTabId: entry.tabId, sourceLaneId: entry.laneId, sourceIndex: index }); }} onDragEnd={() => { setActiveDrag(null); setDropTarget(null); }} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: getInboxLaneIdForTab(activeTabId), index }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, getInboxLaneIdForTab(activeTabId), index); }} isDropMarker={dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) && dropTarget.index === index} isDragging={activeDrag?.entryId === entry.id} isDropActive={dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) && dropTarget.index === index} isRecentlyDropped={recentDrop?.entryId === entry.id && recentDrop?.laneId === getInboxLaneIdForTab(activeTabId) && recentDrop?.tabId === activeTabId} /></div>)}
             </div>
           ) : (
-            <div className="flex h-[90px] items-center justify-center text-[13px] font-medium text-slate-500">
-              No unassigned patients
+            <div className={`flex h-[90px] items-center justify-center text-[13px] font-medium transition-colors ${dropTarget?.tabId === activeTabId && dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) ? 'text-cyan-200' : 'text-slate-500'}`}>
+              {dropTarget?.tabId === activeTabId && dropTarget?.laneId === getInboxLaneIdForTab(activeTabId) ? 'Release to move here' : 'No unassigned patients'}
             </div>
           )}
         </div>
@@ -848,19 +877,24 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
       <div className="mt-6 flex flex-wrap items-start gap-5">
         {boardLanes.map((lane) => {
           const laneEntries = groupedEntries.get(lane.id) || [];
+          const isLaneDropActive = dropTarget?.tabId === activeTabId && dropTarget?.laneId === lane.id;
+          const isLaneRecentlyDropped = recentDrop?.tabId === activeTabId && recentDrop?.laneId === lane.id;
           return (
-            <div key={lane.id} className="flex flex-1 min-w-[220px] max-w-[320px] min-h-[340px] flex-col rounded-[1.5rem] border border-white/[0.04] bg-[#141922] p-5 shadow-lg" onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: lane.id, index: laneEntries.length }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, lane.id, laneEntries.length); }}>
-              <h3 className="mb-4 text-center text-[15px] font-bold text-white tracking-tight">{lane.label}</h3>
+            <div key={lane.id} className={`flex flex-1 min-w-[220px] max-w-[320px] min-h-[340px] flex-col rounded-[1.5rem] border bg-[#141922] p-5 shadow-lg transition-all duration-200 ${isLaneDropActive ? 'border-cyan-300/45 bg-[#16212d] shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_24px_48px_rgba(8,145,178,0.14)] -translate-y-[2px]' : isLaneRecentlyDropped ? 'border-emerald-300/25 shadow-[0_18px_40px_rgba(16,185,129,0.10)]' : 'border-white/[0.04]'}`} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: lane.id, index: laneEntries.length }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, lane.id, laneEntries.length); }}>
+              <div className="mb-4 text-center">
+                <h3 className={`text-[15px] font-bold tracking-tight transition-colors ${isLaneDropActive ? 'text-cyan-100' : 'text-white'}`}>{lane.label}</h3>
+                <p className={`mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] transition-opacity ${isLaneDropActive ? 'text-cyan-300/80 opacity-100' : 'pointer-events-none opacity-0'}`}>Release to drop</p>
+              </div>
               
-              <div className="flex flex-1 flex-col rounded-[1.25rem] border border-dashed border-white/[0.06] bg-[#0d1219]/60 pb-3">
+              <div className={`flex flex-1 flex-col rounded-[1.25rem] border border-dashed bg-[#0d1219]/60 pb-3 transition-all duration-200 ${isLaneDropActive ? 'border-cyan-300/45 bg-cyan-400/[0.05]' : isLaneRecentlyDropped ? 'border-emerald-300/25' : 'border-white/[0.06]'}`}>
                 {laneEntries.length ? (
                   <div className="space-y-2 p-2">
-                    {laneEntries.map((entry, index) => <PatientPill key={entry.id} entry={entry} viewMode={viewMode} onOpen={openEditor} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setActiveDrag({ entryId: entry.id, sourceTabId: entry.tabId, sourceLaneId: entry.laneId, sourceIndex: index }); }} onDragEnd={() => { setActiveDrag(null); setDropTarget(null); }} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: lane.id, index }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, lane.id, index); }} isDropMarker={dropTarget?.laneId === lane.id && dropTarget.index === index} isDragging={activeDrag?.entryId === entry.id} />)}
+                    {laneEntries.map((entry, index) => <PatientPill key={entry.id} entry={entry} viewMode={viewMode} onOpen={openEditor} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; setActiveDrag({ entryId: entry.id, sourceTabId: entry.tabId, sourceLaneId: entry.laneId, sourceIndex: index }); }} onDragEnd={() => { setActiveDrag(null); setDropTarget(null); }} onDragOver={(event) => { event.preventDefault(); setDropTarget({ tabId: activeTabId, laneId: lane.id, index }); }} onDrop={(event) => { void handleDropMove(event, activeTabId, lane.id, index); }} isDropMarker={dropTarget?.laneId === lane.id && dropTarget.index === index} isDragging={activeDrag?.entryId === entry.id} isDropActive={dropTarget?.laneId === lane.id && dropTarget.index === index} isRecentlyDropped={recentDrop?.entryId === entry.id && recentDrop?.laneId === lane.id && recentDrop?.tabId === activeTabId} />)}
                     {dropTarget?.laneId === lane.id && dropTarget.index === laneEntries.length ? <div className="mx-2 h-[3px] rounded-full bg-cyan-300/80" /> : null}
                   </div>
                 ) : (
-                  <div className="flex flex-1 items-center justify-center text-center text-[13px] font-medium text-slate-500 p-6">
-                    Drop patients here
+                  <div className={`flex flex-1 items-center justify-center p-6 text-center text-[13px] font-medium transition-colors ${isLaneDropActive ? 'text-cyan-200' : 'text-slate-500'}`}>
+                    {isLaneDropActive ? 'Release to move here' : 'Drop patients here'}
                   </div>
                 )}
               </div>

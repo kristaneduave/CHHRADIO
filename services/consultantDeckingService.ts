@@ -214,18 +214,22 @@ const getSeededLanes = () => DEFAULT_LANE_SEEDS.map((lane) => ({ ...lane }));
 const persistEntryPositions = async (
   rows: Array<{ id: string; tab_id: ConsultantDeckingTabId; lane_id: ConsultantDeckingLaneId; position: number; updated_by: string | null }>,
 ) => {
-  for (const row of rows) {
-    const { error } = await supabase
-      .from(ENTRY_TABLE_NAME)
-      .update({
-        tab_id: row.tab_id,
-        lane_id: row.lane_id,
-        position: row.position,
-        updated_by: row.updated_by,
-      })
-      .eq('id', row.id);
-    if (error) throw error;
-  }
+  const results = await Promise.all(
+    rows.map((row) =>
+      supabase
+        .from(ENTRY_TABLE_NAME)
+        .update({
+          tab_id: row.tab_id,
+          lane_id: row.lane_id,
+          column_key: toLegacyColumnKey(row.lane_id),
+          position: row.position,
+          updated_by: row.updated_by,
+        })
+        .eq('id', row.id),
+    ),
+  );
+  const failed = results.find((result) => result.error);
+  if (failed?.error) throw failed.error;
 };
 
 const fetchConsultantDeckingTabs = async (): Promise<ConsultantDeckingTab[]> => {
