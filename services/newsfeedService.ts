@@ -389,9 +389,42 @@ export const createSystemNotification = async (params: {
 
 export const fetchRecipientUserIdsByRoles = async (roles: string[]): Promise<string[]> => {
   if (!roles.length) return [];
-  const { data, error } = await supabase.from('profiles').select('id').in('role', roles);
-  if (error) throw error;
-  return (data || []).map((row: any) => row.id);
+
+  const recipientIds = new Set<string>();
+
+  const { data: assignmentRows, error: assignmentsError } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .in('role', roles);
+
+  if (assignmentsError) {
+    const message = String(assignmentsError.message || '').toLowerCase();
+    const canFallbackToProfilesOnly =
+      message.includes('relation') ||
+      message.includes('does not exist') ||
+      message.includes('schema cache') ||
+      message.includes('user_roles');
+
+    if (!canFallbackToProfilesOnly) {
+      throw assignmentsError;
+    }
+  } else {
+    (assignmentRows || []).forEach((row: any) => {
+      if (row?.user_id) {
+        recipientIds.add(String(row.user_id));
+      }
+    });
+  }
+
+  const { data: profiles, error: profilesError } = await supabase.from('profiles').select('id').in('role', roles);
+  if (profilesError) throw profilesError;
+  (profiles || []).forEach((row: any) => {
+    if (row?.id) {
+      recipientIds.add(String(row.id));
+    }
+  });
+
+  return Array.from(recipientIds);
 };
 
 export const fetchAllRecipientUserIds = async (): Promise<string[]> => {

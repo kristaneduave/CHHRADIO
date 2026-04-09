@@ -16,18 +16,17 @@ import {
   createLiveAuntMinnieSession,
   deleteLiveAuntMinnieSession,
   deleteLiveAuntMinnieResponse,
-  getLiveAuntMinniePromptsMeta,
-  getLiveAuntMinniePromptResponseMeta,
+  getLiveAuntMinnieSessionMeta,
   getLiveAuntMinnieRoomBootstrap,
   getLiveAuntMinnieRoomState,
-  getLiveAuntMinnieResponsesMeta,
-  getLiveAuntMinnieSessionMeta,
   getLiveAuntMinnieWorkspace,
   getCachedLiveAuntMinnieWorkspace,
   hydrateLiveAuntMinnieRoomDeferred,
   lockLiveAuntMinnieAnswers,
   preloadCurrentLiveAuntMinnieRoom,
   preloadLiveAuntMinnieWorkspace,
+  refreshLiveAuntMinnieRoomMessages,
+  refreshLiveAuntMinnieRoomParticipants,
   refreshLiveAuntMinnieRoomResponses,
   submitLiveAuntMinnieResponse,
   subscribeToLiveAuntMinnieRoom,
@@ -43,8 +42,10 @@ interface LiveAuntMinnieScreenProps {
 
 const REALTIME_UNAVAILABLE_MESSAGE = 'Live Aunt Minnie realtime connection unavailable.';
 type RoomSyncState = LiveAuntMinnieSyncState;
+type LiveAuntMinnieSessionMeta = Awaited<ReturnType<typeof getLiveAuntMinnieSessionMeta>>;
 const AUNT_MINNIE_DRAFT_KEY_PREFIX = 'chh:aunt-minnie:drafts:';
-const DRAFT_PERSIST_DEBOUNCE_MS = 250;
+const DRAFT_PERSIST_DEBOUNCE_MS = 600;
+const DEGRADED_REFRESH_INTERVAL_MS = 4000;
 
 const createEmptyPrompt = (): LiveAuntMinniePromptInput => ({
   images: [],
@@ -268,6 +269,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   const latestDraftResponsesRef = useRef<Record<string, string>>({});
   const queuedResponseValuesRef = useRef<Record<string, string | undefined>>({});
   const submittingPromptIdsRef = useRef<Record<string, boolean>>({});
+  const lastSessionMetaRef = useRef<LiveAuntMinnieSessionMeta | null>(null);
 
   const applyRoomState = (nextState: LiveAuntMinnieRoomState) => {
     const mergedState = roomStateRef.current
@@ -473,22 +475,17 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   useEffect(() => {
     if (!currentSessionId) return;
 
-    const isLiveRoom = roomState?.session.status === 'live';
-    const refreshIntervalMs = roomSyncState === 'degraded'
-      ? (isLiveRoom ? 3500 : 6000)
-      : isLiveRoom
-        ? 2000
-        : 4500;
+    const shouldBackgroundRefresh =
+      roomSyncState === 'degraded'
+      || roomSyncState === 'reconnecting'
+      || roomSyncState === 'connecting';
 
-    if (!refreshIntervalMs) {
+    if (!shouldBackgroundRefresh) {
       return;
     }
 
     let cancelled = false;
     let refreshInFlight = false;
-    let sessionProbeInFlight = false;
-    let promptProbeInFlight = false;
-    let responseProbeInFlight = false;
 
     const refreshRoom = async () => {
       if (cancelled || refreshInFlight || document.visibilityState !== 'visible') {
@@ -511,152 +508,75 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       }
     };
 
-    const probeRoom = async () => {
-      if (cancelled || sessionProbeInFlight || document.visibilityState !== 'visible') {
+    const probeRoomMeta = async () => {
+      if (cancelled || refreshInFlight || document.visibilityState !== 'visible') {
         return;
       }
 
-      sessionProbeInFlight = true;
       try {
-        const meta = await getLiveAuntMinnieSessionMeta(currentSessionId);
+        const nextMeta = await getLiveAuntMinnieSessionMeta(currentSessionId);
         if (cancelled) return;
 
-        const currentState = roomStateRef.current;
-        if (!currentState || currentState.session.id !== currentSessionId) {
+        const previousMeta = lastSessionMetaRef.current;
+        lastSessionMetaRef.current = nextMeta;
+
+        if (!previousMeta) {
           return;
         }
 
-        const session = currentState.session;
-        const shouldRefresh =
-          meta.status !== session.status
-          || meta.current_phase !== session.current_phase
-          || meta.current_prompt_index !== session.current_prompt_index
-          || meta.prompt_count !== session.prompt_count
-          || (meta.prompt_count > currentState.prompts.length)
-          || (meta.updated_at || '') !== (session.updated_at || '')
-          || (meta.ended_at || '') !== (session.ended_at || '');
+        const shouldRefreshWholeRoom =
+          nextMeta.status !== previousMeta.status
+          || nextMeta.current_phase !== previousMeta.current_phase
+          || nextMeta.current_prompt_index !== previousMeta.current_prompt_index
+          || nextMeta.prompt_count !== previousMeta.prompt_count
+          || nextMeta.ended_at !== previousMeta.ended_at
+          || nextMeta.prompts_version !== previousMeta.prompts_version;
 
-        if (shouldRefresh) {
+        if (shouldRefreshWholeRoom) {
           await refreshRoom();
+          return;
         }
-      } catch {
-        // Keep the current UI state if the metadata probe fails.
-      } finally {
-        sessionProbeInFlight = false;
-      }
-    };
-
-    const probeResponses = async () => {
-      if (cancelled || responseProbeInFlight || document.visibilityState !== 'visible') {
-        return;
-      }
-
-      responseProbeInFlight = true;
-      try {
-        const meta = await getLiveAuntMinnieResponsesMeta(currentSessionId);
-        if (cancelled) return;
 
         const currentState = roomStateRef.current;
         if (!currentState || currentState.session.id !== currentSessionId) {
+          await refreshRoom();
           return;
         }
-        const currentPrompt = currentState.prompts[currentState.session.current_prompt_index] || null;
-        const isParticipantLiveExam =
-          !currentState.isHost
-          && currentState.session.status === 'live'
-          && currentState.session.current_phase === 'prompt_open';
-        const relevantResponses = isParticipantLiveExam && currentPrompt
-          ? currentState.responsesByPromptId[currentPrompt.id] || []
-          : currentState.responses;
-        const responseMeta = isParticipantLiveExam && currentPrompt
-          ? await getLiveAuntMinniePromptResponseMeta(currentSessionId, currentPrompt.id)
-          : meta;
 
-        const currentResponseCount = relevantResponses.length;
-        const currentLatestResponseTimestamp = relevantResponses.reduce((latest, response) => {
-          const candidate = response.updated_at || response.submitted_at || '';
-          return candidate > latest ? candidate : latest;
-        }, '');
-
-        const shouldRefresh =
-          responseMeta.count !== currentResponseCount
-          || (responseMeta.latest_updated_at || '') !== currentLatestResponseTimestamp;
-
-        if (shouldRefresh) {
-          if (isParticipantLiveExam) {
-            const nextState = await refreshLiveAuntMinnieRoomResponses(currentSessionId, currentState);
-            if (!cancelled) {
-              applyRoomState(nextState);
-            }
-            return;
+        if (nextMeta.participants_version !== previousMeta.participants_version) {
+          const nextState = await refreshLiveAuntMinnieRoomParticipants(currentSessionId, currentState);
+          if (!cancelled) {
+            applyRoomState(nextState);
           }
-          await refreshRoom();
-        }
-      } catch {
-        // Keep the current UI state if the response probe fails.
-      } finally {
-        responseProbeInFlight = false;
-      }
-    };
-
-    const probePrompts = async () => {
-      if (cancelled || promptProbeInFlight || document.visibilityState !== 'visible') {
-        return;
-      }
-
-      promptProbeInFlight = true;
-      try {
-        const meta = await getLiveAuntMinniePromptsMeta(currentSessionId);
-        if (cancelled) return;
-
-        const currentState = roomStateRef.current;
-        if (!currentState || currentState.session.id !== currentSessionId) {
           return;
         }
 
-        const currentPromptCount = currentState.prompts.length;
-        const currentLatestPromptTimestamp = currentState.prompts.reduce((latest, prompt) => {
-          const candidate = prompt.updated_at || prompt.created_at || '';
-          return candidate > latest ? candidate : latest;
-        }, '');
-        const currentLatestImageTimestamp = currentState.prompts.reduce((latest, prompt) => {
-          const promptLatest = prompt.images.reduce((imageLatest, image) => {
-            const candidate = image.updated_at || image.created_at || '';
-            return candidate > imageLatest ? candidate : imageLatest;
-          }, '');
-          return promptLatest > latest ? promptLatest : latest;
-        }, '');
+        if (nextMeta.messages_version !== previousMeta.messages_version) {
+          const nextState = await refreshLiveAuntMinnieRoomMessages(currentSessionId, currentState);
+          if (!cancelled) {
+            applyRoomState(nextState);
+          }
+          return;
+        }
 
-        const shouldRefresh =
-          meta.count !== currentPromptCount
-          || (meta.latest_prompt_updated_at || '') !== currentLatestPromptTimestamp
-          || (meta.latest_image_updated_at || '') !== currentLatestImageTimestamp;
-
-        if (shouldRefresh) {
-          await refreshRoom();
+        if (nextMeta.responses_version !== previousMeta.responses_version) {
+          const nextState = await refreshLiveAuntMinnieRoomResponses(currentSessionId, currentState);
+          if (!cancelled) {
+            applyRoomState(nextState);
+          }
         }
       } catch {
-        // Keep the current UI state if the prompt probe fails.
-      } finally {
-        promptProbeInFlight = false;
+        // Keep existing realtime state if metadata polling fails.
       }
     };
 
     const intervalId = window.setInterval(() => {
-      if (roomSyncState === 'degraded') {
-        void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
-        return;
-      }
-      void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
-    }, refreshIntervalMs);
+      void probeRoomMeta();
+    }, DEGRADED_REFRESH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (roomSyncState === 'degraded') {
-          void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
-          return;
-        }
-        void Promise.all([probeRoom(), probePrompts(), probeResponses()]);
+        void probeRoomMeta();
       }
     };
 
@@ -684,6 +604,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     setDraftResponsesByPromptId({});
     setResponseStatusByPromptId({});
     setSubmittingPromptIds({});
+    lastSessionMetaRef.current = null;
     setRoomState(null);
     setRoomSyncState('connecting');
     try {
@@ -712,6 +633,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
     latestDraftResponsesRef.current = {};
     queuedResponseValuesRef.current = {};
     submittingPromptIdsRef.current = {};
+    lastSessionMetaRef.current = null;
     setIsComposerOpen(false);
     setEditingPromptId(null);
     setComposerPrompt(createEmptyPrompt());

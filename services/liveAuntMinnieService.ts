@@ -392,6 +392,11 @@ const timestampValue = (value?: string | null) => {
 const isEndedStatus = (status: LiveAuntMinnieSessionStatus) =>
   status === 'completed' || status === 'cancelled';
 
+const isMissingRpcError = (error: unknown) => {
+  const message = String((error as any)?.message || '').toLowerCase();
+  return message.includes('function') || message.includes('schema cache');
+};
+
 const isParticipantLivePromptOpenSession = (
   session: Pick<LiveAuntMinnieSession, 'status' | 'current_phase'>,
   isHost: boolean,
@@ -1207,15 +1212,32 @@ const fetchSession = async (sessionId: string) => {
 };
 
 export const getLiveAuntMinnieSessionMeta = async (sessionId: string) => {
-  const session = await fetchSession(sessionId);
+  const { data, error } = await supabase
+    .from('live_aunt_minnie_sessions')
+    .select('id, status, current_phase, current_prompt_index, prompt_count, updated_at, ended_at, prompts_version, responses_version, messages_version, participants_version')
+    .eq('id', sessionId)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error('Live Aunt Minnie room not found.');
+  }
+
   return {
-    id: session.id,
-    status: session.status,
-    current_phase: session.current_phase,
-    current_prompt_index: session.current_prompt_index,
-    prompt_count: session.prompt_count,
-    updated_at: session.updated_at || null,
-    ended_at: session.ended_at || null,
+    id: data.id,
+    status: data.status,
+    current_phase: data.current_phase,
+    current_prompt_index: Number(data.current_prompt_index || 0),
+    prompt_count: Number(data.prompt_count || 0),
+    updated_at: data.updated_at || null,
+    ended_at: data.ended_at || null,
+    prompts_version: Number((data as any).prompts_version || 0),
+    responses_version: Number((data as any).responses_version || 0),
+    messages_version: Number((data as any).messages_version || 0),
+    participants_version: Number((data as any).participants_version || 0),
   };
 };
 
@@ -1503,6 +1525,44 @@ export const refreshLiveAuntMinnieRoomResponses = async (
   return nextState;
 };
 
+export const refreshLiveAuntMinnieRoomMessages = async (
+  sessionId: string,
+  state: LiveAuntMinnieRoomState,
+): Promise<LiveAuntMinnieRoomState> => {
+  const { userId } = await getAuthenticatedProfile();
+  const messages = await fetchMessages(sessionId);
+  const nextState = buildRoomStateFromSlices(
+    state.session,
+    sortPrompts(state.prompts),
+    state.participants,
+    state.responses,
+    messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
+  return nextState;
+};
+
+export const refreshLiveAuntMinnieRoomParticipants = async (
+  sessionId: string,
+  state: LiveAuntMinnieRoomState,
+): Promise<LiveAuntMinnieRoomState> => {
+  const { userId } = await getAuthenticatedProfile();
+  const participants = await fetchParticipants(sessionId);
+  const nextState = buildRoomStateFromSlices(
+    state.session,
+    sortPrompts(state.prompts),
+    participants,
+    state.responses,
+    state.messages,
+    userId,
+    state.onlineParticipantIds,
+  );
+  liveAuntMinnieRoomBootstrapCache.set(sessionId, nextState);
+  return nextState;
+};
+
 export const preloadCurrentLiveAuntMinnieRoom = async (): Promise<void> => {
   const workspace = await getLiveAuntMinnieWorkspace();
   const session = workspace.joinableSessions.find((item) => item.status === 'live') || workspace.joinableSessions[0];
@@ -1776,54 +1836,80 @@ export const deleteLiveAuntMinnieSession = async (sessionId: string) => {
   const { userId, roles } = await getAuthenticatedProfile();
   ensureHostRole(roles);
 
-  const session = await fetchSession(sessionId);
-  if (session.host_user_id !== userId) {
-    throw new Error('Only the host can delete this room.');
-  }
+  const { error: rpcError } = await supabase.rpc('delete_live_aunt_minnie_session', {
+    p_session_id: sessionId,
+  });
 
-  const tables = [
-    'live_aunt_minnie_prompt_images',
-    'live_aunt_minnie_responses',
-    'live_aunt_minnie_messages',
-    'live_aunt_minnie_participants',
-    'live_aunt_minnie_prompts',
-  ] as const;
-
-  for (const table of tables) {
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq('session_id', sessionId);
-
-    if (error) {
-      throw error;
+  if (rpcError) {
+    if (!isMissingRpcError(rpcError)) {
+      throw rpcError;
     }
-  }
 
-  const { error: sessionDeleteError } = await supabase
-    .from('live_aunt_minnie_sessions')
-    .delete()
-    .eq('id', sessionId)
-    .eq('host_user_id', userId);
+    const session = await fetchSession(sessionId);
+    if (session.host_user_id !== userId) {
+      throw new Error('Only the host can delete this room.');
+    }
 
-  if (sessionDeleteError) {
-    throw sessionDeleteError;
+    const tables = [
+      'live_aunt_minnie_prompt_images',
+      'live_aunt_minnie_responses',
+      'live_aunt_minnie_messages',
+      'live_aunt_minnie_participants',
+      'live_aunt_minnie_prompts',
+    ] as const;
+
+    for (const table of tables) {
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq('session_id', sessionId);
+
+      if (error) {
+        throw error;
+      }
+    }
+
+    const { error: sessionDeleteError } = await supabase
+      .from('live_aunt_minnie_sessions')
+      .delete()
+      .eq('id', sessionId)
+      .eq('host_user_id', userId);
+
+    if (sessionDeleteError) {
+      throw sessionDeleteError;
+    }
   }
   clearLiveAuntMinnieRoomCache(sessionId);
 };
 
 export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmitResponsePayload) => {
   const { userId } = await getAuthenticatedProfile();
+  const responseText = payload.responseText.trim();
+  if (!responseText) {
+    throw new Error('Answer cannot be empty.');
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('submit_live_aunt_minnie_response', {
+    p_session_id: payload.sessionId,
+    p_prompt_id: payload.promptId,
+    p_response_text: responseText,
+  });
+
+  if (!rpcError && rpcData) {
+    clearLiveAuntMinnieRoomCache(payload.sessionId);
+    const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+    return mapResponse(row as ResponseRow);
+  }
+
+  if (rpcError && !isMissingRpcError(rpcError)) {
+    throw rpcError;
+  }
+
   const session = await fetchSession(payload.sessionId);
   if (session.host_user_id === userId) {
     throw new Error('Hosts cannot submit answers in their own Live Aunt Minnie room.');
   }
   ensureSessionIsAcceptingAnswers(session);
-
-  const responseText = payload.responseText.trim();
-  if (!responseText) {
-    throw new Error('Answer cannot be empty.');
-  }
 
   const { data, error } = await supabase
     .from('live_aunt_minnie_responses')
@@ -1850,35 +1936,61 @@ export const submitLiveAuntMinnieResponse = async (payload: LiveAuntMinnieSubmit
 
 export const deleteLiveAuntMinnieResponse = async (payload: Pick<LiveAuntMinnieSubmitResponsePayload, 'sessionId' | 'promptId'>) => {
   const { userId } = await getAuthenticatedProfile();
-  const session = await fetchSession(payload.sessionId);
-  if (session.host_user_id === userId) {
-    throw new Error('Hosts cannot delete answers in their own Live Aunt Minnie room.');
-  }
-  ensureSessionIsAcceptingAnswers(session);
+  const { error: rpcError } = await supabase.rpc('delete_live_aunt_minnie_response', {
+    p_session_id: payload.sessionId,
+    p_prompt_id: payload.promptId,
+  });
 
-  const { error } = await supabase
-    .from('live_aunt_minnie_responses')
-    .delete()
-    .eq('session_id', payload.sessionId)
-    .eq('prompt_id', payload.promptId)
-    .eq('user_id', userId);
+  if (rpcError) {
+    if (!isMissingRpcError(rpcError)) {
+      throw rpcError;
+    }
 
-  if (error) {
-    throw error;
+    const session = await fetchSession(payload.sessionId);
+    if (session.host_user_id === userId) {
+      throw new Error('Hosts cannot delete answers in their own Live Aunt Minnie room.');
+    }
+    ensureSessionIsAcceptingAnswers(session);
+
+    const { error } = await supabase
+      .from('live_aunt_minnie_responses')
+      .delete()
+      .eq('session_id', payload.sessionId)
+      .eq('prompt_id', payload.promptId)
+      .eq('user_id', userId);
+
+    if (error) {
+      throw error;
+    }
   }
   clearLiveAuntMinnieRoomCache(payload.sessionId);
 };
 
 export const submitLiveAuntMinnieMessage = async (payload: LiveAuntMinnieSubmitMessagePayload) => {
   const { userId } = await getAuthenticatedProfile();
-  const session = await fetchSession(payload.sessionId);
-  if (session.status === 'completed' || session.status === 'cancelled') {
-    throw new Error('This live Aunt Minnie room is no longer accepting messages.');
-  }
-
   const body = payload.body.trim();
   if (!body) {
     throw new Error('Message cannot be empty.');
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc('submit_live_aunt_minnie_message', {
+    p_session_id: payload.sessionId,
+    p_prompt_id: payload.promptId,
+    p_body: body,
+  });
+
+  if (!rpcError && rpcData) {
+    const row = Array.isArray(rpcData) ? rpcData[0] : rpcData;
+    return mapMessage(row as MessageRow);
+  }
+
+  if (rpcError && !isMissingRpcError(rpcError)) {
+    throw rpcError;
+  }
+
+  const session = await fetchSession(payload.sessionId);
+  if (session.status === 'completed' || session.status === 'cancelled') {
+    throw new Error('This live Aunt Minnie room is no longer accepting messages.');
   }
 
   const { data, error } = await supabase
@@ -1917,6 +2029,7 @@ export const subscribeToLiveAuntMinnieRoom = async ({
   let lastState: LiveAuntMinnieRoomState | null = initialState || null;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let initialSnapshotLoaded = false;
+  let presenceRegistered = false;
   const pendingRefreshKinds = new Set<'session' | 'prompts' | 'participants' | 'responses' | 'messages'>();
   const bufferedEvents: Array<() => void> = [];
 
@@ -2152,9 +2265,12 @@ export const subscribeToLiveAuntMinnieRoom = async ({
             const nextBufferedEvent = bufferedEvents.shift();
             nextBufferedEvent?.();
           }
-          const session = lastState?.session || await fetchSession(sessionId);
-          await upsertParticipant(sessionId, userId, session.host_user_id === userId ? 'host' : 'participant');
-          await channel.track({ user_id: userId, ts: new Date().toISOString() });
+          if (!presenceRegistered) {
+            const session = lastState?.session || await fetchSession(sessionId);
+            await upsertParticipant(sessionId, userId, session.host_user_id === userId ? 'host' : 'participant');
+            await channel.track({ user_id: userId, ts: new Date().toISOString() });
+            presenceRegistered = true;
+          }
         } catch (error: any) {
           onConnectionStateChange?.('degraded');
           onError?.(error.message || 'Unable to join the live Aunt Minnie room.');
@@ -2162,6 +2278,7 @@ export const subscribeToLiveAuntMinnieRoom = async ({
       }
 
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        presenceRegistered = false;
         onConnectionStateChange?.('reconnecting');
         onError?.('Live Aunt Minnie realtime connection unavailable.');
       }
