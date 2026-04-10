@@ -131,13 +131,13 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
   onOpenViewer,
 }) => (
   <article
-    className="rounded-[28px] border border-white/10 bg-white/[0.03] p-3 shadow-[0_18px_40px_rgba(3,10,18,0.18)] sm:p-4"
+    className="rounded-[26px] border border-white/10 bg-white/[0.03] p-3 shadow-[0_18px_40px_rgba(3,10,18,0.18)] sm:p-4"
     style={{ contentVisibility: 'auto', containIntrinsicSize: '780px' }}
   >
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+          <span className="rounded-[14px] border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
             Question {promptNumber}
           </span>
           {prompt.created_at && <span>{formatPromptTimestamp(prompt.created_at)}</span>}
@@ -152,7 +152,7 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
           <button
             type="button"
             onClick={() => onEditPrompt(prompt)}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
+            className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10"
             aria-label={`Edit Question ${promptNumber}`}
             title={`Edit Question ${promptNumber}`}
           >
@@ -168,7 +168,7 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
           key={image.id}
           type="button"
           onClick={() => onOpenViewer(promptNumber - 1, imageIndex)}
-          className="min-w-[85%] snap-start overflow-hidden rounded-[22px] border border-white/10 bg-black/30 text-left sm:min-w-[320px]"
+          className="min-w-[85%] snap-start overflow-hidden rounded-[20px] border border-white/10 bg-black/30 text-left sm:min-w-[320px]"
         >
           <div className="relative">
             <div className="aspect-[4/3] w-full bg-slate-900/60" />

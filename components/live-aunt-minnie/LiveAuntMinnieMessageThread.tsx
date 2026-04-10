@@ -64,6 +64,7 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showOtherAnswers, setShowOtherAnswers] = useState(false);
+  const [showLiveUpdatePulse, setShowLiveUpdatePulse] = useState(false);
   const normalizedCorrectAnswer = sanitizeEditableCorrectAnswer(correctAnswer);
   const [correctAnswerDraft, setCorrectAnswerDraft] = useState(normalizedCorrectAnswer);
   const [isEditingCorrectAnswer, setIsEditingCorrectAnswer] = useState(!Boolean(normalizedCorrectAnswer));
@@ -83,9 +84,14 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   const showCompletedAnswers = isReadOnly;
   const visibleOtherResponses = showCompletedAnswers || expanded ? otherResponses : otherResponses.slice(0, 5);
   const hasOverflow = otherResponses.length > 5;
+  const submittedResponsesCount = useMemo(
+    () => otherResponses.filter((response) => !response.id.startsWith('missing:') && response.response_text !== 'No answer').length,
+    [otherResponses],
+  );
   const savedValue = (myResponse?.response_text || '').trim();
   const currentValue = draftValue.trim();
   const isDirty = currentValue !== savedValue;
+  const responseSignature = useMemo(() => responseListSignature(responses), [responses]);
   const statusLabel = (() => {
     if (isSubmitting || responseStatus === 'saving') return 'Saving...';
     if (responseStatus === 'retry failed') return 'Retry failed';
@@ -113,6 +119,22 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
     const timer = window.setTimeout(() => setShowCorrectAnswerSaved(false), 1800);
     return () => window.clearTimeout(timer);
   }, [showCorrectAnswerSaved]);
+
+  useEffect(() => {
+    if (answerMode === 'host-review') {
+      setExpanded(true);
+    }
+  }, [answerMode]);
+
+  useEffect(() => {
+    if (answerMode !== 'host-review' || submittedResponsesCount === 0) {
+      return;
+    }
+
+    setShowLiveUpdatePulse(true);
+    const timer = window.setTimeout(() => setShowLiveUpdatePulse(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [answerMode, responseSignature, submittedResponsesCount]);
 
   return (
     <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-3 sm:p-4">
@@ -229,9 +251,28 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
 
       {otherResponses.length > 0 ? (
         <div>
-          {showCompletedAnswers ? (
-            <div className="mt-3">
-              <p className="text-sm font-semibold text-white">Submitted answers</p>
+          {showCompletedAnswers || answerMode === 'host-review' ? (
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex h-2.5 w-2.5 rounded-full ${showLiveUpdatePulse ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]' : 'bg-emerald-500/70'}`} />
+                <p className="text-sm font-semibold text-white">
+                  {answerMode === 'host-review' ? 'Live submitted answers' : 'Submitted answers'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+                  {submittedResponsesCount} live
+                </span>
+                {answerMode === 'host-review' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowOtherAnswers((previous) => !previous)}
+                    className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+                  >
+                    {showOtherAnswers ? 'Hide answers' : 'Show answers'}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <button
@@ -249,11 +290,11 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
           )}
 
           {(showCompletedAnswers || showOtherAnswers) && (
-            <div className="mt-3 divide-y divide-white/10">
+            <div className={`mt-3 ${answerMode === 'host-review' ? 'grid gap-2.5' : 'divide-y divide-white/10'}`}>
               {visibleOtherResponses.map((response) => (
                 <div
                   key={response.id}
-                  className="flex items-center gap-2.5 py-3 text-sm text-slate-100"
+                  className={`flex items-center gap-2.5 text-sm text-slate-100 ${answerMode === 'host-review' ? 'rounded-[18px] border border-white/8 bg-white/[0.04] px-3 py-2.5' : 'py-3'}`}
                 >
                   {response.participant?.avatar_url ? (
                     <img
@@ -269,13 +310,21 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
                     </div>
                   )}
                   <div className="min-w-0 flex-1 leading-5">
-                    <span className="font-semibold text-white align-middle">
-                      {displayName(response)}
-                    </span>
-                    <span className="text-slate-500">: </span>
-                    <span className="whitespace-pre-wrap break-words text-slate-300 align-middle">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="truncate font-semibold text-white align-middle">
+                        {displayName(response)}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-slate-500">
+                        {new Date(response.updated_at || response.submitted_at).toLocaleTimeString([], {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          second: answerMode === 'host-review' ? '2-digit' : undefined,
+                        })}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 whitespace-pre-wrap break-words text-slate-300 align-middle">
                       {response.response_text}
-                    </span>
+                    </div>
                   </div>
                 </div>
               ))}

@@ -72,7 +72,7 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
 
   return (
     <div className="space-y-4">
-      <section className="sticky top-3 z-10 rounded-[24px] border border-white/10 bg-[#101b26]/95 p-3 backdrop-blur sm:p-4">
+      <section className="sticky top-3 z-10 rounded-[24px] border border-white/10 bg-[#101b26]/95 p-3 shadow-[0_18px_40px_rgba(3,10,18,0.24)] backdrop-blur sm:p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             {onBack && (
@@ -95,7 +95,7 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
               type="button"
               onClick={() => void onRefresh?.()}
               disabled={busyAction === 'manual-resync'}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
+              className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10 disabled:opacity-50"
               aria-label={busyAction === 'manual-resync' ? 'Refreshing' : 'Refresh'}
               title={busyAction === 'manual-resync' ? 'Refreshing' : 'Refresh'}
             >
@@ -103,7 +103,7 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
                 refresh
               </span>
             </button>
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+            <span className={`rounded-[16px] border px-3 py-1.5 text-xs font-semibold ${
               roomSyncState === 'live'
                 ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-100'
                 : 'border-amber-400/20 bg-amber-500/10 text-amber-100'
@@ -121,7 +121,7 @@ const LiveAuntMinnieParticipantView: React.FC<LiveAuntMinnieParticipantViewProps
           </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-3">
-          <div className="rounded-full border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">
+          <div className="rounded-[16px] border border-cyan-400/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">
             Question {currentQuestionNumber} of {totalQuestionCount}
           </div>
           <p className="text-xs text-slate-400">{syncBannerCopy[roomSyncState || 'connecting']}</p>
