@@ -137,7 +137,7 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
   }, [answerMode, responseSignature, submittedResponsesCount]);
 
   return (
-    <div className="mt-4 rounded-[24px] border border-white/10 bg-black/20 p-3 sm:p-4">
+    <div className="mt-4 rounded-[24px] border border-white/5 bg-black/20 p-3 sm:p-4">
       {answerMode === 'editable' && !isReadOnly && canAnswer ? (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -256,23 +256,19 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
               <div className="flex items-center gap-2">
                 <span className={`inline-flex h-2.5 w-2.5 rounded-full ${showLiveUpdatePulse ? 'bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.8)]' : 'bg-emerald-500/70'}`} />
                 <p className="text-sm font-semibold text-white">
-                  {answerMode === 'host-review' ? 'Live submitted answers' : 'Submitted answers'}
+                  {answerMode === 'host-review' ? `Answers (${submittedResponsesCount})` : `Submitted answers (${submittedResponsesCount})`}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[11px] font-semibold text-slate-300">
-                  {submittedResponsesCount} live
-                </span>
-                {answerMode === 'host-review' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowOtherAnswers((previous) => !previous)}
-                    className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-[11px] font-semibold text-slate-200 transition hover:bg-white/[0.08]"
-                  >
-                    {showOtherAnswers ? 'Hide answers' : 'Show answers'}
-                  </button>
-                )}
-              </div>
+              {answerMode === 'host-review' && (
+                <button
+                  type="button"
+                  onClick={() => setShowOtherAnswers((previous) => !previous)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/[0.05] hover:text-white"
+                  aria-label={showOtherAnswers ? 'Hide answers' : 'Show answers'}
+                >
+                  <span className="material-icons">{showOtherAnswers ? 'expand_less' : 'expand_more'}</span>
+                </button>
+              )}
             </div>
           ) : (
             <button
@@ -290,11 +286,11 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
           )}
 
           {(showCompletedAnswers || showOtherAnswers) && (
-            <div className={`mt-3 ${answerMode === 'host-review' ? 'grid gap-2.5' : 'divide-y divide-white/10'}`}>
+            <div className="mt-3 divide-y divide-white/5">
               {visibleOtherResponses.map((response) => (
                 <div
                   key={response.id}
-                  className={`flex items-center gap-2.5 text-sm text-slate-100 ${answerMode === 'host-review' ? 'rounded-[18px] border border-white/8 bg-white/[0.04] px-3 py-2.5' : 'py-3'}`}
+                  className="flex items-center gap-2.5 py-3 text-sm text-slate-100"
                 >
                   {response.participant?.avatar_url ? (
                     <img
@@ -318,7 +314,6 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
                         {new Date(response.updated_at || response.submitted_at).toLocaleTimeString([], {
                           hour: 'numeric',
                           minute: '2-digit',
-                          second: answerMode === 'host-review' ? '2-digit' : undefined,
                         })}
                       </span>
                     </div>

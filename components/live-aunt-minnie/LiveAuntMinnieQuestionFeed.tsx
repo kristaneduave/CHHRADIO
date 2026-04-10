@@ -130,22 +130,19 @@ const LiveAuntMinniePromptCard: React.FC<LiveAuntMinniePromptCardProps> = ({
   onSubmitResponse,
   onOpenViewer,
 }) => (
-  <article
-    className="rounded-[26px] border border-white/10 bg-white/[0.03] p-3 shadow-[0_18px_40px_rgba(3,10,18,0.18)] sm:p-4"
-    style={{ contentVisibility: 'auto', containIntrinsicSize: '780px' }}
-  >
-    <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-          <span className="rounded-[14px] border border-cyan-400/20 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
+    <article
+      className="rounded-[26px] border border-white/5 bg-white/[0.03] p-3 shadow-lg shadow-black/20 sm:p-4"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '780px' }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
             Question {promptNumber}
-          </span>
-          {prompt.created_at && <span>{formatPromptTimestamp(prompt.created_at)}</span>}
+          </div>
+          <p className="mt-1 text-lg font-semibold leading-7 text-white sm:text-lg">
+            {prompt.question_text || `Question ${promptNumber}`}
+          </p>
         </div>
-        <p className="mt-2 text-lg font-semibold leading-7 text-white sm:text-xl">
-          {prompt.question_text || `Question ${promptNumber}`}
-        </p>
-      </div>
 
       <div className="flex items-center gap-2">
         {canEditPosts && onEditPrompt && (

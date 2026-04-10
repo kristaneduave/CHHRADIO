@@ -71,14 +71,11 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${syncTone}`}>
-              {roomSyncState === 'live' ? 'Realtime live' : roomSyncState === 'connecting' ? 'Connecting...' : 'Realtime delayed'}
+            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${syncTone}`}>
+              {roomSyncState === 'live' ? 'Live' : roomSyncState === 'connecting' ? 'Connecting...' : 'Delayed'}
             </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-slate-300">
-              {submittedResponseCount}/{Math.max(participantCount, 1)} answered
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-semibold text-slate-300">
-              Q{Math.min(roomState.session.current_prompt_index + 1, Math.max(roomState.prompts.length, 1))}
+            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-300">
+              {submittedResponseCount}/{Math.max(participantCount, 1)}
             </span>
           </div>
 
@@ -87,9 +84,11 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
               <button
                 type="button"
                 onClick={onCompose}
-                className="rounded-[18px] border border-cyan-400/20 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
+                className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-cyan-400/20 bg-cyan-500/15 text-cyan-100 transition hover:bg-cyan-500/20"
+                aria-label="Add question"
+                title="Add question"
               >
-                Add question
+                <span className="material-icons text-[20px]">add</span>
               </button>
             )}
             <button
@@ -120,13 +119,16 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
                   void onLockAnswers();
                 }}
                 disabled={busyAction === 'lock-answers'}
-                className="rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-[18px] border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50"
               >
-                {busyAction === 'lock-answers'
-                  ? 'Locking...'
-                  : lockCountdownSeconds !== null
-                    ? `Cancel ${lockCountdownSeconds}`
-                    : 'Lock answers'}
+                <span className="material-icons text-[18px]">{lockCountdownSeconds !== null ? 'close' : 'lock_outline'}</span>
+                <span>
+                  {busyAction === 'lock-answers'
+                    ? 'Locking...'
+                    : lockCountdownSeconds !== null
+                      ? `Cancel ${lockCountdownSeconds}`
+                      : 'Lock'}
+                </span>
               </button>
             )}
           </div>
