@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
-import { PROFILE_IMAGE } from '../constants';
 import { NoteSaveState, UserRole } from '../types';
 import AdminUserManagement from './AdminUserManagement';
 import LoadingButton from './LoadingButton';
@@ -683,11 +682,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
         <div className="absolute -inset-[3px] rounded-full border border-primary/18 opacity-70 shadow-[0_0_24px_rgba(56,189,248,0.14)] transition-opacity duration-300 group-hover:opacity-90" />
 
         <div className="relative h-24 w-24 rounded-full border border-white/10 bg-[#0a0f18] p-1 shadow-2xl overflow-hidden z-10">
-          <img
-            src={profile.avatar_url || PROFILE_IMAGE}
-            alt="Profile"
-            className="w-full h-full rounded-full object-cover shadow-inner hover:opacity-80 transition-opacity duration-300"
-          />
+          {profile.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt="Profile"
+              className="w-full h-full rounded-full object-cover shadow-inner hover:opacity-80 transition-opacity duration-300"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center rounded-full bg-white/[0.04] text-slate-500">
+              <span className="material-icons text-[32px]">person</span>
+            </div>
+          )}
           {/* Overlay Icon */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
             <span className="material-icons text-white drop-shadow-lg text-2xl">photo_camera</span>
@@ -705,9 +710,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
 
       {/* View Mode Header */}
       {!isEditing && (
-        <div className="z-10 w-full mb-6">
+        <div className="z-10 mb-6 flex w-full flex-col items-center text-center">
           <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight leading-tight">{profile.full_name || 'Doctor'}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-1.5 mb-5 opacity-90">
+          <div className="mt-1.5 mb-5 flex flex-wrap items-center justify-center gap-2 opacity-90">
             {profile.year_level && (
               <span className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-md text-[11px] font-black uppercase tracking-[0.15em] shadow-sm">
                 {profile.year_level}
@@ -722,13 +727,13 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
           <ResidentBadges activeBadges={activeBadges} />
 
           {/* Stats Box */}
-          <div className="flex justify-center md:justify-start gap-8 mt-6 rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4 md:px-8 max-w-fit shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-sm">
-            <div className="text-center md:text-left group">
+          <div className="mt-6 flex max-w-fit justify-center gap-8 rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4 md:px-8 shadow-[0_18px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-sm">
+            <div className="text-center group">
               <span className="block text-2xl font-black text-white group-hover:text-primary transition-colors">{myCases.length}</span>
               <span className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mt-1 block transition-colors">Total Cases</span>
             </div>
             <div className="w-[1px] bg-white/5 self-stretch" />
-            <div className="text-center md:text-left group">
+            <div className="text-center group">
               <span className="block text-2xl font-black text-white group-hover:text-emerald-400 transition-colors">{myCases.filter(c => c.status === 'published').length}</span>
               <span className="text-[10px] text-slate-500 uppercase tracking-[0.15em] font-bold mt-1 block transition-colors">Published</span>
             </div>

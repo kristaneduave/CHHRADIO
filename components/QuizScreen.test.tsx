@@ -172,7 +172,6 @@ describe('QuizScreen', () => {
     render(<QuizScreen onOpenLiveAuntMinnie={onOpenLiveAuntMinnie} />);
 
     fireEvent.click(await screen.findByText('Aunt Minnie'));
-    fireEvent.click(await screen.findByRole('button', { name: 'Open' }));
 
     expect(mockPreloadCurrentLiveAuntMinnieRoom).toHaveBeenCalledTimes(1);
     expect(onOpenLiveAuntMinnie).toHaveBeenCalledTimes(1);

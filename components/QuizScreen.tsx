@@ -22,9 +22,9 @@ import QuizSectionHeader from './quiz/QuizSectionHeader';
 import QuizManageAccess from './quiz/QuizManageAccess';
 import PageShell from './ui/PageShell';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
-import { canManageAuntMinnieRoom, canManageQuiz } from '../utils/roles';
+import { canManageQuiz } from '../utils/roles';
 
-type ScreenMode = 'landing' | 'mcq-library' | 'mcq-session' | 'mcq-review' | 'aunt-minnie-hub';
+type ScreenMode = 'landing' | 'mcq-library' | 'mcq-session' | 'mcq-review';
 
 interface QuizScreenProps {
   onOpenLiveAuntMinnie?: () => void;
@@ -171,7 +171,6 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
   };
 
   const canManage = canManageQuiz(userRoles);
-  const canHostAuntMinnie = canManageAuntMinnieRoom(userRoles);
   const handleOpenAuntMinnie = () => {
     void preloadCurrentLiveAuntMinnieRoom().catch(() => undefined);
     onOpenLiveAuntMinnie?.();
@@ -205,7 +204,7 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
             manageOpen={manageOpen}
             onToggleManage={() => setManageOpen((prev) => !prev)}
             onOpenMcq={() => setMode('mcq-library')}
-            onOpenAuntMinnie={() => setMode('aunt-minnie-hub')}
+            onOpenAuntMinnie={handleOpenAuntMinnie}
           />
           {error ? <ScreenStatusNotice tone="error" message={error} /> : null}
           {busy ? <ScreenStatusNotice message="Working on your quiz request..." /> : null}
@@ -290,79 +289,6 @@ const QuizScreen: React.FC<QuizScreenProps> = ({ onOpenLiveAuntMinnie }) => {
         </div>
       ) : null}
 
-      {mode === 'aunt-minnie-hub' ? (
-        <div className="space-y-5">
-          <QuizSectionHeader
-            title="Aunt Minnie"
-            onBack={() => setMode('landing')}
-          />
-          {error ? (
-            <div className="rounded-[1.6rem] border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">
-              {error}
-            </div>
-          ) : null}
-          <div className="space-y-4">
-            <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-              <div className="rounded-3xl border border-white/[0.05] bg-white/[0.025] p-5 backdrop-blur-md">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Session</p>
-                    <h3 className="mt-3 text-[1.9rem] font-black tracking-tight text-white">Join live room</h3>
-                    <p className="mt-3 text-sm leading-6 text-slate-400">Read, answer, reveal.</p>
-                  </div>
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-400/16 bg-amber-500/[0.08] text-amber-200">
-                    <span className="material-icons text-[21px]">visibility</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenAuntMinnie}
-                  disabled={!onOpenLiveAuntMinnie}
-                  className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-amber-400/18 bg-amber-500/[0.08] px-4 text-sm font-semibold text-white transition hover:bg-amber-500/[0.12] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Open
-                </button>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-white/5 bg-white/[0.03] p-4 backdrop-blur-sm">
-              <div className="rounded-3xl border border-white/[0.05] bg-white/[0.025] p-5 backdrop-blur-md">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Host</p>
-                    <h3 className="mt-3 text-[1.9rem] font-black tracking-tight text-white">{canHostAuntMinnie ? 'Manage room' : 'Host access'}</h3>
-                    <p className="mt-3 text-sm leading-6 text-slate-400">
-                      {canHostAuntMinnie ? 'Create prompts and run the reveal.' : 'Join sessions even without host permissions.'}
-                    </p>
-                  </div>
-                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${canHostAuntMinnie ? 'border-cyan-400/16 bg-cyan-500/[0.08] text-cyan-100' : 'border-white/[0.05] bg-white/[0.02] text-slate-400'}`}>
-                    <span className="material-icons text-[21px]">hub</span>
-                  </div>
-                </div>
-                <div className="mt-5 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4">
-                  <p className="text-sm leading-6 text-slate-300">
-                    {canHostAuntMinnie ? 'Open the room to host or edit a session.' : 'Consultant, admin, faculty, and training officer roles can host.'}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenAuntMinnie}
-                  disabled={!onOpenLiveAuntMinnie}
-                  className="mt-5 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 text-sm font-semibold text-white transition hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {canHostAuntMinnie ? 'Open' : 'Browse'}
-                </button>
-              </div>
-            </section>
-
-            <div
-              aria-hidden="true"
-              className="xl:hidden"
-              style={{ height: 'var(--mobile-bottom-nav-clearance)' }}
-            />
-          </div>
-        </div>
-      ) : null}
     </PageShell>
   );
 };
