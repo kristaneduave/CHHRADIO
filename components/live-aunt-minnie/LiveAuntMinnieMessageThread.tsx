@@ -81,7 +81,7 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
     () => sortedResponses.filter((response) => response.user_id !== currentUserId),
     [currentUserId, sortedResponses],
   );
-  const showCompletedAnswers = isReadOnly;
+  const showCompletedAnswers = isReadOnly && answerMode !== 'host-review';
   const visibleOtherResponses = showCompletedAnswers || expanded ? otherResponses : otherResponses.slice(0, 5);
   const hasOverflow = otherResponses.length > 5;
   const submittedResponsesCount = useMemo(
@@ -285,7 +285,7 @@ const LiveAuntMinnieMessageThread: React.FC<LiveAuntMinnieMessageThreadProps> = 
             </button>
           )}
 
-          {(showCompletedAnswers || showOtherAnswers) && (
+          {((answerMode === 'host-review' ? showOtherAnswers : (showCompletedAnswers || showOtherAnswers))) && (
             <div className="mt-3 divide-y divide-white/5">
               {visibleOtherResponses.map((response) => (
                 <div
