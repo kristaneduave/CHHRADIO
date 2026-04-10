@@ -36,6 +36,24 @@ type WorkspaceData = {
 let liveAuntMinnieWorkspaceCache: WorkspaceData | null = null;
 let liveAuntMinnieWorkspacePromise: Promise<WorkspaceData> | null = null;
 const liveAuntMinnieRoomBootstrapCache = new Map<string, LiveAuntMinnieRoomState>();
+let authenticatedProfileCache:
+  | {
+      expiresAt: number;
+      value: {
+        userId: string;
+        profile: Profile | null;
+        primaryRole: UserRole | null;
+        roles: UserRole[];
+      };
+    }
+  | null = null;
+let authenticatedProfilePromise: Promise<{
+  userId: string;
+  profile: Profile | null;
+  primaryRole: UserRole | null;
+  roles: UserRole[];
+}> | null = null;
+const AUTHENTICATED_PROFILE_CACHE_TTL_MS = 10_000;
 
 const clearLiveAuntMinnieRoomCache = (sessionId?: string) => {
   if (sessionId) {
@@ -686,36 +704,57 @@ const getAuthenticatedProfile = async (): Promise<{
   primaryRole: UserRole | null;
   roles: UserRole[];
 }> => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error('Not authenticated');
+  if (authenticatedProfileCache && authenticatedProfileCache.expiresAt > Date.now()) {
+    return authenticatedProfileCache.value;
   }
 
-  const [{ data, error }, roleState] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single(),
-    getCurrentUserRoleState(),
-  ]);
-
-  if (error) {
-    throw error;
+  if (authenticatedProfilePromise) {
+    return authenticatedProfilePromise;
   }
 
-  const profile = (data as Profile | null) || null;
-  const roles = roleState?.roles?.length
-    ? roleState.roles
-    : normalizeUserRoles([profile?.role]);
-  const primaryRole = roleState?.primaryRole || getPrimaryRole(roles, profile?.role);
+  authenticatedProfilePromise = (async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
 
-  return {
-    userId: user.id,
-    profile,
-    primaryRole,
-    roles,
-  };
+    const [{ data, error }, roleState] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single(),
+      getCurrentUserRoleState(),
+    ]);
+
+    if (error) {
+      throw error;
+    }
+
+    const profile = (data as Profile | null) || null;
+    const roles = roleState?.roles?.length
+      ? roleState.roles
+      : normalizeUserRoles([profile?.role]);
+    const primaryRole = roleState?.primaryRole || getPrimaryRole(roles, profile?.role);
+
+    const nextValue = {
+      userId: user.id,
+      profile,
+      primaryRole,
+      roles,
+    };
+
+    authenticatedProfileCache = {
+      expiresAt: Date.now() + AUTHENTICATED_PROFILE_CACHE_TTL_MS,
+      value: nextValue,
+    };
+
+    return nextValue;
+  })().finally(() => {
+    authenticatedProfilePromise = null;
+  });
+
+  return authenticatedProfilePromise;
 };
 
 const ensureHostRole = (roles: UserRole[] | UserRole | null | undefined) => {

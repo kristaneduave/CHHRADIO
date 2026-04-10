@@ -23,8 +23,6 @@ import {
   getCachedLiveAuntMinnieWorkspace,
   hydrateLiveAuntMinnieRoomDeferred,
   lockLiveAuntMinnieAnswers,
-  preloadCurrentLiveAuntMinnieRoom,
-  preloadLiveAuntMinnieWorkspace,
   refreshLiveAuntMinnieRoomMessages,
   refreshLiveAuntMinnieRoomParticipants,
   refreshLiveAuntMinnieRoomResponses,
@@ -400,15 +398,8 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   };
 
   useEffect(() => {
-    void Promise.all([
-      preloadLiveAuntMinnieWorkspace(),
-      preloadCurrentLiveAuntMinnieRoom(),
-    ]).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
     void loadWorkspace({
-      force: Boolean(cachedWorkspace),
+      force: false,
       preserveLoading: Boolean(cachedWorkspace),
     });
   }, []);
