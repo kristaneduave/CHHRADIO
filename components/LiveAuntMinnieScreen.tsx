@@ -44,6 +44,7 @@ type LiveAuntMinnieSessionMeta = Awaited<ReturnType<typeof getLiveAuntMinnieSess
 const AUNT_MINNIE_DRAFT_KEY_PREFIX = 'chh:aunt-minnie:drafts:';
 const DRAFT_PERSIST_DEBOUNCE_MS = 600;
 const DEGRADED_REFRESH_INTERVAL_MS = 4000;
+const HOST_LIVE_REFRESH_INTERVAL_MS = 1000;
 
 const createEmptyPrompt = (): LiveAuntMinniePromptInput => ({
   images: [],
@@ -466,10 +467,12 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   useEffect(() => {
     if (!currentSessionId) return;
 
+    const shouldHostAutoRefresh = Boolean(roomState?.isHost && roomState.session.status === 'live');
     const shouldBackgroundRefresh =
       roomSyncState === 'degraded'
       || roomSyncState === 'reconnecting'
-      || roomSyncState === 'connecting';
+      || roomSyncState === 'connecting'
+      || shouldHostAutoRefresh;
 
     if (!shouldBackgroundRefresh) {
       return;
@@ -563,7 +566,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
     const intervalId = window.setInterval(() => {
       void probeRoomMeta();
-    }, DEGRADED_REFRESH_INTERVAL_MS);
+    }, shouldHostAutoRefresh ? HOST_LIVE_REFRESH_INTERVAL_MS : DEGRADED_REFRESH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -578,7 +581,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentSessionId, roomState?.onlineParticipantIds, roomState?.session.status, roomSyncState]);
+  }, [currentSessionId, roomState?.isHost, roomState?.onlineParticipantIds, roomState?.session.status, roomSyncState]);
 
   const refreshWorkspace = async () => {
     try {
