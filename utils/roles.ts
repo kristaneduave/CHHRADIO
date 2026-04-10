@@ -11,6 +11,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const DEFAULT_ROLE: UserRole = 'resident';
+export const EXCLUSIVE_ROLE: UserRole = 'training_officer';
 
 export const PRIVILEGED_MANAGER_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
 export const RESIDENT_ACCESS_ROLES: UserRole[] = ['resident', 'admin', 'moderator'];
@@ -55,6 +56,10 @@ export const normalizeUserRoles = (roles: Array<string | null | undefined> | nul
 
   if (normalized.length === 0) {
     return [DEFAULT_ROLE];
+  }
+
+  if (normalized.includes(EXCLUSIVE_ROLE)) {
+    return [EXCLUSIVE_ROLE];
   }
 
   return normalized;

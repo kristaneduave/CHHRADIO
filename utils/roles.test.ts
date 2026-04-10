@@ -7,6 +7,7 @@ import {
   canManageQuiz,
   canManageUsers,
   getCapabilitySet,
+  normalizeUserRoles,
 } from './roles';
 
 describe('roles capability helpers', () => {
@@ -41,5 +42,10 @@ describe('roles capability helpers', () => {
       canManageCalendar: false,
       canManageUsers: false,
     });
+  });
+
+  it('keeps training officer exclusive when role sets are normalized', () => {
+    expect(normalizeUserRoles(['training_officer', 'resident'])).toEqual(['training_officer']);
+    expect(normalizeUserRoles(['resident', 'moderator'])).toEqual(['resident', 'moderator']);
   });
 });

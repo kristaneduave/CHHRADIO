@@ -115,4 +115,21 @@ describe('AdminUserManagement', () => {
 
     expect(screen.getByText('Roles updated.')).toBeInTheDocument();
   });
+
+  it('makes training officer exclusive and updates the primary role when selected', async () => {
+    render(<AdminUserManagement onClose={() => undefined} />);
+
+    const userCard = (await screen.findByText('Dr. Mira')).closest('div.rounded-xl');
+    expect(userCard).not.toBeNull();
+
+    fireEvent.click(within(userCard as HTMLElement).getAllByRole('button', { name: 'training officer' })[1]);
+
+    await waitFor(() => {
+      expect(profilesUpdateEq).toHaveBeenCalledWith('id', 'user-1');
+      expect(userRolesDeleteEq).toHaveBeenCalledWith('user_id', 'user-1');
+      expect(userRolesInsert).toHaveBeenCalledWith([
+        { user_id: 'user-1', role: 'training_officer' },
+      ]);
+    });
+  });
 });

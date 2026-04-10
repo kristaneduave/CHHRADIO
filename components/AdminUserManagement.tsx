@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 import { Profile, UserRole } from '../types';
-import { ensurePrimaryRoleIncluded, normalizeUserRoles } from '../utils/roles';
+import { ensurePrimaryRoleIncluded, EXCLUSIVE_ROLE, normalizeUserRoles } from '../utils/roles';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
 
 interface AdminUserManagementProps {
@@ -19,6 +19,22 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
     useEffect(() => {
         fetchUsers();
     }, []);
+
+    const resolveRoleSelection = (primaryRole: UserRole, nextRoles: UserRole[]) => {
+        const normalizedRoles = ensurePrimaryRoleIncluded(nextRoles, primaryRole);
+
+        if (normalizedRoles.includes(EXCLUSIVE_ROLE)) {
+            return {
+                primaryRole: EXCLUSIVE_ROLE,
+                roles: [EXCLUSIVE_ROLE] as UserRole[],
+            };
+        }
+
+        return {
+            primaryRole,
+            roles: normalizedRoles,
+        };
+    };
 
     const fetchUsers = async () => {
         try {
@@ -64,14 +80,14 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
 
     const updateUserRoles = async (userId: string, primaryRole: UserRole, nextRoles: UserRole[]) => {
         try {
-            const normalizedRoles = ensurePrimaryRoleIncluded(nextRoles, primaryRole);
+            const resolved = resolveRoleSelection(primaryRole, nextRoles);
 
             // Optimistic update
-            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: primaryRole, roles: normalizedRoles } : u));
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: resolved.primaryRole, roles: resolved.roles } : u));
 
             const { error } = await supabase
                 .from('profiles')
-                .update({ role: primaryRole })
+                .update({ role: resolved.primaryRole })
                 .eq('id', userId);
 
             if (error) throw error;
@@ -91,7 +107,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
 
             const { error: insertError } = await supabase
                 .from('user_roles')
-                .insert(normalizedRoles.map((role) => ({
+                .insert(resolved.roles.map((role) => ({
                     user_id: userId,
                     role,
                 })));
@@ -199,11 +215,18 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                                 <div className="flex flex-wrap gap-2">
                                                     {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
                                                         const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                        const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
                                                         return (
                                                             <button
                                                                 key={`primary-${roleOption}`}
                                                                 type="button"
-                                                                onClick={() => updateUserRoles(user.id, roleOption, ensurePrimaryRoleIncluded(user.roles, roleOption))}
+                                                                onClick={() => updateUserRoles(
+                                                                    user.id,
+                                                                    roleOption,
+                                                                    roleOption === EXCLUSIVE_ROLE
+                                                                        ? [EXCLUSIVE_ROLE]
+                                                                        : [roleOption, ...currentRoles.filter((role) => role !== EXCLUSIVE_ROLE && role !== roleOption)],
+                                                                )}
                                                                 className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
                                                                     isPrimaryRole
                                                                         ? `${getRoleTone(roleOption)} bg-white/5`
@@ -227,6 +250,9 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                                         const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
                                                         const isActive = currentRoles.includes(roleOption);
                                                         const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                        const exclusiveRoleSelected = currentRoles.includes(EXCLUSIVE_ROLE);
+                                                        const disabledBecauseExclusive = exclusiveRoleSelected && roleOption !== EXCLUSIVE_ROLE;
+                                                        const disabled = isPrimaryRole || disabledBecauseExclusive;
                                                         return (
                                                             <button
                                                                 key={roleOption}
@@ -238,11 +264,19 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                                                         : [...currentRoles, roleOption];
                                                                     updateUserRoles(user.id, user.role || 'resident', nextRoles);
                                                                 }}
-                                                                disabled={isPrimaryRole}
-                                                                title={isPrimaryRole ? 'Primary role is always active.' : undefined}
+                                                                disabled={disabled}
+                                                                title={
+                                                                    isPrimaryRole
+                                                                        ? 'Primary role is always active.'
+                                                                        : disabledBecauseExclusive
+                                                                            ? 'Training Officer cannot be combined with other roles.'
+                                                                            : undefined
+                                                                }
                                                                 className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
                                                                     isPrimaryRole
                                                                         ? `cursor-default ${getRoleTone(roleOption)} bg-white/5`
+                                                                        : disabledBecauseExclusive
+                                                                            ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-600'
                                                                         : isActive
                                                                             ? 'border-primary/40 bg-primary/15 text-primary'
                                                                             : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
@@ -254,7 +288,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                                                     })}
                                                 </div>
                                                 <p className="text-[10px] leading-4 text-slate-500">
-                                                    The primary role stays active automatically. Add roles like <span className="text-slate-400">resident + moderator</span> to combine permissions.
+                                                    The primary role stays active automatically. Add roles like <span className="text-slate-400">resident + moderator</span> to combine permissions. <span className="text-slate-400">Training Officer</span> stays exclusive.
                                                 </p>
                                             </div>
                                         </div>

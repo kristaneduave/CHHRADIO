@@ -44,9 +44,9 @@ export const getUserRoleState = async (userId: string): Promise<UserRoleState> =
     throw error;
   }
 
-  const primaryRole = getPrimaryRole([], data?.role);
   const assignmentRoles = await loadRolesFromAssignments(userId);
-  const roles = ensurePrimaryRoleIncluded(assignmentRoles, data?.role);
+  const primaryRole = getPrimaryRole(assignmentRoles, data?.role);
+  const roles = ensurePrimaryRoleIncluded(assignmentRoles, primaryRole);
 
   return {
     primaryRole,
