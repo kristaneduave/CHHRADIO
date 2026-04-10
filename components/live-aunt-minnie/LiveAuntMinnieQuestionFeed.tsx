@@ -561,7 +561,7 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
               }
 
               lastTapAtRef.current = tapAt;
-              touchModeRef.current = imageZoom > 1.05 ? 'pan' : 'swipe';
+              touchModeRef.current = imageZoom > 1.05 ? 'pan' : 'idle';
               setIsGestureActive(imageZoom > 1.05);
               touchStartXRef.current = event.touches[0].clientX;
               touchStartYRef.current = event.touches[0].clientY;
@@ -608,32 +608,7 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
               return;
             }
 
-            if (touchModeRef.current === 'swipe' && event.touches.length === 1) {
-              touchCurrentXRef.current = event.touches[0].clientX;
-              touchCurrentYRef.current = event.touches[0].clientY;
 
-              const startX = touchStartXRef.current;
-              const startY = touchStartYRef.current;
-              if (startX === null || startY === null || imageZoom > 1.05) return;
-
-              const deltaX = touchCurrentXRef.current - startX;
-              const deltaY = touchCurrentYRef.current - startY;
-              if (Math.abs(deltaY) > Math.abs(deltaX) && deltaY > 0) {
-                touchModeRef.current = 'dismiss';
-                event.preventDefault();
-                return;
-              }
-              if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                event.preventDefault();
-              }
-              return;
-            }
-
-            if (touchModeRef.current === 'dismiss' && event.touches.length === 1) {
-              touchCurrentXRef.current = event.touches[0].clientX;
-              touchCurrentYRef.current = event.touches[0].clientY;
-              event.preventDefault();
-            }
           }}
           onTouchEnd={() => {
             if (touchModeRef.current === 'pinch') {
@@ -649,36 +624,7 @@ const LiveAuntMinnieQuestionFeed: React.FC<LiveAuntMinnieQuestionFeedProps> = ({
               setImageOffset((previous) => clampImageOffset(previous, imageZoom));
             }
 
-            if (touchModeRef.current === 'swipe') {
-              const startX = touchStartXRef.current;
-              const startY = touchStartYRef.current;
-              const endX = touchCurrentXRef.current;
-              const endY = touchCurrentYRef.current;
 
-              if (startX !== null && startY !== null && endX !== null && endY !== null && imageZoom <= 1.05) {
-                const deltaX = endX - startX;
-                const deltaY = endY - startY;
-                const horizontalSwipe = Math.abs(deltaX) >= IMAGE_SWIPE_THRESHOLD_PX;
-                const verticalEnough = Math.abs(deltaY) <= IMAGE_SWIPE_VERTICAL_TOLERANCE_PX;
-
-                if (horizontalSwipe && verticalEnough) {
-                  if (deltaX < 0) {
-                    showNextViewerImage();
-                  } else {
-                    showPreviousViewerImage();
-                  }
-                }
-              }
-            }
-
-            if (touchModeRef.current === 'dismiss') {
-              const startY = touchStartYRef.current;
-              const endY = touchCurrentYRef.current;
-              if (startY !== null && endY !== null && endY - startY >= IMAGE_DISMISS_SWIPE_THRESHOLD_PX && imageZoom <= 1.05) {
-                closeViewer();
-                return;
-              }
-            }
 
             pinchDistanceRef.current = null;
             pinchZoomRef.current = imageZoom;

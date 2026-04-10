@@ -104,4 +104,27 @@ describe('Layout', () => {
 
     expect(onNavigateBack).not.toHaveBeenCalled();
   });
+
+  it('does not trigger edge swipe back during live aunt minnie', () => {
+    const onNavigateBack = vi.fn();
+
+    render(
+      <Layout activeScreen="live-aunt-minnie" setScreen={() => undefined} canNavigateBack onNavigateBack={onNavigateBack}>
+        <div>live room</div>
+      </Layout>,
+    );
+
+    const shell = screen.getByText('live room').closest('.relative.flex.min-h-0.flex-1');
+    expect(shell).not.toBeNull();
+
+    fireEvent.touchStart(shell!, {
+      touches: [{ clientX: 12, clientY: 100 }],
+    });
+    fireEvent.touchMove(shell!, {
+      touches: [{ clientX: 110, clientY: 112 }],
+    });
+    fireEvent.touchEnd(shell!);
+
+    expect(onNavigateBack).not.toHaveBeenCalled();
+  });
 });

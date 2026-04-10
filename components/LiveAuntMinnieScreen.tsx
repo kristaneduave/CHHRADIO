@@ -467,12 +467,12 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   useEffect(() => {
     if (!currentSessionId) return;
 
-    const shouldHostAutoRefresh = Boolean(roomState?.isHost && roomState.session.status === 'live');
+    const shouldLiveSessionAutoRefresh = Boolean(roomState?.session.status === 'live');
     const shouldBackgroundRefresh =
       roomSyncState === 'degraded'
       || roomSyncState === 'reconnecting'
       || roomSyncState === 'connecting'
-      || shouldHostAutoRefresh;
+      || shouldLiveSessionAutoRefresh;
 
     if (!shouldBackgroundRefresh) {
       return;
@@ -566,7 +566,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
 
     const intervalId = window.setInterval(() => {
       void probeRoomMeta();
-    }, shouldHostAutoRefresh ? HOST_LIVE_REFRESH_INTERVAL_MS : DEGRADED_REFRESH_INTERVAL_MS);
+    }, shouldLiveSessionAutoRefresh ? HOST_LIVE_REFRESH_INTERVAL_MS : DEGRADED_REFRESH_INTERVAL_MS);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -1111,7 +1111,7 @@ const LiveAuntMinnieScreen: React.FC<LiveAuntMinnieScreenProps> = ({ onBack }) =
   }
 
   return (
-    <div className="mobile-nav-clearance px-4 pt-4 sm:px-6 sm:pt-6">
+    <div className="mobile-nav-clearance px-4 pt-4 sm:px-6 sm:pt-6" data-disable-app-swipe-back="true">
       {currentSessionId && roomState ? (
         <div className="mx-auto max-w-5xl space-y-4">
           {error && <p className="text-sm text-rose-300">{error}</p>}

@@ -71,15 +71,6 @@ const LiveAuntMinnieHostPanel: React.FC<LiveAuntMinnieHostPanelProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${syncTone}`}>
-              {roomSyncState === 'live' ? 'Live' : roomSyncState === 'connecting' ? 'Connecting...' : 'Delayed'}
-            </span>
-            <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-slate-300">
-              {submittedResponseCount}/{Math.max(participantCount, 1)}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
             {canAddQuestion && (
               <button
                 type="button"

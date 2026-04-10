@@ -57,6 +57,7 @@ const Layout: React.FC<LayoutProps> = ({
   const layoutMode = getScreenLayoutMode(activeScreen);
 
   const isDesktop = viewport === 'desktop';
+  const canUseAppSwipeBack = canNavigateBack && activeScreen !== 'live-aunt-minnie';
   const hideBottomNav = activeScreen === 'monthly-census' || isBottomNavHidden;
   const shellStyle = {
     ['--mobile-safe-bottom' as string]: 'env(safe-area-inset-bottom, 0px)',
@@ -187,7 +188,7 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (isDesktop || !canNavigateBack || event.touches.length !== 1) {
+    if (isDesktop || !canUseAppSwipeBack || event.touches.length !== 1) {
       resetSwipeGesture();
       return;
     }
@@ -209,7 +210,7 @@ const Layout: React.FC<LayoutProps> = ({
   };
 
   const handleTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (isDesktop || !canNavigateBack || swipeBlockedRef.current || event.touches.length !== 1) {
+    if (isDesktop || !canUseAppSwipeBack || swipeBlockedRef.current || event.touches.length !== 1) {
       return;
     }
 
