@@ -15,7 +15,7 @@ const compactText = (value: unknown, maxLength: number) => {
   const normalized = collapseWhitespace(String(value || ''));
   if (!normalized) return '';
   if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
 };
 
 const getSubmissionLabel = (submissionType?: string) => {
@@ -61,14 +61,19 @@ export const generateViberText = (data: any): string => {
           ? compactText(`${findings || ''} ${notesText || ''}`.trim(), 180)
           : compactText(`${findings || ''} ${impression || ''}`.trim(), 220);
 
+    const examLabel = [modality, organSystem].filter(Boolean).join(' - ');
+
     return [
-      `*${getSubmissionLabel(submissionType).toUpperCase()}*`,
-      previewTitle ? previewTitle : null,
-      'Open full case report:',
-      publicUrl,
+      '*CHH Radiology Portal*',
+      `*${getSubmissionLabel(submissionType)} Report*`,
+      previewTitle ? `Case: ${previewTitle}` : null,
+      examLabel ? `Exam: ${examLabel}` : null,
       normalizedPatientId ? `PACS Patient ID: ${normalizedPatientId}` : null,
-      summary ? summary : null,
-      previewImageUrl ? `Representative image available` : null,
+      summary ? `Summary: ${summary}` : null,
+      previewImageUrl ? 'Representative image:' : null,
+      previewImageUrl || null,
+      'Full report:',
+      publicUrl,
     ]
       .filter(Boolean)
       .join('\n\n');

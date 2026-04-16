@@ -1,10 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import CaseViewScreen from './CaseViewScreen';
-import { getCaseShareErrorMessage, resolvePublicCaseByToken } from '../services/caseShareService';
+import { getCaseShareErrorMessage, getCaseSharePreviewImage, resolvePublicCaseByToken } from '../services/caseShareService';
 
 interface PublicCaseShareScreenProps {
   token: string;
 }
+
+const ensureMetaTag = (attribute: 'name' | 'property', value: string) => {
+  if (typeof document === 'undefined') return null;
+  let element = document.head.querySelector(`meta[${attribute}="${value}"]`) as HTMLMetaElement | null;
+  if (!element) {
+    element = document.createElement('meta');
+    element.setAttribute(attribute, value);
+    document.head.appendChild(element);
+  }
+  return element;
+};
+
+const updateMetaContent = (attribute: 'name' | 'property', value: string, content: string) => {
+  const element = ensureMetaTag(attribute, value);
+  if (element) {
+    element.setAttribute('content', content);
+  }
+};
 
 const PublicCaseShareScreen: React.FC<PublicCaseShareScreenProps> = ({ token }) => {
   const [caseData, setCaseData] = useState<any | null>(null);
@@ -30,7 +48,32 @@ const PublicCaseShareScreen: React.FC<PublicCaseShareScreenProps> = ({ token }) 
 
         setCaseData(resolvedCase);
         if (typeof document !== 'undefined') {
-          document.title = `${String(resolvedCase.title || 'Shared Case')} | CHH Radiology`;
+          const pageTitle = String(resolvedCase.title || 'Shared Case').trim() || 'Shared Case';
+          const representativeImage = getCaseSharePreviewImage(resolvedCase);
+          const descriptionParts = [
+            resolvedCase.modality,
+            resolvedCase.organ_system,
+            resolvedCase.analysis_result?.patientId || resolvedCase.diagnosis,
+            resolvedCase.findings || resolvedCase.analysis_result?.impression,
+          ]
+            .filter((value) => typeof value === 'string' && String(value).trim().length > 0)
+            .map((value) => String(value).trim());
+          const description = descriptionParts.join(' • ').slice(0, 280);
+
+          document.title = `${pageTitle} | CHH Radiology`;
+          updateMetaContent('name', 'description', description || 'Shared radiology case report from CHH Radiology.');
+          updateMetaContent('property', 'og:title', `${pageTitle} | CHH Radiology`);
+          updateMetaContent('property', 'og:description', description || 'Shared radiology case report from CHH Radiology.');
+          updateMetaContent('property', 'og:type', 'article');
+          updateMetaContent('property', 'og:url', window.location.href);
+          updateMetaContent('name', 'twitter:card', representativeImage ? 'summary_large_image' : 'summary');
+          updateMetaContent('name', 'twitter:title', `${pageTitle} | CHH Radiology`);
+          updateMetaContent('name', 'twitter:description', description || 'Shared radiology case report from CHH Radiology.');
+
+          if (representativeImage) {
+            updateMetaContent('property', 'og:image', representativeImage);
+            updateMetaContent('name', 'twitter:image', representativeImage);
+          }
         }
       } catch (error: any) {
         if (isCancelled) return;

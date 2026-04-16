@@ -440,8 +440,16 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             const viberUrl = `viber://forward?text=${encodeURIComponent(text)}`;
 
             if (typeof window !== 'undefined') {
-                const openedWindow = window.open(viberUrl, '_blank');
-                if (!openedWindow) {
+                try {
+                    const launchAnchor = document.createElement('a');
+                    launchAnchor.href = viberUrl;
+                    launchAnchor.target = '_self';
+                    launchAnchor.rel = 'noopener noreferrer';
+                    launchAnchor.style.display = 'none';
+                    document.body.appendChild(launchAnchor);
+                    launchAnchor.click();
+                    document.body.removeChild(launchAnchor);
+                } catch {
                     await copyText(text, 'Viber text copied', 'Paste it into Viber to share the public report.');
                     return;
                 }
