@@ -1,3 +1,29 @@
+const collapseWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
+
+const stripHtmlToPlainText = (value: string) => {
+  if (!value) return '';
+  if (typeof window === 'undefined') {
+    return collapseWhitespace(value.replace(/<[^>]+>/g, ' '));
+  }
+
+  const parser = new window.DOMParser();
+  const doc = parser.parseFromString(value, 'text/html');
+  return collapseWhitespace(doc.body.textContent || '');
+};
+
+const compactText = (value: unknown, maxLength: number) => {
+  const normalized = collapseWhitespace(String(value || ''));
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+};
+
+const getSubmissionLabel = (submissionType?: string) => {
+  if (submissionType === 'rare_pathology') return 'Rare Pathology';
+  if (submissionType === 'aunt_minnie') return 'Aunt Minnie';
+  return 'Case';
+};
+
 export const generateViberText = (data: any): string => {
   const {
     submissionType,
@@ -11,7 +37,42 @@ export const generateViberText = (data: any): string => {
     impression,
     notes,
     diagnosis,
+    patientId,
+    publicUrl,
+    title,
   } = data;
+
+  const previewTitle = compactText(
+    title || impression || diagnosis || getSubmissionLabel(submissionType),
+    110
+  );
+  const previewImageUrl = String(data.previewImageUrl || '').trim();
+  const normalizedPatientId = String(patientId || diagnosis || '').trim();
+  const notesText = stripHtmlToPlainText(String(notes || ''));
+
+  if (publicUrl) {
+    const summary =
+      submissionType === 'rare_pathology'
+        ? compactText(
+            `${findings || ''} ${data.radiologicClinchers || data.radiologic_clinchers || ''}`.trim(),
+            220
+          )
+        : submissionType === 'aunt_minnie'
+          ? compactText(`${findings || ''} ${notesText || ''}`.trim(), 180)
+          : compactText(`${findings || ''} ${impression || ''}`.trim(), 220);
+
+    return [
+      `*${getSubmissionLabel(submissionType).toUpperCase()}*`,
+      previewTitle ? previewTitle : null,
+      'Open full case report:',
+      publicUrl,
+      normalizedPatientId ? `PACS Patient ID: ${normalizedPatientId}` : null,
+      summary ? summary : null,
+      previewImageUrl ? `Representative image available` : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
+  }
 
   if (submissionType === 'rare_pathology') {
     return `*RARE PATHOLOGY*
@@ -33,7 +94,7 @@ ${data.radiologicClinchers || data.radiologic_clinchers || 'No radiologic clinch
 ${findings || 'No description provided.'}
 
 *Notes / Remarks:*
-${notes || 'No notes provided.'}`;
+${notesText || 'No notes provided.'}`;
   }
 
   return `*INTERESTING CASE*
@@ -50,5 +111,5 @@ ${impression || 'Pending Diagnosis'}
 ${diagnosis ? `*Code:* ${diagnosis}` : ''}
 
 *Notes:*
-${notes || 'No notes provided.'}`;
+${notesText || 'No notes provided.'}`;
 };
