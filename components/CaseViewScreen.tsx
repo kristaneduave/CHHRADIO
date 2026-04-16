@@ -436,8 +436,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         try {
             const share = await ensureCaseShare();
             const publicUrl = buildPublicCaseUrl(share.public_token);
-            const text = generateViberText(buildViberPayload(publicUrl));
-            const viberUrl = `viber://forward?text=${encodeURIComponent(text)}`;
+            const viberUrl = `viber://forward?text=${encodeURIComponent(publicUrl)}`;
 
             if (typeof window !== 'undefined') {
                 try {
@@ -450,12 +449,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     launchAnchor.click();
                     document.body.removeChild(launchAnchor);
                 } catch {
-                    await copyText(text, 'Viber text copied', 'Paste it into Viber to share the public report.');
+                    await copyText(publicUrl, 'Share link copied', 'Paste it into Viber to share the public report preview.');
                     return;
                 }
             }
 
-            toastSuccess('Viber share ready', 'Opening Viber with the full-report link.');
+            toastSuccess('Viber share ready', 'Opening Viber with the share link preview.');
         } catch (error: any) {
             toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
         } finally {

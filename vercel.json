@@ -1,6 +1,10 @@
 {
     "rewrites": [
         {
+            "source": "/shared/case/:token",
+            "destination": "/api/shared-case?token=:token"
+        },
+        {
             "source": "/(.*)",
             "destination": "/index.html"
         }

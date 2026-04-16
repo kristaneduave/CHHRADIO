@@ -83,6 +83,7 @@ const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
 const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 const PUBLIC_CASE_ROUTE_PREFIX = '/shared/case/';
+const PUBLIC_CASE_QUERY_PARAM = 'publicCaseToken';
 const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   if (isFinalStep) return 260;
   if (delta <= 8) return 220;
@@ -97,6 +98,16 @@ const getPublicCaseTokenFromPath = (pathname: string) => {
 
   const token = pathname.slice(PUBLIC_CASE_ROUTE_PREFIX.length).split('/')[0]?.trim();
   return token || null;
+};
+
+const getPublicCaseTokenFromLocation = (location: Location) => {
+  const tokenFromPath = getPublicCaseTokenFromPath(location.pathname);
+  if (tokenFromPath) {
+    return tokenFromPath;
+  }
+
+  const tokenFromQuery = new URLSearchParams(location.search).get(PUBLIC_CASE_QUERY_PARAM)?.trim();
+  return tokenFromQuery || null;
 };
 
 const App: React.FC = () => {
@@ -123,7 +134,7 @@ const App: React.FC = () => {
   const [navigationHistory, setNavigationHistory] = useState<Screen[]>([]);
   const [publicCaseToken, setPublicCaseToken] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
-    return getPublicCaseTokenFromPath(window.location.pathname);
+    return getPublicCaseTokenFromLocation(window.location);
   });
   const hasReleasedBootRef = useRef(false);
   const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,7 +180,7 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     const syncPublicRoute = () => {
-      setPublicCaseToken(getPublicCaseTokenFromPath(window.location.pathname));
+      setPublicCaseToken(getPublicCaseTokenFromLocation(window.location));
     };
 
     window.addEventListener('popstate', syncPublicRoute);
