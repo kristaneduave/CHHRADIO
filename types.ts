@@ -186,6 +186,16 @@ export interface ReferenceSource {
   page?: string;
 }
 
+export interface CaseShareRecord {
+  case_id: string;
+  public_token: string;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  revoked_at: string | null;
+}
+
 export interface CaseComment {
   id: string;
   case_id: string;
@@ -240,6 +250,7 @@ export interface AnalysisResult {
   pearl?: string;
   redFlags?: string[];
   impression?: string;
+  patientId?: string;
   imagesMetadata?: Array<{ description?: string }>;
   studyDate?: string;
   reference?: ReferenceSource;

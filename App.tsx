@@ -23,6 +23,7 @@ import {
   loadArticleLibraryScreen,
   loadCalendarScreen,
   loadCaseViewScreen,
+  loadPublicCaseShareScreen,
   loadConsultantDeckingBoardScreen,
   loadLiveAuntMinnieScreen,
   loadMonthlyCensusPage,
@@ -71,6 +72,7 @@ const CalendarScreen = lazy(loadCalendarScreen);
 const ProfileScreen = lazy(loadProfileScreen);
 const AnnouncementsScreen = lazy(loadAnnouncementsScreen);
 const CaseViewScreen = lazy(loadCaseViewScreen);
+const PublicCaseShareScreen = lazy(loadPublicCaseShareScreen);
 const ResidentsCornerScreen = lazy(loadResidentsCornerScreen);
 const ResidentEndorsementsScreen = lazy(loadResidentEndorsementsScreen);
 const ConsultantDeckingBoardScreen = lazy(loadConsultantDeckingBoardScreen);
@@ -80,11 +82,21 @@ const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
 const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
 const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+const PUBLIC_CASE_ROUTE_PREFIX = '/shared/case/';
 const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   if (isFinalStep) return 260;
   if (delta <= 8) return 220;
   if (delta <= 24) return 360;
   return 560;
+};
+
+const getPublicCaseTokenFromPath = (pathname: string) => {
+  if (!pathname.startsWith(PUBLIC_CASE_ROUTE_PREFIX)) {
+    return null;
+  }
+
+  const token = pathname.slice(PUBLIC_CASE_ROUTE_PREFIX.length).split('/')[0]?.trim();
+  return token || null;
 };
 
 const App: React.FC = () => {
@@ -109,6 +121,10 @@ const App: React.FC = () => {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<Screen[]>([]);
+  const [publicCaseToken, setPublicCaseToken] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return getPublicCaseTokenFromPath(window.location.pathname);
+  });
   const hasReleasedBootRef = useRef(false);
   const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bootProgressTweenRef = useRef<number | null>(null);
@@ -148,6 +164,21 @@ const App: React.FC = () => {
   useEffect(() => {
     currentScreenRef.current = currentScreen;
   }, [currentScreen]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const syncPublicRoute = () => {
+      setPublicCaseToken(getPublicCaseTokenFromPath(window.location.pathname));
+    };
+
+    window.addEventListener('popstate', syncPublicRoute);
+    syncPublicRoute();
+
+    return () => {
+      window.removeEventListener('popstate', syncPublicRoute);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -672,6 +703,17 @@ const App: React.FC = () => {
   const bootScreenMode = !isSessionResolved ? 'session' : 'bootstrap';
   const shouldShowBootScreen = !isSessionResolved || ((Boolean(session) || guestMode) && (!isBootReady || isBootCompleting));
   const canRenderAppShell = isSessionResolved && (Boolean(session) || guestMode) && isBootReady;
+
+  if (publicCaseToken) {
+    return (
+      <>
+        <Suspense fallback={null}>
+          <PublicCaseShareScreen token={publicCaseToken} />
+        </Suspense>
+        <ToastHost />
+      </>
+    );
+  }
 
   if (isSessionResolved && !session && !guestMode) {
     return (

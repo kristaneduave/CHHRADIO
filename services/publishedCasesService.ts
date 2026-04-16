@@ -41,7 +41,7 @@ const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): Pa
     age: parseInt(item.patient_age, 10) || 0,
     date: item.created_at,
     specialty: item.organ_system || '',
-    diagnosticCode: item.diagnosis || 'Pending',
+    diagnosticCode: item.analysis_result?.patientId || item.diagnosis || 'Pending',
     status: 'Published',
     submission_type: submissionType,
     radiologic_clinchers: item.radiologic_clinchers || '',

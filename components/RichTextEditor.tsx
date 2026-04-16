@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import type { Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextStyle from '@tiptap/extension-text-style';
 import { mergeAttributes } from '@tiptap/core';
@@ -129,36 +128,9 @@ export function RichTextEditor({
   }, [editor, value]);
 
   const toolbarButtonBase = 'rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors sm:px-3';
-  const textColors = [
-    { label: 'Default', value: '', swatch: 'transparent' },
-    { label: 'Amber', value: '#78350f', swatch: '#92400e' },
-    { label: 'Rose', value: '#881337', swatch: '#9f1239' },
-    { label: 'Emerald', value: '#14532d', swatch: '#166534' },
-    { label: 'Blue', value: '#1d4ed8', swatch: '#2563eb' },
-    { label: 'Violet', value: '#6d28d9', swatch: '#7c3aed' },
-    { label: 'Red', value: '#b91c1c', swatch: '#dc2626' },
-  ];
-
   if (!editor) {
     return null;
   }
-
-  const withSelection = (currentEditor: Editor, callback: () => void) => {
-    const { from, to, empty } = currentEditor.state.selection;
-    if (empty || from === to) return;
-    callback();
-  };
-
-  const applyTextColor = (color: string) => {
-    withSelection(editor, () => {
-      const chain = editor.chain().focus();
-      if (!color) {
-        chain.setMark('textStyle', { color: null }).removeEmptyTextStyle().run();
-        return;
-      }
-      chain.setMark('textStyle', { color }).run();
-    });
-  };
 
   const getSelectionFontSize = () => {
     const rawSize = editor.getAttributes('textStyle').fontSize;
@@ -243,28 +215,6 @@ export function RichTextEditor({
         >
           Clear
         </button>
-        <div className="rich-editor-style-pill flex items-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-2 py-1">
-          <span className="min-w-[82px] px-1 text-center text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Text Color</span>
-          {textColors.map((color) => (
-            <button
-              key={`inline-text-${color.label}`}
-              type="button"
-              onClick={() => applyTextColor(color.value)}
-              className={`flex h-7 w-7 items-center justify-center rounded-full border transition-colors ${
-                color.value
-                  ? 'border-white/10 bg-white/[0.04] hover:bg-white/10'
-                  : 'border-white/10 bg-transparent text-slate-400 hover:bg-white/10 hover:text-white'
-              }`}
-              title={color.label}
-            >
-              {color.value ? (
-                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color.swatch }} />
-              ) : (
-                <span className="material-icons text-[14px]">format_color_reset</span>
-              )}
-            </button>
-          ))}
-        </div>
 
         {isExpanded && (
           <>

@@ -6,8 +6,10 @@ import { generateViberText } from '../utils/formatters';
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
-import { CaseComment } from '../types';
-import { toastError, toastSuccess } from '../utils/toast';
+import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage, getCaseSharePreviewImage, regenerateCaseShare, revokeCaseShare } from '../services/caseShareService';
+import { getCurrentUserRoleState } from '../services/userRoleService';
+import { CaseComment, CaseShareRecord } from '../types';
+import { toastError, toastInfo, toastSuccess } from '../utils/toast';
 import {
     IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
     IMAGE_DOUBLE_TAP_DELAY_MS,
@@ -18,26 +20,70 @@ import {
 interface CaseViewScreenProps {
     caseData: any;
     onBack: () => void;
-    onEdit: () => void;
+    onEdit?: () => void;
+    mode?: 'internal' | 'public';
 }
 
-const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
+const normalizeCaseReferences = (caseData: any) => {
+    const seededReferences = Array.isArray(caseData.analysis_result?.references) && caseData.analysis_result.references.length > 0
+        ? caseData.analysis_result.references
+        : caseData.analysis_result?.reference
+            ? [caseData.analysis_result.reference]
+            : [];
 
-const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit }) => {
+    return seededReferences
+        .map((reference: any) => ({
+            sourceType: String(reference?.sourceType || '').trim(),
+            title: String(reference?.title || '').trim(),
+            page: String(reference?.page || '').trim(),
+        }))
+        .filter((reference) => reference.sourceType || reference.title || reference.page);
+};
+
+const getReferenceDisplayText = (reference: { sourceType?: string; title?: string; page?: string }) =>
+    [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
+
+const resolveCasePatientId = (caseData: any) =>
+    String(caseData.analysis_result?.patientId || '').trim() || String(caseData.diagnosis || '').trim() || null;
+
+const clampZoom = (value: number) => Math.min(3, Math.max(1, Number(value.toFixed(2))));
+const PRIVILEGED_SHARE_ROLES = new Set(['admin', 'moderator', 'training_officer']);
+const stripHtmlToPlainText = (value: string) => {
+    if (!value) return '';
+    if (typeof window === 'undefined') {
+        return value.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    const parser = new window.DOMParser();
+    const doc = parser.parseFromString(value, 'text/html');
+    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdit, mode = 'internal' }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isImageModalOpen, setIsImageModalOpen] = useState(false);
     const [imageZoom, setImageZoom] = useState(1);
     const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
     const [isGestureActive, setIsGestureActive] = useState(false);
     const [isOwner, setIsOwner] = useState(false);
+    const [canManageShares, setCanManageShares] = useState(false);
+    const [shareRecord, setShareRecord] = useState<CaseShareRecord | null>(null);
+    const [isPreparingShare, setIsPreparingShare] = useState(false);
+    const [isUpdatingShare, setIsUpdatingShare] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
+    const isPublicMode = mode === 'public';
     const resolvedImpression = caseData.title || caseData.analysis_result?.impression || caseData.diagnosis;
     const normalizedEducationalSummary = React.useMemo(
         () => normalizeRichTextNotesHtml(caseData.educational_summary),
         [caseData.educational_summary]
     );
+    const normalizedReferences = React.useMemo(() => normalizeCaseReferences(caseData), [caseData]);
+    const patientId = React.useMemo(() => resolveCasePatientId(caseData), [caseData]);
+    const notesPlainText = React.useMemo(() => stripHtmlToPlainText(normalizedEducationalSummary), [normalizedEducationalSummary]);
+    const sharePreviewImageUrl = React.useMemo(() => getCaseSharePreviewImage(caseData), [caseData]);
+    const canShowShareActions = !isPublicMode && caseData?.status === 'published';
 
     const [comments, setComments] = useState<CaseComment[]>([]);
     const [newComment, setNewComment] = useState('');
@@ -59,9 +105,14 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     useEffect(() => {
         checkOwnership();
-        loadInteractions();
+        if (!isPublicMode) {
+            loadInteractions();
+        } else {
+            setComments([]);
+        }
         loadPublisherName();
-    }, [caseData]);
+        setShareRecord(null);
+    }, [caseData, isPublicMode]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || navigator.connection?.saveData) {
@@ -112,9 +163,28 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const checkOwnership = async () => {
+        if (isPublicMode) {
+            setIsOwner(false);
+            setCanManageShares(false);
+            return;
+        }
+
         const { data: { user } } = await supabase.auth.getUser();
-        if (user && caseData.created_by === user.id) {
-            setIsOwner(true);
+        const owner = Boolean(user && caseData.created_by === user.id);
+        setIsOwner(owner);
+
+        if (!user) {
+            setCanManageShares(false);
+            return;
+        }
+
+        try {
+            const roleState = await getCurrentUserRoleState();
+            const privileged = roleState?.roles?.some((role) => PRIVILEGED_SHARE_ROLES.has(role)) || false;
+            setCanManageShares(owner || privileged);
+        } catch (error) {
+            console.error('Failed to resolve role state for case share management:', error);
+            setCanManageShares(owner);
         }
     };
 
@@ -326,22 +396,131 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             img.src = src;
         });
     }, [currentImageIndex, images]);
-    const handleCopyToViber = () => {
-        // Map DB fields to formatter expectation
-        const formattedData = {
-            initials: caseData.patient_initials,
-            age: caseData.patient_age,
-            sex: caseData.patient_sex,
-            modality: caseData.modality,
-            organSystem: caseData.organ_system,
-            findings: caseData.findings,
-            impression: resolvedImpression,
-            notes: caseData.clinical_history
-        };
-        const text = generateViberText(formattedData);
-        navigator.clipboard.writeText(text).then(() => {
-            toastSuccess('Copied to clipboard', 'Ready to paste into Viber.');
-        });
+    const buildViberPayload = (publicUrl?: string) => ({
+        submissionType,
+        title: caseData.title,
+        initials: caseData.patient_initials,
+        age: caseData.patient_age,
+        sex: caseData.patient_sex,
+        modality: caseData.modality,
+        organSystem: caseData.organ_system,
+        clinicalData: caseData.clinical_history,
+        findings: caseData.findings,
+        impression: resolvedImpression,
+        notes: notesPlainText,
+        diagnosis: caseData.diagnosis,
+        patientId,
+        publicUrl,
+        previewImageUrl: sharePreviewImageUrl,
+        radiologicClinchers: caseData.radiologic_clinchers,
+    });
+
+    const copyText = async (value: string, successTitle: string, successDescription?: string) => {
+        await navigator.clipboard.writeText(value);
+        toastSuccess(successTitle, successDescription);
+    };
+
+    const ensureCaseShare = async () => {
+        if (!caseData?.id) {
+            throw new Error('Case is missing an id.');
+        }
+
+        const share = await createOrGetCaseShare(String(caseData.id));
+        setShareRecord(share);
+        return share;
+    };
+
+    const handleShareToViber = async () => {
+        if (!canShowShareActions) return;
+        setIsPreparingShare(true);
+        try {
+            const share = await ensureCaseShare();
+            const publicUrl = buildPublicCaseUrl(share.public_token);
+            const text = generateViberText(buildViberPayload(publicUrl));
+            const viberUrl = `viber://forward?text=${encodeURIComponent(text)}`;
+
+            if (typeof window !== 'undefined') {
+                const openedWindow = window.open(viberUrl, '_blank');
+                if (!openedWindow) {
+                    await copyText(text, 'Viber text copied', 'Paste it into Viber to share the public report.');
+                    return;
+                }
+            }
+
+            toastSuccess('Viber share ready', 'Opening Viber with the full-report link.');
+        } catch (error: any) {
+            toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
+        } finally {
+            setIsPreparingShare(false);
+        }
+    };
+
+    const handleCopyViberText = async () => {
+        try {
+            if (canShowShareActions) {
+                const share = await ensureCaseShare();
+                const publicUrl = buildPublicCaseUrl(share.public_token);
+                await copyText(
+                    generateViberText(buildViberPayload(publicUrl)),
+                    'Viber text copied',
+                    'The full-report link is included.'
+                );
+                return;
+            }
+
+            await copyText(
+                generateViberText(buildViberPayload()),
+                'Copied to clipboard',
+                'Ready to paste into Viber.'
+            );
+        } catch (error: any) {
+            toastError('Unable to copy Viber text', getCaseShareErrorMessage(error));
+        }
+    };
+
+    const handleCopyShareLink = async () => {
+        try {
+            const share = await ensureCaseShare();
+            await copyText(
+                buildPublicCaseUrl(share.public_token),
+                'Share link copied',
+                'The public case report link is on your clipboard.'
+            );
+        } catch (error: any) {
+            toastError('Unable to copy share link', getCaseShareErrorMessage(error));
+        }
+    };
+
+    const handleRegenerateShareLink = async () => {
+        if (!canManageShares) return;
+        setIsUpdatingShare(true);
+        try {
+            const share = await regenerateCaseShare(String(caseData.id));
+            setShareRecord(share);
+            await copyText(
+                buildPublicCaseUrl(share.public_token),
+                'Share link regenerated',
+                'The previous public link is now inactive.'
+            );
+        } catch (error: any) {
+            toastError('Unable to regenerate share link', getCaseShareErrorMessage(error));
+        } finally {
+            setIsUpdatingShare(false);
+        }
+    };
+
+    const handleDisableShareLink = async () => {
+        if (!canManageShares) return;
+        setIsUpdatingShare(true);
+        try {
+            const share = await revokeCaseShare(String(caseData.id));
+            setShareRecord(share);
+            toastInfo('Share link disabled', 'The public case link no longer resolves.');
+        } catch (error: any) {
+            toastError('Unable to disable share link', getCaseShareErrorMessage(error));
+        } finally {
+            setIsUpdatingShare(false);
+        }
     };
 
     const handleExportPDF = async () => {
@@ -367,7 +546,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             pearl: caseData.pearl || caseData.analysis_result?.pearl,
             additionalNotes: caseData.notes,
             uploadDate: caseData.created_at,
+            patientId: caseData.analysis_result?.patientId,
             reference: caseData.analysis_result?.reference,
+            references: caseData.analysis_result?.references,
             title: caseData.title,
         };
 
@@ -739,7 +920,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         <span className="material-icons text-[20px]">arrow_back</span>
                     </button>
 
-                    {isOwner && (
+                    {!isPublicMode && isOwner && onEdit && (
                         <button
                             onClick={onEdit}
                             className={`pointer-events-auto inline-flex h-11 items-center gap-2 rounded-full border px-4 ${theme.borderClass} ${theme.buttonBg} shadow-[0_12px_28px_rgba(15,23,42,0.32)] backdrop-blur-md transition-all hover:scale-[1.02] hover:shadow-[0_16px_34px_rgba(15,23,42,0.38)]`}
@@ -869,10 +1050,10 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 <div>
                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                                         <span className="material-icons text-[12px]">local_hospital</span>
-                                        Patient ID
+                                        PACS Patient ID
                                     </div>
                                     <div className="text-xl sm:text-2xl font-black text-white tracking-wide leading-none select-text">
-                                        {caseData.diagnosis || 'PENDING'}
+                                        {patientId || 'PENDING'}
                                     </div>
                                 </div>
 
@@ -1021,7 +1202,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                         )}
 
                         {/* Notes / Remarks */}
-                        {normalizedEducationalSummary && (
+                        {(normalizedEducationalSummary || normalizedReferences.length > 0) && (
                             <div className="space-y-4">
                                 <div className="flex items-center gap-4 mb-4">
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
@@ -1030,10 +1211,27 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     </h3>
                                     <div className="h-[1px] flex-1 bg-white/[0.015]"></div>
                                 </div>
-                                <div
-                                    className="case-rich-preview text-[13px] text-slate-300/90 leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normalizedEducationalSummary) }}
-                                />
+                                {normalizedEducationalSummary ? (
+                                    <div
+                                        className="case-rich-preview text-[13px] text-slate-300/90 leading-relaxed"
+                                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normalizedEducationalSummary) }}
+                                    />
+                                ) : (
+                                    <p className="text-[13px] text-slate-400/80 leading-relaxed">No notes recorded.</p>
+                                )}
+                                {normalizedReferences.length > 0 && (
+                                    <div className="rounded-2xl border border-white/[0.05] bg-white/[0.025] px-4 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">References</p>
+                                        <div className="mt-3 space-y-2.5">
+                                            {normalizedReferences.map((reference, index) => (
+                                                <div key={`${getReferenceDisplayText(reference)}-${reference.page}-${index}`} className="text-sm leading-relaxed text-slate-300">
+                                                    <p className="font-medium text-white/90">{index + 1}. {getReferenceDisplayText(reference)}</p>
+                                                    {reference.page && <p className="text-xs text-slate-400">{reference.page}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <style>{`
                                   .case-rich-preview h2,
                                   .case-rich-preview h3 {
@@ -1112,25 +1310,114 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="grid grid-cols-2 gap-3 pt-4 pb-28 relative z-10">
-                        <button
-                            onClick={handleCopyToViber}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e293b] hover:bg-[#334155] py-3.5 w-full text-[13px] font-bold text-slate-200 transition-colors"
-                        >
-                            <span className="material-icons text-[16px]">content_copy</span>
-                            <span className="truncate">Copy Text</span>
-                        </button>
-                        <button
-                            onClick={handleExportPDF}
-                            disabled={isExportingPdf}
-                            className={`inline-flex items-center justify-center gap-1.5 rounded-xl ${theme.buttonBg} py-3.5 w-full text-[13px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                            <span className="material-icons text-[16px]">picture_as_pdf</span>
-                            <span className="truncate">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
-                        </button>
+                    <div className="space-y-4 pt-4 pb-28 relative z-10">
+                        {canShowShareActions ? (
+                            <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Viber Share</p>
+                                        <p className="mt-1 text-sm text-slate-300">
+                                            Create a public full-report link and send a compact case preview to Viber.
+                                        </p>
+                                    </div>
+                                    {shareRecord && (
+                                        <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] ${shareRecord.is_active ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border border-slate-500/20 bg-slate-500/10 text-slate-300'}`}>
+                                            <span className={`h-1.5 w-1.5 rounded-full ${shareRecord.is_active ? 'bg-emerald-400' : 'bg-slate-400'}`}></span>
+                                            {shareRecord.is_active ? 'Link Active' : 'Link Disabled'}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <button
+                                        onClick={handleShareToViber}
+                                        disabled={isPreparingShare || isUpdatingShare}
+                                        className={`inline-flex items-center justify-center gap-2 rounded-xl ${theme.buttonBg} px-4 py-3.5 text-[13px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50`}
+                                    >
+                                        <span className="material-icons text-[18px]">send</span>
+                                        <span>{isPreparingShare ? 'Preparing Viber...' : 'Share to Viber'}</span>
+                                    </button>
+                                    <button
+                                        onClick={handleCopyShareLink}
+                                        disabled={isPreparingShare || isUpdatingShare}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1e293b] px-4 py-3.5 text-[13px] font-bold text-slate-200 transition-colors hover:bg-[#334155] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <span className="material-icons text-[18px]">link</span>
+                                        <span>Copy Link</span>
+                                    </button>
+                                    <button
+                                        onClick={handleCopyViberText}
+                                        disabled={isPreparingShare || isUpdatingShare}
+                                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1e293b] px-4 py-3.5 text-[13px] font-bold text-slate-200 transition-colors hover:bg-[#334155] disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <span className="material-icons text-[18px]">content_copy</span>
+                                        <span>Copy Viber Text</span>
+                                    </button>
+                                    {canManageShares ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={handleRegenerateShareLink}
+                                                disabled={isPreparingShare || isUpdatingShare}
+                                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3.5 text-[13px] font-bold text-slate-200 transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <span className="material-icons text-[18px]">autorenew</span>
+                                                <span>Regenerate</span>
+                                            </button>
+                                            <button
+                                                onClick={handleDisableShareLink}
+                                                disabled={isPreparingShare || isUpdatingShare}
+                                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-4 py-3.5 text-[13px] font-bold text-rose-200 transition-colors hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                                            >
+                                                <span className="material-icons text-[18px]">link_off</span>
+                                                <span>Disable Link</span>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={handleExportPDF}
+                                            disabled={isExportingPdf}
+                                            className={`inline-flex items-center justify-center gap-1.5 rounded-xl ${theme.buttonBg} py-3.5 w-full text-[13px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                                        >
+                                            <span className="material-icons text-[16px]">picture_as_pdf</span>
+                                            <span className="truncate">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {canManageShares && (
+                                    <button
+                                        onClick={handleExportPDF}
+                                        disabled={isExportingPdf}
+                                        className={`mt-3 inline-flex items-center justify-center gap-1.5 rounded-xl ${theme.buttonBg} py-3.5 w-full text-[13px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    >
+                                        <span className="material-icons text-[16px]">picture_as_pdf</span>
+                                        <span className="truncate">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
+                                    </button>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={handleCopyViberText}
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1e293b] hover:bg-[#334155] py-3.5 w-full text-[13px] font-bold text-slate-200 transition-colors"
+                                >
+                                    <span className="material-icons text-[16px]">content_copy</span>
+                                    <span className="truncate">{isPublicMode ? 'Copy Summary' : 'Copy Text'}</span>
+                                </button>
+                                <button
+                                    onClick={handleExportPDF}
+                                    disabled={isExportingPdf}
+                                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl ${theme.buttonBg} py-3.5 w-full text-[13px] font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                    <span className="material-icons text-[16px]">picture_as_pdf</span>
+                                    <span className="truncate">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     {/* Discussion Section */}
+                    {!isPublicMode && (
                     <div className="mt-8 pt-8 border-t border-white/10">
                         <div className="flex justify-between items-center mb-6">
                             <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
@@ -1194,6 +1481,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                             </button>
                         </div>
                     </div>
+                    )}
 
                 </div >
             </div >

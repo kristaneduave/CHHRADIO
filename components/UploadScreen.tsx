@@ -43,6 +43,37 @@ const REFERENCE_SOURCE_TYPES = [
 ];
 
 const MAX_REFERENCES = 4;
+const CASE_TEXT_LIMITS: Record<SubmissionType, { findings: number; notes?: number; radiologicClinchers?: number }> = {
+  interesting_case: {
+    findings: 280,
+    notes: 280,
+  },
+  rare_pathology: {
+    findings: 350,
+    radiologicClinchers: 160,
+  },
+  aunt_minnie: {
+    findings: 220,
+    notes: 220,
+  },
+};
+
+const stripHtmlToPlainText = (value: string): string => {
+  if (!value) return '';
+  if (typeof window === 'undefined') {
+    return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+  const parser = new window.DOMParser();
+  const doc = parser.parseFromString(value, 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+const getFieldLength = (field: 'findings' | 'notes' | 'radiologicClinchers', value: string): number =>
+  field === 'notes' ? stripHtmlToPlainText(value).length : value.length;
+
+const getReferencePreviewText = (reference: ReferenceSource) =>
+  [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
+
 const getCaseNotesDraftKey = (userId: string, caseId: string, submissionType: SubmissionType) =>
   `upload:case-notes:draft:${userId}:${caseId}:${submissionType}`;
 
@@ -85,8 +116,7 @@ const normalizeReferences = (existingCase?: any): UploadReference[] => {
 
 const buildEmptyReferences = (): UploadReference[] => [createEmptyReference('reference-1')];
 
-const getReferenceSummary = (reference: ReferenceSource): string =>
-  [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
+const getReferenceSummary = (reference: ReferenceSource): string => getReferencePreviewText(reference);
 
 const SUBMISSION_TYPE_OPTIONS: Array<{
   id: SubmissionType;
@@ -148,6 +178,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     sex: existingCase?.patient_sex || 'M',
     modality: existingCase?.modality || 'CT Scan',
     organSystem: existingCase?.organ_system || existingCase?.anatomy_region || existingCase?.analysis_result?.anatomy_region || 'Neuroradiology',
+    patientId: existingCase?.analysis_result?.patientId || '',
     clinicalData: existingCase?.clinical_history || '',
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
@@ -276,6 +307,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         sex: 'M',
         modality: 'CT Scan',
         organSystem: 'Neuroradiology',
+        patientId: '',
         clinicalData: '',
         findings: '',
         impression: '',
@@ -304,6 +336,18 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
     if (name === 'age') {
       value = value.replace(/\D/g, '').slice(0, 3);
+    }
+
+    if (name === 'findings' || name === 'radiologicClinchers') {
+      const limit = CASE_TEXT_LIMITS[formData.submissionType][name];
+      const currentValue = String(formData[name] || '');
+      if (limit && value.length > limit && value.length >= currentValue.length) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          [name]: `Keep ${name === 'findings' ? (formData.submissionType === 'aunt_minnie' ? 'description' : 'findings') : 'radiologic clinchers'} within ${limit} characters.`,
+        }));
+        return;
+      }
     }
 
     setFieldErrors((prev) => {
@@ -456,6 +500,18 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       nextErrors.radiologicClinchers = 'Radiologic clinchers are required for Rare Pathology.';
     }
 
+    if (formData.findings.length > findingsLimit) {
+      nextErrors.findings = `Keep ${formData.submissionType === 'aunt_minnie' ? 'description' : 'findings'} within ${findingsLimit} characters.`;
+    }
+
+    if (radiologicClinchersLimit && formData.radiologicClinchers.length > radiologicClinchersLimit) {
+      nextErrors.radiologicClinchers = `Keep radiologic clinchers within ${radiologicClinchersLimit} characters.`;
+    }
+
+    if (notesLimit && plainNotes.length > notesLimit) {
+      nextErrors.notes = `Keep notes within ${notesLimit} characters.`;
+    }
+
     setFieldErrors(nextErrors);
     const firstError = Object.keys(nextErrors)[0];
     if (firstError) {
@@ -499,6 +555,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             sex: 'M',
             modality: 'CT Scan',
             organSystem: 'Neuroradiology',
+            patientId: '',
             clinicalData: '',
             findings: '',
             impression: '',
@@ -527,6 +584,21 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   };
 
   const handleNotesChange = (value: string) => {
+    const notesLimit = CASE_TEXT_LIMITS[formData.submissionType].notes;
+    const nextLength = getFieldLength('notes', value);
+    const currentLength = getFieldLength('notes', String(formData.notes || ''));
+
+    if (notesLimit && nextLength > notesLimit && nextLength >= currentLength) {
+      setFieldErrors((prev) => ({ ...prev, notes: `Keep notes within ${notesLimit} characters.` }));
+      return;
+    }
+
+    setFieldErrors((prev) => {
+      if (!prev.notes) return prev;
+      const next = { ...prev };
+      delete next.notes;
+      return next;
+    });
     setFormData(prev => ({ ...prev, notes: value }));
   };
 
@@ -537,6 +609,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const sectionHintClassName = 'mt-1 text-xs leading-5 text-slate-500';
   const segmentedPanelClassName = 'grid grid-cols-1 gap-2 md:grid-cols-3';
   const canShowReferenceFields = formData.submissionType !== 'aunt_minnie';
+  const activeTextLimits = CASE_TEXT_LIMITS[formData.submissionType];
+  const findingsLimit = activeTextLimits.findings;
+  const notesLimit = activeTextLimits.notes ?? null;
+  const radiologicClinchersLimit = activeTextLimits.radiologicClinchers ?? null;
   const activeReferences = formData.references.filter(hasReferenceContent);
   const imageCountLabel = `${images.length} / 8 images`;
   const submissionTypeLabel = formData.submissionType === 'rare_pathology'
@@ -552,15 +628,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     : formData.submissionType === 'aunt_minnie'
       ? 'Enter pattern-recognition title'
       : 'Enter case title';
-  const plainNotes = React.useMemo(() => {
-    if (!formData.notes) return '';
-    if (typeof window === 'undefined') {
-      return String(formData.notes).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-    const parser = new window.DOMParser();
-    const doc = parser.parseFromString(formData.notes, 'text/html');
-    return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
-  }, [formData.notes]);
+  const plainNotes = React.useMemo(() => stripHtmlToPlainText(String(formData.notes || '')), [formData.notes]);
+  const findingsCount = formData.findings.length;
+  const notesCount = plainNotes.length;
+  const radiologicClinchersCount = formData.radiologicClinchers.length;
   return (
     <div className="flex flex-col h-full bg-transparent relative">
       {/* Screenshot Overlay */}
@@ -847,6 +918,20 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 )}
               </div>
 
+              <div ref={setFieldRef('patientId')} className="space-y-2">
+                <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">PACS Patient ID</label>
+                <input
+                  name="patientId"
+                  value={formData.patientId}
+                  onChange={handleInputChange}
+                  placeholder="Enter PACS patient ID for tracing"
+                  maxLength={40}
+                  className={inputClassName}
+                  autoComplete="off"
+                />
+                <p className="text-xs text-slate-500">Visible only to help trace the uploaded case back in PACS.</p>
+              </div>
+
               {formData.submissionType !== 'aunt_minnie' && (
                 <div ref={setFieldRef('clinicalData')} className="space-y-2">
                   <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Clinical Data</label>
@@ -863,11 +948,17 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               )}
 
               <div ref={setFieldRef('findings')} className="space-y-2">
-                <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
+                  <span className={`text-[11px] font-semibold ${findingsCount >= findingsLimit ? 'text-amber-300' : 'text-slate-500'}`}>
+                    {findingsCount}/{findingsLimit}
+                  </span>
+                </div>
                 <textarea
                   name="findings"
                   value={formData.findings}
                   onChange={handleInputChange}
+                  maxLength={findingsLimit}
                   rows={7}
                   placeholder="Enter findings..."
                   className={`${textareaClassName} min-h-[260px] sm:min-h-[180px]`}
@@ -877,11 +968,17 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
               {formData.submissionType === 'rare_pathology' && (
                 <div ref={setFieldRef('radiologicClinchers')} className="space-y-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Radiologic Clinchers</label>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Radiologic Clinchers</label>
+                    <span className={`text-[11px] font-semibold ${radiologicClinchersLimit !== null && radiologicClinchersCount >= radiologicClinchersLimit ? 'text-amber-300' : 'text-slate-500'}`}>
+                      {radiologicClinchersCount}/{radiologicClinchersLimit}
+                    </span>
+                  </div>
                   <textarea
                     name="radiologicClinchers"
                     value={formData.radiologicClinchers}
                     onChange={handleInputChange}
+                    maxLength={radiologicClinchersLimit ?? undefined}
                     rows={5}
                     placeholder="Enter radiologic clinchers..."
                     className={`${textareaClassName} min-h-[120px]`}
@@ -900,7 +997,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 {(formData.submissionType === 'interesting_case' || formData.submissionType === 'aunt_minnie') && (
                   <div className="space-y-3 min-w-0">
                     <div className="min-w-0">
-                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Notes / Remarks</label>
+                      <div className="flex items-center justify-between gap-3">
+                        <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Notes / Remarks</label>
+                        <span className={`text-[11px] font-semibold ${notesLimit !== null && notesCount >= notesLimit ? 'text-amber-300' : 'text-slate-500'}`}>
+                          {notesCount}/{notesLimit}
+                        </span>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -915,6 +1017,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                         {formData.notes ? 'Open full editor' : 'Open full editor'}
                       </p>
                     </button>
+                    {fieldErrors.notes && <p className="text-sm text-rose-400">{fieldErrors.notes}</p>}
                   </div>
                 )}
 
@@ -1061,6 +1164,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-cyan-200">Full Editor</p>
                   <h2 className="mt-2 text-2xl font-black text-white">Notes / Remarks</h2>
+                  {notesLimit !== null && (
+                    <p className={`mt-2 text-sm ${notesCount >= notesLimit ? 'text-amber-300' : 'text-slate-400'}`}>
+                      {notesCount}/{notesLimit} characters
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -1194,11 +1302,11 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 )}
               </div>
 
-              {/* Patient ID Display */}
-              {formData.diagnosis && (
+              {/* PACS Patient ID Display */}
+              {formData.patientId && (
                 <div>
-                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">Patient ID</span>
-                  <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.diagnosis}</p>
+                  <span className="text-[9px] text-primary font-bold uppercase tracking-wider">PACS Patient ID</span>
+                  <p className="text-white text-lg font-mono font-bold tracking-widest">{formData.patientId}</p>
                 </div>
               )}
 
@@ -1224,12 +1332,38 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <div>
                   <span className="text-[9px] text-slate-500 uppercase font-bold">Notes / Remarks</span>
                   <p className="text-slate-300 text-sm whitespace-pre-line">{plainNotes || 'No notes provided.'}</p>
+                  {activeReferences.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">References</span>
+                      <div className="space-y-1.5">
+                        {activeReferences.map((reference, index) => (
+                          <div key={`${reference.id}-${index}`} className="text-sm">
+                            <p className="text-white font-medium">{index + 1}. {getReferencePreviewText(reference)}</p>
+                            {reference.page && <p className="text-slate-400 text-xs">{reference.page}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {formData.submissionType === 'interesting_case' && (
                 <div>
                   <span className="text-[9px] text-slate-500 uppercase font-bold">Notes</span>
                   <p className="text-slate-300 text-sm whitespace-pre-line">{plainNotes || 'No notes provided.'}</p>
+                  {activeReferences.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">References</span>
+                      <div className="space-y-1.5">
+                        {activeReferences.map((reference, index) => (
+                          <div key={`${reference.id}-${index}`} className="text-sm">
+                            <p className="text-white font-medium">{index + 1}. {getReferencePreviewText(reference)}</p>
+                            {reference.page && <p className="text-slate-400 text-xs">{reference.page}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {canShowReferenceFields && (formData.referenceSourceType || formData.referenceTitle || formData.referencePage) && (

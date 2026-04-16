@@ -16,12 +16,14 @@ type PdfExportData = {
   patientSex?: string | null;
   modality?: string | null;
   organSystem?: string | null;
+  patientId?: string | null;
   findings?: string | null;
   clinicalData?: string | null;
   radiologicClinchers?: string | null;
   notesHtml?: string | null;
   diagnosis?: string | null;
   reference?: ReferenceSource | null;
+  references?: ReferenceSource[];
   images: PdfImage[];
 };
 
@@ -323,6 +325,24 @@ const normalizeReference = (data: any): ReferenceSource | null => {
   return reference.sourceType || reference.title || reference.page ? reference : null;
 };
 
+const normalizeReferences = (data: any): ReferenceSource[] => {
+  const seededReferences = Array.isArray(data.references) && data.references.length > 0
+    ? data.references
+    : Array.isArray(data.analysis_result?.references) && data.analysis_result.references.length > 0
+      ? data.analysis_result.references
+      : normalizeReference(data)
+        ? [normalizeReference(data)]
+        : [];
+
+  return seededReferences
+    .map((reference: any) => ({
+      sourceType: normalizeText(reference?.sourceType) || '',
+      title: normalizeText(reference?.title) || '',
+      page: normalizeText(reference?.page) || '',
+    }))
+    .filter((reference) => reference.sourceType || reference.title || reference.page);
+};
+
 const normalizePdfExportData = (
   data: any,
   customTitle?: string,
@@ -345,6 +365,7 @@ const normalizePdfExportData = (
     patientSex: normalizeText(data.patientSex || data.sex || data.patient_sex) || null,
     modality: normalizeText(data.modality) || null,
     organSystem: normalizeText(data.organSystem || data.organ_system || data.analysis_result?.anatomy_region) || null,
+    patientId: normalizeText(data.patientId || data.analysis_result?.patientId || data.diagnosis) || null,
     findings: normalizeText(data.findings) || null,
     clinicalData: normalizeText(data.clinicalData || data.clinical_history || data.clinicalHistory) || null,
     radiologicClinchers: normalizeText(data.radiologicClinchers || data.radiologic_clinchers) || null,
@@ -353,6 +374,7 @@ const normalizePdfExportData = (
     ),
     diagnosis: normalizeText(data.diagnosis || data.diagnosticCode) || null,
     reference: normalizeReference(data),
+    references: normalizeReferences(data),
     images: normalizeImages(images),
   };
 };
@@ -684,6 +706,30 @@ const writeParagraphText = (
   ensurePageSpace(doc, ctx, lines.length * theme.layout.bodyLineHeight + 2);
   doc.text(lines, ctx.margin, ctx.y);
   ctx.y += lines.length * theme.layout.bodyLineHeight + theme.layout.paragraphGap;
+};
+
+const getReferenceLabel = (reference: ReferenceSource) =>
+  joinWithSeparator(
+    [
+      normalizeText(reference.sourceType),
+      normalizeText(reference.title),
+    ],
+    ' - '
+  ) || 'Reference provided';
+
+const renderReferences = (
+  doc: jsPDF,
+  ctx: RenderContext,
+  references: ReferenceSource[],
+  theme: PdfThemeTokens,
+) => {
+  references.forEach((reference, index) => {
+    writeParagraphText(doc, ctx, `${index + 1}. ${getReferenceLabel(reference)}`, theme, 'bold');
+    const pageLabel = normalizeText(reference.page);
+    if (pageLabel) {
+      writeParagraphText(doc, ctx, pageLabel, theme);
+    }
+  });
 };
 
 const drawCompactMetadataSummary = (
@@ -1278,42 +1324,14 @@ export const generateCasePDF = async (
             },
             { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-            { label: 'Patient ID', value: normalized.diagnosis || '' },
+            { label: 'PACS Patient ID', value: normalized.patientId || '' },
             { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
-            ...(normalized.reference
-              ? [{
-                  label: 'Reference Source',
-                  value: joinWithSeparator(
-                    [
-                      normalizeText(normalized.reference.sourceType),
-                      normalizeText(normalized.reference.title),
-                      normalizeText(normalized.reference.page),
-                    ],
-                    ' - '
-                  ),
-                  fullWidth: true,
-                }]
-              : []),
           ]
         : [
             { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-            { label: 'Patient ID', value: normalized.diagnosis || '' },
+            { label: 'PACS Patient ID', value: normalized.patientId || '' },
             ...(normalized.clinicalData ? [{ label: 'Clinical Data', value: normalized.clinicalData, fullWidth: true }] : []),
-            ...(normalized.reference && normalized.submissionType !== 'aunt_minnie'
-              ? [{
-                  label: 'Reference Source',
-                  value: joinWithSeparator(
-                    [
-                      normalizeText(normalized.reference.sourceType),
-                      normalizeText(normalized.reference.title),
-                      normalizeText(normalized.reference.page),
-                    ],
-                    ' - '
-                  ),
-                  fullWidth: true,
-                }]
-              : []),
           ];
 
     writeSectionHeader(doc, ctx, 'Case Information', theme);
@@ -1361,6 +1379,11 @@ export const generateCasePDF = async (
     if (normalized.notesHtml && normalized.submissionType !== 'rare_pathology') {
       writeSectionHeader(doc, ctx, 'Notes / Remarks', theme);
       renderRichNotes(doc, ctx, normalized.notesHtml, theme);
+    }
+
+    if ((normalized.references?.length || 0) > 0) {
+      writeSectionHeader(doc, ctx, 'References', theme);
+      renderReferences(doc, ctx, normalized.references || [], theme);
     }
 
     addFooter(doc, ctx.margin, ctx.pageHeight, normalized.title, theme, uploaderName);

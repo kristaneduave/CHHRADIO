@@ -26,6 +26,7 @@ export const loadCalendarScreen = memoizeImport(() => import('../components/Cale
 export const loadProfileScreen = memoizeImport(() => import('../components/ProfileScreen'));
 export const loadAnnouncementsScreen = memoizeImport(() => import('../components/AnnouncementsScreen'));
 export const loadCaseViewScreen = memoizeImport(() => import('../components/CaseViewScreen'));
+export const loadPublicCaseShareScreen = memoizeImport(() => import('../components/PublicCaseShareScreen'));
 export const loadResidentsCornerScreen = memoizeImport(() => import('../components/ResidentsCornerScreen'));
 export const loadResidentEndorsementsScreen = memoizeImport(() => import('../components/ResidentEndorsementsScreen'));
 export const loadConsultantDeckingBoardScreen = memoizeImport(() => import('../components/ConsultantDeckingBoardScreen'));

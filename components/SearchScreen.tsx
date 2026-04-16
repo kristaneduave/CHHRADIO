@@ -371,7 +371,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       }`
       : '',
     filters.specialty ? `Organ system: ${filters.specialty}` : '',
-    filters.diagnosticCode ? `Code: ${filters.diagnosticCode}` : '',
+    filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '',
     filters.datePreset !== 'all'
       ? `Date: ${filters.datePreset === 'custom'
         ? 'Custom'
@@ -566,14 +566,14 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-300">
-                  Diagnostic code (ICD-10)
+                  PACS Patient ID
                 </label>
                 <input
                   type="text"
                   name="diagnosticCode"
                   value={filters.diagnosticCode}
                   onChange={handleFilterChange}
-                  placeholder="e.g. G30.9"
+                  placeholder="e.g. 12345678"
                   className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/35"
                 />
               </div>
@@ -657,8 +657,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                           </h4>
                         </div>
                         <div className="flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
-                          <span className="text-white opacity-90">{primaryMeta}</span>
-                          <span className="text-slate-600 font-bold px-0.5">|</span>
                           <span className="text-slate-300 truncate">{p.author || 'Hospital Staff'}</span>
                         </div>
                       </div>
