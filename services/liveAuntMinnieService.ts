@@ -759,7 +759,7 @@ const getAuthenticatedProfile = async (): Promise<{
 
 const ensureHostRole = (roles: UserRole[] | UserRole | null | undefined) => {
   if (!isLiveAuntMinnieRoomManagerRole(roles)) {
-    throw new Error('Only the training officer or an admin can create or upload to a live Aunt Minnie room.');
+    throw new Error('You must be signed in to create or upload to a live Aunt Minnie room.');
   }
 };
 

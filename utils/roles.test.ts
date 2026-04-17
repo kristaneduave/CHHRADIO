@@ -21,7 +21,8 @@ describe('roles capability helpers', () => {
     expect(canManageCalendar(['moderator', 'resident'])).toBe(true);
     expect(canManageQuiz(['admin', 'resident'])).toBe(true);
     expect(canManageAuntMinnieRoom(['training_officer', 'resident'])).toBe(true);
-    expect(canManageAuntMinnieRoom(['consultant', 'resident'])).toBe(false);
+    expect(canManageAuntMinnieRoom(['consultant', 'resident'])).toBe(true);
+    expect(canManageAuntMinnieRoom(['resident'])).toBe(true);
   });
 
   it('builds a capability set that reflects combined roles', () => {

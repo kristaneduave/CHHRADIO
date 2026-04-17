@@ -35,7 +35,6 @@ export const normalizeUserRole = (role?: string | null): UserRole => {
 
 export const ARTICLE_LIBRARY_EDITOR_ROLES: UserRole[] = ['admin', 'moderator', 'training_officer'];
 export const QUIZ_MANAGER_ROLES: UserRole[] = ['admin', 'faculty'];
-export const AUNT_MINNIE_ROOM_MANAGER_ROLES: UserRole[] = ['admin', 'training_officer'];
 
 export interface CapabilitySet {
   canManageUsers: boolean;
@@ -117,7 +116,7 @@ export const canManageQuiz = (roles?: UserRole[] | UserRole | null): boolean => 
 };
 
 export const canManageAuntMinnieRoom = (roles?: UserRole[] | UserRole | null): boolean => {
-  return hasAnyRole(roles, AUNT_MINNIE_ROOM_MANAGER_ROLES);
+  return canParticipateInAuntMinnie(roles);
 };
 
 export const canParticipateInAuntMinnie = (roles?: UserRole[] | UserRole | null): boolean => {

@@ -13,7 +13,7 @@ describe('liveAuntMinnieService helpers', () => {
   it('recognizes room managers from combined roles', () => {
     expect(__testables.isLiveAuntMinnieRoomManagerRole(['training_officer', 'resident'])).toBe(true);
     expect(__testables.isLiveAuntMinnieRoomManagerRole(['admin', 'resident'])).toBe(true);
-    expect(__testables.isLiveAuntMinnieRoomManagerRole(['consultant', 'resident'])).toBe(false);
+    expect(__testables.isLiveAuntMinnieRoomManagerRole(['consultant', 'resident'])).toBe(true);
   });
 
   it('builds uppercase join codes', () => {
