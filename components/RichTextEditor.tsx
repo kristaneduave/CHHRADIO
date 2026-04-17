@@ -46,6 +46,7 @@ interface RichTextEditorProps {
   onChange: (value: string) => void;
   placeholder?: string;
   minHeight?: number | string;
+  plainTextLimit?: number;
   toolbarMode?: ToolbarMode;
   autoFocus?: boolean;
   className?: string;
@@ -65,6 +66,7 @@ export function RichTextEditor({
   onChange,
   placeholder,
   minHeight = 240,
+  plainTextLimit,
   toolbarMode = 'compact',
   autoFocus = false,
   className = '',
@@ -113,6 +115,30 @@ export function RichTextEditor({
       attributes: {
         class: editorContentClassName,
         'data-placeholder': placeholder || '',
+      },
+      handlePaste(view, event) {
+        if (!plainTextLimit) return false;
+
+        const pastedText = event.clipboardData?.getData('text/plain') || '';
+        if (!pastedText) return false;
+
+        const { from, to } = view.state.selection;
+        const currentText = view.state.doc.textBetween(0, view.state.doc.content.size, ' ', ' ');
+        const selectedText = view.state.doc.textBetween(from, to, ' ', ' ');
+        const remaining = plainTextLimit - (currentText.length - selectedText.length);
+
+        if (remaining <= 0) {
+          event.preventDefault();
+          return true;
+        }
+
+        if (pastedText.length <= remaining) {
+          return false;
+        }
+
+        event.preventDefault();
+        view.dispatch(view.state.tr.insertText(pastedText.slice(0, remaining), from, to));
+        return true;
       },
     },
   });

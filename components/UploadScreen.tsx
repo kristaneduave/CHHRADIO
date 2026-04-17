@@ -1186,6 +1186,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   onChange={handleNotesChange}
                   placeholder="Build out your teaching pearls, differential diagnosis, pitfalls, and takeaways..."
                   minHeight="52vh"
+                  plainTextLimit={notesLimit ?? undefined}
                   toolbarMode="expanded"
                   autoFocus
                   surface="paper"
