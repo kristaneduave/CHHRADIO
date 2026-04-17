@@ -46,7 +46,7 @@ const MAX_REFERENCES = 4;
 const CASE_TEXT_LIMITS: Record<SubmissionType, { findings: number; notes?: number; radiologicClinchers?: number }> = {
   interesting_case: {
     findings: 280,
-    notes: 280,
+    notes: 1000,
   },
   rare_pathology: {
     findings: 350,
