@@ -1315,7 +1315,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     </button>
                                 </div>
                             </div>
-                        ) : (
+                        ) : !isPublicMode ? (
                             <div className="grid grid-cols-1 gap-3">
                                 <button
                                     onClick={handleExportPDF}
@@ -1326,7 +1326,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     <span className="truncate">{isExportingPdf ? 'Exporting...' : 'Export PDF'}</span>
                                 </button>
                             </div>
-                        )}
+                        ) : null}
                     </div>
 
                     {/* Discussion Section */}
