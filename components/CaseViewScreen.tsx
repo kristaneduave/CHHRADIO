@@ -5,9 +5,10 @@ import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfSer
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
-import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage } from '../services/caseShareService';
+import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage, getCaseSharePreviewImage } from '../services/caseShareService';
 import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
+import { generateViberText } from '../utils/formatters';
 import {
     IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
     IMAGE_DOUBLE_TAP_DELAY_MS,
@@ -367,14 +368,25 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const buildViberShareText = (publicUrl: string) => {
-        const caseTitle = String(caseData.title || caseData.diagnosis || 'Shared Case').trim() || 'Shared Case';
-        const findingsText = String(caseData.findings || caseData.analysis_result?.impression || caseData.diagnosis || '').trim();
-
-        return [
-            caseTitle,
-            findingsText || 'Open the full report in the app.',
-            `Open full report: ${publicUrl}`,
-        ].filter(Boolean).join('\n\n');
+        return generateViberText({
+            submissionType: caseData.submission_type || 'interesting_case',
+            initials: caseData.patient_initials,
+            age: caseData.patient_age,
+            sex: caseData.patient_sex,
+            modality: caseData.modality,
+            organSystem: caseData.organ_system,
+            clinicalData: caseData.clinical_history || caseData.clinicalData,
+            findings: caseData.findings,
+            impression: caseData.analysis_result?.impression || caseData.diagnosis,
+            notes: caseData.educational_summary,
+            diagnosis: caseData.diagnosis,
+            patientId: caseData.analysis_result?.patientId,
+            publicUrl,
+            title: caseData.title,
+            previewImageUrl: getCaseSharePreviewImage(caseData),
+            radiologicClinchers: caseData.radiologic_clinchers,
+            radiologic_clinchers: caseData.radiologic_clinchers,
+        });
     };
 
     const ensureCaseShare = async () => {
