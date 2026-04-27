@@ -2606,10 +2606,14 @@ const ArticleLibraryScreen: React.FC = () => {
 
   return (
     <div
-      className="min-h-full bg-transparent px-6 pt-6 xl:pb-40"
+      className="relative min-h-full bg-transparent px-6 pt-6 xl:pb-40"
       style={{ paddingBottom: 'calc(var(--mobile-bottom-nav-clearance, 0px) - 0.35rem)' }}
     >
-      <div className="mx-auto max-w-[1680px] space-y-6">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[168px] bg-[#08111a]/78 backdrop-blur-xl xl:hidden"
+      />
+      <div className="relative z-10 mx-auto max-w-[1680px] space-y-6">
         <header className="flex items-center justify-between gap-3 pt-2">
           <h1 className="text-3xl font-bold text-white">Article Library</h1>
           {!isRoleLoading && canEdit && !isDetailOverlayVisible && !isDesktopDetail ? (

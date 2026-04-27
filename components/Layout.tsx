@@ -363,7 +363,6 @@ const Layout: React.FC<LayoutProps> = ({
             className="fixed left-0 right-0 z-50 flex justify-center px-4 pointer-events-none"
             style={{
               bottom: 'var(--mobile-bottom-nav-offset)',
-              paddingBottom: 'var(--mobile-safe-bottom)',
             }}
           >
             <div

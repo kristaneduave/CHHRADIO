@@ -73,7 +73,6 @@ const formatSavedAt = (iso: string | null): string => {
 const ABOUT_CREDITS = {
   appName: 'CHH RadCore',
   builtBy: 'Created by Kristan Rey Eduave (Feb 2026)',
-  department: 'Built for CHH Radiology',
   version: 'v3.2.0',
   recentChanges: [
     'Dedicated user management page for admins.',
@@ -85,11 +84,13 @@ const ABOUT_CREDITS = {
 
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUserManagement, onEditCase, onViewCase }) => {
   const viewport = useAppViewport();
+  const isMobile = viewport === 'mobile';
   const cachedWorkspace = currentUserId ? getCachedProfileHomeWorkspace(currentUserId) : null;
   const [loading, setLoading] = useState(!cachedWorkspace);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAboutCredits, setShowAboutCredits] = useState(false);
+  const [aboutChangesExpanded, setAboutChangesExpanded] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedWorkspace?.profileRecord?.role ? [cachedWorkspace.profileRecord.role as UserRole] : []);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -1068,48 +1069,58 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
       }
 
       {showAboutCredits && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in duration-200" onClick={() => setShowAboutCredits(false)}>
-          <div className="bg-[#0c1829] border border-white/10 rounded-3xl p-6 w-full max-w-[420px] shadow-2xl space-y-5 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none animate-in fade-in duration-200"
+          onClick={() => setShowAboutCredits(false)}
+        >
+          <div
+            className={`pointer-events-auto bg-[#102033] border border-white/10 shadow-[0_24px_70px_rgba(0,0,0,0.42)] animate-in zoom-in-95 duration-200 ${isMobile ? 'w-full max-w-[340px] rounded-[26px] px-5 py-5' : 'w-full max-w-[360px] rounded-[28px] px-6 py-5'}`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">About This App</p>
-                <h3 className="mt-2 text-[22px] font-black text-white">{ABOUT_CREDITS.appName}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-slate-300">{ABOUT_CREDITS.builtBy}</p>
-                <p className="mt-1 text-xs text-slate-500">{ABOUT_CREDITS.department}</p>
+                <h3 className={`mt-2 font-black text-white ${isMobile ? 'text-[24px] leading-[1.05]' : 'text-[22px]'}`}>{ABOUT_CREDITS.appName}</h3>
+                <p className={`mt-3 max-w-[24ch] text-slate-300 ${isMobile ? 'text-[14px] leading-6' : 'text-sm leading-relaxed'}`}>{ABOUT_CREDITS.builtBy}</p>
               </div>
               <button
                 onClick={() => setShowAboutCredits(false)}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0"
+                className={`rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0 ${isMobile ? 'w-10 h-10' : 'w-9 h-9'}`}
               >
                 <span className="material-icons text-lg">close</span>
               </button>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
+            <div className="mt-5 rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
               <div className="flex items-center justify-between gap-4">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Version</span>
                 <span className="text-sm font-bold text-white">{ABOUT_CREDITS.version}</span>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Recent Changes</p>
-              <div className="mt-3 space-y-2.5">
-                {ABOUT_CREDITS.recentChanges.map((entry) => (
-                  <div key={entry} className="flex items-start gap-2 text-sm text-slate-300 leading-relaxed">
-                    <span className="mt-[6px] h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
-                    <span>{entry}</span>
+            <div className="mt-4 rounded-2xl border border-white/8 bg-white/[0.03] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setAboutChangesExpanded((value) => !value)}
+                className="w-full px-4 py-3.5 flex items-center justify-between gap-4 text-left hover:bg-white/[0.03] transition-colors"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Recent Changes</span>
+                <span className={`material-icons text-slate-400 transition-transform ${aboutChangesExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+              </button>
+              {aboutChangesExpanded && (
+                <div className="px-4 pb-4">
+                  <div className="space-y-3 border-t border-white/6 pt-3">
+                    {ABOUT_CREDITS.recentChanges.map((entry) => (
+                      <div key={entry} className={`flex items-start gap-3 text-slate-300 ${isMobile ? 'text-[14px] leading-6' : 'text-sm leading-relaxed'}`}>
+                        <span className={`rounded-full bg-cyan-400 shrink-0 ${isMobile ? 'mt-[8px] h-2 w-2' : 'mt-[6px] h-1.5 w-1.5'}`} />
+                        <span>{entry}</span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
 
-            <button
-              onClick={() => setShowAboutCredits(false)}
-              className="w-full py-3.5 bg-white/5 hover:bg-white/10 rounded-xl text-[11px] font-bold text-slate-300 uppercase tracking-widest transition-colors"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
