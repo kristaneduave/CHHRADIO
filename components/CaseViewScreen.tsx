@@ -5,7 +5,7 @@ import { loadGenerateCasePDF, prefetchGenerateCasePDF } from '../services/pdfSer
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 import { supabase } from '../services/supabase';
 import { fetchCaseComments, submitCaseComment } from '../services/caseInteractionService';
-import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage, getCaseSharePreviewImage } from '../services/caseShareService';
+import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage } from '../services/caseShareService';
 import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { generateViberText } from '../utils/formatters';
@@ -383,7 +383,6 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             patientId: caseData.analysis_result?.patientId,
             publicUrl,
             title: caseData.title,
-            previewImageUrl: getCaseSharePreviewImage(caseData),
             radiologicClinchers: caseData.radiologic_clinchers,
             radiologic_clinchers: caseData.radiologic_clinchers,
         });

@@ -46,7 +46,6 @@ export const generateViberText = (data: any): string => {
     title || impression || diagnosis || getSubmissionLabel(submissionType),
     110
   );
-  const previewImageUrl = String(data.previewImageUrl || '').trim();
   const normalizedPatientId = String(patientId || diagnosis || '').trim();
   const notesText = stripHtmlToPlainText(String(notes || ''));
 
@@ -70,8 +69,6 @@ export const generateViberText = (data: any): string => {
       examLabel ? `Exam: ${examLabel}` : null,
       normalizedPatientId ? `PACS Patient ID: ${normalizedPatientId}` : null,
       summary ? `Summary: ${summary}` : null,
-      previewImageUrl ? 'Representative image:' : null,
-      previewImageUrl || null,
       'Full report:',
       publicUrl,
     ]
