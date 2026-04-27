@@ -366,6 +366,17 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         toastSuccess(successTitle, successDescription);
     };
 
+    const buildViberShareText = (publicUrl: string) => {
+        const caseTitle = String(caseData.title || caseData.diagnosis || 'Shared Case').trim() || 'Shared Case';
+        const findingsText = String(caseData.findings || caseData.analysis_result?.impression || caseData.diagnosis || '').trim();
+
+        return [
+            caseTitle,
+            findingsText || 'Open the full report in the app.',
+            `Open full report: ${publicUrl}`,
+        ].filter(Boolean).join('\n\n');
+    };
+
     const ensureCaseShare = async () => {
         if (!caseData?.id) {
             throw new Error('Case is missing an id.');
@@ -380,7 +391,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         try {
             const share = await ensureCaseShare();
             const publicUrl = buildPublicCaseUrl(share.public_token);
-            const viberUrl = `viber://forward?text=${encodeURIComponent(publicUrl)}`;
+            const viberText = buildViberShareText(publicUrl);
+            const viberUrl = `viber://forward?text=${encodeURIComponent(viberText)}`;
 
             if (typeof window !== 'undefined') {
                 try {
@@ -393,12 +405,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     launchAnchor.click();
                     document.body.removeChild(launchAnchor);
                 } catch {
-                    await copyText(publicUrl, 'Share link copied', 'Paste it into Viber to share the public report preview.');
+                    await copyText(viberText, 'Viber text copied', 'Paste it into Viber to share the full findings and report link.');
                     return;
                 }
             }
 
-            toastSuccess('Viber share ready', 'Opening Viber with the share link preview.');
+            toastSuccess('Viber share ready', 'Opening Viber with the case title, findings, and report link.');
         } catch (error: any) {
             toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
         } finally {
