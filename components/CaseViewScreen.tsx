@@ -8,7 +8,7 @@ import { fetchCaseComments, submitCaseComment } from '../services/caseInteractio
 import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage } from '../services/caseShareService';
 import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
-import { generateViberText } from '../utils/formatters';
+import { generateConsultantShareText } from '../utils/formatters';
 import {
     IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
     IMAGE_DOUBLE_TAP_DELAY_MS,
@@ -367,24 +367,13 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         toastSuccess(successTitle, successDescription);
     };
 
-    const buildViberShareText = (publicUrl: string) => {
-        return generateViberText({
-            submissionType: caseData.submission_type || 'interesting_case',
-            initials: caseData.patient_initials,
-            age: caseData.patient_age,
-            sex: caseData.patient_sex,
-            modality: caseData.modality,
-            organSystem: caseData.organ_system,
-            clinicalData: caseData.clinical_history || caseData.clinicalData,
+    const buildConsultantShareText = (publicUrl: string) => {
+        return generateConsultantShareText({
             findings: caseData.findings,
-            impression: caseData.analysis_result?.impression || caseData.diagnosis,
-            notes: caseData.educational_summary,
-            diagnosis: caseData.diagnosis,
-            patientId: caseData.analysis_result?.patientId,
-            publicUrl,
             title: caseData.title,
-            radiologicClinchers: caseData.radiologic_clinchers,
-            radiologic_clinchers: caseData.radiologic_clinchers,
+            impression: caseData.analysis_result?.impression || caseData.diagnosis,
+            diagnosis: caseData.diagnosis,
+            publicUrl,
         });
     };
 
@@ -396,14 +385,33 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         return createOrGetCaseShare(String(caseData.id));
     };
 
+    const getPreparedConsultantShareText = async () => {
+        const share = await ensureCaseShare();
+        const publicUrl = buildPublicCaseUrl(share.public_token);
+        return buildConsultantShareText(publicUrl);
+    };
+
+    const handleCopyCaseText = async () => {
+        if (!canShowShareActions) return;
+        try {
+            const shareText = await getPreparedConsultantShareText();
+            await copyText(
+                shareText,
+                'Case text copied',
+                'Upload the representative image in Viber, then paste the copied case text.'
+            );
+        } catch (error: any) {
+            toastError('Unable to copy case text', getCaseShareErrorMessage(error));
+        }
+    };
+
     const handleShareToViber = async () => {
         if (!canShowShareActions) return;
         setIsPreparingShare(true);
         try {
-            const share = await ensureCaseShare();
-            const publicUrl = buildPublicCaseUrl(share.public_token);
-            const viberText = buildViberShareText(publicUrl);
-            const viberUrl = `viber://forward?text=${encodeURIComponent(viberText)}`;
+            const shareText = await getPreparedConsultantShareText();
+            await navigator.clipboard.writeText(shareText);
+            const viberUrl = `viber://forward?text=${encodeURIComponent(shareText)}`;
 
             if (typeof window !== 'undefined') {
                 try {
@@ -416,12 +424,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     launchAnchor.click();
                     document.body.removeChild(launchAnchor);
                 } catch {
-                    await copyText(viberText, 'Viber text copied', 'Paste it into Viber to share the full findings and report link.');
+                    toastSuccess('Case text copied', 'Open Viber, upload the representative image, then paste the copied case text.');
                     return;
                 }
             }
 
-            toastSuccess('Viber share ready', 'Opening Viber with the case title, findings, and report link.');
+            toastSuccess('Viber ready', 'Viber is opening. Upload the representative image, then paste the copied case text.');
         } catch (error: any) {
             toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
         } finally {
@@ -1219,14 +1227,22 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     <div className="space-y-4 pt-4 pb-28 relative z-10">
                         {canShowShareActions ? (
                             <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                    <button
+                                        onClick={handleCopyCaseText}
+                                        disabled={isPreparingShare}
+                                        className={`inline-flex w-full items-center justify-center gap-2 rounded-xl ${theme.buttonBg} px-4 py-3.5 text-[13px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50`}
+                                    >
+                                        <span className="material-icons text-[18px]">content_copy</span>
+                                        <span>Copy Case Text</span>
+                                    </button>
                                     <button
                                         onClick={handleShareToViber}
                                         disabled={isPreparingShare}
                                         className={`inline-flex w-full items-center justify-center gap-2 rounded-xl ${theme.buttonBg} px-4 py-3.5 text-[13px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50`}
                                     >
                                         <span className="material-icons text-[18px]">send</span>
-                                        <span>{isPreparingShare ? 'Preparing Viber...' : 'Share to Viber'}</span>
+                                        <span>{isPreparingShare ? 'Opening Viber...' : 'Share to Viber'}</span>
                                     </button>
                                     <button
                                         onClick={handleExportPDF}

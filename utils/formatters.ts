@@ -115,3 +115,21 @@ ${diagnosis ? `*Code:* ${diagnosis}` : ''}
 *Notes:*
 ${notesText || 'No notes provided.'}`;
 };
+
+export const generateConsultantShareText = (data: any): string => {
+  const title = compactText(
+    data?.title || data?.impression || data?.diagnosis || 'Shared Case',
+    110
+  );
+  const findings = compactText(String(data?.findings || ''), 420);
+  const publicUrl = String(data?.publicUrl || '').trim();
+
+  return [
+    'CHH Radiology Portal',
+    `Case: ${title}`,
+    findings ? `Findings:\n${findings}` : null,
+    publicUrl ? `Full report:\n${publicUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
