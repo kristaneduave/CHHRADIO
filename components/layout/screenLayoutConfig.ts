@@ -18,6 +18,7 @@ export const SCREEN_LAYOUT_CONFIG: Record<Screen, ScreenLayoutMode> = {
   'resident-endorsements': 'content',
   'consultant-decking': 'wide',
   'article-library': 'split',
+  'admin-user-management': 'wide',
   newsfeed: 'split',
   'monthly-census': 'wide',
   anatomy: 'content',

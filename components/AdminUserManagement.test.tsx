@@ -86,7 +86,7 @@ describe('AdminUserManagement', () => {
   });
 
   it('renders the multi-role management sections for a loaded user', async () => {
-    render(<AdminUserManagement onClose={() => undefined} />);
+    render(<AdminUserManagement onBack={() => undefined} />);
 
     expect(await screen.findByText('Dr. Mira')).toBeInTheDocument();
     expect(screen.getByText('Primary role')).toBeInTheDocument();
@@ -96,7 +96,7 @@ describe('AdminUserManagement', () => {
   });
 
   it('updates roles and shows a success notice when toggling an additional role', async () => {
-    render(<AdminUserManagement onClose={() => undefined} />);
+    render(<AdminUserManagement onBack={() => undefined} />);
 
     const userCard = (await screen.findByText('Dr. Mira')).closest('div.rounded-xl');
     expect(userCard).not.toBeNull();
@@ -117,7 +117,7 @@ describe('AdminUserManagement', () => {
   });
 
   it('makes training officer exclusive and updates the primary role when selected', async () => {
-    render(<AdminUserManagement onClose={() => undefined} />);
+    render(<AdminUserManagement onBack={() => undefined} />);
 
     const userCard = (await screen.findByText('Dr. Mira')).closest('div.rounded-xl');
     expect(userCard).not.toBeNull();

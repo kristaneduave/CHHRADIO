@@ -1,5 +1,5 @@
 
-export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'consultant-decking' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library';
+export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'consultant-decking' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library' | 'admin-user-management';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';

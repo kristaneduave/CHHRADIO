@@ -34,6 +34,7 @@ export const loadArticleLibraryScreen = memoizeImport(() => import('../component
 export const loadNewsfeedScreen = memoizeImport(() => import('../components/NewsfeedScreen'));
 export const loadAnatomyScreen = memoizeImport(() => import('../components/AnatomyComingSoonScreen'));
 export const loadMonthlyCensusPage = memoizeImport(() => import('../components/MonthlyCensusPage'));
+export const loadAdminUserManagementScreen = memoizeImport(() => import('../components/AdminUserManagement'));
 
 const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   upload: loadUploadScreen,
@@ -49,6 +50,7 @@ const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   'resident-endorsements': loadResidentEndorsementsScreen,
   'consultant-decking': loadConsultantDeckingBoardScreen,
   'article-library': loadArticleLibraryScreen,
+  'admin-user-management': loadAdminUserManagementScreen,
   newsfeed: loadNewsfeedScreen,
   anatomy: loadAnatomyScreen,
   'monthly-census': loadMonthlyCensusPage,
@@ -109,6 +111,7 @@ export const preloadMajorRouteChunks = async (): Promise<void> => {
     loadArticleLibraryScreen(),
     loadQuizScreen(),
     loadMonthlyCensusPage(),
+    loadAdminUserManagementScreen(),
   ]);
 };
 

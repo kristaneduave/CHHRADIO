@@ -3,12 +3,14 @@ import { supabase } from '../services/supabase';
 import { Profile, UserRole } from '../types';
 import { ensurePrimaryRoleIncluded, EXCLUSIVE_ROLE, normalizeUserRoles } from '../utils/roles';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
+import PageShell from './ui/PageShell';
+import PageHeader from './ui/PageHeader';
 
 interface AdminUserManagementProps {
-    onClose: () => void;
+    onBack: () => void;
 }
 
-const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) => {
+const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => {
     const [users, setUsers] = useState<Profile[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -139,22 +141,26 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
     );
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-surface border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+        <PageShell layoutMode="wide" contentClassName="pb-8">
+            <div className="space-y-6">
+                <PageHeader
+                    title="User Management"
+                    description="Manage user roles and permissions."
+                    action={(
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 transition-colors hover:bg-white/[0.08] hover:text-white"
+                        >
+                            <span className="material-icons text-[18px]">arrow_back</span>
+                            <span>Back</span>
+                        </button>
+                    )}
+                />
 
-                {/* Header */}
-                <div className="p-6 border-b border-white/5 flex justify-between items-center">
-                    <div>
-                        <h2 className="text-xl font-bold text-white">User Management</h2>
-                        <p className="text-xs text-slate-400 mt-1">Manage user roles and permissions</p>
-                    </div>
-                    <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-                        <span className="material-icons text-lg">close</span>
-                    </button>
-                </div>
-
-                {/* Search */}
-                <div className="p-4 border-b border-white/5 bg-black/20">
+                <div className="rounded-[1.75rem] border border-white/10 bg-surface shadow-2xl">
+                    {/* Search */}
+                    <div className="border-b border-white/5 bg-black/20 p-4">
                     <div className="relative group flex bg-black/40 p-1.5 rounded-[1.25rem] border border-white/5 backdrop-blur-md shadow-inner transition-colors focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/30">
                         <span className="material-icons absolute left-5 top-1/2 -translate-y-1/2 text-[19px] text-slate-500 group-focus-within:text-primary transition-colors">search</span>
                         <input
@@ -172,134 +178,135 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onClose }) =>
                             className="mt-3"
                         />
                     ) : null}
-                </div>
+                    </div>
 
-                {/* List */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                    {loading ? (
-                        <div className="text-center py-12">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                            <p className="text-xs text-slate-500">Loading users...</p>
-                        </div>
-                    ) : filteredUsers.length === 0 ? (
-                        <div className="text-center py-12 text-slate-500">
-                            <p>No users found.</p>
-                        </div>
-                    ) : (
-                        filteredUsers.map(user => (
-                            <div key={user.id} className="rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-white/10">
-                                <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)] lg:items-start">
-                                    <div className="flex items-start gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0">
-                                            {user.avatar_url ? (
-                                                <img src={user.avatar_url} alt={user.username || 'User'} className="w-full h-full object-cover" />
-                                            ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-slate-500">
-                                                    <span className="material-icons text-lg">person</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <h3 className="text-sm font-bold text-slate-200 truncate">{user.full_name || 'Unnamed User'}</h3>
-                                            <p className="text-[10px] text-slate-500 break-all">@{user.username || 'unknown'} ?{user.year_level || 'N/A'}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start">
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Primary role</p>
-                                                </div>
-                                                <p className="text-[10px] leading-4 text-slate-500">Default identity.</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
-                                                        const isPrimaryRole = (user.role || 'resident') === roleOption;
-                                                        const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
-                                                        return (
-                                                            <button
-                                                                key={`primary-${roleOption}`}
-                                                                type="button"
-                                                                onClick={() => updateUserRoles(
-                                                                    user.id,
-                                                                    roleOption,
-                                                                    roleOption === EXCLUSIVE_ROLE
-                                                                        ? [EXCLUSIVE_ROLE]
-                                                                        : [roleOption, ...currentRoles.filter((role) => role !== EXCLUSIVE_ROLE && role !== roleOption)],
-                                                                )}
-                                                                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
-                                                                    isPrimaryRole
-                                                                        ? `${getRoleTone(roleOption)} bg-white/5`
-                                                                        : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
-                                                                }`}
-                                                            >
-                                                                {roleOption.replace('_', ' ')}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
+                    {/* List */}
+                    <div className="p-4 space-y-2">
+                        {loading ? (
+                            <div className="text-center py-12">
+                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                                <p className="text-xs text-slate-500">Loading users...</p>
+                            </div>
+                        ) : filteredUsers.length === 0 ? (
+                            <div className="text-center py-12 text-slate-500">
+                                <p>No users found.</p>
+                            </div>
+                        ) : (
+                            filteredUsers.map(user => (
+                                <div key={user.id} className="rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:border-white/10">
+                                    <div className="grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)] lg:items-start">
+                                        <div className="flex items-start gap-3 min-w-0">
+                                            <div className="w-10 h-10 rounded-full bg-slate-800 overflow-hidden shrink-0">
+                                                {user.avatar_url ? (
+                                                    <img src={user.avatar_url} alt={user.username || 'User'} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-500">
+                                                        <span className="material-icons text-lg">person</span>
+                                                    </div>
+                                                )}
                                             </div>
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-bold text-slate-200 truncate">{user.full_name || 'Unnamed User'}</h3>
+                                                <p className="text-[10px] text-slate-500 break-all">@{user.username || 'unknown'} ?{user.year_level || 'N/A'}</p>
+                                            </div>
+                                        </div>
 
-                                            <div className="space-y-2">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Additional roles</p>
-                                                </div>
-                                                <p className="text-[10px] leading-4 text-slate-500">Active roles control permissions.</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
-                                                        const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
-                                                        const isActive = currentRoles.includes(roleOption);
-                                                        const isPrimaryRole = (user.role || 'resident') === roleOption;
-                                                        const exclusiveRoleSelected = currentRoles.includes(EXCLUSIVE_ROLE);
-                                                        const disabledBecauseExclusive = exclusiveRoleSelected && roleOption !== EXCLUSIVE_ROLE;
-                                                        const disabled = isPrimaryRole || disabledBecauseExclusive;
-                                                        return (
-                                                            <button
-                                                                key={roleOption}
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    if (isPrimaryRole) return;
-                                                                    const nextRoles = isActive
-                                                                        ? currentRoles.filter((role) => role !== roleOption)
-                                                                        : [...currentRoles, roleOption];
-                                                                    updateUserRoles(user.id, user.role || 'resident', nextRoles);
-                                                                }}
-                                                                disabled={disabled}
-                                                                title={
-                                                                    isPrimaryRole
-                                                                        ? 'Primary role is always active.'
-                                                                        : disabledBecauseExclusive
-                                                                            ? 'Training Officer cannot be combined with other roles.'
-                                                                            : undefined
-                                                                }
-                                                                className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
-                                                                    isPrimaryRole
-                                                                        ? `cursor-default ${getRoleTone(roleOption)} bg-white/5`
-                                                                        : disabledBecauseExclusive
-                                                                            ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-600'
-                                                                        : isActive
-                                                                            ? 'border-primary/40 bg-primary/15 text-primary'
+                                        <div className="space-y-3">
+                                            <div className="grid gap-3 xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start">
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Primary role</p>
+                                                    </div>
+                                                    <p className="text-[10px] leading-4 text-slate-500">Default identity.</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
+                                                            const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                            const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
+                                                            return (
+                                                                <button
+                                                                    key={`primary-${roleOption}`}
+                                                                    type="button"
+                                                                    onClick={() => updateUserRoles(
+                                                                        user.id,
+                                                                        roleOption,
+                                                                        roleOption === EXCLUSIVE_ROLE
+                                                                            ? [EXCLUSIVE_ROLE]
+                                                                            : [roleOption, ...currentRoles.filter((role) => role !== EXCLUSIVE_ROLE && role !== roleOption)],
+                                                                    )}
+                                                                    className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
+                                                                        isPrimaryRole
+                                                                            ? `${getRoleTone(roleOption)} bg-white/5`
                                                                             : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
-                                                                }`}
-                                                            >
-                                                                {roleOption.replace('_', ' ')}
-                                                            </button>
-                                                        );
-                                                    })}
+                                                                    }`}
+                                                                >
+                                                                    {roleOption.replace('_', ' ')}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
                                                 </div>
-                                                <p className="text-[10px] leading-4 text-slate-500">
-                                                    The primary role stays active automatically. Add roles like <span className="text-slate-400">resident + moderator</span> to combine permissions. <span className="text-slate-400">Training Officer</span> stays exclusive.
-                                                </p>
+
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Additional roles</p>
+                                                    </div>
+                                                    <p className="text-[10px] leading-4 text-slate-500">Active roles control permissions.</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {ALL_ASSIGNABLE_ROLES.map((roleOption) => {
+                                                            const currentRoles = ensurePrimaryRoleIncluded(user.roles, user.role);
+                                                            const isActive = currentRoles.includes(roleOption);
+                                                            const isPrimaryRole = (user.role || 'resident') === roleOption;
+                                                            const exclusiveRoleSelected = currentRoles.includes(EXCLUSIVE_ROLE);
+                                                            const disabledBecauseExclusive = exclusiveRoleSelected && roleOption !== EXCLUSIVE_ROLE;
+                                                            const disabled = isPrimaryRole || disabledBecauseExclusive;
+                                                            return (
+                                                                <button
+                                                                    key={roleOption}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (isPrimaryRole) return;
+                                                                        const nextRoles = isActive
+                                                                            ? currentRoles.filter((role) => role !== roleOption)
+                                                                            : [...currentRoles, roleOption];
+                                                                        updateUserRoles(user.id, user.role || 'resident', nextRoles);
+                                                                    }}
+                                                                    disabled={disabled}
+                                                                    title={
+                                                                        isPrimaryRole
+                                                                            ? 'Primary role is always active.'
+                                                                            : disabledBecauseExclusive
+                                                                                ? 'Training Officer cannot be combined with other roles.'
+                                                                                : undefined
+                                                                    }
+                                                                    className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] transition-colors ${
+                                                                        isPrimaryRole
+                                                                            ? `cursor-default ${getRoleTone(roleOption)} bg-white/5`
+                                                                            : disabledBecauseExclusive
+                                                                                ? 'cursor-not-allowed border-white/10 bg-white/5 text-slate-600'
+                                                                            : isActive
+                                                                                ? 'border-primary/40 bg-primary/15 text-primary'
+                                                                                : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-white'
+                                                                    }`}
+                                                                >
+                                                                    {roleOption.replace('_', ' ')}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <p className="text-[10px] leading-4 text-slate-500">
+                                                        The primary role stays active automatically. Add roles like <span className="text-slate-400">resident + moderator</span> to combine permissions. <span className="text-slate-400">Training Officer</span> stays exclusive.
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))
-                    )}
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+        </PageShell>
     );
 };
 

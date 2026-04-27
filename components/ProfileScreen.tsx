@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../services/supabase';
 import { NoteSaveState, UserRole } from '../types';
-import AdminUserManagement from './AdminUserManagement';
 import LoadingButton from './LoadingButton';
 import LoadingState from './LoadingState';
 import {
@@ -39,6 +38,7 @@ import { getCurrentUserRoleState } from '../services/userRoleService';
 
 interface ProfileScreenProps {
   currentUserId?: string | null;
+  onOpenUserManagement?: () => void;
   onEditCase?: (caseItem: any) => void;
   onViewCase?: (caseItem: any) => void; // Added for navigation
 }
@@ -70,13 +70,12 @@ const formatSavedAt = (iso: string | null): string => {
   });
 };
 
-const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase, onViewCase }) => {
+const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUserManagement, onEditCase, onViewCase }) => {
   const viewport = useAppViewport();
   const cachedWorkspace = currentUserId ? getCachedProfileHomeWorkspace(currentUserId) : null;
   const [loading, setLoading] = useState(!cachedWorkspace);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedWorkspace?.profileRecord?.role ? [cachedWorkspace.profileRecord.role as UserRole] : []);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -773,11 +772,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
             </div>
 
             {/* Admin Action */}
-            {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
-              <button
-                onClick={() => setShowAdminPanel(true)}
-                className="w-full p-2.5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 hover:bg-rose-500/[0.08] hover:border-rose-500/20 transition-all text-left flex items-center justify-between group"
-              >
+              {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
+                <button
+                onClick={onOpenUserManagement}
+                  className="w-full p-2.5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 hover:bg-rose-500/[0.08] hover:border-rose-500/20 transition-all text-left flex items-center justify-between group"
+                >
                 <div className="flex items-center gap-3.5 w-full">
                   <div className="w-[34px] h-[34px] rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center border border-orange-500/20 shadow-[0_0_10px_rgba(249,115,22,0.15)] group-hover:shadow-[0_0_15px_rgba(249,115,22,0.25)] transition-all">
                     <span className="material-icons text-[18px]">admin_panel_settings</span>
@@ -1041,11 +1040,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onEditCase
         )
       }
 
-      {
-        showAdminPanel && (
-          <AdminUserManagement onClose={() => setShowAdminPanel(false)} />
-        )
-      }
     </div>
     </PageShell>
   );

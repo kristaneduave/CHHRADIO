@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import LoginScreen from './components/LoginScreen';
+import ProfileCompletionScreen from './components/ProfileCompletionScreen';
 import ToastHost from './components/ToastHost';
 import AppBootScreen from './components/AppBootScreen';
 import { Screen, SubmissionType } from './types';
@@ -34,9 +35,11 @@ import {
   loadResidentsCornerScreen,
   loadSearchScreen,
   loadUploadScreen,
+  loadAdminUserManagementScreen,
   preloadRouteForScreen,
 } from './services/routePreloadService';
 import { startAppBootstrap } from './services/appBootstrapService';
+import { normalizeUserRole } from './utils/roles';
 
 declare global {
   interface NetworkInformation {
@@ -62,6 +65,7 @@ const TRACKABLE_SCREENS: Screen[] = [
   'resident-endorsements',
   'consultant-decking',
   'profile',
+  'admin-user-management',
 ];
 
 const UploadScreen = lazy(loadUploadScreen);
@@ -80,6 +84,7 @@ const ArticleLibraryScreen = lazy(loadArticleLibraryScreen);
 const NewsfeedScreen = lazy(loadNewsfeedScreen);
 const AnatomyComingSoonScreen = lazy(loadAnatomyScreen);
 const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
+const AdminUserManagementScreen = lazy(loadAdminUserManagementScreen);
 const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 const PUBLIC_CASE_ROUTE_PREFIX = '/shared/case/';
@@ -87,6 +92,28 @@ const PUBLIC_CASE_QUERY_PARAM = 'publicCaseToken';
 type PublicCaseRouteState = {
   token: string;
   source: 'path' | 'query';
+};
+
+type ProfileSetupState = 'idle' | 'checking' | 'required' | 'ready';
+
+const buildFallbackDisplayName = (fullName?: string, email?: string | null): string => {
+  const byName = String(fullName || '').trim();
+  if (byName.length >= 3) return byName;
+  const byEmail = String(email || '').split('@')[0].trim();
+  if (byEmail.length >= 3) return byEmail;
+  return 'Resident';
+};
+
+const buildFallbackUsername = (fullName?: string, displayName?: string, email?: string | null): string => {
+  const safeBase = String(displayName || fullName || email?.split('@')[0] || 'resident')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 18);
+
+  const base = safeBase.length >= 3 ? safeBase : 'resident';
+  return `${base}${Math.random().toString(36).slice(2, 6)}`.slice(0, 24);
 };
 const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   if (isFinalStep) return 260;
@@ -136,6 +163,14 @@ const App: React.FC = () => {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<Screen[]>([]);
+  const [profileSetupState, setProfileSetupState] = useState<ProfileSetupState>('idle');
+  const [profileSetupDefaults, setProfileSetupDefaults] = useState({
+    fullName: '',
+    displayName: '',
+    role: 'resident' as const,
+  });
+  const [profileSetupError, setProfileSetupError] = useState<string | null>(null);
+  const [isSavingProfileSetup, setIsSavingProfileSetup] = useState(false);
   const [publicCaseRoute, setPublicCaseRoute] = useState<PublicCaseRouteState | null>(() => {
     if (typeof window === 'undefined') return null;
     return getPublicCaseRouteStateFromLocation(window.location);
@@ -315,6 +350,82 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!isSessionResolved) return;
+    if (!session?.user || guestMode) {
+      setProfileSetupState('idle');
+      setProfileSetupError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const checkProfileSetup = async () => {
+      setProfileSetupState('checking');
+      setProfileSetupError(null);
+      try {
+        const authUser = session.user;
+        const metadataFullName = String(authUser.user_metadata?.full_name || authUser.user_metadata?.name || '').trim();
+        const fallbackFullName = metadataFullName || String(authUser.email?.split('@')[0] || 'Resident').trim();
+        const fallbackDisplayName = buildFallbackDisplayName(
+          String(authUser.user_metadata?.nickname || authUser.user_metadata?.display_name || '').trim() || fallbackFullName,
+          authUser.email
+        );
+
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, nickname, role')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        const fullName = String(data?.full_name || fallbackFullName).trim();
+        const displayName = String(data?.nickname || fallbackDisplayName).trim();
+        const storedRole = String(data?.role || '').trim();
+        const hasRequiredProfile =
+          Boolean(data)
+          && fullName.length > 0
+          && displayName.length > 0
+          && storedRole.length > 0;
+
+        if (cancelled) return;
+
+        if (hasRequiredProfile) {
+          setProfileSetupState('ready');
+          return;
+        }
+
+        const normalizedRole = normalizeUserRole(storedRole || 'resident');
+        const allowedRole = normalizedRole === 'consultant' || normalizedRole === 'fellow' ? normalizedRole : 'resident';
+        setProfileSetupDefaults({
+          fullName,
+          displayName,
+          role: allowedRole,
+        });
+        setProfileSetupState('required');
+      } catch (error: any) {
+        if (cancelled) return;
+        setProfileSetupError(error?.message || 'Unable to check your profile setup.');
+        setProfileSetupDefaults({
+          fullName: '',
+          displayName: '',
+          role: 'resident',
+        });
+        setProfileSetupState('required');
+      }
+    };
+
+    void checkProfileSetup();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [guestMode, isSessionResolved, session]);
+
+  useEffect(() => {
+    if (!isSessionResolved) return;
+    if (session?.user && !guestMode && profileSetupState !== 'ready') {
+      return;
+    }
     if (principalKey === 'anon') {
       debugLifecycle('bootstrap:idle-anon');
       hasReleasedBootRef.current = false;
@@ -439,7 +550,38 @@ const App: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [bootPrincipalKey, debugLifecycle, guestMode, isSessionResolved, principalKey, session]);
+  }, [bootPrincipalKey, debugLifecycle, guestMode, isSessionResolved, principalKey, profileSetupState, session]);
+
+  const handleCompleteProfileSetup = async (input: { fullName: string; displayName: string; role: 'resident' | 'fellow' | 'consultant' }) => {
+    if (!session?.user) return;
+
+    setIsSavingProfileSetup(true);
+    setProfileSetupError(null);
+    try {
+      const username = buildFallbackUsername(input.fullName, input.displayName, session.user.email);
+      const { error } = await supabase.from('profiles').upsert({
+        id: session.user.id,
+        full_name: input.fullName,
+        nickname: input.displayName,
+        username,
+        role: input.role,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) throw error;
+
+      setProfileSetupDefaults({
+        fullName: input.fullName,
+        displayName: input.displayName,
+        role: input.role,
+      });
+      setProfileSetupState('ready');
+    } catch (error: any) {
+      setProfileSetupError(error?.message || 'Unable to save your profile.');
+    } finally {
+      setIsSavingProfileSetup(false);
+    }
+  };
 
   useEffect(() => {
     const uid = session?.user?.id;
@@ -651,13 +793,14 @@ const App: React.FC = () => {
             }}
           />
         );
-      case 'profile':
-        return (
-          <ProfileScreen
-            currentUserId={session?.user?.id || null}
-            onEditCase={(caseItem) => {
-              setCaseToEdit(caseItem);
-              navigateToScreen('case-view'); // Profile also goes to view mode first
+        case 'profile':
+          return (
+            <ProfileScreen
+              currentUserId={session?.user?.id || null}
+              onOpenUserManagement={() => navigateToScreen('admin-user-management')}
+              onEditCase={(caseItem) => {
+                setCaseToEdit(caseItem);
+                navigateToScreen('case-view'); // Profile also goes to view mode first
             }}
             onViewCase={(caseItem) => {
               setCaseToEdit(caseItem);
@@ -688,10 +831,12 @@ const App: React.FC = () => {
             onOpenConsultantDecking={() => navigateToScreen('consultant-decking')}
           />
         );
-      case 'article-library':
-        return <ArticleLibraryScreen />;
-      case 'resident-endorsements':
-        return <ResidentEndorsementsScreen onBack={navigateBack} />;
+        case 'article-library':
+          return <ArticleLibraryScreen />;
+        case 'admin-user-management':
+          return <AdminUserManagementScreen onBack={navigateBack} />;
+        case 'resident-endorsements':
+          return <ResidentEndorsementsScreen onBack={navigateBack} />;
       case 'consultant-decking':
         return (
           <ConsultantDeckingBoardScreen
@@ -716,8 +861,14 @@ const App: React.FC = () => {
   };
 
   const bootScreenMode = !isSessionResolved ? 'session' : 'bootstrap';
-  const shouldShowBootScreen = !isSessionResolved || ((Boolean(session) || guestMode) && (!isBootReady || isBootCompleting));
-  const canRenderAppShell = isSessionResolved && (Boolean(session) || guestMode) && isBootReady;
+  const shouldShowBootScreen =
+    !isSessionResolved
+    || ((Boolean(session) || guestMode) && profileSetupState !== 'required' && (!isBootReady || isBootCompleting));
+  const canRenderAppShell =
+    isSessionResolved
+    && (Boolean(session) || guestMode)
+    && (guestMode || !session || profileSetupState === 'ready')
+    && isBootReady;
 
   if (publicCaseRoute) {
     return (
@@ -743,6 +894,22 @@ const App: React.FC = () => {
           setGuestMode(true);
         }}
       />
+    );
+  }
+
+  if (isSessionResolved && session && !guestMode && profileSetupState === 'required') {
+    return (
+      <>
+        <ProfileCompletionScreen
+          initialFullName={profileSetupDefaults.fullName}
+          initialDisplayName={profileSetupDefaults.displayName}
+          initialRole={profileSetupDefaults.role}
+          isSaving={isSavingProfileSetup}
+          error={profileSetupError}
+          onSubmit={handleCompleteProfileSetup}
+        />
+        <ToastHost />
+      </>
     );
   }
 
