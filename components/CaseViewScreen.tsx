@@ -395,12 +395,29 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         }
     };
 
+    const promptManualCopy = (value: string) => {
+        if (typeof window === 'undefined' || typeof window.prompt !== 'function') {
+            return false;
+        }
+
+        window.prompt('Copy the case text manually:', value);
+        return true;
+    };
+
     const copyText = async (value: string, successTitle: string, successDescription?: string) => {
         const copied = await writeTextToClipboard(value);
-        if (!copied) {
-            throw new Error('Clipboard access is not available in this context.');
+        if (copied) {
+            toastSuccess(successTitle, successDescription);
+            return;
         }
-        toastSuccess(successTitle, successDescription);
+
+        const prompted = promptManualCopy(value);
+        if (prompted) {
+            toastSuccess('Manual copy ready', 'A copy prompt was opened. Copy the text there, then paste it into Viber.');
+            return;
+        }
+
+        throw new Error('Clipboard access is not available in this context.');
     };
 
     const buildConsultantShareText = (publicUrl: string) => {
