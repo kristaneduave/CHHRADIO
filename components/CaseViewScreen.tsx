@@ -362,8 +362,44 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             img.src = src;
         });
     }, [currentImageIndex, images]);
+    const writeTextToClipboard = async (value: string) => {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            try {
+                await navigator.clipboard.writeText(value);
+                return true;
+            } catch {
+                // Fall through to the legacy copy strategy below.
+            }
+        }
+
+        if (typeof document === 'undefined') {
+            return false;
+        }
+
+        const textArea = document.createElement('textarea');
+        textArea.value = value;
+        textArea.setAttribute('readonly', 'true');
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        textArea.style.pointerEvents = 'none';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        try {
+            return document.execCommand('copy');
+        } catch {
+            return false;
+        } finally {
+            document.body.removeChild(textArea);
+        }
+    };
+
     const copyText = async (value: string, successTitle: string, successDescription?: string) => {
-        await navigator.clipboard.writeText(value);
+        const copied = await writeTextToClipboard(value);
+        if (!copied) {
+            throw new Error('Clipboard access is not available in this context.');
+        }
         toastSuccess(successTitle, successDescription);
     };
 
@@ -410,7 +446,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         setIsPreparingShare(true);
         try {
             const shareText = await getPreparedConsultantShareText();
-            await navigator.clipboard.writeText(shareText);
+            const copied = await writeTextToClipboard(shareText);
             const viberUrl = `viber://forward?text=${encodeURIComponent(shareText)}`;
 
             if (typeof window !== 'undefined') {
@@ -424,12 +460,20 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     launchAnchor.click();
                     document.body.removeChild(launchAnchor);
                 } catch {
-                    toastSuccess('Case text copied', 'Open Viber, upload the representative image, then paste the copied case text.');
+                    if (copied) {
+                        toastSuccess('Case text copied', 'Open Viber, upload the representative image, then paste the copied case text.');
+                    } else {
+                        toastError('Unable to open Viber', 'Open Viber manually, then use Copy Case Text to copy the share message.');
+                    }
                     return;
                 }
             }
 
-            toastSuccess('Viber ready', 'Viber is opening. Upload the representative image, then paste the copied case text.');
+            if (copied) {
+                toastSuccess('Viber ready', 'Viber is opening. Upload the representative image, then paste the copied case text.');
+            } else {
+                toastSuccess('Viber opening', 'Viber is opening. If paste is unavailable, return and tap Copy Case Text.');
+            }
         } catch (error: any) {
             toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
         } finally {
