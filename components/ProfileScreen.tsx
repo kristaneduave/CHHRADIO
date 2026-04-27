@@ -70,12 +70,26 @@ const formatSavedAt = (iso: string | null): string => {
   });
 };
 
+const ABOUT_CREDITS = {
+  appName: 'CHH RadCore',
+  builtBy: 'Created by Kristan Rey Eduave (Feb 2026)',
+  department: 'Built for CHH Radiology',
+  version: 'v3.2.0',
+  recentChanges: [
+    'Dedicated user management page for admins.',
+    'First-login profile completion for new accounts.',
+    'Simplified consultant case sharing flow.',
+    'Improved public case sharing and report access.',
+  ],
+};
+
 const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUserManagement, onEditCase, onViewCase }) => {
   const viewport = useAppViewport();
   const cachedWorkspace = currentUserId ? getCachedProfileHomeWorkspace(currentUserId) : null;
   const [loading, setLoading] = useState(!cachedWorkspace);
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showAboutCredits, setShowAboutCredits] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedWorkspace?.profileRecord?.role ? [cachedWorkspace.profileRecord.role as UserRole] : []);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -759,20 +773,33 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
           <div className="space-y-1.5">
 
             {/* Appearance */}
-            <div className="w-full p-2 bg-white/[0.02] rounded-2xl border border-white/[0.05] flex items-center justify-between">
-              <div className="flex items-center gap-3.5 px-2">
-                <div className="w-[34px] h-[34px] rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
-                  <span className="material-icons text-[18px]">palette</span>
-                </div>
+              <div className="w-full p-2 bg-white/[0.02] rounded-2xl border border-white/[0.05] flex items-center justify-between">
+                <div className="flex items-center gap-3.5 px-2">
+                  <div className="w-[34px] h-[34px] rounded-xl bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+                    <span className="material-icons text-[18px]">palette</span>
+                  </div>
                 <span className="block text-[12px] font-bold text-white tracking-wider uppercase">Appearance</span>
               </div>
-              <div className="pr-1">
-                <ThemeToggle showSystem={false} />
+                <div className="pr-1">
+                  <ThemeToggle showSystem={false} />
+                </div>
               </div>
-            </div>
 
-            {/* Admin Action */}
-              {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
+              <button
+                onClick={() => setShowAboutCredits(true)}
+                className="w-full p-2.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3.5 w-full">
+                  <div className="w-[34px] h-[34px] rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 shadow-[0_0_10px_rgba(34,211,238,0.15)] group-hover:shadow-[0_0_15px_rgba(34,211,238,0.25)] transition-all">
+                    <span className="material-icons text-[18px]">info</span>
+                  </div>
+                  <span className="block text-[12px] font-bold text-slate-300 group-hover:text-white transition-colors tracking-wider uppercase flex-1">About / Credits</span>
+                  <span className="material-icons text-white/20 text-[20px] group-hover:text-white/60 transition-colors">chevron_right</span>
+                </div>
+              </button>
+
+              {/* Admin Action */}
+                {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
                 <button
                 onClick={onOpenUserManagement}
                   className="w-full p-2.5 rounded-2xl bg-rose-500/[0.03] border border-rose-500/10 hover:bg-rose-500/[0.08] hover:border-rose-500/20 transition-all text-left flex items-center justify-between group"
@@ -1039,6 +1066,53 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
           </div>
         )
       }
+
+      {showAboutCredits && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-in fade-in duration-200" onClick={() => setShowAboutCredits(false)}>
+          <div className="bg-[#0c1829] border border-white/10 rounded-3xl p-6 w-full max-w-[420px] shadow-2xl space-y-5 animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.24em] text-cyan-300">About This App</p>
+                <h3 className="mt-2 text-[22px] font-black text-white">{ABOUT_CREDITS.appName}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-300">{ABOUT_CREDITS.builtBy}</p>
+                <p className="mt-1 text-xs text-slate-500">{ABOUT_CREDITS.department}</p>
+              </div>
+              <button
+                onClick={() => setShowAboutCredits(false)}
+                className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0"
+              >
+                <span className="material-icons text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 space-y-2">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Version</span>
+                <span className="text-sm font-bold text-white">{ABOUT_CREDITS.version}</span>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Recent Changes</p>
+              <div className="mt-3 space-y-2.5">
+                {ABOUT_CREDITS.recentChanges.map((entry) => (
+                  <div key={entry} className="flex items-start gap-2 text-sm text-slate-300 leading-relaxed">
+                    <span className="mt-[6px] h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0" />
+                    <span>{entry}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAboutCredits(false)}
+              className="w-full py-3.5 bg-white/5 hover:bg-white/10 rounded-xl text-[11px] font-bold text-slate-300 uppercase tracking-widest transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
     </PageShell>
