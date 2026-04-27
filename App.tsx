@@ -84,6 +84,10 @@ const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toSt
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
 const PUBLIC_CASE_ROUTE_PREFIX = '/shared/case/';
 const PUBLIC_CASE_QUERY_PARAM = 'publicCaseToken';
+type PublicCaseRouteState = {
+  token: string;
+  source: 'path' | 'query';
+};
 const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   if (isFinalStep) return 260;
   if (delta <= 8) return 220;
@@ -100,14 +104,14 @@ const getPublicCaseTokenFromPath = (pathname: string) => {
   return token || null;
 };
 
-const getPublicCaseTokenFromLocation = (location: Location) => {
+const getPublicCaseRouteStateFromLocation = (location: Location): PublicCaseRouteState | null => {
   const tokenFromPath = getPublicCaseTokenFromPath(location.pathname);
   if (tokenFromPath) {
-    return tokenFromPath;
+    return { token: tokenFromPath, source: 'path' };
   }
 
   const tokenFromQuery = new URLSearchParams(location.search).get(PUBLIC_CASE_QUERY_PARAM)?.trim();
-  return tokenFromQuery || null;
+  return tokenFromQuery ? { token: tokenFromQuery, source: 'query' } : null;
 };
 
 const App: React.FC = () => {
@@ -132,9 +136,9 @@ const App: React.FC = () => {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [pendingAnnouncementId, setPendingAnnouncementId] = useState<string | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<Screen[]>([]);
-  const [publicCaseToken, setPublicCaseToken] = useState<string | null>(() => {
+  const [publicCaseRoute, setPublicCaseRoute] = useState<PublicCaseRouteState | null>(() => {
     if (typeof window === 'undefined') return null;
-    return getPublicCaseTokenFromLocation(window.location);
+    return getPublicCaseRouteStateFromLocation(window.location);
   });
   const hasReleasedBootRef = useRef(false);
   const bootExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,7 +184,7 @@ const App: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     const syncPublicRoute = () => {
-      setPublicCaseToken(getPublicCaseTokenFromLocation(window.location));
+      setPublicCaseRoute(getPublicCaseRouteStateFromLocation(window.location));
     };
 
     window.addEventListener('popstate', syncPublicRoute);
@@ -715,11 +719,14 @@ const App: React.FC = () => {
   const shouldShowBootScreen = !isSessionResolved || ((Boolean(session) || guestMode) && (!isBootReady || isBootCompleting));
   const canRenderAppShell = isSessionResolved && (Boolean(session) || guestMode) && isBootReady;
 
-  if (publicCaseToken) {
+  if (publicCaseRoute) {
     return (
       <>
         <Suspense fallback={null}>
-          <PublicCaseShareScreen token={publicCaseToken} />
+          <PublicCaseShareScreen
+            token={publicCaseRoute.token}
+            mode={publicCaseRoute.source === 'path' ? 'preview' : 'report'}
+          />
         </Suspense>
         <ToastHost />
       </>

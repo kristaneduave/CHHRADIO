@@ -53,26 +53,14 @@ const buildDescription = (record: PublicCaseRecord | null) => {
     ? record.analysis_result.impression.trim()
     : '';
   const diagnosis = typeof record.diagnosis === 'string' ? record.diagnosis.trim() : '';
-  const exam = [record.modality, record.organ_system]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.trim())
-    .join(' - ');
+  const narrative = findings || impression || diagnosis;
 
-  const parts = [
-    exam,
-    findings ? `Findings: ${findings}` : '',
-    impression ? `Impression: ${impression}` : '',
-    !impression && diagnosis ? `Diagnosis: ${diagnosis}` : '',
-  ].filter(Boolean);
+  if (!narrative) {
+    return 'Open the full report in the CHH Radiology app.';
+  }
 
-  return compactText(parts.join(' ') || 'Shared radiology case report from CHH Radiology.', 280);
+  return compactText(`${narrative} Open the full report in the app.`, 280);
 };
-
-const getExamLabel = (record: PublicCaseRecord | null) =>
-  [record?.modality, record?.organ_system]
-    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-    .map((value) => value.trim())
-    .join(' - ');
 
 const buildHtml = (token: string, origin: string, record: PublicCaseRecord | null, notFound = false) => {
   const caseTitle = String(record?.title || record?.diagnosis || 'Shared Case').trim() || 'Shared Case';
@@ -82,25 +70,18 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
   const description = notFound
     ? 'This shared radiology case link is invalid, disabled, or no longer available.'
     : buildDescription(record);
-  const findings = compactText(String(record?.findings || '').trim(), 420);
-  const impression = compactText(String(record?.analysis_result?.impression || record?.diagnosis || '').trim(), 220);
-  const patientId = String(record?.analysis_result?.patientId || record?.diagnosis || '').trim();
-  const examLabel = getExamLabel(record);
   const image = getRepresentativeImage(record);
   const sharedUrl = `${origin}/shared/case/${encodeURIComponent(token)}`;
-  const appUrl = `${origin}/?publicCaseToken=${encodeURIComponent(token)}`;
   const appPath = `/?publicCaseToken=${encodeURIComponent(token)}`;
   const safeTitle = escapeHtml(pageTitle);
   const safeCaseTitle = escapeHtml(caseTitle);
   const safeDescription = escapeHtml(description);
   const safeSharedUrl = escapeHtml(sharedUrl);
-  const safeAppUrl = escapeHtml(appUrl);
   const safeAppPath = escapeHtml(appPath);
   const safeImage = image ? escapeHtml(image) : '';
-  const safeFindings = findings ? escapeHtml(findings) : '';
-  const safeImpression = impression ? escapeHtml(impression) : '';
-  const safePatientId = patientId ? escapeHtml(patientId) : '';
-  const safeExamLabel = examLabel ? escapeHtml(examLabel) : '';
+  const redirectScript = notFound
+    ? ''
+    : `<script>window.location.replace(${JSON.stringify(appPath)});</script>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -109,15 +90,16 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${safeTitle}</title>
     <meta name="description" content="${safeDescription}" />
-    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:title" content="${notFound ? safeTitle : safeCaseTitle}" />
     <meta property="og:description" content="${safeDescription}" />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${safeSharedUrl}" />
     ${safeImage ? `<meta property="og:image" content="${safeImage}" />` : ''}
     <meta name="twitter:card" content="${safeImage ? 'summary_large_image' : 'summary'}" />
-    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:title" content="${notFound ? safeTitle : safeCaseTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
     ${safeImage ? `<meta name="twitter:image" content="${safeImage}" />` : ''}
+    ${redirectScript}
     <style>
       body {
         margin: 0;
@@ -138,14 +120,8 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
         overflow: hidden;
         box-shadow: 0 24px 80px rgba(2, 6, 23, 0.45);
       }
-      .hero {
-        ${safeImage ? `background-image: linear-gradient(rgba(7,16,25,0.18), rgba(7,16,25,0.58)), url('${safeImage}');` : 'background: linear-gradient(135deg, #0f2740, #0b1520);'}
-        background-size: cover;
-        background-position: center;
-        min-height: 300px;
-      }
       .content {
-        padding: 28px;
+        padding: 28px 28px 22px;
       }
       .eyebrow {
         color: #7dd3fc;
@@ -164,51 +140,34 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
         color: #cbd5e1;
         line-height: 1.6;
       }
-      .meta {
-        display: grid;
-        gap: 12px;
-        margin-top: 20px;
+      .media {
+        padding: 0 28px 28px;
       }
-      .meta-row {
+      .hero {
+        width: 100%;
+        min-height: 300px;
+        border-radius: 24px;
+        object-fit: cover;
+        display: block;
+        background: linear-gradient(135deg, #0f2740, #0b1520);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+      }
+      .hero-placeholder {
+        min-height: 300px;
         display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-      }
-      .pill {
-        display: inline-flex;
         align-items: center;
-        border-radius: 999px;
-        border: 1px solid rgba(125, 211, 252, 0.18);
-        background: rgba(14, 165, 233, 0.08);
-        color: #e0f2fe;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        padding: 8px 12px;
-      }
-      .section {
-        margin-top: 24px;
-        padding-top: 20px;
-        border-top: 1px solid rgba(148, 163, 184, 0.12);
-      }
-      .section-label {
-        color: #93c5fd;
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-      }
-      .section-copy {
-        margin-top: 10px;
-        color: #e2e8f0;
-        font-size: 16px;
-        line-height: 1.7;
+        justify-content: center;
+        color: #cbd5e1;
+        font-weight: 600;
       }
       .actions {
         display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
         margin-top: 28px;
+      }
+      .helper {
+        margin-top: 14px;
+        color: #94a3b8;
+        font-size: 14px;
       }
       a {
         display: inline-flex;
@@ -221,45 +180,26 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
         padding: 13px 18px;
         border-radius: 999px;
       }
-      .ghost-link {
-        background: rgba(148, 163, 184, 0.08);
-        color: #e2e8f0;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-      }
     </style>
   </head>
   <body>
     <article class="card">
-      <div class="hero"></div>
       <div class="content">
         <div class="eyebrow">CHH Radiology Portal</div>
         <h1>${notFound ? safeTitle : safeCaseTitle}</h1>
         <p>${safeDescription}</p>
-        ${notFound ? '' : `
-          <div class="meta">
-            <div class="meta-row">
-              ${safeExamLabel ? `<div class="pill">${safeExamLabel}</div>` : ''}
-              ${safePatientId ? `<div class="pill">PACS Patient ID: ${safePatientId}</div>` : ''}
-            </div>
-          </div>
-          ${safeFindings ? `
-            <div class="section">
-              <div class="section-label">Findings</div>
-              <div class="section-copy">${safeFindings}</div>
-            </div>
-          ` : ''}
-          ${safeImpression ? `
-            <div class="section">
-              <div class="section-label">Impression</div>
-              <div class="section-copy">${safeImpression}</div>
-            </div>
-          ` : ''}
-          <div class="actions">
-            <a href="${safeAppPath}">Open Full Case Report</a>
-            <a class="ghost-link" href="${safeSharedUrl}">Copy Share Link</a>
-          </div>
-        `}
       </div>
+      ${notFound ? '' : `
+        <div class="media">
+          ${safeImage
+            ? `<img class="hero" src="${safeImage}" alt="${safeCaseTitle}" />`
+            : `<div class="hero hero-placeholder">Representative image unavailable</div>`}
+          <div class="actions">
+            <a href="${safeAppPath}">Open Full Report</a>
+          </div>
+          <p class="helper">Opening the full report automatically. Use the button above if it does not continue.</p>
+        </div>
+      `}
     </article>
   </body>
 </html>`;
