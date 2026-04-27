@@ -72,13 +72,15 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
     : buildDescription(record);
   const image = getRepresentativeImage(record);
   const sharedUrl = `${origin}/shared/case/${encodeURIComponent(token)}`;
+  const sharedImageUrl = `${origin}/api/shared-case-image?token=${encodeURIComponent(token)}`;
   const appPath = `/?publicCaseToken=${encodeURIComponent(token)}`;
   const safeTitle = escapeHtml(pageTitle);
   const safeCaseTitle = escapeHtml(caseTitle);
   const safeDescription = escapeHtml(description);
   const safeSharedUrl = escapeHtml(sharedUrl);
+  const safeSharedImageUrl = escapeHtml(sharedImageUrl);
   const safeAppPath = escapeHtml(appPath);
-  const safeImage = image ? escapeHtml(image) : '';
+  const safeImage = image ? safeSharedImageUrl : '';
   const redirectScript = notFound
     ? ''
     : `<script>window.location.replace(${JSON.stringify(appPath)});</script>`;
@@ -95,6 +97,8 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${safeSharedUrl}" />
     ${safeImage ? `<meta property="og:image" content="${safeImage}" />` : ''}
+    ${safeImage ? `<meta property="og:image:secure_url" content="${safeImage}" />` : ''}
+    ${safeImage ? `<meta property="og:image:alt" content="${safeCaseTitle}" />` : ''}
     <meta name="twitter:card" content="${safeImage ? 'summary_large_image' : 'summary'}" />
     <meta name="twitter:title" content="${notFound ? safeTitle : safeCaseTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
