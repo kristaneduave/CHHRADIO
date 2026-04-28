@@ -118,6 +118,20 @@ ${notesText || 'No notes provided.'}`;
 
 export const generateConsultantShareText = (data: any): string => {
   const publicUrl = String(data?.publicUrl || '').trim();
+  const impressionText = compactText(
+    data?.impression || data?.title || data?.diagnosis || '',
+    220
+  );
 
-  return publicUrl;
+  if (!publicUrl) {
+    return '';
+  }
+
+  return [
+    impressionText ? `Impression: ${impressionText}` : null,
+    'Please click the link for the full report:',
+    publicUrl,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 };
