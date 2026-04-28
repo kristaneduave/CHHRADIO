@@ -119,7 +119,7 @@ ${notesText || 'No notes provided.'}`;
 export const generateConsultantShareText = (data: any): string => {
   const publicUrl = String(data?.publicUrl || '').trim();
   const impressionText = compactText(
-    data?.impression || data?.title || data?.diagnosis || '',
+    data?.title || data?.impression || data?.diagnosis || '',
     220
   );
 
