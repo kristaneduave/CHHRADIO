@@ -52,6 +52,18 @@ const ORGAN_SYSTEM_OPTIONS = [
   'Nuclear Medicine',
 ] as const;
 
+const MODALITY_OPTIONS = [
+  'X-Ray',
+  'CT Scan',
+  'MRI',
+  'Ultrasound',
+  'Mammography',
+  'Fluoroscopy',
+  'Nuclear Medicine',
+  'Interventional',
+  'PET/CT',
+] as const;
+
 const normalizeOrganSystem = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -142,6 +154,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
     startDate: '',
     endDate: '',
     specialty: '',
+    modality: '',
     diagnosticCode: '',
     submissionType: '',
     datePreset: 'all',
@@ -315,6 +328,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       const raw = rawCases.find((c) => c.id === p.id);
       const rawOrganSystem = resolveOrganSystem(raw?.organ_system);
       const matchSpecialty = filters.specialty ? rawOrganSystem === filters.specialty : true;
+      const rawModality = String(raw?.modality || p.modality || '').trim();
+      const matchModality = filters.modality ? rawModality === filters.modality : true;
       const matchCode = filters.diagnosticCode
         ? p.diagnosticCode.toLowerCase().includes(filters.diagnosticCode.toLowerCase())
         : true;
@@ -326,7 +341,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       const end = filters.endDate ? new Date(filters.endDate) : null;
       const matchDate = (!start || date >= start) && (!end || date <= end);
 
-      return matchQuery && matchSpecialty && matchCode && matchSubmissionType && matchDate;
+      return matchQuery && matchSpecialty && matchModality && matchCode && matchSubmissionType && matchDate;
     });
 
     startTransition(() => {
@@ -341,6 +356,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       startDate: '',
       endDate: '',
       specialty: '',
+      modality: '',
       diagnosticCode: '',
       submissionType: '',
       datePreset: 'all',
@@ -371,6 +387,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
       }`
       : '',
     filters.specialty ? `Organ system: ${filters.specialty}` : '',
+    filters.modality ? `Modality: ${filters.modality}` : '',
     filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '',
     filters.datePreset !== 'all'
       ? `Date: ${filters.datePreset === 'custom'
@@ -471,7 +488,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                   <span className="material-icons text-[16px]">filter_alt</span>
                   Advanced filters
                 </h3>
-                <p className="mt-1 text-xs text-slate-400">Refine the case library by type, date, organ system, and ICD-10 code.</p>
+                <p className="mt-1 text-xs text-slate-400">Refine the case library by type, date, modality, organ system, and PACS Patient ID.</p>
               </div>
               <button
                 onClick={clearFilters}
@@ -560,6 +577,22 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                   {primaryMetaOptions.map((s) => (
                     <option key={s} value={s} className="bg-surface">
                       {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-300">Modality</label>
+                <select
+                  name="modality"
+                  value={filters.modality}
+                  onChange={handleFilterChange}
+                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
+                >
+                  <option value="">All Modalities</option>
+                  {MODALITY_OPTIONS.map((modality) => (
+                    <option key={modality} value={modality} className="bg-surface">
+                      {modality}
                     </option>
                   ))}
                 </select>

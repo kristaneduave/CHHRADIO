@@ -442,6 +442,7 @@ export interface PatientRecord {
   age: number;
   date: string;
   specialty: string;
+  modality?: string;
   diagnosticCode: string;
   status: 'Completed' | 'Pending' | 'Draft' | 'Published';
   submission_type?: SubmissionType;
@@ -453,6 +454,7 @@ export interface SearchFilters {
   startDate: string;
   endDate: string;
   specialty: string;
+  modality: string;
   diagnosticCode: string;
   submissionType: '' | SubmissionType;
   datePreset: 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
