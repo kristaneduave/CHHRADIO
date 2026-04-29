@@ -1,6 +1,7 @@
 
 export type Screen = 'dashboard' | 'upload' | 'quiz' | 'live-aunt-minnie' | 'calendar' | 'announcements' | 'profile' | 'search' | 'database' | 'case-view' | 'activity-log' | 'residents-corner' | 'resident-endorsements' | 'consultant-decking' | 'newsfeed' | 'anatomy' | 'monthly-census' | 'article-library' | 'admin-user-management';
 export type SubmissionType = 'interesting_case' | 'rare_pathology' | 'aunt_minnie';
+export type InterestingCaseSource = 'Infinitt' | 'Medavis';
 export type GuidelineSyncStatus = 'draft' | 'published' | 'failed';
 export type PathologyGuidelineSourceKind = 'google_drive' | 'pdf' | 'external';
 export type PathologyGuidelineVersionOrigin = 'pdf_json_import' | 'manual_edit' | 'drive_sync' | 'draft_clone';
@@ -251,6 +252,7 @@ export interface AnalysisResult {
   redFlags?: string[];
   impression?: string;
   patientId?: string;
+  caseSource?: InterestingCaseSource | null;
   imagesMetadata?: Array<{ description?: string }>;
   studyDate?: string;
   reference?: ReferenceSource;

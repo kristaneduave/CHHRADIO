@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, DragEvent } from 'react';
 import { supabase } from '../services/supabase';
 import { generateViberText } from '../utils/formatters';
-import { ReferenceSource, SubmissionType } from '../types';
+import { InterestingCaseSource, ReferenceSource, SubmissionType } from '../types';
 import { toastError, toastSuccess, toastInfo } from '../utils/toast';
 import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
@@ -43,6 +43,7 @@ const REFERENCE_SOURCE_TYPES = [
 ];
 
 const MAX_REFERENCES = 4;
+const INTERESTING_CASE_SOURCES: InterestingCaseSource[] = ['Infinitt', 'Medavis'];
 const CASE_TEXT_LIMITS: Record<SubmissionType, { findings: number; notes?: number; radiologicClinchers?: number }> = {
   interesting_case: {
     findings: 280,
@@ -179,6 +180,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     modality: existingCase?.modality || 'CT Scan',
     organSystem: existingCase?.organ_system || existingCase?.anatomy_region || existingCase?.analysis_result?.anatomy_region || 'Neuroradiology',
     patientId: existingCase?.analysis_result?.patientId || '',
+    caseSource: (existingCase?.analysis_result?.caseSource || existingCase?.analysis_result?.case_source || 'Infinitt') as InterestingCaseSource,
     clinicalData: existingCase?.clinical_history || '',
     findings: existingCase?.findings || '',
     impression: existingCase?.analysis_result?.impression || '',
@@ -308,6 +310,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         modality: 'CT Scan',
         organSystem: 'Neuroradiology',
         patientId: '',
+        caseSource: 'Infinitt' as InterestingCaseSource,
         clinicalData: '',
         findings: '',
         impression: '',
@@ -556,6 +559,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             modality: 'CT Scan',
             organSystem: 'Neuroradiology',
             patientId: '',
+            caseSource: 'Infinitt' as InterestingCaseSource,
             clinicalData: '',
             findings: '',
             impression: '',
@@ -671,10 +675,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             </div>
 
             {formData.submissionType === 'interesting_case' && (
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Clinical Data</p>
-                  <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.clinicalData || 'No clinical data provided.'}</p>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Case Source</p>
+                    <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.caseSource || 'Infinitt'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Clinical Data</p>
+                    <p className="text-sm text-white leading-relaxed whitespace-pre-line">{formData.clinicalData || 'No clinical data provided.'}</p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Findings</p>
@@ -932,9 +940,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                 <p className="text-xs text-slate-500">Visible only to help trace the uploaded case back in PACS.</p>
               </div>
 
-              {formData.submissionType !== 'aunt_minnie' && (
-                <div ref={setFieldRef('clinicalData')} className="space-y-2">
-                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Clinical Data</label>
+                {formData.submissionType !== 'aunt_minnie' && (
+                  <div ref={setFieldRef('clinicalData')} className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Clinical Data</label>
                   <input
                     name="clinicalData"
                     value={formData.clinicalData}
@@ -943,11 +951,27 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     className={inputClassName}
                     autoComplete="off"
                   />
-                  {fieldErrors.clinicalData && <p className="text-sm text-rose-400">{fieldErrors.clinicalData}</p>}
-                </div>
-              )}
+                    {fieldErrors.clinicalData && <p className="text-sm text-rose-400">{fieldErrors.clinicalData}</p>}
+                  </div>
+                )}
 
-              <div ref={setFieldRef('findings')} className="space-y-2">
+                {formData.submissionType === 'interesting_case' && (
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Case Source</label>
+                    <select
+                      name="caseSource"
+                      value={formData.caseSource}
+                      onChange={handleInputChange}
+                      className={`${inputClassName} appearance-none cursor-pointer`}
+                    >
+                      {INTERESTING_CASE_SOURCES.map((source) => (
+                        <option key={source} value={source} className="bg-app text-white">{source}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div ref={setFieldRef('findings')} className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{formData.submissionType === 'aunt_minnie' ? 'Description' : 'Findings'}</label>
                   <span className={`text-[11px] font-semibold ${findingsCount >= findingsLimit ? 'text-amber-300' : 'text-slate-500'}`}>
@@ -1292,6 +1316,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                       <span className="text-[9px] text-slate-500 uppercase font-bold">Exam</span>
                       <p className="text-white text-sm font-bold">{formData.modality}</p>
                       <p className="text-slate-400 text-xs">{formData.organSystem}</p>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-slate-500 uppercase font-bold">Source</span>
+                      <p className="text-white text-sm font-bold">{formData.caseSource || 'Infinitt'}</p>
                     </div>
                   </>
                 )}

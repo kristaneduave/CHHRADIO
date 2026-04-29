@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { ReferenceSource, SubmissionType } from '../types';
+import { InterestingCaseSource, ReferenceSource, SubmissionType } from '../types';
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 
 type PdfImage = {
@@ -17,6 +17,7 @@ type PdfExportData = {
   modality?: string | null;
   organSystem?: string | null;
   patientId?: string | null;
+  caseSource?: InterestingCaseSource | null;
   findings?: string | null;
   clinicalData?: string | null;
   radiologicClinchers?: string | null;
@@ -25,6 +26,12 @@ type PdfExportData = {
   reference?: ReferenceSource | null;
   references?: ReferenceSource[];
   images: PdfImage[];
+};
+
+const normalizeInterestingCaseSource = (value: unknown): InterestingCaseSource | null => {
+  const normalized = String(value || '').trim();
+  if (normalized === 'Infinitt' || normalized === 'Medavis') return normalized;
+  return null;
 };
 
 type PdfTypographyScale = {
@@ -366,6 +373,9 @@ const normalizePdfExportData = (
     modality: normalizeText(data.modality) || null,
     organSystem: normalizeText(data.organSystem || data.organ_system || data.analysis_result?.anatomy_region) || null,
     patientId: normalizeText(data.patientId || data.analysis_result?.patientId || data.diagnosis) || null,
+    caseSource: normalizeInterestingCaseSource(
+      data.caseSource || data.analysis_result?.caseSource || data.analysis_result?.case_source
+    ),
     findings: normalizeText(data.findings) || null,
     clinicalData: normalizeText(data.clinicalData || data.clinical_history || data.clinicalHistory) || null,
     radiologicClinchers: normalizeText(data.radiologicClinchers || data.radiologic_clinchers) || null,
@@ -1322,11 +1332,12 @@ export const generateCasePDF = async (
                 ' | '
               ),
             },
-            { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
-            { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-            { label: 'PACS Patient ID', value: normalized.patientId || '' },
-            { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
-          ]
+              { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
+              { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
+              { label: 'PACS Patient ID', value: normalized.patientId || '' },
+              { label: 'Source', value: normalized.caseSource || '' },
+              { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
+            ]
         : [
             { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },

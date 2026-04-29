@@ -128,7 +128,7 @@ export const generateConsultantShareText = (data: any): string => {
   }
 
   return [
-    impressionText ? `Impression: ${impressionText}` : null,
+    impressionText || null,
     'Please click the link for the full report:',
     publicUrl,
   ]

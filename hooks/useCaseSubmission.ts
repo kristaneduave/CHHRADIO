@@ -136,6 +136,7 @@ export function useCaseSubmission() {
                 modality: isMinimalSubmission ? null : formData.modality,
                 anatomy_region: isMinimalSubmission ? null : formData.organSystem,
                 patientId: formData.patientId?.trim() || null,
+                caseSource: formData.submissionType === 'interesting_case' ? (formData.caseSource || 'Infinitt') : null,
                 keyFindings: [formData.findings],
                 impression: isMinimalSubmission ? null : formData.impression,
                 educationalSummary: formData.submissionType === 'rare_pathology' ? null : normalizeRichTextNotesHtml(formData.notes),

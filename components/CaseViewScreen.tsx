@@ -60,6 +60,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const isInterestingCase = submissionType === 'interesting_case';
     const isPublicMode = mode === 'public';
     const resolvedImpression = caseData.title || caseData.analysis_result?.impression || caseData.diagnosis;
+    const caseSource = isInterestingCase
+        ? String(caseData.analysis_result?.caseSource || caseData.analysis_result?.case_source || '').trim() || null
+        : null;
     const normalizedEducationalSummary = React.useMemo(
         () => normalizeRichTextNotesHtml(caseData.educational_summary),
         [caseData.educational_summary]
@@ -522,6 +525,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             additionalNotes: caseData.notes,
             uploadDate: caseData.created_at,
             patientId: caseData.analysis_result?.patientId,
+            caseSource,
             reference: caseData.analysis_result?.reference,
             references: caseData.analysis_result?.references,
             title: caseData.title,
@@ -1019,7 +1023,18 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                         {/* Collapsible Content */}
                         <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isMetadataExpanded ? 'max-h-[500px] opacity-100 mt-2' : 'max-h-0 opacity-0 mt-0 pointer-events-none'}`}>
-                            <div className="bg-[#131b26] border border-[#1e293b] rounded-xl p-5 flex flex-col gap-5">
+                                <div className="bg-[#131b26] border border-[#1e293b] rounded-xl p-5 flex flex-col gap-5">
+
+                                {/* Uploaded By */}
+                                <div>
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                        <span className="material-icons text-[12px]">person</span>
+                                        Uploaded By
+                                    </div>
+                                    <div className="text-base sm:text-lg font-bold text-white leading-tight">
+                                        {publisherName || 'Radiologist'}
+                                    </div>
+                                </div>
 
                                 {/* Patient ID */}
                                 <div>
@@ -1051,6 +1066,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                         {caseData.organ_system && (
                                             <span className="px-2.5 py-1 rounded-md bg-[#1e293b] text-slate-300 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase border border-white/5">
                                                 {caseData.organ_system}
+                                            </span>
+                                        )}
+                                        {caseSource && (
+                                            <span className="px-2.5 py-1 rounded-md bg-[#1e293b] text-slate-300 text-[10px] sm:text-[11px] font-bold tracking-widest uppercase border border-white/5">
+                                                {caseSource}
                                             </span>
                                         )}
                                     </div>
