@@ -78,9 +78,7 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
   const safeCaseTitle = escapeHtml(caseTitle);
   const safeDescription = escapeHtml(description);
   const safeSharedUrl = escapeHtml(sharedUrl);
-  const safeSharedImageUrl = escapeHtml(sharedImageUrl);
   const safeAppPath = escapeHtml(appPath);
-  const safeImage = image ? safeSharedImageUrl : '';
   const redirectScript = notFound
     ? ''
     : `<script>window.location.replace(${JSON.stringify(appPath)});</script>`;
@@ -96,13 +94,9 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
     <meta property="og:description" content="${safeDescription}" />
     <meta property="og:type" content="article" />
     <meta property="og:url" content="${safeSharedUrl}" />
-    ${safeImage ? `<meta property="og:image" content="${safeImage}" />` : ''}
-    ${safeImage ? `<meta property="og:image:secure_url" content="${safeImage}" />` : ''}
-    ${safeImage ? `<meta property="og:image:alt" content="${safeCaseTitle}" />` : ''}
-    <meta name="twitter:card" content="${safeImage ? 'summary_large_image' : 'summary'}" />
+    <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="${notFound ? safeTitle : safeCaseTitle}" />
     <meta name="twitter:description" content="${safeDescription}" />
-    ${safeImage ? `<meta name="twitter:image" content="${safeImage}" />` : ''}
     ${redirectScript}
     <style>
       body {
@@ -195,8 +189,8 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
       </div>
       ${notFound ? '' : `
         <div class="media">
-          ${safeImage
-            ? `<img class="hero" src="${safeImage}" alt="${safeCaseTitle}" />`
+          ${image
+            ? `<img class="hero" src="${sharedImageUrl}" alt="${safeCaseTitle}" />`
             : `<div class="hero hero-placeholder">Representative image unavailable</div>`}
           <div class="actions">
             <a href="${safeAppPath}">Open Full Report</a>

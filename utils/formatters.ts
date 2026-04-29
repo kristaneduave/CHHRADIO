@@ -129,7 +129,7 @@ export const generateConsultantShareText = (data: any): string => {
 
   return [
     impressionText || null,
-    'Please click the link for the full report:',
+    'Click for more:',
     publicUrl,
   ]
     .filter(Boolean)

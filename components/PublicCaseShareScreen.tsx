@@ -70,7 +70,6 @@ const PublicCaseShareScreen: React.FC<PublicCaseShareScreenProps> = ({ token, mo
         setCaseData(resolvedCase);
         if (typeof document !== 'undefined') {
           const previewTitle = String(resolvedCase.title || resolvedCase.diagnosis || 'Shared Case').trim() || 'Shared Case';
-          const representativeImage = getCaseSharePreviewImage(resolvedCase);
           const description = buildPreviewDescription(resolvedCase);
 
           document.title = `${previewTitle} | CHH Radiology`;
@@ -79,14 +78,9 @@ const PublicCaseShareScreen: React.FC<PublicCaseShareScreenProps> = ({ token, mo
           updateMetaContent('property', 'og:description', description);
           updateMetaContent('property', 'og:type', 'article');
           updateMetaContent('property', 'og:url', window.location.href);
-          updateMetaContent('name', 'twitter:card', representativeImage ? 'summary_large_image' : 'summary');
+          updateMetaContent('name', 'twitter:card', 'summary');
           updateMetaContent('name', 'twitter:title', previewTitle);
           updateMetaContent('name', 'twitter:description', description);
-
-          if (representativeImage) {
-            updateMetaContent('property', 'og:image', representativeImage);
-            updateMetaContent('name', 'twitter:image', representativeImage);
-          }
         }
       } catch (error: any) {
         if (isCancelled) return;
