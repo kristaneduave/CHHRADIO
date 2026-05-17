@@ -9,6 +9,7 @@ import { createOrGetCaseShare, buildPublicCaseUrl, getCaseShareErrorMessage } fr
 import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { generateConsultantShareText } from '../utils/formatters';
+import { setCaseViberShareStatus } from '../services/caseViberShareService';
 import {
     IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
     IMAGE_DOUBLE_TAP_DELAY_MS,
@@ -56,6 +57,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isOwner, setIsOwner] = useState(false);
     const [isPreparingShare, setIsPreparingShare] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
+    const [isUpdatingViberShareStatus, setIsUpdatingViberShareStatus] = useState(false);
+    const [viberSharedAt, setViberSharedAt] = useState<string | null>(caseData?.viber_shared_at ? String(caseData.viber_shared_at) : null);
+    const [viberSharedByName, setViberSharedByName] = useState<string | null>(caseData?.viber_shared_by_name ? String(caseData.viber_shared_by_name) : null);
     const submissionType = caseData.submission_type || 'interesting_case';
     const isInterestingCase = submissionType === 'interesting_case';
     const isPublicMode = mode === 'public';
@@ -70,6 +74,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const normalizedReferences = React.useMemo(() => normalizeCaseReferences(caseData), [caseData]);
     const patientId = React.useMemo(() => resolveCasePatientId(caseData), [caseData]);
     const canShowShareActions = !isPublicMode && caseData?.status === 'published';
+    const canToggleViberSharedState = canShowShareActions && isInterestingCase;
+    const isMarkedSharedToViber = Boolean(viberSharedAt);
 
     const [comments, setComments] = useState<CaseComment[]>([]);
     const [newComment, setNewComment] = useState('');
@@ -98,6 +104,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         }
         loadPublisherName();
     }, [caseData, isPublicMode]);
+
+    useEffect(() => {
+        setViberSharedAt(caseData?.viber_shared_at ? String(caseData.viber_shared_at) : null);
+        setViberSharedByName(caseData?.viber_shared_by_name ? String(caseData.viber_shared_by_name) : null);
+    }, [caseData?.viber_shared_at, caseData?.viber_shared_by_name]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || navigator.connection?.saveData) {
@@ -498,6 +509,27 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             toastError('Unable to prepare Viber share', getCaseShareErrorMessage(error));
         } finally {
             setIsPreparingShare(false);
+        }
+    };
+
+    const handleToggleViberSharedState = async () => {
+        if (!canToggleViberSharedState || !caseData?.id || isUpdatingViberShareStatus) return;
+
+        setIsUpdatingViberShareStatus(true);
+        try {
+            const nextStatus = await setCaseViberShareStatus(String(caseData.id), !isMarkedSharedToViber);
+            setViberSharedAt(nextStatus.viber_shared_at);
+            setViberSharedByName(nextStatus.viber_shared_by_name);
+            toastSuccess(
+                isMarkedSharedToViber ? 'Marked not shared' : 'Marked shared to Viber',
+                isMarkedSharedToViber
+                    ? 'This case is now marked as not yet shared in the public library.'
+                    : 'This case is now marked as shared in the public library.',
+            );
+        } catch (error) {
+            toastError(error instanceof Error ? error.message : 'Unable to update Viber share status.');
+        } finally {
+            setIsUpdatingViberShareStatus(false);
         }
     };
 
@@ -1308,6 +1340,32 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     <div className="space-y-4 pt-4 pb-28 relative z-10">
                         {canShowShareActions ? (
                             <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+                                {canToggleViberSharedState ? (
+                                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-black/20 px-3 py-2.5">
+                                        <div className="min-w-0">
+                                            <div className={`text-[10px] font-black uppercase tracking-[0.18em] ${isMarkedSharedToViber ? 'text-emerald-200' : 'text-amber-100'}`}>
+                                                {isMarkedSharedToViber ? 'Shared to Viber' : 'Not Shared to Viber'}
+                                            </div>
+                                            <div className="text-[11px] text-slate-400">
+                                                {isMarkedSharedToViber
+                                                    ? `Marked ${new Date(viberSharedAt as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${viberSharedByName ? ` by ${viberSharedByName}` : ''}`
+                                                    : 'Use this when the case has already been posted in the public Viber workflow.'}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleToggleViberSharedState}
+                                            disabled={isUpdatingViberShareStatus}
+                                            className={`inline-flex items-center justify-center rounded-xl border px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
+                                                isMarkedSharedToViber
+                                                    ? 'border-emerald-400/25 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18'
+                                                    : 'border-white/10 bg-white/5 text-slate-100 hover:bg-white/10'
+                                            } disabled:cursor-not-allowed disabled:opacity-60`}
+                                        >
+                                            {isUpdatingViberShareStatus ? 'Saving...' : isMarkedSharedToViber ? 'Mark Not Shared' : 'Mark Shared'}
+                                        </button>
+                                    </div>
+                                ) : null}
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                                     <button
                                         onClick={handleCopyCaseText}

@@ -448,6 +448,9 @@ export interface PatientRecord {
   submission_type?: SubmissionType;
   radiologic_clinchers?: string;
   author?: string;
+  viber_shared_at?: string | null;
+  viber_shared_by?: string | null;
+  viber_shared_by_name?: string | null;
 }
 
 export interface SearchFilters {
@@ -457,6 +460,7 @@ export interface SearchFilters {
   modality: string;
   diagnosticCode: string;
   submissionType: '' | SubmissionType;
+  viberShareStatus: '' | 'shared' | 'not_shared';
   datePreset: 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
 }
 
