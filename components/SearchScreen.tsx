@@ -8,7 +8,6 @@ import { fetchPublishedCasesBundle, getCachedPublishedCasesBundle } from '../ser
 import {
   CASE_VIBER_SHARE_UPDATED_EVENT,
   CaseViberShareStatusRecord,
-  setCaseViberShareStatus,
 } from '../services/caseViberShareService';
 import { useAppViewport } from './responsive/useViewport';
 import PageHeader from './ui/PageHeader';
@@ -171,7 +170,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const [loading, setLoading] = useState(!cachedBundle);
   const [error, setError] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
-  const [shareUpdatingCaseId, setShareUpdatingCaseId] = useState<string | null>(null);
 
   // Track opened cases so they lose their "New" styling, including across reloads
   const [openedCaseIds, setOpenedCaseIds] = useState<Set<string>>(() => {
@@ -367,33 +365,6 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
   const isViberShareEligible = (rawCase: any) =>
     String(rawCase?.status || '').toLowerCase() === 'published'
     && String(rawCase?.submission_type || 'interesting_case') === 'interesting_case';
-
-  const formatViberShareMeta = (record: PatientRecord) => {
-    if (!record.viber_shared_at) return 'Not shared to Viber';
-
-    const dateLabel = new Date(record.viber_shared_at).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
-    const userLabel = String(record.viber_shared_by_name || '').trim();
-    return userLabel ? `Shared ${dateLabel} by ${userLabel}` : `Shared ${dateLabel}`;
-  };
-
-  const handleToggleViberShare = async (event: React.MouseEvent, rawCase: any, isCurrentlyShared: boolean) => {
-    event.stopPropagation();
-
-    const caseId = String(rawCase?.id || '');
-    if (!caseId || shareUpdatingCaseId) return;
-
-    setShareUpdatingCaseId(caseId);
-    try {
-      await setCaseViberShareStatus(caseId, !isCurrentlyShared);
-    } catch (toggleError) {
-      toastError(toggleError instanceof Error ? toggleError.message : 'Unable to update Viber share status.');
-    } finally {
-      setShareUpdatingCaseId(null);
-    }
-  };
 
   const primaryMetaOptions = ORGAN_SYSTEM_OPTIONS;
 
@@ -761,16 +732,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
             results.map((p) => {
               const typeMeta = getSubmissionTypeMeta(p.submission_type);
               const raw = rawCases.find((c) => c.id === p.id);
-              const primaryMeta = getPrimaryMeta(raw, p.submission_type);
               const isRecent = !openedCaseIds.has(p.id) && new Date(p.date) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-              const isViberShared = Boolean(raw?.viber_shared_at || p.viber_shared_at);
-              const isShareEligible = isViberShareEligible(raw);
-              const isUpdatingShare = shareUpdatingCaseId === p.id;
-              const viberMeta = formatViberShareMeta({
-                ...p,
-                viber_shared_at: raw?.viber_shared_at || p.viber_shared_at || null,
-                viber_shared_by_name: raw?.viber_shared_by_name || p.viber_shared_by_name || null,
-              });
 
               return (
                 <div
@@ -804,47 +766,13 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                           <h4 className={`truncate text-[12px] sm:text-[13px] tracking-widest font-extrabold uppercase ${typeMeta.tintClass}`}>
                             {String(p.name || '').toUpperCase()}
                           </h4>
-                          {isShareEligible ? (
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.18em] ${
-                                isViberShared
-                                  ? 'border-emerald-400/25 bg-emerald-500/15 text-emerald-200'
-                                  : 'border-amber-400/20 bg-amber-500/12 text-amber-100'
-                              }`}
-                            >
-                              {isViberShared ? 'Shared to Viber' : 'Not Shared'}
-                            </span>
-                          ) : null}
                         </div>
                         <div className="flex items-center gap-1.5 text-[9px] truncate uppercase tracking-widest font-bold">
                           <span className="text-slate-300 truncate">{p.author || 'Hospital Staff'}</span>
                         </div>
-                        {isShareEligible ? (
-                          <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">
-                            {viberMeta}
-                          </div>
-                        ) : (
-                          <div className="text-[9px] uppercase tracking-[0.16em] text-slate-500">
-                            {primaryMeta}
-                          </div>
-                        )}
                       </div>
 
                       <div className="flex items-center shrink-0 gap-2 relative z-50">
-                        {isShareEligible ? (
-                          <button
-                            type="button"
-                            onClick={(event) => handleToggleViberShare(event, raw, isViberShared)}
-                            disabled={isUpdatingShare}
-                            className={`inline-flex items-center justify-center rounded-xl border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors ${
-                              isViberShared
-                                ? 'border-emerald-400/25 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18'
-                                : 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
-                            } disabled:cursor-not-allowed disabled:opacity-60`}
-                          >
-                            {isUpdatingShare ? 'Saving...' : isViberShared ? 'Mark Not Shared' : 'Mark Shared'}
-                          </button>
-                        ) : null}
                         <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold tracking-widest text-slate-500">
                           {formatUploadedAt(p.date)}
                         </span>
