@@ -43,7 +43,9 @@ const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): Pa
     date: item.created_at,
     specialty: item.organ_system || '',
     modality: item.modality || '',
-    diagnosticCode: item.analysis_result?.patientId || item.diagnosis || 'Pending',
+    // Patient identifiers are intentionally excluded from public list/search metadata.
+    // Authenticated users can still see the PACS Patient ID inside the case detail view.
+    diagnosticCode: item.diagnosis || 'Pending',
     status: 'Published',
     submission_type: submissionType,
     radiologic_clinchers: item.radiologic_clinchers || '',
@@ -67,11 +69,7 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
   const rawCases = await fetchWithCache(
     'published-cases:list',
     async () => {
-      const { data, error } = await supabase
-        .from('cases')
-        .select('*')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.rpc('list_published_cases_for_viewer');
 
       if (error) throw error;
       return data || [];

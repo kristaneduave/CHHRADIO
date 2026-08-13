@@ -55,6 +55,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [imageOffset, setImageOffset] = useState({ x: 0, y: 0 });
     const [isGestureActive, setIsGestureActive] = useState(false);
     const [isOwner, setIsOwner] = useState(false);
+    const [isRegisteredUser, setIsRegisteredUser] = useState(false);
     const [isPreparingShare, setIsPreparingShare] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isUpdatingViberShareStatus, setIsUpdatingViberShareStatus] = useState(false);
@@ -159,13 +160,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     };
 
     const checkOwnership = async () => {
-        if (isPublicMode) {
-            setIsOwner(false);
-            return;
-        }
-
         const { data: { user } } = await supabase.auth.getUser();
-        setIsOwner(Boolean(user && caseData.created_by === user.id));
+        setIsRegisteredUser(Boolean(user));
+        setIsOwner(Boolean(!isPublicMode && user && caseData.created_by === user.id));
     };
 
     const loadPublisherName = async () => {
@@ -1068,16 +1065,18 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                     </div>
                                 </div>
 
-                                {/* Patient ID */}
-                                <div>
-                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                                        <span className="material-icons text-[12px]">local_hospital</span>
-                                        PACS Patient ID
+                                {/* Patient ID is restricted to authenticated users. */}
+                                {isRegisteredUser && (
+                                    <div>
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                                            <span className="material-icons text-[12px]">local_hospital</span>
+                                            PACS Patient ID
+                                        </div>
+                                        <div className="text-xl sm:text-2xl font-black text-white tracking-wide leading-none select-text">
+                                            {patientId || 'PENDING'}
+                                        </div>
                                     </div>
-                                    <div className="text-xl sm:text-2xl font-black text-white tracking-wide leading-none select-text">
-                                        {patientId || 'PENDING'}
-                                    </div>
-                                </div>
+                                )}
 
                                 {/* Tags & Classification */}
                                 <div>
