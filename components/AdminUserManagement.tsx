@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Profile, UserRole } from '../types';
+import { Profile, StaffAccountAccessRequest, UserRole } from '../types';
 import { ensurePrimaryRoleIncluded, EXCLUSIVE_ROLE, normalizeUserRoles } from '../utils/roles';
+import { listAccountAccessRequestsForStaff, reviewAccountAccessRequest } from '../services/accountAccessRequestService';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
 import PageShell from './ui/PageShell';
 import PageHeader from './ui/PageHeader';
@@ -16,11 +17,44 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
     const [searchTerm, setSearchTerm] = useState('');
     const [statusMessage, setStatusMessage] = useState<string | null>(null);
     const [statusTone, setStatusTone] = useState<'error' | 'success'>('success');
+    const [accessRequests, setAccessRequests] = useState<StaffAccountAccessRequest[]>([]);
+    const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
     const ALL_ASSIGNABLE_ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
 
     useEffect(() => {
         fetchUsers();
+        fetchAccessRequests();
     }, []);
+
+    const fetchAccessRequests = async () => {
+        try {
+            setAccessRequests(await listAccountAccessRequestsForStaff());
+        } catch (error) {
+            console.error('Error fetching access requests:', error);
+            setStatusTone('error');
+            setStatusMessage('Failed to load access requests.');
+        }
+    };
+
+    const handleReviewRequest = async (requestId: string, status: 'approved' | 'rejected') => {
+        setReviewingRequestId(requestId);
+        setStatusMessage(null);
+        try {
+            await reviewAccountAccessRequest(requestId, status);
+            setAccessRequests((requests) => requests.map((request) => (
+                request.id === requestId
+                    ? { ...request, status, reviewedAt: new Date().toISOString() }
+                    : request
+            )));
+            setStatusTone('success');
+            setStatusMessage(status === 'approved' ? 'Access request approved.' : 'Access request rejected.');
+        } catch (error: any) {
+            setStatusTone('error');
+            setStatusMessage(error.message || 'Failed to review access request.');
+        } finally {
+            setReviewingRequestId(null);
+        }
+    };
 
     const resolveRoleSelection = (primaryRole: UserRole, nextRoles: UserRole[]) => {
         const normalizedRoles = ensurePrimaryRoleIncluded(nextRoles, primaryRole);
@@ -157,6 +191,42 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
                         </button>
                     )}
                 />
+
+                <section className="rounded-[1.75rem] border border-white/10 bg-surface p-5 shadow-2xl">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-lg font-bold text-white">Access Requests</h2>
+                            <p className="text-xs text-slate-500">Approve applicants before they can create an account.</p>
+                        </div>
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                            {accessRequests.filter((request) => request.status === 'pending').length} pending
+                        </span>
+                    </div>
+
+                    <div className="space-y-2">
+                        {accessRequests.length === 0 ? (
+                            <p className="rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm text-slate-500">No access requests.</p>
+                        ) : accessRequests.map((request) => (
+                            <div key={request.id} className="flex flex-col gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-4 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0">
+                                    <p className="font-bold text-slate-200">{request.fullName}</p>
+                                    <p className="text-xs text-slate-500">{request.email}</p>
+                                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                                        {request.requestedRole.replace('_', ' ')}{request.yearLevel ? ` · ${request.yearLevel}` : ''}
+                                    </p>
+                                </div>
+                                {request.status === 'pending' ? (
+                                    <div className="flex gap-2">
+                                        <button type="button" disabled={reviewingRequestId === request.id} onClick={() => handleReviewRequest(request.id, 'rejected')} className="rounded-full border border-rose-500/30 px-4 py-2 text-xs font-bold text-rose-300 disabled:opacity-50">Reject</button>
+                                        <button type="button" disabled={reviewingRequestId === request.id} onClick={() => handleReviewRequest(request.id, 'approved')} className="rounded-full bg-primary px-4 py-2 text-xs font-bold text-white disabled:opacity-50">Approve</button>
+                                    </div>
+                                ) : (
+                                    <span className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${request.status === 'approved' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-rose-500/10 text-rose-300'}`}>{request.status}</span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </section>
 
                 <div className="rounded-[1.75rem] border border-white/10 bg-surface shadow-2xl">
                     {/* Search */}

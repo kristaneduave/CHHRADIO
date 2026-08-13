@@ -104,17 +104,6 @@ const buildFallbackDisplayName = (fullName?: string, email?: string | null): str
   return 'Resident';
 };
 
-const buildFallbackUsername = (fullName?: string, displayName?: string, email?: string | null): string => {
-  const safeBase = String(displayName || fullName || email?.split('@')[0] || 'resident')
-    .trim()
-    .replace(/\s+/g, '_')
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 18);
-
-  const base = safeBase.length >= 3 ? safeBase : 'resident';
-  return `${base}${Math.random().toString(36).slice(2, 6)}`.slice(0, 24);
-};
 const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   if (isFinalStep) return 260;
   if (delta <= 8) return 220;
@@ -552,28 +541,26 @@ const App: React.FC = () => {
     };
   }, [bootPrincipalKey, debugLifecycle, guestMode, isSessionResolved, principalKey, profileSetupState, session]);
 
-  const handleCompleteProfileSetup = async (input: { fullName: string; displayName: string; role: 'resident' | 'fellow' | 'consultant' }) => {
+  const handleCompleteProfileSetup = async (input: { fullName: string; displayName: string }) => {
     if (!session?.user) return;
 
     setIsSavingProfileSetup(true);
     setProfileSetupError(null);
     try {
-      const username = buildFallbackUsername(input.fullName, input.displayName, session.user.email);
-      const { error } = await supabase.from('profiles').upsert({
-        id: session.user.id,
-        full_name: input.fullName,
-        nickname: input.displayName,
-        username,
-        role: input.role,
-        updated_at: new Date().toISOString(),
+      const { data, error } = await supabase.rpc('complete_approved_profile', {
+        p_full_name: input.fullName,
+        p_display_name: input.displayName,
       });
 
       if (error) throw error;
 
+      const row = Array.isArray(data) ? data[0] : data;
+      const approvedRole = normalizeUserRole(String(row?.role || profileSetupDefaults.role));
+
       setProfileSetupDefaults({
         fullName: input.fullName,
         displayName: input.displayName,
-        role: input.role,
+        role: approvedRole === 'consultant' || approvedRole === 'fellow' ? approvedRole : 'resident',
       });
       setProfileSetupState('ready');
     } catch (error: any) {
@@ -903,7 +890,6 @@ const App: React.FC = () => {
         <ProfileCompletionScreen
           initialFullName={profileSetupDefaults.fullName}
           initialDisplayName={profileSetupDefaults.displayName}
-          initialRole={profileSetupDefaults.role}
           isSaving={isSavingProfileSetup}
           error={profileSetupError}
           onSubmit={handleCompleteProfileSetup}

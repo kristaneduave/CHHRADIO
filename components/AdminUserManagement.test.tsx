@@ -9,12 +9,21 @@ const {
   profilesUpdateEq,
   userRolesDeleteEq,
   userRolesInsert,
+  listAccountAccessRequestsForStaff,
+  reviewAccountAccessRequest,
 } = vi.hoisted(() => ({
   profilesOrder: vi.fn(),
   userRolesIn: vi.fn(),
   profilesUpdateEq: vi.fn(),
   userRolesDeleteEq: vi.fn(),
   userRolesInsert: vi.fn(),
+  listAccountAccessRequestsForStaff: vi.fn(),
+  reviewAccountAccessRequest: vi.fn(),
+}));
+
+vi.mock('../services/accountAccessRequestService', () => ({
+  listAccountAccessRequestsForStaff,
+  reviewAccountAccessRequest,
 }));
 
 vi.mock('../services/supabase', () => ({
@@ -55,6 +64,8 @@ describe('AdminUserManagement', () => {
     profilesUpdateEq.mockReset();
     userRolesDeleteEq.mockReset();
     userRolesInsert.mockReset();
+    listAccountAccessRequestsForStaff.mockReset();
+    reviewAccountAccessRequest.mockReset();
 
     profilesOrder.mockResolvedValue({
       data: [
@@ -83,6 +94,8 @@ describe('AdminUserManagement', () => {
     profilesUpdateEq.mockResolvedValue({ error: null });
     userRolesDeleteEq.mockResolvedValue({ error: null });
     userRolesInsert.mockResolvedValue({ error: null });
+    listAccountAccessRequestsForStaff.mockResolvedValue([]);
+    reviewAccountAccessRequest.mockResolvedValue(undefined);
   });
 
   it('renders the multi-role management sections for a loaded user', async () => {
@@ -131,5 +144,31 @@ describe('AdminUserManagement', () => {
         { user_id: 'user-1', role: 'training_officer' },
       ]);
     });
+  });
+
+  it('allows staff to approve a pending access request', async () => {
+    listAccountAccessRequestsForStaff.mockResolvedValue([
+      {
+        id: 'request-1',
+        publicToken: 'public-token',
+        fullName: 'Dr. Applicant',
+        email: 'applicant@example.com',
+        requestedRole: 'resident',
+        yearLevel: 'R1',
+        status: 'pending',
+        createdAt: '2026-08-13T00:00:00.000Z',
+        reviewedAt: null,
+        adminNotes: null,
+      },
+    ]);
+
+    render(<AdminUserManagement onBack={() => undefined} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => {
+      expect(reviewAccountAccessRequest).toHaveBeenCalledWith('request-1', 'approved');
+    });
+    expect(screen.getByText('Access request approved.')).toBeInTheDocument();
   });
 });

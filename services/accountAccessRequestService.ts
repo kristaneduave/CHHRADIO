@@ -4,17 +4,21 @@ import {
   AccountAccessRequestInput,
   AccountAccessRequestStatus,
   AccountAccessRequestStatusType,
+  StaffAccountAccessRequest,
 } from '../types';
 import { normalizeUserRole } from '../utils/roles';
 
 type AccountAccessRequestRow = {
+  id?: string;
   public_token: string;
+  full_name?: string;
   email: string;
   requested_role: string;
   year_level: string | null;
   status: string;
   created_at: string;
   reviewed_at: string | null;
+  admin_notes?: string | null;
 };
 
 const normalizeStatus = (value: unknown): AccountAccessRequestStatusType => {
@@ -90,4 +94,35 @@ export const fetchAccountAccessRequestStatus = async (
   const row = (Array.isArray(data) ? data[0] : null) as AccountAccessRequestRow | null;
   if (!row) return null;
   return mapRow(row);
+};
+
+export const listAccountAccessRequestsForStaff = async (): Promise<StaffAccountAccessRequest[]> => {
+  const { data, error } = await supabase
+    .from('account_access_requests')
+    .select('id, public_token, full_name, email, requested_role, year_level, status, admin_notes, created_at, reviewed_at')
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message || 'Failed to load access requests.');
+
+  return ((data || []) as AccountAccessRequestRow[]).map((row) => ({
+    ...mapRow(row),
+    id: String(row.id || ''),
+    fullName: String(row.full_name || '').trim(),
+    adminNotes: row.admin_notes || null,
+  }));
+};
+
+export const reviewAccountAccessRequest = async (
+  requestId: string,
+  status: 'approved' | 'rejected',
+  adminNotes?: string,
+): Promise<void> => {
+  const { error } = await supabase
+    .rpc('review_account_access_request', {
+      p_request_id: requestId,
+      p_status: status,
+      p_admin_notes: adminNotes?.trim() || null,
+    });
+
+  if (error) throw new Error(error.message || 'Failed to review access request.');
 };

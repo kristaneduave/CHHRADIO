@@ -1111,6 +1111,12 @@ export interface AccountAccessRequestStatus {
   reviewedAt: string | null;
 }
 
+export interface StaffAccountAccessRequest extends AccountAccessRequestStatus {
+  id: string;
+  fullName: string;
+  adminNotes: string | null;
+}
+
 export type NeedleDifficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export interface NeedleRiskZone {

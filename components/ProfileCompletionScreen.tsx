@@ -1,34 +1,24 @@
 import React, { useMemo, useState } from 'react';
 import LoadingButton from './LoadingButton';
 import ThemeToggle from './ThemeToggle';
-import { UserRole } from '../types';
 
 interface ProfileCompletionScreenProps {
   initialFullName?: string;
   initialDisplayName?: string;
-  initialRole?: UserRole;
   isSaving?: boolean;
   error?: string | null;
-  onSubmit: (input: { fullName: string; displayName: string; role: UserRole }) => Promise<void>;
+  onSubmit: (input: { fullName: string; displayName: string }) => Promise<void>;
 }
-
-const ROLE_OPTIONS: Array<{ value: UserRole; label: string }> = [
-  { value: 'resident', label: 'Resident' },
-  { value: 'fellow', label: 'Fellow' },
-  { value: 'consultant', label: 'Consultant' },
-];
 
 const ProfileCompletionScreen: React.FC<ProfileCompletionScreenProps> = ({
   initialFullName = '',
   initialDisplayName = '',
-  initialRole = 'resident',
   isSaving = false,
   error = null,
   onSubmit,
 }) => {
   const [fullName, setFullName] = useState(initialFullName);
   const [displayName, setDisplayName] = useState(initialDisplayName);
-  const [role, setRole] = useState<UserRole>(initialRole);
   const [localError, setLocalError] = useState<string | null>(null);
 
   const resolvedError = error || localError;
@@ -48,7 +38,6 @@ const ProfileCompletionScreen: React.FC<ProfileCompletionScreenProps> = ({
     await onSubmit({
       fullName: fullName.trim(),
       displayName: displayName.trim(),
-      role,
     });
   };
 
@@ -62,7 +51,7 @@ const ProfileCompletionScreen: React.FC<ProfileCompletionScreenProps> = ({
         <header className="text-center mb-6">
           <h1 className="text-3xl font-bold text-text-primary">Complete Your Profile</h1>
           <p className="mt-2 text-sm text-text-secondary">
-            Set your name, display name, and role before entering the portal.
+            Set your name and display name before entering the portal. Your role is assigned by staff.
           </p>
         </header>
 
@@ -104,22 +93,8 @@ const ProfileCompletionScreen: React.FC<ProfileCompletionScreenProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-2" htmlFor="profile-role">
-              Role
-            </label>
-            <select
-              id="profile-role"
-              value={role}
-              onChange={(event) => setRole(event.target.value as UserRole)}
-              className="w-full px-4 py-2.5 bg-surface-alt border border-border-default rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/40 text-base text-text-primary transition-all"
-            >
-              {ROLE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+          <div className="rounded-lg border border-border-default bg-surface-alt px-4 py-3 text-sm text-text-secondary">
+            Your staff-approved role will be applied automatically.
           </div>
 
           <LoadingButton

@@ -3,6 +3,10 @@ import { supabase } from '../services/supabase';
 import ThemeToggle from './ThemeToggle';
 import LoadingButton from './LoadingButton';
 import { toastError, toastSuccess } from '../utils/toast';
+import { createAccountAccessRequest, fetchAccountAccessRequestStatus } from '../services/accountAccessRequestService';
+import type { AccountAccessRequestRole, AccountAccessRequestStatus } from '../types';
+
+const ACCESS_REQUEST_TOKEN_KEY = 'chh-radcore-access-request-token';
 
 const mapAuthError = (message: string): string => {
   const normalized = String(message || '').toLowerCase();
@@ -27,6 +31,12 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
   const [password, setPassword] = useState('');
   const [passwordLoginLoading, setPasswordLoginLoading] = useState(false);
   const [signUpLoading, setSignUpLoading] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [showAccessRequest, setShowAccessRequest] = useState(false);
+  const [requestFullName, setRequestFullName] = useState('');
+  const [requestRole, setRequestRole] = useState<AccountAccessRequestRole>('resident');
+  const [requestYearLevel, setRequestYearLevel] = useState('');
+  const [accessRequest, setAccessRequest] = useState<AccountAccessRequestStatus | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -42,6 +52,14 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
     const humanMessage = decodeURIComponent(authError.replace(/\+/g, ' '));
     setError(humanMessage);
     toastError('Authentication failed', humanMessage);
+  }, []);
+
+  useEffect(() => {
+    const token = window.localStorage.getItem(ACCESS_REQUEST_TOKEN_KEY);
+    if (!token) return;
+    fetchAccountAccessRequestStatus(token)
+      .then(setAccessRequest)
+      .catch(() => window.localStorage.removeItem(ACCESS_REQUEST_TOKEN_KEY));
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -104,6 +122,12 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
       return;
     }
 
+    if (!accessRequest || accessRequest.status !== 'approved' || accessRequest.email !== targetEmail.toLowerCase()) {
+      setError('Staff approval is required before creating an account.');
+      setShowAccessRequest(true);
+      return;
+    }
+
     setSignUpLoading(true);
     setError(null);
     setMessage(null);
@@ -113,7 +137,7 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
         password,
       });
       if (signUpError) throw signUpError;
-      const ok = 'Sign-up submitted. Check your email for confirmation if required.';
+      const ok = 'Account created. Check your email for confirmation if required.';
       setMessage(ok);
       toastSuccess('Account created', ok);
     } catch (err: any) {
@@ -122,6 +146,60 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
       toastError('Sign up failed', humanMessage);
     } finally {
       setSignUpLoading(false);
+    }
+  };
+
+  const handleAccessRequest = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const targetEmail = email.trim().toLowerCase();
+    if (requestFullName.trim().length < 2 || !targetEmail.includes('@')) {
+      setError('Enter your full name and a valid email address.');
+      return;
+    }
+
+    setRequestLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const request = await createAccountAccessRequest({
+        fullName: requestFullName,
+        email: targetEmail,
+        requestedRole: requestRole,
+        yearLevel: requestRole === 'resident' ? requestYearLevel : null,
+      });
+      window.localStorage.setItem(ACCESS_REQUEST_TOKEN_KEY, request.publicToken);
+      setAccessRequest(request);
+      setShowAccessRequest(false);
+      setMessage('Request submitted. Staff must approve it before you can create an account.');
+      toastSuccess('Access requested', 'Your request is waiting for staff review.');
+    } catch (err: any) {
+      const humanMessage = mapAuthError(err.message);
+      setError(humanMessage);
+      toastError('Request failed', humanMessage);
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
+  const handleRefreshRequestStatus = async () => {
+    const token = accessRequest?.publicToken || window.localStorage.getItem(ACCESS_REQUEST_TOKEN_KEY) || '';
+    if (!token) return;
+    setRequestLoading(true);
+    try {
+      const request = await fetchAccountAccessRequestStatus(token);
+      setAccessRequest(request);
+      if (request?.status === 'approved') {
+        setEmail(request.email);
+        setMessage('Your request is approved. Enter a password and create your account.');
+      } else if (request?.status === 'rejected') {
+        setError('Your access request was not approved. Contact staff if you need help.');
+      } else {
+        setMessage('Your request is still waiting for staff review.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Unable to check request status.');
+    } finally {
+      setRequestLoading(false);
     }
   };
 
@@ -176,16 +254,53 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
             >
               Sign In
             </LoadingButton>
-            <LoadingButton
-              type="button"
-              onClick={handleSignUp}
-              isLoading={signUpLoading}
-              loadingText="Creating..."
-              className="w-full py-2.5 px-4 bg-surface border border-border-default text-text-primary rounded-lg font-medium hover:bg-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-            >
-              Sign Up
-            </LoadingButton>
+            {accessRequest?.status === 'approved' ? (
+              <LoadingButton
+                type="button"
+                onClick={handleSignUp}
+                isLoading={signUpLoading}
+                loadingText="Creating..."
+                className="w-full py-2.5 px-4 bg-surface border border-border-default text-text-primary rounded-lg font-medium hover:bg-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                Create Approved Account
+              </LoadingButton>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowAccessRequest((value) => !value)}
+                className="w-full py-2.5 px-4 bg-surface border border-border-default text-text-primary rounded-lg font-medium hover:bg-surface-alt transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              >
+                Request Staff Access
+              </button>
+            )}
           </form>
+
+          {accessRequest && accessRequest.status !== 'approved' ? (
+            <div className="rounded-lg border border-border-default bg-surface-alt p-3 text-sm text-text-secondary">
+              <p className="font-semibold text-text-primary">Request status: <span className="capitalize">{accessRequest.status}</span></p>
+              <button type="button" onClick={handleRefreshRequestStatus} disabled={requestLoading} className="mt-2 font-semibold text-primary hover:underline disabled:opacity-50">
+                {requestLoading ? 'Checking…' : 'Check status'}
+              </button>
+            </div>
+          ) : null}
+
+          {showAccessRequest ? (
+            <form onSubmit={handleAccessRequest} className="space-y-3 rounded-xl border border-border-default bg-surface-alt p-4">
+              <p className="font-semibold text-text-primary">Request portal access</p>
+              <input type="text" value={requestFullName} onChange={(event) => setRequestFullName(event.target.value)} placeholder="Full name" autoComplete="name" required className="w-full rounded-lg border border-border-default bg-surface px-3 py-2.5 text-text-primary" />
+              <select value={requestRole} onChange={(event) => setRequestRole(event.target.value as AccountAccessRequestRole)} className="w-full rounded-lg border border-border-default bg-surface px-3 py-2.5 text-text-primary">
+                <option value="resident">Resident</option>
+                <option value="fellow">Fellow</option>
+                <option value="consultant">Consultant</option>
+              </select>
+              {requestRole === 'resident' ? (
+                <input type="text" value={requestYearLevel} onChange={(event) => setRequestYearLevel(event.target.value)} placeholder="Year level (for example, R1)" className="w-full rounded-lg border border-border-default bg-surface px-3 py-2.5 text-text-primary" />
+              ) : null}
+              <LoadingButton type="submit" isLoading={requestLoading} loadingText="Submitting…" className="w-full rounded-lg bg-primary px-4 py-2.5 font-semibold text-white">
+                Submit Request
+              </LoadingButton>
+            </form>
+          ) : null}
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
