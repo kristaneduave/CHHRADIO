@@ -173,12 +173,44 @@ describe('UploadScreen case entry', () => {
     expect(screen.getByRole('textbox', { name: 'Reference 1 page or section' })).toHaveValue('p. 10');
   });
 
-  it('shows manual Viber tracking only for Interesting Cases', () => {
-    const { unmount } = render(<UploadScreen initialSubmissionType="interesting_case" />);
+  it('shows manual Viber tracking only for already-published Interesting Cases', () => {
+    let view = render(<UploadScreen initialSubmissionType="interesting_case" />);
+    expect(screen.queryByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeInTheDocument();
+
+    view.unmount();
+    view = render(
+      <UploadScreen
+        existingCase={{
+          id: 'case-1',
+          status: 'draft',
+          submission_type: 'interesting_case',
+        }}
+      />
+    );
+    expect(screen.queryByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeInTheDocument();
+
+    view.unmount();
+    view = render(
+      <UploadScreen
+        existingCase={{
+          id: 'case-1',
+          status: 'published',
+          submission_type: 'interesting_case',
+        }}
+      />
+    );
     expect(screen.getByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeChecked();
 
-    unmount();
-    render(<UploadScreen initialSubmissionType="rare_pathology" />);
+    view.unmount();
+    render(
+      <UploadScreen
+        existingCase={{
+          id: 'case-2',
+          status: 'published',
+          submission_type: 'rare_pathology',
+        }}
+      />
+    );
     expect(screen.queryByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeInTheDocument();
   });
 
@@ -187,6 +219,7 @@ describe('UploadScreen case entry', () => {
       <UploadScreen
         existingCase={{
           id: 'case-1',
+          status: 'published',
           submission_type: 'interesting_case',
           viber_shared_at: '2026-08-27T10:00:00.000Z',
         }}
@@ -205,6 +238,7 @@ describe('UploadScreen case entry', () => {
       <UploadScreen
         existingCase={{
           id: 'case-1',
+          status: 'published',
           submission_type: 'interesting_case',
           patient_initials: 'AB',
           clinical_history: 'Clinical history',
@@ -267,7 +301,7 @@ describe('UploadScreen case entry', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Restore' }));
     expect(screen.getByPlaceholderText('Enter case title')).toHaveValue('Restored case title');
     expect(screen.getByPlaceholderText('Enter findings...')).toHaveValue('Restored findings');
-    expect(screen.getByRole('checkbox', { name: 'Sent to Viber GC' })).toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeInTheDocument();
     expect(screen.getByAltText('Uploaded case image 1')).toHaveAttribute('src', 'https://example.com/restored.jpg');
   });
 

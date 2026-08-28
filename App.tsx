@@ -302,17 +302,25 @@ const App: React.FC = () => {
       window.localStorage.setItem(APP_OPEN_STORAGE_KEY, new Date().toISOString());
     }
 
+    const applyResolvedSession = (nextSession: Session | null) => {
+      setSession((currentSession) => {
+        const currentUserId = currentSession?.user?.id || null;
+        const nextUserId = nextSession?.user?.id || null;
+        return currentUserId === nextUserId ? currentSession : nextSession;
+      });
+      if (nextSession && typeof window !== 'undefined') {
+        window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
+        setGuestMode(false);
+      }
+      setIsSessionResolved(true);
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       debugLifecycle('auth:getSession:resolved', {
         hasSession: Boolean(session),
         userId: session?.user?.id || null,
       });
-      setSession(session);
-      if (session && typeof window !== 'undefined') {
-        window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
-        setGuestMode(false);
-      }
-      setIsSessionResolved(true);
+      applyResolvedSession(session);
     });
 
     const {
@@ -323,12 +331,7 @@ const App: React.FC = () => {
         hasSession: Boolean(session),
         userId: session?.user?.id || null,
       });
-      setSession(session);
-      if (session && typeof window !== 'undefined') {
-        window.localStorage.removeItem(GUEST_MODE_STORAGE_KEY);
-        setGuestMode(false);
-      }
-      setIsSessionResolved(true);
+      applyResolvedSession(session);
     });
 
     return () => {
@@ -904,7 +907,7 @@ const App: React.FC = () => {
       <AnimatePresence>
         {shouldShowBootScreen ? (
           <AppBootScreen
-            key={bootScreenMode}
+            key="app-boot"
             mode={bootScreenMode}
             progress={displayBootProgress}
             statusLabel={bootStatusLabel}

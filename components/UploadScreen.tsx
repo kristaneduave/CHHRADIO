@@ -255,6 +255,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const activeDraftKey = currentUserId
     ? getCaseDraftKey(currentUserId, draftCaseId, formData.submissionType)
     : '';
+  const canTrackViber = formData.submissionType === 'interesting_case'
+    && existingCase?.status === 'published';
 
   const setFieldRef = (key: string) => (node: HTMLElement | null) => {
     fieldRefs.current[key] = node;
@@ -848,7 +850,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       onSuccess: async (savedId) => {
         if (
           status === 'published'
-          && formData.submissionType === 'interesting_case'
+          && canTrackViber
           && sentToViberGc !== Boolean(existingCase?.viber_shared_at)
         ) {
           try {
@@ -1594,7 +1596,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               </div>
             </section>
 
-            {formData.submissionType === 'interesting_case' && (
+            {canTrackViber && (
               <section className={`${sectionCardClassName} space-y-3`}>
                 <div className="space-y-1">
                   <h2 className={sectionLabelClassName}>Viber Tracking</h2>
@@ -1613,7 +1615,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-white">Sent to Viber GC</span>
                     <span className="mt-1 block text-xs leading-5 text-slate-400">
-                      The status, staff member, and time will be recorded when this case is published.
+                      The status, staff member, and time will be recorded when you save this published case.
                     </span>
                   </span>
                 </label>
@@ -1749,7 +1751,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                       <span className="text-amber-300 font-bold uppercase tracking-wide">Aunt Minnie</span>
                     </>
                   )}
-                  {formData.submissionType === 'interesting_case' && (
+                  {canTrackViber && (
                     <>
                       <span className="text-cyan-200 font-bold uppercase tracking-wide">Interesting Case</span>
                       <span className={`rounded-full border px-2.5 py-1 font-semibold ${sentToViberGc ? 'border-violet-400/25 bg-violet-500/10 text-violet-200' : 'border-white/10 bg-white/5 text-slate-400'}`}>
