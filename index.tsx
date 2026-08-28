@@ -2,6 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { registerRadcoreServiceWorker } from './services/pwaService';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
@@ -14,3 +15,9 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    void registerRadcoreServiceWorker();
+  }, { once: true });
+}

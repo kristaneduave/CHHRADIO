@@ -35,6 +35,11 @@ import PageSection from './ui/PageSection';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
 import { canManageUsers, getRoleLabel } from '../utils/roles';
 import { getCurrentUserRoleState } from '../services/userRoleService';
+import {
+  CaseDraftStorageSummary,
+  clearUserCaseDrafts,
+  getCaseDraftStorageSummary,
+} from '../services/caseDraftStorage';
 
 interface ProfileScreenProps {
   currentUserId?: string | null;
@@ -130,9 +135,42 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
   const [noteLastSavedAt, setNoteLastSavedAt] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
   const [notesFeatureUnavailable, setNotesFeatureUnavailable] = useState(false);
+  const [draftStorageSummary, setDraftStorageSummary] = useState<CaseDraftStorageSummary>({ draftCount: 0, bytes: 0 });
+  const [isClearingDrafts, setIsClearingDrafts] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const noteAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setDraftStorageSummary({ draftCount: 0, bytes: 0 });
+      return;
+    }
+    void getCaseDraftStorageSummary(currentUserId)
+      .then(setDraftStorageSummary)
+      .catch(() => setDraftStorageSummary({ draftCount: 0, bytes: 0 }));
+  }, [currentUserId]);
+
+  const handleClearLocalDrafts = async () => {
+    if (!currentUserId || draftStorageSummary.draftCount === 0 || isClearingDrafts) return;
+    if (!window.confirm('Clear all unfinished case drafts stored for this account on this device?')) return;
+    setIsClearingDrafts(true);
+    try {
+      await clearUserCaseDrafts(currentUserId);
+      setDraftStorageSummary({ draftCount: 0, bytes: 0 });
+      toastSuccess('Local drafts cleared');
+    } catch (error) {
+      toastError('Unable to clear local drafts', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setIsClearingDrafts(false);
+    }
+  };
+
+  const formattedDraftStorage = draftStorageSummary.bytes < 1024
+    ? `${draftStorageSummary.bytes} B`
+    : draftStorageSummary.bytes < 1024 * 1024
+      ? `${(draftStorageSummary.bytes / 1024).toFixed(1)} KB`
+      : `${(draftStorageSummary.bytes / (1024 * 1024)).toFixed(1)} MB`;
 
   useEffect(() => {
     if (!currentUserId) {
@@ -848,6 +886,27 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
                 </div>
               </button>
             )}
+
+            <button
+              onClick={() => void handleClearLocalDrafts()}
+              disabled={draftStorageSummary.draftCount === 0 || isClearingDrafts}
+              className="w-full p-2.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-amber-500/[0.05] hover:border-amber-500/20 transition-all text-left flex items-center justify-between group disabled:cursor-default disabled:opacity-60"
+            >
+              <div className="flex items-center gap-3.5 w-full">
+                <div className="w-[34px] h-[34px] rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
+                  <span className="material-icons text-[18px]">draft</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="block text-[12px] font-bold text-slate-300 tracking-wider uppercase">Local drafts</span>
+                  <span className="block text-[9px] text-slate-500">
+                    {draftStorageSummary.draftCount} {draftStorageSummary.draftCount === 1 ? 'draft' : 'drafts'} · {formattedDraftStorage}
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-400/80">
+                  {isClearingDrafts ? 'Clearing…' : draftStorageSummary.draftCount > 0 ? 'Clear' : 'Empty'}
+                </span>
+              </div>
+            </button>
 
             {/* Sign Out */}
             <button

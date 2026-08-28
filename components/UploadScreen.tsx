@@ -317,6 +317,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
             restored = {
               draft: {
                 version: CASE_DRAFT_SCHEMA_VERSION,
+                ownerId: currentUserId,
                 savedAt: new Date().toISOString(),
                 formData: { ...formData, notes: legacyNotes },
                 customTitle,
@@ -459,6 +460,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         const savedAt = new Date().toISOString();
         const draft: CaseUploadDraft<typeof formData> = {
           version: CASE_DRAFT_SCHEMA_VERSION,
+          ownerId: currentUserId,
           savedAt,
           ...draftState,
         };
@@ -532,6 +534,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
     const refreshedDraft: CaseUploadDraft<typeof formData> = {
       version: CASE_DRAFT_SCHEMA_VERSION,
+      ownerId: currentUserId,
       savedAt: draftCandidate.draft.savedAt,
       ...restoredState,
     };

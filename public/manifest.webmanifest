@@ -1,0 +1,24 @@
+{
+  "name": "CHH Radiology Portal",
+  "short_name": "RADCORE",
+  "description": "CHH Radiology Residency Portal",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101922",
+  "theme_color": "#101922",
+  "icons": [
+    {
+      "src": "/logo-radcore.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-radcore-touch.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -5,7 +5,9 @@ import {
   CASE_DRAFT_SCHEMA_VERSION,
   CaseUploadDraft,
   createCaseDraftSignature,
+  clearUserCaseDrafts,
   deleteCaseUploadDraft,
+  getCaseDraftStorageSummary,
   getCaseDraftKey,
   loadCaseUploadDraft,
   saveCaseUploadDraft,
@@ -20,6 +22,7 @@ const deleteTestDatabase = () => new Promise<void>((resolve, reject) => {
 
 const buildDraft = (savedAt = new Date().toISOString()): CaseUploadDraft<{ findings: string }> => ({
   version: CASE_DRAFT_SCHEMA_VERSION,
+  ownerId: 'user-1',
   savedAt,
   formData: { findings: 'Restorable findings' },
   customTitle: 'Draft case',
@@ -69,6 +72,25 @@ describe('caseDraftStorage', () => {
     expect(window.localStorage.getItem(draftKey)).toBeNull();
   });
 
+  it('migrates an existing version-one draft to the owning user', async () => {
+    const draftKey = getCaseDraftKey('user-1', 'new', 'interesting_case');
+    const legacyDraft = { ...buildDraft(), version: 1 } as Record<string, unknown>;
+    delete legacyDraft.ownerId;
+    window.localStorage.setItem(draftKey, JSON.stringify(legacyDraft));
+
+    const restored = await loadCaseUploadDraft(draftKey);
+
+    expect(restored?.draft).toMatchObject({ version: CASE_DRAFT_SCHEMA_VERSION, ownerId: 'user-1' });
+    expect(JSON.parse(window.localStorage.getItem(draftKey) || '{}')).toMatchObject({ ownerId: 'user-1' });
+  });
+
+  it('rejects a draft whose stored owner does not match its user-scoped key', async () => {
+    const draftKey = getCaseDraftKey('user-1', 'new', 'interesting_case');
+    window.localStorage.setItem(draftKey, JSON.stringify({ ...buildDraft(), ownerId: 'user-2' }));
+
+    expect(await loadCaseUploadDraft(draftKey)).toBeNull();
+  });
+
   it('clears both metadata and image records', async () => {
     const draftKey = getCaseDraftKey('user-1', 'case-2', 'interesting_case');
     await saveCaseUploadDraft(
@@ -79,6 +101,22 @@ describe('caseDraftStorage', () => {
 
     await deleteCaseUploadDraft(draftKey);
     expect(await loadCaseUploadDraft(draftKey)).toBeNull();
+  });
+
+  it('reports and clears storage only for the current user', async () => {
+    const userOneKey = getCaseDraftKey('user-1', 'case-1', 'interesting_case');
+    const userTwoKey = getCaseDraftKey('user-2', 'case-2', 'interesting_case');
+    const image = { url: 'data:image/png;base64,eA==', file: new File(['image-bytes'], 'scan.png', { type: 'image/png' }), description: '' };
+    await saveCaseUploadDraft(userOneKey, buildDraft(), [image]);
+    await saveCaseUploadDraft(userTwoKey, { ...buildDraft(), ownerId: 'user-2' }, [image]);
+
+    const summary = await getCaseDraftStorageSummary('user-1');
+    expect(summary.draftCount).toBe(1);
+    expect(summary.bytes).toBeGreaterThan(image.file.size);
+
+    await clearUserCaseDrafts('user-1');
+    expect(await getCaseDraftStorageSummary('user-1')).toEqual({ draftCount: 0, bytes: 0 });
+    expect(await loadCaseUploadDraft(userTwoKey)).not.toBeNull();
   });
 
   it('builds a stable signature that includes image metadata', () => {

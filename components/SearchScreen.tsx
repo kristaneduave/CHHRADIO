@@ -16,6 +16,7 @@ import {
 import { useAppViewport } from './responsive/useViewport';
 import PageHeader from './ui/PageHeader';
 import PageShell from './ui/PageShell';
+import { NETWORK_RESTORED_EVENT } from '../hooks/useOnlineStatus';
 
 const DatabaseItemSkeleton = () => (
   <div className="w-full p-4 rounded-2xl backdrop-blur-md transition-all duration-300 relative bg-white/[0.03] border border-white/5 opacity-80 mb-3">
@@ -219,6 +220,12 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
 
   useEffect(() => {
     void fetchCases(Boolean(cachedBundle));
+  }, []);
+
+  useEffect(() => {
+    const refreshAfterReconnect = () => void fetchCases(true);
+    window.addEventListener(NETWORK_RESTORED_EVENT, refreshAfterReconnect);
+    return () => window.removeEventListener(NETWORK_RESTORED_EVENT, refreshAfterReconnect);
   }, []);
 
   useEffect(() => {

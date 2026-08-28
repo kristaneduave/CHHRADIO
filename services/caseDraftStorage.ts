@@ -4,11 +4,13 @@ import type { SubmissionType } from '../types';
 const CASE_DRAFT_DB_NAME = 'radcore-case-upload-drafts';
 const CASE_DRAFT_IMAGE_STORE = 'draft-images';
 const CASE_DRAFT_DB_VERSION = 1;
-export const CASE_DRAFT_SCHEMA_VERSION = 1;
+const CASE_DRAFT_KEY_VERSION = 1;
+export const CASE_DRAFT_SCHEMA_VERSION = 2;
 export const CASE_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface CaseUploadDraft<TFormData = Record<string, unknown>> {
   version: typeof CASE_DRAFT_SCHEMA_VERSION;
+  ownerId: string;
   savedAt: string;
   formData: TFormData;
   customTitle: string;
@@ -31,6 +33,11 @@ interface StoredDraftImage {
   lastModified: number;
   bytes: ArrayBuffer | null;
   remoteUrl: string | null;
+}
+
+export interface CaseDraftStorageSummary {
+  draftCount: number;
+  bytes: number;
 }
 
 const readBlobAsArrayBuffer = (blob: Blob): Promise<ArrayBuffer> => {
@@ -148,13 +155,13 @@ const loadDraftImages = async (draftKey: string): Promise<ImageUpload[]> => {
 };
 
 export const getCaseDraftKey = (userId: string, caseId: string, submissionType: SubmissionType) =>
-  `upload:case-draft:v${CASE_DRAFT_SCHEMA_VERSION}:${userId}:${caseId}:${submissionType}`;
+  `upload:case-draft:v${CASE_DRAFT_KEY_VERSION}:${userId}:${caseId}:${submissionType}`;
 
 export const getLegacyCaseNotesDraftKey = (userId: string, caseId: string, submissionType: SubmissionType) =>
   `upload:case-notes:draft:${userId}:${caseId}:${submissionType}`;
 
 export const createCaseDraftSignature = <TFormData>(
-  draft: Omit<CaseUploadDraft<TFormData>, 'version' | 'savedAt'>,
+  draft: Omit<CaseUploadDraft<TFormData>, 'version' | 'savedAt' | 'ownerId'>,
   images: ImageUpload[],
 ) => JSON.stringify({
   ...draft,
@@ -173,6 +180,10 @@ export const saveCaseUploadDraft = async <TFormData>(
   draft: CaseUploadDraft<TFormData>,
   images: ImageUpload[],
 ) => {
+  const expectedOwnerId = draftKey.split(':')[3] || '';
+  if (!expectedOwnerId || draft.ownerId !== expectedOwnerId) {
+    throw new Error('This local draft does not belong to the current user.');
+  }
   await saveDraftImages(draftKey, images);
   try {
     window.localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -190,15 +201,28 @@ export const loadCaseUploadDraft = async <TFormData>(
   if (!raw) return null;
 
   try {
-    const draft = JSON.parse(raw) as CaseUploadDraft<TFormData>;
+    const parsed = JSON.parse(raw) as Partial<Omit<CaseUploadDraft<TFormData>, 'version'>> & { version?: number };
+    const expectedOwnerId = draftKey.split(':')[3] || '';
+    const isLegacyDraft = parsed.version === 1 && !parsed.ownerId;
+    const draft = {
+      ...parsed,
+      version: CASE_DRAFT_SCHEMA_VERSION,
+      ownerId: parsed.ownerId || expectedOwnerId,
+    } as CaseUploadDraft<TFormData>;
     const savedAt = new Date(draft.savedAt).getTime();
-    const isValid = draft.version === CASE_DRAFT_SCHEMA_VERSION
+    const isValid = (parsed.version === CASE_DRAFT_SCHEMA_VERSION || isLegacyDraft)
+      && Boolean(expectedOwnerId)
+      && draft.ownerId === expectedOwnerId
       && Number.isFinite(savedAt)
       && now - savedAt <= CASE_DRAFT_MAX_AGE_MS;
 
     if (!isValid) {
       await deleteCaseUploadDraft(draftKey);
       return null;
+    }
+
+    if (isLegacyDraft) {
+      window.localStorage.setItem(draftKey, JSON.stringify(draft));
     }
 
     return {
@@ -223,4 +247,62 @@ export const deleteCaseUploadDraft = async (draftKey: string) => {
   } finally {
     database.close();
   }
+};
+
+const getUserDraftKeys = (userId: string): string[] => {
+  if (typeof window === 'undefined' || !userId) return [];
+  const prefix = `upload:case-draft:v${CASE_DRAFT_KEY_VERSION}:${userId}:`;
+  return Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index))
+    .filter((key): key is string => Boolean(key?.startsWith(prefix)));
+};
+
+export const getCaseDraftStorageSummary = async (
+  userId: string,
+  now = Date.now(),
+): Promise<CaseDraftStorageSummary> => {
+  const keys = getUserDraftKeys(userId);
+  const validKeys: string[] = [];
+  let bytes = 0;
+
+  for (const key of keys) {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw) as Partial<Omit<CaseUploadDraft, 'version'>> & { version?: number };
+      const savedAt = new Date(String(parsed.savedAt || '')).getTime();
+      const valid = Number.isFinite(savedAt)
+        && now - savedAt <= CASE_DRAFT_MAX_AGE_MS
+        && (!parsed.ownerId || parsed.ownerId === userId);
+      if (!valid) {
+        await deleteCaseUploadDraft(key);
+        continue;
+      }
+      validKeys.push(key);
+      bytes += new Blob([raw]).size;
+    } catch {
+      await deleteCaseUploadDraft(key);
+    }
+  }
+
+  if (typeof indexedDB !== 'undefined' && validKeys.length > 0) {
+    const validKeySet = new Set(validKeys);
+    const database = await openDraftDatabase();
+    try {
+      const transaction = database.transaction(CASE_DRAFT_IMAGE_STORE, 'readonly');
+      const records = await requestResult(transaction.objectStore(CASE_DRAFT_IMAGE_STORE).getAll()) as StoredDraftImage[];
+      await transactionComplete(transaction);
+      records.forEach((record) => {
+        if (validKeySet.has(record.draftKey)) bytes += record.bytes?.byteLength || 0;
+      });
+    } finally {
+      database.close();
+    }
+  }
+
+  return { draftCount: validKeys.length, bytes };
+};
+
+export const clearUserCaseDrafts = async (userId: string): Promise<void> => {
+  const keys = getUserDraftKeys(userId);
+  await Promise.all(keys.map((key) => deleteCaseUploadDraft(key)));
 };

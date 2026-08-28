@@ -46,6 +46,10 @@ export function useCaseSubmission() {
         onSuccess,
         onSetFormData
     }: SaveCaseParams) => {
+        if (status === 'published' && typeof navigator !== 'undefined' && !navigator.onLine) {
+            toastError('You are offline', 'Your draft is safe on this device. Reconnect before publishing.');
+            return;
+        }
         setIsSaving(true);
         try {
             const { data: { user } } = await supabase.auth.getUser();

@@ -5,6 +5,7 @@ import { triggerHaptic } from '../utils/haptics';
 import { useAppViewport } from './responsive/useViewport';
 import { getScreenLayoutMode } from './layout/screenLayoutConfig';
 import AppAmbientBackground from './AppAmbientBackground';
+import ConnectivityStatus from './ConnectivityStatus';
 import {
   APP_EDGE_SWIPE_DISTANCE_PX,
   APP_EDGE_SWIPE_TRIGGER_PX,
@@ -245,6 +246,7 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <LayoutScrollContext.Provider value={scrollContainer}>
         <div className="relative h-screen h-[100dvh] flex flex-col bg-app overflow-hidden text-text-primary" style={shellStyle}>
+        <ConnectivityStatus />
         <AppAmbientBackground className="z-0" />
         <div
           className="relative flex min-h-0 flex-1"
