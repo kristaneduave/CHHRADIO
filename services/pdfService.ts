@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { InterestingCaseSource, ReferenceSource, SubmissionType } from '../types';
 import { normalizeRichTextNotesHtml } from '../utils/richTextNotesNormalizer';
 
@@ -76,6 +77,8 @@ type PdfSectionSpec = {
 type InlineSegment = {
   text: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   color?: string;
   highlight?: string;
   fontSize?: string;
@@ -87,7 +90,8 @@ type RichBlock =
   | { type: 'heading3'; segments: InlineSegment[] }
   | { type: 'blockquote'; blocks: RichBlock[] }
   | { type: 'unorderedList'; items: RichBlock[][] }
-  | { type: 'orderedList'; items: RichBlock[][] };
+  | { type: 'orderedList'; items: RichBlock[][] }
+  | { type: 'table'; rows: Array<Array<{ text: string; header: boolean }>> };
 
 type RenderContext = {
   y: number;
@@ -102,6 +106,8 @@ type RunStyle = {
   lineHeight: number;
   color?: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
   indent?: number;
   maxWidth?: number;
 };
@@ -109,6 +115,8 @@ type RunStyle = {
 type ResolvedInlineSegment = InlineSegment & {
   resolvedFontSize: number;
   resolvedBold: boolean;
+  resolvedItalic: boolean;
+  resolvedUnderline: boolean;
   resolvedColor: string;
 };
 
@@ -397,6 +405,8 @@ const compactInlineSegments = (segments: InlineSegment[]): InlineSegment[] => {
     if (
       previous &&
       previous.bold === segment.bold &&
+      previous.italic === segment.italic &&
+      previous.underline === segment.underline &&
       previous.color === segment.color &&
       previous.highlight === segment.highlight &&
       previous.fontSize === segment.fontSize
@@ -428,6 +438,8 @@ const parseInlineNodes = (nodes: NodeListOf<ChildNode> | ChildNode[], inherited:
     const nextInherited: Omit<InlineSegment, 'text'> = {
       ...inherited,
       bold: inherited.bold || node.tagName === 'STRONG' || node.tagName === 'B',
+      italic: inherited.italic || node.tagName === 'EM' || node.tagName === 'I',
+      underline: inherited.underline || node.tagName === 'U',
     };
 
     segments.push(...parseInlineNodes(Array.from(node.childNodes), nextInherited));
@@ -437,7 +449,7 @@ const parseInlineNodes = (nodes: NodeListOf<ChildNode> | ChildNode[], inherited:
 };
 
 const isListItemBlockNode = (node: ChildNode) =>
-  node instanceof HTMLElement && ['P', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'UL', 'OL', 'DIV', 'SECTION', 'ARTICLE'].includes(node.tagName);
+  node instanceof HTMLElement && ['P', 'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'DIV', 'SECTION', 'ARTICLE'].includes(node.tagName);
 
 const parseListItemNode = (node: Element): RichBlock[] => {
   const blocks: RichBlock[] = [];
@@ -479,13 +491,24 @@ const parseBlockNode = (node: ChildNode): RichBlock[] => {
   if (tag === 'H1' || tag === 'H2') return [{ type: 'heading2', segments: parseInlineNodes(Array.from(node.childNodes)) }];
   if (tag === 'H3' || tag === 'H4') return [{ type: 'heading3', segments: parseInlineNodes(Array.from(node.childNodes)) }];
   if (tag === 'BLOCKQUOTE') {
-    return Array.from(node.childNodes).flatMap((child) => parseBlockNode(child));
+    return [{ type: 'blockquote', blocks: Array.from(node.childNodes).flatMap((child) => parseBlockNode(child)) }];
   }
   if (tag === 'UL' || tag === 'OL') {
     const items = Array.from(node.children)
       .filter((child) => child.tagName === 'LI')
       .map((li) => parseListItemNode(li));
     return [{ type: tag === 'OL' ? 'orderedList' : 'unorderedList', items }];
+  }
+  if (tag === 'TABLE') {
+    const rows = Array.from(node.querySelectorAll('tr'))
+      .map((row) => Array.from(row.children)
+        .filter((cell) => cell.tagName === 'TH' || cell.tagName === 'TD')
+        .map((cell) => ({
+          text: String(cell.textContent || '').replace(/\s+/g, ' ').trim(),
+          header: cell.tagName === 'TH',
+        })))
+      .filter((row) => row.length > 0);
+    return rows.length > 0 ? [{ type: 'table', rows }] : [];
   }
   if (tag === 'DIV' || tag === 'SECTION' || tag === 'ARTICLE') {
     return Array.from(node.childNodes).flatMap((child) => parseBlockNode(child));
@@ -821,6 +844,13 @@ const drawCompactMetadataSummary = (
 
 const tokenize = (text: string) => text.split(/(\s+|\n)/).filter((token) => token.length > 0);
 
+const getPdfFontStyle = (bold: boolean, italic: boolean) => {
+  if (bold && italic) return 'bolditalic';
+  if (bold) return 'bold';
+  if (italic) return 'italic';
+  return 'normal';
+};
+
 const resolveSegmentFontSize = (fontSize: string | undefined, fallback: number) => {
   if (!fontSize) return fallback;
   const parsed = Number.parseFloat(fontSize);
@@ -849,7 +879,7 @@ const estimateStyledSegmentsHeight = (
       }
 
       const isWhitespace = /^\s+$/.test(token);
-      doc.setFont('helvetica', segment.resolvedBold ? 'bold' : 'normal');
+      doc.setFont('helvetica', getPdfFontStyle(segment.resolvedBold, segment.resolvedItalic));
       doc.setFontSize(segment.resolvedFontSize);
       const tokenWidth = doc.getTextWidth(token);
 
@@ -877,6 +907,8 @@ const normalizeRenderableSegments = (
   segments.forEach((segment) => {
     const resolvedFontSize = resolveSegmentFontSize(segment.fontSize, style.fontSize);
     const resolvedBold = Boolean(segment.bold || style.bold);
+    const resolvedItalic = Boolean(segment.italic || style.italic);
+    const resolvedUnderline = Boolean(segment.underline || style.underline);
     const resolvedColor = segment.color || fallbackColor;
     const previous = normalized[normalized.length - 1];
 
@@ -884,6 +916,8 @@ const normalizeRenderableSegments = (
       previous &&
       previous.resolvedFontSize === resolvedFontSize &&
       previous.resolvedBold === resolvedBold &&
+      previous.resolvedItalic === resolvedItalic &&
+      previous.resolvedUnderline === resolvedUnderline &&
       previous.resolvedColor === resolvedColor
     ) {
       previous.text += segment.text;
@@ -894,6 +928,8 @@ const normalizeRenderableSegments = (
       ...segment,
       resolvedFontSize,
       resolvedBold,
+      resolvedItalic,
+      resolvedUnderline,
       resolvedColor,
     });
   });
@@ -949,6 +985,8 @@ const estimateBlockHeight = (
     case 'unorderedList':
     case 'orderedList':
       return estimateListHeight(doc, block, theme, ctx);
+    case 'table':
+      return Math.max(14, block.rows.length * 8 + 4) + BLOCK_SPACING;
   }
 };
 
@@ -1034,7 +1072,7 @@ const renderStyledSegments = (
       }
 
       const isWhitespace = /^\s+$/.test(token);
-      doc.setFont('helvetica', segment.resolvedBold ? 'bold' : 'normal');
+      doc.setFont('helvetica', getPdfFontStyle(segment.resolvedBold, segment.resolvedItalic));
       doc.setFontSize(segment.resolvedFontSize);
       const tokenWidth = doc.getTextWidth(token);
 
@@ -1045,11 +1083,67 @@ const renderStyledSegments = (
       const drawColor = getReadableTextColor(segment.resolvedColor || style.color, theme.textSecondary);
       doc.setTextColor(...drawColor);
       doc.text(token, x, y);
+      if (segment.resolvedUnderline && !isWhitespace) {
+        doc.setDrawColor(...drawColor);
+        doc.setLineWidth(0.2);
+        doc.line(x, y + 0.8, x + tokenWidth, y + 0.8);
+      }
       x += tokenWidth;
     });
   });
 
   ctx.y = y + style.lineHeight * 0.5;
+};
+
+const renderTableBlock = (
+  doc: jsPDF,
+  ctx: RenderContext,
+  block: Extract<RichBlock, { type: 'table' }>,
+  theme: PdfThemeTokens,
+) => {
+  const firstRow = block.rows[0] || [];
+  const hasHeaderRow = firstRow.some((cell) => cell.header);
+  const head = hasHeaderRow ? [firstRow.map((cell) => cell.text)] : [];
+  const bodyRows = hasHeaderRow ? block.rows.slice(1) : block.rows;
+  const body = bodyRows.map((row) => row.map((cell) => cell.text));
+  let finalY = ctx.y;
+
+  autoTable(doc, {
+    startY: ctx.y,
+    head,
+    body,
+    theme: 'grid',
+    tableWidth: ctx.pageWidth - ctx.margin * 2,
+    margin: {
+      top: ctx.margin,
+      right: ctx.margin,
+      bottom: ctx.bottomMargin,
+      left: ctx.margin,
+    },
+    styles: {
+      font: 'helvetica',
+      fontSize: theme.typography.body,
+      textColor: theme.textSecondary,
+      lineColor: theme.border,
+      lineWidth: 0.2,
+      cellPadding: 2.5,
+      overflow: 'linebreak',
+      valign: 'top',
+    },
+    headStyles: {
+      fillColor: theme.fillMuted,
+      textColor: theme.textPrimary,
+      fontStyle: 'bold',
+    },
+    alternateRowStyles: {
+      fillColor: theme.fillSubtle,
+    },
+    didDrawCell: ({ cell }) => {
+      finalY = cell.y + cell.height;
+    },
+  });
+
+  ctx.y = finalY + BLOCK_SPACING + 1;
 };
 
 const renderRichBlock = (
@@ -1111,6 +1205,9 @@ const renderRichBlock = (
     case 'unorderedList':
     case 'orderedList':
       renderListBlock(doc, ctx, block, theme);
+      return;
+    case 'table':
+      renderTableBlock(doc, ctx, block, theme);
       return;
   }
 };
@@ -1417,6 +1514,8 @@ export const __testables = {
   normalizePdfExportData,
   preparePdfImages,
   parseRichContent,
+  renderRichNotes,
+  PDF_THEME_BY_SUBMISSION,
   sanitizeFilenamePart,
   getPdfSectionOrder,
   getCompactMetadataGroups,

@@ -2,6 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import TextStyle from '@tiptap/extension-text-style';
+import Underline from '@tiptap/extension-underline';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { mergeAttributes } from '@tiptap/core';
 
 type ToolbarMode = 'compact' | 'expanded';
@@ -92,6 +97,9 @@ export function RichTextEditor({
     ['--rich-editor-blockquote-border' as string]: isPaperSurface ? 'rgba(14, 165, 233, 0.35)' : 'rgba(34, 211, 238, 0.55)',
     ['--rich-editor-blockquote-bg' as string]: isPaperSurface ? 'rgba(241, 245, 249, 0.92)' : 'rgba(15, 23, 42, 0.75)',
     ['--rich-editor-blockquote-color' as string]: isPaperSurface ? '#334155' : '#dbeafe',
+    ['--rich-editor-table-border' as string]: isPaperSurface ? '#cbd5e1' : 'rgba(148, 163, 184, 0.35)',
+    ['--rich-editor-table-header-bg' as string]: isPaperSurface ? '#e2e8f0' : 'rgba(51, 65, 85, 0.8)',
+    ['--rich-editor-table-selected-bg' as string]: isPaperSurface ? 'rgba(14, 165, 233, 0.12)' : 'rgba(34, 211, 238, 0.12)',
     ['--rich-editor-paper-edge' as string]: 'rgba(148, 163, 184, 0.2)',
   }), [isPaperSurface]);
   const toolbarClassName = isPaperSurface
@@ -104,6 +112,14 @@ export function RichTextEditor({
         heading: { levels: [2, 3] },
       }),
       StyledText,
+      Underline,
+      Table.configure({
+        resizable: false,
+        allowTableNodeSelection: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: value || '',
     autofocus: autoFocus,
@@ -177,8 +193,7 @@ export function RichTextEditor({
     editor
       .chain()
       .focus()
-      .unsetMark('bold')
-      .unsetMark('textStyle')
+      .unsetAllMarks()
       .removeEmptyTextStyle()
       .run();
   };
@@ -197,6 +212,50 @@ export function RichTextEditor({
         </button>
         <button
           type="button"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          className={`${toolbarButtonBase} ${editor.isActive('italic') ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+          title="Italic"
+        >
+          <span className="material-icons text-[18px]">format_italic</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          className={`${toolbarButtonBase} ${editor.isActive('underline') ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+          title="Underline"
+        >
+          <span className="material-icons text-[18px]">format_underlined</span>
+        </button>
+        {isExpanded && (
+          <>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={`${toolbarButtonBase} ${editor.isActive('heading', { level: 2 }) ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              title="Heading"
+            >
+              H2
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              className={`${toolbarButtonBase} ${editor.isActive('heading', { level: 3 }) ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              title="Subheading"
+            >
+              H3
+            </button>
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              className={`${toolbarButtonBase} ${editor.isActive('blockquote') ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
+              title="Blockquote"
+            >
+              <span className="material-icons text-[18px]">format_quote</span>
+            </button>
+          </>
+        )}
+        <button
+          type="button"
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           className={`${toolbarButtonBase} ${editor.isActive('bulletList') ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10 hover:text-white'}`}
           title="Bullet List"
@@ -211,6 +270,28 @@ export function RichTextEditor({
         >
           <span className="material-icons text-[18px]">format_list_numbered</span>
         </button>
+        {isExpanded && (
+          <>
+            <div className="rich-editor-toolbar-divider mx-1 hidden h-4 w-px bg-white/10 sm:block" />
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+              className={`${toolbarButtonBase} text-slate-400 hover:bg-white/10 hover:text-white`}
+              title="Insert table"
+            >
+              <span className="material-icons text-[18px]">table_chart</span>
+            </button>
+            {editor.isActive('table') && (
+              <div className="flex flex-wrap items-center justify-center gap-1 rounded-xl border border-white/10 bg-black/20 p-1">
+                <button type="button" onClick={() => editor.chain().focus().addRowAfter().run()} className={toolbarButtonBase} title="Add row">+ Row</button>
+                <button type="button" onClick={() => editor.chain().focus().addColumnAfter().run()} className={toolbarButtonBase} title="Add column">+ Column</button>
+                <button type="button" onClick={() => editor.chain().focus().deleteRow().run()} className={toolbarButtonBase} title="Delete row">− Row</button>
+                <button type="button" onClick={() => editor.chain().focus().deleteColumn().run()} className={toolbarButtonBase} title="Delete column">− Column</button>
+                <button type="button" onClick={() => editor.chain().focus().deleteTable().run()} className={`${toolbarButtonBase} text-rose-300`} title="Delete table">Delete table</button>
+              </div>
+            )}
+          </>
+        )}
         <div className="rich-editor-toolbar-divider mx-1 hidden h-4 w-px bg-white/10 sm:block" />
         <div className="rich-editor-style-pill flex items-center gap-1 rounded-full border border-white/10 bg-black/20 px-2 py-1">
           <button
@@ -453,6 +534,48 @@ export function RichTextEditor({
           padding: 0.85rem 1rem;
           border-radius: 0 1rem 1rem 0;
           color: var(--rich-editor-blockquote-color, #dbeafe);
+        }
+
+        .rich-editor-content .tableWrapper {
+          margin: 0.9rem 0;
+          max-width: 100%;
+          overflow-x: auto;
+        }
+
+        .rich-editor-content table {
+          width: 100%;
+          min-width: 420px;
+          table-layout: fixed;
+          border-collapse: collapse;
+        }
+
+        .rich-editor-content th,
+        .rich-editor-content td {
+          position: relative;
+          min-width: 90px;
+          border: 1px solid var(--rich-editor-table-border, rgba(148, 163, 184, 0.35));
+          padding: 0.55rem 0.65rem;
+          text-align: left;
+          vertical-align: top;
+        }
+
+        .rich-editor-content th {
+          background: var(--rich-editor-table-header-bg, rgba(51, 65, 85, 0.8));
+          font-weight: 700;
+        }
+
+        .rich-editor-content th p,
+        .rich-editor-content td p {
+          margin: 0;
+        }
+
+        .rich-editor-content .selectedCell::after {
+          position: absolute;
+          inset: 0;
+          z-index: 2;
+          pointer-events: none;
+          content: '';
+          background: var(--rich-editor-table-selected-bg, rgba(34, 211, 238, 0.12));
         }
 
         .rich-editor-content:focus {

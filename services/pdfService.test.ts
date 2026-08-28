@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import jsPDF from 'jspdf';
 import { __testables } from './pdfService';
 
 describe('pdfService helpers', () => {
@@ -143,6 +144,63 @@ describe('pdfService helpers', () => {
     expect(blocks[0].items[0][0].segments.map((segment) => segment.text).join('')).toBe(
       'transitional meningioma (40%): mixed histology'
     );
+  });
+
+  it('preserves italic and underline marks in rich notes parsing', () => {
+    const blocks = __testables.parseRichContent('<p><em>Italic</em> and <u>underlined</u></p>');
+
+    expect(blocks[0]?.type).toBe('paragraph');
+    if (blocks[0]?.type !== 'paragraph') throw new Error('Expected paragraph block');
+    expect(blocks[0].segments.find((segment) => segment.text === 'Italic')?.italic).toBe(true);
+    expect(blocks[0].segments.find((segment) => segment.text === 'underlined')?.underline).toBe(true);
+  });
+
+  it('preserves blockquotes as rich blocks', () => {
+    const blocks = __testables.parseRichContent('<blockquote><p>Teaching point</p></blockquote>');
+
+    expect(blocks[0]?.type).toBe('blockquote');
+    if (blocks[0]?.type !== 'blockquote') throw new Error('Expected blockquote block');
+    expect(blocks[0].blocks[0]?.type).toBe('paragraph');
+  });
+
+  it('parses table headers and rows for PDF rendering', () => {
+    const blocks = __testables.parseRichContent(
+      '<table><thead><tr><th>Finding</th><th>Meaning</th></tr></thead>'
+      + '<tbody><tr><td>Halo</td><td>Sign</td></tr></tbody></table>'
+    );
+
+    expect(blocks[0]).toEqual({
+      type: 'table',
+      rows: [
+        [{ text: 'Finding', header: true }, { text: 'Meaning', header: true }],
+        [{ text: 'Halo', header: false }, { text: 'Sign', header: false }],
+      ],
+    });
+  });
+
+  it('renders formatted notes and tables into a PDF document', () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const context = {
+      y: 20,
+      margin: 18,
+      pageWidth,
+      pageHeight,
+      bottomMargin: 18,
+    };
+
+    __testables.renderRichNotes(
+      doc,
+      context,
+      '<h2>Teaching Table</h2><p><em>Italic</em> and <u>underlined</u></p>'
+      + '<table><thead><tr><th>Finding</th><th>Meaning</th></tr></thead>'
+      + '<tbody><tr><td>Halo</td><td>Sign</td></tr></tbody></table>',
+      __testables.PDF_THEME_BY_SUBMISSION.interesting_case,
+    );
+
+    expect(context.y).toBeGreaterThan(20);
+    expect(doc.output('arraybuffer').byteLength).toBeGreaterThan(1000);
   });
 
   it('repairs spaced letter runs before parsing notes html', () => {

@@ -1239,7 +1239,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 </div>
                                 {normalizedEducationalSummary ? (
                                     <div
-                                        className="case-rich-preview text-[13px] text-slate-300/90 leading-relaxed"
+                                        className="case-rich-preview overflow-x-auto text-[13px] text-slate-300/90 leading-relaxed"
                                         dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normalizedEducationalSummary) }}
                                     />
                                 ) : (
@@ -1309,6 +1309,43 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
                                   .case-rich-preview strong {
                                     color: #ffffff;
+                                  }
+
+                                  .case-rich-preview blockquote {
+                                    margin: 0.75rem 0;
+                                    border-left: 3px solid rgba(34, 211, 238, 0.5);
+                                    border-radius: 0 0.75rem 0.75rem 0;
+                                    background: rgba(15, 23, 42, 0.7);
+                                    padding: 0.7rem 0.85rem;
+                                    color: rgba(219, 234, 254, 0.95);
+                                  }
+
+                                  .case-rich-preview table {
+                                    display: table;
+                                    width: 100%;
+                                    min-width: 420px;
+                                    margin: 0.75rem 0;
+                                    border-collapse: collapse;
+                                    table-layout: fixed;
+                                  }
+
+                                  .case-rich-preview th,
+                                  .case-rich-preview td {
+                                    border: 1px solid rgba(148, 163, 184, 0.25);
+                                    padding: 0.5rem 0.6rem;
+                                    text-align: left;
+                                    vertical-align: top;
+                                    overflow-wrap: anywhere;
+                                  }
+
+                                  .case-rich-preview th {
+                                    background: rgba(51, 65, 85, 0.55);
+                                    color: #f8fafc;
+                                    font-weight: 700;
+                                  }
+
+                                  .case-rich-preview td {
+                                    background: rgba(15, 23, 42, 0.35);
                                   }
 
                                   .case-rich-preview span[style*="color"] {

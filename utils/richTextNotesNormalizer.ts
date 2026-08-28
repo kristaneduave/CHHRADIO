@@ -1,6 +1,13 @@
 const normalizeWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
 const LETTER_RUN_PATTERN = /\b(?:[A-Za-z]\s+){3,}[A-Za-z]\b/g;
 const INVISIBLE_CHAR_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u200B-\u200F\u2060\uFEFF]/g;
+const ALLOWED_RICH_TEXT_TAGS = new Set([
+  'P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U',
+  'H1', 'H2', 'H3', 'H4', 'BLOCKQUOTE',
+  'UL', 'OL', 'LI',
+  'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TR', 'TH', 'TD',
+]);
+const DROP_WITH_CONTENT_TAGS = new Set(['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED', 'SVG', 'MATH']);
 
 const stripInvisibleCharacters = (value: string) => value.replace(INVISIBLE_CHAR_PATTERN, ' ');
 
@@ -56,16 +63,21 @@ export const normalizeRichTextNotesHtml = (html?: string | null) => {
   const parser = new window.DOMParser();
   const doc = parser.parseFromString(value, 'text/html');
 
-  doc.querySelectorAll('span').forEach((span) => {
-    span.replaceWith(...Array.from(span.childNodes));
+  Array.from(doc.body.querySelectorAll<HTMLElement>('*')).reverse().forEach((element) => {
+    if (DROP_WITH_CONTENT_TAGS.has(element.tagName)) {
+      element.remove();
+      return;
+    }
+
+    if (!ALLOWED_RICH_TEXT_TAGS.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      return;
+    }
+
+    Array.from(element.attributes).forEach((attribute) => element.removeAttribute(attribute.name));
   });
 
-  doc.querySelectorAll<HTMLElement>('*').forEach((element) => {
-    element.removeAttribute('style');
-    element.removeAttribute('class');
-  });
-
-  doc.querySelectorAll<HTMLElement>('p, li, h1, h2, h3, h4, blockquote').forEach((element) => {
+  doc.querySelectorAll<HTMLElement>('p, li, h1, h2, h3, h4, blockquote, th, td').forEach((element) => {
     const directTextNodes = Array.from(element.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE);
     directTextNodes.forEach((node) => {
       node.textContent = normalizeTextNodeContent(node.textContent || '');
