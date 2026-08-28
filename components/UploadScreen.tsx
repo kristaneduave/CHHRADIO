@@ -7,6 +7,7 @@ import { toastError, toastSuccess, toastInfo } from '../utils/toast';
 import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
 import { RichTextEditor } from './RichTextEditor';
+import { CASE_TEXT_LIMITS, getCaseTextFieldLength, stripHtmlToPlainText } from '../utils/caseTextLimits';
 
 const ORGAN_SYSTEMS = [
   'Neuroradiology',
@@ -44,34 +45,6 @@ const REFERENCE_SOURCE_TYPES = [
 
 const MAX_REFERENCES = 4;
 const INTERESTING_CASE_SOURCES: InterestingCaseSource[] = ['Infinitt', 'Medavis'];
-const CASE_TEXT_LIMITS: Record<SubmissionType, { findings: number; notes?: number; radiologicClinchers?: number }> = {
-  interesting_case: {
-    findings: 280,
-    notes: 1000,
-  },
-  rare_pathology: {
-    findings: 350,
-    radiologicClinchers: 160,
-  },
-  aunt_minnie: {
-    findings: 220,
-    notes: 220,
-  },
-};
-
-const stripHtmlToPlainText = (value: string): string => {
-  if (!value) return '';
-  if (typeof window === 'undefined') {
-    return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  }
-  const parser = new window.DOMParser();
-  const doc = parser.parseFromString(value, 'text/html');
-  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
-};
-
-const getFieldLength = (field: 'findings' | 'notes' | 'radiologicClinchers', value: string): number =>
-  field === 'notes' ? stripHtmlToPlainText(value).length : value.length;
-
 const getReferencePreviewText = (reference: ReferenceSource) =>
   [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
 
@@ -589,8 +562,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
   const handleNotesChange = (value: string) => {
     const notesLimit = CASE_TEXT_LIMITS[formData.submissionType].notes;
-    const nextLength = getFieldLength('notes', value);
-    const currentLength = getFieldLength('notes', String(formData.notes || ''));
+    const nextLength = getCaseTextFieldLength('notes', value);
+    const currentLength = getCaseTextFieldLength('notes', String(formData.notes || ''));
 
     if (notesLimit && nextLength > notesLimit && nextLength >= currentLength) {
       setFieldErrors((prev) => ({ ...prev, notes: `Keep notes within ${notesLimit} characters.` }));
