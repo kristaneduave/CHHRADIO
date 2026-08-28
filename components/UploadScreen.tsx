@@ -7,6 +7,7 @@ import { toastError, toastSuccess, toastInfo } from '../utils/toast';
 import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
 import { RichTextEditor } from './RichTextEditor';
+import { setCaseViberShareStatus } from '../services/caseViberShareService';
 import { CASE_TEXT_LIMITS, getCaseTextFieldLength, stripHtmlToPlainText } from '../utils/caseTextLimits';
 import {
   OTHER_BOOK_VALUE,
@@ -194,6 +195,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const [showControls, setShowControls] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isNotesFocusOpen, setIsNotesFocusOpen] = useState(false);
+  const [sentToViberGc, setSentToViberGc] = useState(Boolean(existingCase?.viber_shared_at));
 
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
@@ -276,6 +278,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   }, [isNotesFocusOpen]);
 
   useEffect(() => {
+    setSentToViberGc(Boolean(existingCase?.viber_shared_at));
+  }, [existingCase?.id, existingCase?.viber_shared_at]);
+
+  useEffect(() => {
     window.dispatchEvent(new CustomEvent('radcore-bottom-nav-visibility', { detail: { hidden: isNotesFocusOpen } }));
     return () => {
       window.dispatchEvent(new CustomEvent('radcore-bottom-nav-visibility', { detail: { hidden: false } }));
@@ -309,6 +315,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       setCustomTitle('');
       setImages([]);
       setStep(1);
+      setSentToViberGc(false);
     }
   }, [existingCase, initialSubmissionType]);
 
@@ -567,7 +574,22 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       customTitle,
       images,
       onSetFormData: (updates) => setFormData(prev => ({ ...prev, ...updates })),
-      onSuccess: () => {
+      onSuccess: async (savedId) => {
+        if (
+          status === 'published'
+          && formData.submissionType === 'interesting_case'
+          && sentToViberGc !== Boolean(existingCase?.viber_shared_at)
+        ) {
+          try {
+            await setCaseViberShareStatus(savedId, sentToViberGc);
+          } catch (error) {
+            toastInfo(
+              'Case saved with a Viber status warning',
+              `${error instanceof Error ? error.message : 'Unable to update the Viber share status.'} You can retry from the case view.`
+            );
+          }
+        }
+
         if (currentUserId) {
           const caseId = existingCase?.id ? String(existingCase.id) : 'new';
           window.localStorage.removeItem(getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType));
@@ -599,6 +621,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           });
           setImages([]);
           setCustomTitle('');
+          setSentToViberGc(false);
         }
       }
     });
@@ -1232,6 +1255,32 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
               </div>
             </section>
 
+            {formData.submissionType === 'interesting_case' && (
+              <section className={`${sectionCardClassName} space-y-3`}>
+                <div className="space-y-1">
+                  <h2 className={sectionLabelClassName}>Viber Tracking</h2>
+                  <p className="text-xs leading-5 text-slate-500">
+                    Mark this only after the case has actually been sent to the Viber group chat.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/5 bg-black/20 p-4 transition hover:bg-white/[0.04]">
+                  <input
+                    type="checkbox"
+                    checked={sentToViberGc}
+                    onChange={(event) => setSentToViberGc(event.target.checked)}
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-white/20 bg-black/40 text-[#7360f2] focus:ring-[#7360f2]/40"
+                    aria-label="Sent to Viber GC"
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-white">Sent to Viber GC</span>
+                    <span className="mt-1 block text-xs leading-5 text-slate-400">
+                      The status, staff member, and time will be recorded when this case is published.
+                    </span>
+                  </span>
+                </label>
+              </section>
+            )}
+
             <section className={`${sectionCardClassName} space-y-4`}>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-white">Ready to continue?</p>
@@ -1362,7 +1411,12 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                     </>
                   )}
                   {formData.submissionType === 'interesting_case' && (
-                    <span className="text-cyan-200 font-bold uppercase tracking-wide">Interesting Case</span>
+                    <>
+                      <span className="text-cyan-200 font-bold uppercase tracking-wide">Interesting Case</span>
+                      <span className={`rounded-full border px-2.5 py-1 font-semibold ${sentToViberGc ? 'border-violet-400/25 bg-violet-500/10 text-violet-200' : 'border-white/10 bg-white/5 text-slate-400'}`}>
+                        {sentToViberGc ? 'Sent to Viber GC' : 'Not marked for Viber'}
+                      </span>
+                    </>
                   )}
                 </div>
               </div>

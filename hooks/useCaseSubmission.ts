@@ -17,7 +17,7 @@ interface SaveCaseParams {
     formData: any;
     customTitle: string;
     images: ImageUpload[];
-    onSuccess?: (savedId: string, diagnosisCode: string) => void;
+    onSuccess?: (savedId: string, diagnosisCode: string) => void | Promise<void>;
     onSetFormData?: (updates: any) => void;
 }
 
@@ -250,7 +250,7 @@ export function useCaseSubmission() {
             }
 
             if (onSuccess) {
-                onSuccess(savedCaseId!, finalDiagnosis);
+                await onSuccess(savedCaseId!, finalDiagnosis);
             }
 
         } catch (error: any) {
