@@ -460,7 +460,7 @@ export interface SearchFilters {
   modality: string;
   diagnosticCode: string;
   submissionType: '' | SubmissionType;
-  viberShareStatus: '' | 'shared' | 'not_shared';
+  viberShareStatus: 'all' | 'not_sent' | 'sent';
   datePreset: 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
 }
 

@@ -37,6 +37,18 @@ interface SearchScreenProps {
 }
 
 const OPENED_CASES_STORAGE_KEY = 'chh_database_opened_case_ids_v1';
+const VIBER_FILTER_STORAGE_PREFIX = 'chh_database_viber_filter_v1';
+
+const readStoredViberFilter = (userId?: string | null): SearchFilters['viberShareStatus'] => {
+  if (typeof window === 'undefined' || !userId) return 'all';
+  const value = window.sessionStorage.getItem(`${VIBER_FILTER_STORAGE_PREFIX}:${userId}`);
+  return value === 'not_sent' || value === 'sent' ? value : 'all';
+};
+
+const storeViberFilter = (userId: string | null | undefined, value: SearchFilters['viberShareStatus']) => {
+  if (typeof window === 'undefined' || !userId) return;
+  window.sessionStorage.setItem(`${VIBER_FILTER_STORAGE_PREFIX}:${userId}`, value);
+};
 
 const formatUploadedAt = (value: string) =>
   new Date(value).toLocaleString('en-US', {
@@ -178,7 +190,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     modality: '',
     diagnosticCode: '',
     submissionType: '',
-    viberShareStatus: '',
+    viberShareStatus: readStoredViberFilter(currentUserId),
     datePreset: 'all',
   });
   const [results, setResults] = useState<PatientRecord[]>(cachedBundle?.records || []);
@@ -359,6 +371,18 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     };
   }, []);
 
+  useEffect(() => {
+    if (!isRegisteredUser || filters.viberShareStatus === 'all') return;
+    const nextResults = allCases.filter((item) => {
+      const raw = rawCases.find((candidate) => String(candidate?.id || '') === item.id);
+      if (!isViberShareEligible(raw)) return false;
+      return filters.viberShareStatus === 'sent'
+        ? Boolean(raw?.viber_shared_at)
+        : !raw?.viber_shared_at;
+    });
+    startTransition(() => setResults(sortCases(nextResults)));
+  }, [allCases, rawCases]);
+
   const markCaseAsOpened = (caseId: string) => {
     setOpenedCaseIds((prev) => {
       if (prev.has(caseId)) return prev;
@@ -415,9 +439,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
         ? p.diagnosticCode.toLowerCase().includes(filters.diagnosticCode.toLowerCase())
         : true;
       const matchSubmissionType = filters.submissionType ? p.submission_type === filters.submissionType : true;
-      const matchViberShareStatus = isRegisteredUser && filters.viberShareStatus
+      const matchViberShareStatus = isRegisteredUser && filters.viberShareStatus !== 'all'
         ? isViberShareEligible(raw)
-          && (filters.viberShareStatus === 'shared' ? Boolean(raw?.viber_shared_at) : !raw?.viber_shared_at)
+          && (filters.viberShareStatus === 'sent' ? Boolean(raw?.viber_shared_at) : !raw?.viber_shared_at)
         : true;
 
       const date = new Date(p.date);
@@ -432,6 +456,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     startTransition(() => {
       setResults(sortCases(filtered));
     });
+    storeViberFilter(currentUserId, filters.viberShareStatus);
     setShowFilters(false);
     setShowSuggestions(false);
   };
@@ -444,10 +469,11 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
       modality: '',
       diagnosticCode: '',
       submissionType: '',
-      viberShareStatus: '',
+      viberShareStatus: 'all',
       datePreset: 'all',
     });
     setQuery('');
+    storeViberFilter(currentUserId, 'all');
     startTransition(() => {
       setResults(sortCases(allCases));
     });
@@ -475,8 +501,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     filters.specialty ? `Organ system: ${filters.specialty}` : '',
     filters.modality ? `Modality: ${filters.modality}` : '',
     filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '',
-    isRegisteredUser && filters.viberShareStatus
-      ? `Viber: ${filters.viberShareStatus === 'shared' ? 'Sent' : 'Not sent'}`
+    isRegisteredUser && filters.viberShareStatus !== 'all'
+      ? `Viber: ${filters.viberShareStatus === 'sent' ? 'Sent' : 'Not sent'}`
       : '',
     filters.datePreset !== 'all'
       ? `Date: ${filters.datePreset === 'custom'
@@ -612,9 +638,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                     onChange={handleFilterChange}
                     className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                   >
-                    <option value="">All cases</option>
-                    <option value="shared" className="bg-surface">Sent to Viber</option>
-                    <option value="not_shared" className="bg-surface">Not sent to Viber</option>
+                    <option value="all">All</option>
+                    <option value="not_sent" className="bg-surface">Not sent to Viber</option>
+                    <option value="sent" className="bg-surface">Sent to Viber</option>
                   </select>
                 </div>
               ) : null}
@@ -727,12 +753,19 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
         ) : null}
 
         {activeFilterChips.length > 0 && (
-          <div className="mb-4 flex flex-wrap gap-1.5 px-1">
-            {activeFilterChips.map((chip) => (
-              <span key={chip} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
-                {chip}
+          <div className="mb-4 flex items-center justify-between gap-3 px-1">
+            <div className="flex flex-wrap gap-1.5">
+              {activeFilterChips.map((chip) => (
+                <span key={chip} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
+                  {chip}
+                </span>
+              ))}
+            </div>
+            {isRegisteredUser && filters.viberShareStatus !== 'all' ? (
+              <span className="shrink-0 text-[10px] font-semibold text-slate-500" aria-live="polite">
+                {results.length} {results.length === 1 ? 'case' : 'cases'}
               </span>
-            ))}
+            ) : null}
           </div>
         )}
 

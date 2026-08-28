@@ -91,6 +91,7 @@ const buildBundle = () => ({
 describe('SearchScreen Viber status', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    window.sessionStorage.clear();
     getCachedPublishedCasesBundle.mockReset();
     fetchPublishedCasesBundle.mockReset();
     refreshPublishedCasesBundle.mockReset();
@@ -108,6 +109,48 @@ describe('SearchScreen Viber status', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
     expect(screen.getByLabelText('Viber status')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Sent to Viber' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Not sent to Viber' })).toBeInTheDocument();
+  });
+
+  it('filters to unshared Interesting Cases and preserves the selection for return navigation', async () => {
+    const firstRender = render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+
+    expect(screen.getByText('Viber: Not sent')).toBeInTheDocument();
+    expect(screen.getByText('1 case')).toBeInTheDocument();
+    expect(screen.getByText('UNSHARED INTERESTING CASE')).toBeInTheDocument();
+    expect(screen.queryByText('SHARED RARE PATHOLOGY')).not.toBeInTheDocument();
+
+    firstRender.unmount();
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText('Viber: Not sent')).toBeInTheDocument());
+    expect(screen.getByText('UNSHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('removes a case from the Not sent queue immediately when it is marked sent', async () => {
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+    expect(screen.getByText('UNSHARED INTERESTING CASE')).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('radcore-case-viber-share-updated', {
+        detail: {
+          case_id: 'unshared-interesting',
+          viber_shared_at: sharedAt,
+          viber_shared_by: 'staff-1',
+          viber_shared_by_name: 'Dr. Test',
+        },
+      }));
+    });
+
+    await waitFor(() => expect(screen.queryByText('UNSHARED INTERESTING CASE')).not.toBeInTheDocument());
+    expect(screen.getByText('0 cases')).toBeInTheDocument();
   });
 
   it('hides Viber workflow status and filtering from anonymous viewers', () => {
