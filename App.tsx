@@ -777,6 +777,7 @@ const App: React.FC = () => {
       case 'search':
         return (
           <SearchScreen
+            currentUserId={session?.user?.id || null}
             onCaseSelect={(caseItem) => {
               setCaseToEdit(caseItem);
               navigateToScreen('case-view'); // Navigate to read-only view

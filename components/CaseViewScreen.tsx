@@ -75,7 +75,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const normalizedReferences = React.useMemo(() => normalizeCaseReferences(caseData), [caseData]);
     const patientId = React.useMemo(() => resolveCasePatientId(caseData), [caseData]);
     const canShowShareActions = !isPublicMode && caseData?.status === 'published';
-    const canToggleViberSharedState = canShowShareActions && isInterestingCase;
+    const canToggleViberSharedState = canShowShareActions && isInterestingCase && isRegisteredUser;
     const isMarkedSharedToViber = Boolean(viberSharedAt);
 
     const [comments, setComments] = useState<CaseComment[]>([]);
@@ -518,10 +518,10 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             setViberSharedAt(nextStatus.viber_shared_at);
             setViberSharedByName(nextStatus.viber_shared_by_name);
             toastSuccess(
-                isMarkedSharedToViber ? 'Marked not shared' : 'Marked shared to Viber',
+                isMarkedSharedToViber ? 'Marked as not sent' : 'Marked as sent to Viber',
                 isMarkedSharedToViber
-                    ? 'This case is now marked as not yet shared in the public library.'
-                    : 'This case is now marked as shared in the public library.',
+                    ? 'This case is now marked as not yet sent to the Viber group chat.'
+                    : 'This case is now marked as sent to the Viber group chat.',
             );
         } catch (error) {
             toastError(error instanceof Error ? error.message : 'Unable to update Viber share status.');
@@ -1379,13 +1379,13 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 {canToggleViberSharedState ? (
                                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/6 bg-black/20 px-3 py-2.5">
                                         <div className="min-w-0">
-                                            <div className={`text-[10px] font-black uppercase tracking-[0.18em] ${isMarkedSharedToViber ? 'text-emerald-200' : 'text-amber-100'}`}>
-                                                {isMarkedSharedToViber ? 'Shared to Viber' : 'Not Shared to Viber'}
+                                            <div className={`text-[10px] font-black uppercase tracking-[0.18em] ${isMarkedSharedToViber ? 'text-violet-200' : 'text-slate-300'}`}>
+                                                {isMarkedSharedToViber ? 'Sent to Viber' : 'Not Sent to Viber'}
                                             </div>
                                             <div className="text-[11px] text-slate-400">
                                                 {isMarkedSharedToViber
-                                                    ? `Marked ${new Date(viberSharedAt as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${viberSharedByName ? ` by ${viberSharedByName}` : ''}`
-                                                    : 'Use this when the case has already been posted in the public Viber workflow.'}
+                                                    ? `Sent ${new Date(viberSharedAt as string).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}${viberSharedByName ? ` by ${viberSharedByName}` : ''}`
+                                                    : 'Mark this only after the case has been sent to the Viber group chat.'}
                                             </div>
                                         </div>
                                         <button
@@ -1394,11 +1394,11 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                             disabled={isUpdatingViberShareStatus}
                                             className={`inline-flex items-center justify-center rounded-xl border px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] transition-colors ${
                                                 isMarkedSharedToViber
-                                                    ? 'border-emerald-400/25 bg-emerald-500/12 text-emerald-100 hover:bg-emerald-500/18'
-                                                    : 'border-white/10 bg-white/5 text-slate-100 hover:bg-white/10'
+                                                    ? 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+                                                    : 'border-violet-400/25 bg-violet-500/10 text-violet-100 hover:bg-violet-500/[0.16]'
                                             } disabled:cursor-not-allowed disabled:opacity-60`}
                                         >
-                                            {isUpdatingViberShareStatus ? 'Saving...' : isMarkedSharedToViber ? 'Mark Not Shared' : 'Mark Shared'}
+                                            {isUpdatingViberShareStatus ? 'Saving...' : isMarkedSharedToViber ? 'Mark as not sent' : 'Mark as sent'}
                                         </button>
                                     </div>
                                 ) : null}

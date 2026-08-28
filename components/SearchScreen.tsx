@@ -29,6 +29,7 @@ const DatabaseItemSkeleton = () => (
 );
 interface SearchScreenProps {
   onCaseSelect: (caseItem: any) => void;
+  currentUserId?: string | null;
 }
 
 const OPENED_CASES_STORAGE_KEY = 'chh_database_opened_case_ids_v1';
@@ -41,6 +42,17 @@ const formatUploadedAt = (value: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+const formatViberSharedLabel = (value: string, staffName?: string | null) => {
+  const sharedAt = new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `Sent to Viber on ${sharedAt}${staffName ? ` by ${staffName}` : ''}`;
+};
 
 const ORGAN_SYSTEM_OPTIONS = [
   'Neuroradiology',
@@ -146,8 +158,9 @@ const getPrimaryMeta = (rawCase: any, fallbackType?: string) => {
 
 const DATABASE_LOADING_WATCHDOG_MS = 15_000;
 
-const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
+const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId = null }) => {
   const viewport = useAppViewport();
+  const isRegisteredUser = Boolean(currentUserId);
   const cachedBundle = getCachedPublishedCasesBundle();
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
@@ -394,7 +407,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
         ? p.diagnosticCode.toLowerCase().includes(filters.diagnosticCode.toLowerCase())
         : true;
       const matchSubmissionType = filters.submissionType ? p.submission_type === filters.submissionType : true;
-      const matchViberShareStatus = filters.viberShareStatus
+      const matchViberShareStatus = isRegisteredUser && filters.viberShareStatus
         ? isViberShareEligible(raw)
           && (filters.viberShareStatus === 'shared' ? Boolean(raw?.viber_shared_at) : !raw?.viber_shared_at)
         : true;
@@ -454,7 +467,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
     filters.specialty ? `Organ system: ${filters.specialty}` : '',
     filters.modality ? `Modality: ${filters.modality}` : '',
     filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '',
-    filters.viberShareStatus ? `Viber: ${filters.viberShareStatus === 'shared' ? 'Shared' : 'Not shared'}` : '',
+    isRegisteredUser && filters.viberShareStatus
+      ? `Viber: ${filters.viberShareStatus === 'shared' ? 'Sent' : 'Not sent'}`
+      : '',
     filters.datePreset !== 'all'
       ? `Date: ${filters.datePreset === 'custom'
         ? 'Custom'
@@ -579,19 +594,22 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                   <option value="aunt_minnie" className="bg-surface">Aunt Minnie</option>
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-300">Viber share status</label>
-                <select
-                  name="viberShareStatus"
-                  value={filters.viberShareStatus}
-                  onChange={handleFilterChange}
-                  className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
-                >
-                  <option value="">All cases</option>
-                  <option value="shared" className="bg-surface">Shared to Viber</option>
-                  <option value="not_shared" className="bg-surface">Not shared to Viber</option>
-                </select>
-              </div>
+              {isRegisteredUser ? (
+                <div className="space-y-1.5">
+                  <label htmlFor="viber-share-status-filter" className="block text-xs font-medium text-slate-300">Viber status</label>
+                  <select
+                    id="viber-share-status-filter"
+                    name="viberShareStatus"
+                    value={filters.viberShareStatus}
+                    onChange={handleFilterChange}
+                    className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
+                  >
+                    <option value="">All cases</option>
+                    <option value="shared" className="bg-surface">Sent to Viber</option>
+                    <option value="not_shared" className="bg-surface">Not sent to Viber</option>
+                  </select>
+                </div>
+              ) : null}
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-300">Date</label>
                 <select
@@ -733,6 +751,12 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
               const typeMeta = getSubmissionTypeMeta(p.submission_type);
               const raw = rawCases.find((c) => c.id === p.id);
               const isRecent = !openedCaseIds.has(p.id) && new Date(p.date) > new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+              const showViberBadge = isRegisteredUser
+                && p.submission_type === 'interesting_case'
+                && Boolean(p.viber_shared_at);
+              const viberBadgeLabel = showViberBadge
+                ? formatViberSharedLabel(p.viber_shared_at as string, p.viber_shared_by_name)
+                : '';
 
               return (
                 <div
@@ -773,9 +797,21 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect }) => {
                       </div>
 
                       <div className="flex items-center shrink-0 gap-2 relative z-50">
-                        <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold tracking-widest text-slate-500">
-                          {formatUploadedAt(p.date)}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[9px] sm:text-[10px] whitespace-nowrap font-bold tracking-widest text-slate-500">
+                            {formatUploadedAt(p.date)}
+                          </span>
+                          {showViberBadge ? (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-violet-400/20 bg-violet-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase leading-none tracking-[0.12em] text-violet-200"
+                              aria-label={viberBadgeLabel}
+                              title={viberBadgeLabel}
+                            >
+                              <span className="material-icons text-[10px] leading-none" aria-hidden="true">done</span>
+                              <span>Viber</span>
+                            </span>
+                          ) : null}
+                        </div>
                         <span className="material-icons text-slate-500 group-hover:text-primary transition-colors hover:bg-white/10 hover:text-slate-300 rounded-full h-6 w-6 inline-flex items-center justify-center -mr-1">
                           chevron_right
                         </span>
