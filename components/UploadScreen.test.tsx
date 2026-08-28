@@ -3,17 +3,36 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import UploadScreen from './UploadScreen';
 
-const { saveCase, setCaseViberShareStatus, toastInfo } = vi.hoisted(() => ({
+const {
+  saveCase,
+  setCaseViberShareStatus,
+  toastInfo,
+  getUser,
+  loadCaseUploadDraft,
+  saveCaseUploadDraft,
+  deleteCaseUploadDraft,
+} = vi.hoisted(() => ({
   saveCase: vi.fn(),
   setCaseViberShareStatus: vi.fn(),
   toastInfo: vi.fn(),
+  getUser: vi.fn(),
+  loadCaseUploadDraft: vi.fn(),
+  saveCaseUploadDraft: vi.fn(),
+  deleteCaseUploadDraft: vi.fn(),
 }));
 
 vi.mock('../services/supabase', () => ({
   supabase: {
     auth: {
-      getUser: vi.fn(async () => ({ data: { user: null } })),
+      getUser,
     },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn(async () => ({ data: { full_name: 'Dr. Test' } })),
+        })),
+      })),
+    })),
   },
 }));
 
@@ -28,6 +47,18 @@ vi.mock('../hooks/useCaseSubmission', () => ({
 
 vi.mock('../services/caseViberShareService', () => ({
   setCaseViberShareStatus,
+}));
+
+vi.mock('../services/caseDraftStorage', () => ({
+  CASE_DRAFT_SCHEMA_VERSION: 1,
+  createCaseDraftSignature: (draft: unknown, images: unknown[]) => JSON.stringify({ draft, images }),
+  getCaseDraftKey: (userId: string, caseId: string, submissionType: string) =>
+    `upload:case-draft:v1:${userId}:${caseId}:${submissionType}`,
+  getLegacyCaseNotesDraftKey: (userId: string, caseId: string, submissionType: string) =>
+    `upload:case-notes:draft:${userId}:${caseId}:${submissionType}`,
+  loadCaseUploadDraft,
+  saveCaseUploadDraft,
+  deleteCaseUploadDraft,
 }));
 
 vi.mock('../utils/toast', () => ({
@@ -47,6 +78,14 @@ describe('UploadScreen case entry', () => {
     saveCase.mockReset();
     setCaseViberShareStatus.mockReset();
     toastInfo.mockReset();
+    getUser.mockReset();
+    loadCaseUploadDraft.mockReset();
+    saveCaseUploadDraft.mockReset();
+    deleteCaseUploadDraft.mockReset();
+    getUser.mockResolvedValue({ data: { user: null } });
+    loadCaseUploadDraft.mockResolvedValue(null);
+    saveCaseUploadDraft.mockResolvedValue(undefined);
+    deleteCaseUploadDraft.mockResolvedValue(undefined);
     setCaseViberShareStatus.mockResolvedValue({
       case_id: 'case-1',
       viber_shared_at: '2026-08-28T00:00:00.000Z',
@@ -183,5 +222,87 @@ describe('UploadScreen case entry', () => {
     await waitFor(() => {
       expect(setCaseViberShareStatus).toHaveBeenCalledWith('case-1', true);
     });
+  });
+
+  it('offers to restore a complete local draft and applies its saved fields and images', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'doctor@example.com' } } });
+    loadCaseUploadDraft.mockResolvedValue({
+      draft: {
+        version: 1,
+        savedAt: '2026-08-28T02:00:00.000Z',
+        formData: {
+          submissionType: 'interesting_case',
+          initials: 'XY',
+          age: '42',
+          sex: 'F',
+          modality: 'MRI',
+          organSystem: 'Neuroradiology',
+          patientId: 'P-100',
+          caseSource: 'Infinitt',
+          clinicalData: 'Restored history',
+          findings: 'Restored findings',
+          impression: 'Restored impression',
+          notes: '<p>Restored notes</p>',
+          radiologicClinchers: '',
+          referenceSourceType: '',
+          referenceTitle: '',
+          referencePage: '',
+          references: [{ id: 'reference-1', sourceType: '', title: '', page: '', bookSelection: '' }],
+          diagnosis: '',
+          date: '2026-08-28',
+        },
+        customTitle: 'Restored case title',
+        step: 1,
+        sentToViberGc: true,
+      },
+      images: [{
+        url: 'https://example.com/restored.jpg',
+        file: new File([], 'existing_image'),
+        description: 'Restored image',
+      }],
+    });
+
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }));
+    expect(screen.getByPlaceholderText('Enter case title')).toHaveValue('Restored case title');
+    expect(screen.getByPlaceholderText('Enter findings...')).toHaveValue('Restored findings');
+    expect(screen.getByRole('checkbox', { name: 'Sent to Viber GC' })).toBeChecked();
+    expect(screen.getByAltText('Uploaded case image 1')).toHaveAttribute('src', 'https://example.com/restored.jpg');
+  });
+
+  it('discards a discovered local draft', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'doctor@example.com' } } });
+    loadCaseUploadDraft.mockResolvedValue({
+      draft: {
+        version: 1,
+        savedAt: '2026-08-28T02:00:00.000Z',
+        formData: {},
+        customTitle: 'Discard me',
+        step: 1,
+        sentToViberGc: false,
+      },
+      images: [],
+    });
+
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+
+    await waitFor(() => {
+      expect(deleteCaseUploadDraft).toHaveBeenCalledWith('upload:case-draft:v1:user-1:new:interesting_case');
+    });
+    expect(screen.queryByText('Local draft found')).not.toBeInTheDocument();
+  });
+
+  it('autosaves changed form fields after draft discovery completes', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'doctor@example.com' } } });
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+
+    expect(await screen.findByText('Autosave ready')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Enter findings...'), { target: { value: 'Autosaved findings' } });
+
+    await waitFor(() => expect(saveCaseUploadDraft).toHaveBeenCalled(), { timeout: 2500 });
+    const savedDraft = saveCaseUploadDraft.mock.calls.at(-1)?.[1];
+    expect(savedDraft.formData.findings).toBe('Autosaved findings');
   });
 });

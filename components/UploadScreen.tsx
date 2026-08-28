@@ -8,6 +8,17 @@ import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
 import { RichTextEditor } from './RichTextEditor';
 import { setCaseViberShareStatus } from '../services/caseViberShareService';
+import {
+  CASE_DRAFT_SCHEMA_VERSION,
+  CaseUploadDraft,
+  RestoredCaseUploadDraft,
+  createCaseDraftSignature,
+  deleteCaseUploadDraft,
+  getCaseDraftKey,
+  getLegacyCaseNotesDraftKey,
+  loadCaseUploadDraft,
+  saveCaseUploadDraft,
+} from '../services/caseDraftStorage';
 import { CASE_TEXT_LIMITS, getCaseTextFieldLength, stripHtmlToPlainText } from '../utils/caseTextLimits';
 import {
   OTHER_BOOK_VALUE,
@@ -49,9 +60,6 @@ const MAX_REFERENCES = 4;
 const INTERESTING_CASE_SOURCES: InterestingCaseSource[] = ['Infinitt', 'Medavis'];
 const getReferencePreviewText = (reference: ReferenceSource) =>
   [reference.sourceType, reference.title].filter(Boolean).join(' • ') || 'Reference provided';
-
-const getCaseNotesDraftKey = (userId: string, caseId: string, submissionType: SubmissionType) =>
-  `upload:case-notes:draft:${userId}:${caseId}:${submissionType}`;
 
 type UploadReference = ReferenceSource & {
   id: string;
@@ -102,6 +110,38 @@ const normalizeReferences = (existingCase?: any): UploadReference[] => {
 const buildEmptyReferences = (): UploadReference[] => [createEmptyReference('reference-1')];
 
 const getReferenceSummary = (reference: ReferenceSource): string => getReferencePreviewText(reference);
+
+const hasMeaningfulDraftContent = (
+  formData: {
+    initials: string;
+    age: string;
+    patientId: string;
+    clinicalData: string;
+    findings: string;
+    impression: string;
+    notes: string;
+    radiologicClinchers: string;
+    diagnosis: string;
+    references: UploadReference[];
+  },
+  customTitle: string,
+  images: ImageUpload[],
+  sentToViberGc: boolean,
+) => Boolean(
+  customTitle.trim()
+  || formData.initials.trim()
+  || formData.age.trim()
+  || formData.patientId.trim()
+  || formData.clinicalData.trim()
+  || formData.findings.trim()
+  || formData.impression.trim()
+  || stripHtmlToPlainText(formData.notes).trim()
+  || formData.radiologicClinchers.trim()
+  || formData.diagnosis.trim()
+  || formData.references.some(hasReferenceContent)
+  || images.length > 0
+  || sentToViberGc
+);
 
 const SUBMISSION_TYPE_OPTIONS: Array<{
   id: SubmissionType;
@@ -196,11 +236,25 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const [isDragging, setIsDragging] = useState(false);
   const [isNotesFocusOpen, setIsNotesFocusOpen] = useState(false);
   const [sentToViberGc, setSentToViberGc] = useState(Boolean(existingCase?.viber_shared_at));
+  const [draftCandidate, setDraftCandidate] = useState<RestoredCaseUploadDraft<typeof formData> | null>(null);
+  const [isDraftReady, setIsDraftReady] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<'checking' | 'idle' | 'saving' | 'saved' | 'error'>('checking');
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const [draftError, setDraftError] = useState<string>('');
 
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  const draftBaselineRef = useRef('');
+  const draftLoadSequenceRef = useRef(0);
+  const draftSaveSequenceRef = useRef(0);
+  const draftWriteChainRef = useRef<Promise<void>>(Promise.resolve());
+  const restoredObjectUrlsRef = useRef<Set<string>>(new Set());
+  const draftCaseId = existingCase?.id ? String(existingCase.id) : 'new';
+  const activeDraftKey = currentUserId
+    ? getCaseDraftKey(currentUserId, draftCaseId, formData.submissionType)
+    : '';
 
   const setFieldRef = (key: string) => (node: HTMLElement | null) => {
     fieldRefs.current[key] = node;
@@ -241,32 +295,85 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   }, []);
 
   useEffect(() => {
-    if (!currentUserId) return;
+    if (!activeDraftKey || !currentUserId) return;
+    const loadSequence = ++draftLoadSequenceRef.current;
+    let cancelled = false;
 
-    const caseId = existingCase?.id ? String(existingCase.id) : 'new';
-    const draftKey = getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType);
-    const draftValue = window.localStorage.getItem(draftKey);
-    if (draftValue === null) return;
+    setIsDraftReady(false);
+    setDraftCandidate(null);
+    setDraftStatus('checking');
+    setDraftSavedAt(null);
+    setDraftError('');
 
-    setFormData((prev) => {
-      if ((prev.notes || '') === draftValue) return prev;
-      return { ...prev, notes: draftValue };
-    });
-  }, [currentUserId, existingCase?.id, formData.submissionType]);
+    const checkForDraft = async () => {
+      try {
+        let restored = await loadCaseUploadDraft<typeof formData>(activeDraftKey);
+        if (!restored) {
+          const legacyKey = getLegacyCaseNotesDraftKey(currentUserId, draftCaseId, formData.submissionType);
+          const legacyNotes = window.localStorage.getItem(legacyKey);
+          if (legacyNotes?.trim()) {
+            restored = {
+              draft: {
+                version: CASE_DRAFT_SCHEMA_VERSION,
+                savedAt: new Date().toISOString(),
+                formData: { ...formData, notes: legacyNotes },
+                customTitle,
+                step: 1,
+                sentToViberGc,
+              },
+              images,
+            };
+          }
+        }
 
-  useEffect(() => {
-    if (!currentUserId) return;
+        if (cancelled || loadSequence !== draftLoadSequenceRef.current) {
+          restored?.images.forEach((image) => {
+            if (image.url.startsWith('blob:')) URL.revokeObjectURL(image.url);
+          });
+          return;
+        }
 
-    const caseId = existingCase?.id ? String(existingCase.id) : 'new';
-    const draftKey = getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType);
-    const normalizedNotes = String(formData.notes || '');
+        if (restored) {
+          restored.images.forEach((image) => {
+            if (image.url.startsWith('blob:')) restoredObjectUrlsRef.current.add(image.url);
+          });
+          setDraftCandidate(restored);
+          setDraftSavedAt(restored.draft.savedAt);
+          setDraftStatus('saved');
+          return;
+        }
 
-    if (normalizedNotes.trim()) {
-      window.localStorage.setItem(draftKey, normalizedNotes);
-    } else {
-      window.localStorage.removeItem(draftKey);
-    }
-  }, [currentUserId, existingCase?.id, formData.notes, formData.submissionType]);
+        const baselineDraft = {
+          formData,
+          customTitle,
+          step: step as 1 | 2,
+          sentToViberGc,
+        };
+        draftBaselineRef.current = createCaseDraftSignature(baselineDraft, images);
+        setIsDraftReady(true);
+        setDraftStatus('idle');
+      } catch (error) {
+        if (cancelled || loadSequence !== draftLoadSequenceRef.current) return;
+        const baselineDraft = {
+          formData,
+          customTitle,
+          step: step as 1 | 2,
+          sentToViberGc,
+        };
+        draftBaselineRef.current = createCaseDraftSignature(baselineDraft, images);
+        setIsDraftReady(true);
+        setDraftStatus('error');
+        setDraftError(error instanceof Error ? error.message : 'Unable to check local drafts.');
+      }
+    };
+
+    void checkForDraft();
+    return () => {
+      cancelled = true;
+    };
+    // Draft discovery intentionally runs only when the user/case storage key changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDraftKey]);
 
   useEffect(() => {
     if (!isNotesFocusOpen) return;
@@ -318,6 +425,163 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       setSentToViberGc(false);
     }
   }, [existingCase, initialSubmissionType]);
+
+  useEffect(() => () => {
+    restoredObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    restoredObjectUrlsRef.current.clear();
+  }, []);
+
+  useEffect(() => {
+    if (!activeDraftKey || !isDraftReady || draftCandidate || isSaving) return;
+
+    const draftState = {
+      formData,
+      customTitle,
+      step: (step === 2 ? 2 : 1) as 1 | 2,
+      sentToViberGc,
+    };
+    const signature = createCaseDraftSignature(draftState, images);
+    if (signature === draftBaselineRef.current) return;
+
+    const saveSequence = ++draftSaveSequenceRef.current;
+    const timer = window.setTimeout(() => {
+      setDraftStatus('saving');
+      setDraftError('');
+
+      const writeDraft = async () => {
+        if (!hasMeaningfulDraftContent(formData, customTitle, images, sentToViberGc)) {
+          await deleteCaseUploadDraft(activeDraftKey);
+          return;
+        }
+
+        const savedAt = new Date().toISOString();
+        const draft: CaseUploadDraft<typeof formData> = {
+          version: CASE_DRAFT_SCHEMA_VERSION,
+          savedAt,
+          ...draftState,
+        };
+        await saveCaseUploadDraft(activeDraftKey, draft, images);
+        window.localStorage.removeItem(
+          getLegacyCaseNotesDraftKey(currentUserId, draftCaseId, formData.submissionType)
+        );
+        if (saveSequence === draftSaveSequenceRef.current) setDraftSavedAt(savedAt);
+      };
+
+      draftWriteChainRef.current = draftWriteChainRef.current
+        .catch(() => undefined)
+        .then(writeDraft);
+
+      void draftWriteChainRef.current.then(() => {
+        if (saveSequence !== draftSaveSequenceRef.current) return;
+        draftBaselineRef.current = signature;
+        setDraftStatus(hasMeaningfulDraftContent(formData, customTitle, images, sentToViberGc) ? 'saved' : 'idle');
+      }).catch((error) => {
+        if (saveSequence !== draftSaveSequenceRef.current) return;
+        setDraftStatus('error');
+        setDraftError(
+          error instanceof Error
+            ? error.message
+            : 'Unable to save this draft locally. Keep this page open and try again.'
+        );
+      });
+    }, 900);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    activeDraftKey,
+    currentUserId,
+    customTitle,
+    draftCandidate,
+    draftCaseId,
+    formData,
+    images,
+    isDraftReady,
+    isSaving,
+    sentToViberGc,
+    step,
+  ]);
+
+  const handleRestoreLocalDraft = () => {
+    if (!draftCandidate || !activeDraftKey || !currentUserId) return;
+
+    const restoredFormData = {
+      ...formData,
+      ...(draftCandidate.draft.formData || {}),
+      submissionType: formData.submissionType,
+    };
+    const restoredStep = draftCandidate.draft.step === 2 ? 2 : 1;
+    const restoredState = {
+      formData: restoredFormData,
+      customTitle: draftCandidate.draft.customTitle || '',
+      step: restoredStep as 1 | 2,
+      sentToViberGc: Boolean(draftCandidate.draft.sentToViberGc),
+    };
+
+    setFormData(restoredFormData);
+    setCustomTitle(restoredState.customTitle);
+    setImages(draftCandidate.images);
+    setStep(restoredStep);
+    setSentToViberGc(restoredState.sentToViberGc);
+    draftBaselineRef.current = createCaseDraftSignature(restoredState, draftCandidate.images);
+    setDraftCandidate(null);
+    setIsDraftReady(true);
+    setDraftStatus('saved');
+    setDraftError('');
+
+    const refreshedDraft: CaseUploadDraft<typeof formData> = {
+      version: CASE_DRAFT_SCHEMA_VERSION,
+      savedAt: draftCandidate.draft.savedAt,
+      ...restoredState,
+    };
+    draftWriteChainRef.current = draftWriteChainRef.current
+      .catch(() => undefined)
+      .then(() => saveCaseUploadDraft(activeDraftKey, refreshedDraft, draftCandidate.images));
+    void draftWriteChainRef.current
+      .then(() => {
+        window.localStorage.removeItem(
+          getLegacyCaseNotesDraftKey(currentUserId, draftCaseId, formData.submissionType)
+        );
+      })
+      .catch((error) => {
+        setDraftStatus('error');
+        setDraftError(error instanceof Error ? error.message : 'Unable to refresh the local draft.');
+      });
+  };
+
+  const handleDiscardLocalDraft = async () => {
+    if (!activeDraftKey || !currentUserId) return;
+    ++draftSaveSequenceRef.current;
+    setDraftStatus('saving');
+    try {
+      draftWriteChainRef.current = draftWriteChainRef.current
+        .catch(() => undefined)
+        .then(() => deleteCaseUploadDraft(activeDraftKey));
+      await draftWriteChainRef.current;
+      window.localStorage.removeItem(
+        getLegacyCaseNotesDraftKey(currentUserId, draftCaseId, formData.submissionType)
+      );
+      draftCandidate?.images.forEach((image) => {
+        if (!image.url.startsWith('blob:')) return;
+        URL.revokeObjectURL(image.url);
+        restoredObjectUrlsRef.current.delete(image.url);
+      });
+      const baselineDraft = {
+        formData,
+        customTitle,
+        step: (step === 2 ? 2 : 1) as 1 | 2,
+        sentToViberGc,
+      };
+      draftBaselineRef.current = createCaseDraftSignature(baselineDraft, images);
+      setDraftCandidate(null);
+      setDraftSavedAt(null);
+      setIsDraftReady(true);
+      setDraftStatus('idle');
+      setDraftError('');
+    } catch (error) {
+      setDraftStatus('error');
+      setDraftError(error instanceof Error ? error.message : 'Unable to discard the local draft.');
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name } = e.target;
@@ -504,7 +768,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   };
 
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setImages((prev) => {
+      const removed = prev[index];
+      if (removed?.url.startsWith('blob:')) {
+        URL.revokeObjectURL(removed.url);
+        restoredObjectUrlsRef.current.delete(removed.url);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleGenerateReport = () => {
@@ -590,10 +861,25 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           }
         }
 
-        if (currentUserId) {
-          const caseId = existingCase?.id ? String(existingCase.id) : 'new';
-          window.localStorage.removeItem(getCaseNotesDraftKey(currentUserId, caseId, formData.submissionType));
+        if (currentUserId && activeDraftKey) {
+          try {
+            ++draftSaveSequenceRef.current;
+            draftWriteChainRef.current = draftWriteChainRef.current
+              .catch(() => undefined)
+              .then(() => deleteCaseUploadDraft(activeDraftKey));
+            await draftWriteChainRef.current;
+            window.localStorage.removeItem(
+              getLegacyCaseNotesDraftKey(currentUserId, draftCaseId, formData.submissionType)
+            );
+          } catch (error) {
+            toastInfo(
+              'Case saved, but local cleanup failed',
+              error instanceof Error ? error.message : 'You may need to discard the local draft when you return.'
+            );
+          }
         }
+        restoredObjectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+        restoredObjectUrlsRef.current.clear();
         if (onClose) {
           onClose();
         } else {
@@ -684,6 +970,18 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const findingsCount = formData.findings.length;
   const notesCount = plainNotes.length;
   const radiologicClinchersCount = formData.radiologicClinchers.length;
+  const formattedDraftSavedAt = draftSavedAt
+    ? new Date(draftSavedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    : '';
+  const draftStatusText = draftStatus === 'checking'
+    ? 'Checking local draft…'
+    : draftStatus === 'saving'
+      ? 'Saving locally…'
+      : draftStatus === 'saved'
+        ? `Saved locally${formattedDraftSavedAt ? ` · ${formattedDraftSavedAt}` : ''}`
+        : draftStatus === 'error'
+          ? 'Local autosave needs attention'
+          : 'Autosave ready';
   return (
     <div className="flex flex-col h-full bg-transparent relative">
       {/* Screenshot Overlay */}
@@ -784,6 +1082,47 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
 
       <div data-layout-scroll-target="true" className={`flex-1 overflow-y-auto custom-scrollbar ${isScreenshotMode ? 'hidden' : ''}`}>
         <div className="px-6 pt-6 pb-24 max-w-7xl mx-auto w-full">
+        {currentUserId && (
+          <div className="mb-5 space-y-3" aria-live="polite">
+            {draftCandidate ? (
+              <div className="flex flex-col gap-4 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-cyan-100">Local draft found</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-300">
+                    Saved on this device {formattedDraftSavedAt ? `on ${formattedDraftSavedAt}` : 'recently'}, including {draftCandidate.images.length} image{draftCandidate.images.length === 1 ? '' : 's'}.
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDiscardLocalDraft()}
+                    className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRestoreLocalDraft}
+                    className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                  >
+                    Restore
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={`flex items-center gap-2 text-xs ${draftStatus === 'error' ? 'text-rose-300' : 'text-slate-500'}`}>
+                <span className={`h-2 w-2 rounded-full ${draftStatus === 'saving' || draftStatus === 'checking' ? 'animate-pulse bg-cyan-400' : draftStatus === 'error' ? 'bg-rose-400' : draftStatus === 'saved' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                <span>{draftStatusText}</span>
+                <span className="text-slate-600">· This device only</span>
+              </div>
+            )}
+            {!draftCandidate && draftStatus === 'error' && draftError && (
+              <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-xs leading-5 text-rose-200">
+                {draftError} Your current entries remain on screen; keep this page open until they can be saved.
+              </div>
+            )}
+          </div>
+        )}
         {step === 1 && (
           <div className="space-y-5 animate-in fade-in slide-in-from-right-4 duration-500">
             <header className="px-1">
