@@ -8,6 +8,15 @@ import { ImageAnnotatorDialog } from './ImageAnnotatorDialog';
 import { useCaseSubmission, ImageUpload } from '../hooks/useCaseSubmission';
 import { RichTextEditor } from './RichTextEditor';
 import { CASE_TEXT_LIMITS, getCaseTextFieldLength, stripHtmlToPlainText } from '../utils/caseTextLimits';
+import {
+  OTHER_BOOK_VALUE,
+  REFERENCE_BOOK_GROUPS,
+  REFERENCE_SOURCE_TYPES,
+  STANDARD_REFERENCE_SOURCE_TYPE,
+  getReferenceEntryField,
+  isCatalogReferenceBook,
+  normalizeReferenceSourceType,
+} from '../utils/referenceCatalog';
 
 const ORGAN_SYSTEMS = [
   'Neuroradiology',
@@ -35,14 +44,6 @@ const MODALITIES = [
   'PET/CT'
 ];
 
-const REFERENCE_SOURCE_TYPES = [
-  'Book',
-  'Journal Article',
-  'Reviewer / Board Prep',
-  'Online Resource',
-  'Lecture / Handout'
-];
-
 const MAX_REFERENCES = 4;
 const INTERESTING_CASE_SOURCES: InterestingCaseSource[] = ['Infinitt', 'Medavis'];
 const getReferencePreviewText = (reference: ReferenceSource) =>
@@ -53,6 +54,7 @@ const getCaseNotesDraftKey = (userId: string, caseId: string, submissionType: Su
 
 type UploadReference = ReferenceSource & {
   id: string;
+  bookSelection?: string;
 };
 
 const createEmptyReference = (id: string): UploadReference => ({
@@ -60,6 +62,7 @@ const createEmptyReference = (id: string): UploadReference => ({
   sourceType: '',
   title: '',
   page: '',
+  bookSelection: '',
 });
 
 const hasReferenceContent = (reference?: ReferenceSource | null): boolean =>
@@ -82,9 +85,16 @@ const normalizeReferences = (existingCase?: any): UploadReference[] => {
 
   return seededReferences.slice(0, MAX_REFERENCES).map((reference: ReferenceSource, index: number) => ({
     id: `reference-${index + 1}`,
-    sourceType: reference?.sourceType || '',
+    sourceType: normalizeReferenceSourceType(reference?.sourceType),
     title: reference?.title || '',
     page: reference?.page || '',
+    bookSelection: normalizeReferenceSourceType(reference?.sourceType) === STANDARD_REFERENCE_SOURCE_TYPE
+      ? isCatalogReferenceBook(reference?.title)
+        ? reference?.title
+        : reference?.title
+          ? OTHER_BOOK_VALUE
+          : ''
+      : '',
   }));
 };
 
@@ -343,6 +353,48 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     setFormData((prev) => {
       const references = prev.references.map((reference) =>
         reference.id === referenceId ? { ...reference, [field]: value } : reference
+      );
+      const firstReference = references[0] ?? createEmptyReference('reference-1');
+
+      return {
+        ...prev,
+        referenceSourceType: firstReference.sourceType || '',
+        referenceTitle: firstReference.title || '',
+        referencePage: firstReference.page || '',
+        references,
+      };
+    });
+  };
+
+  const handleReferenceSourceTypeChange = (referenceId: string, sourceType: string) => {
+    setFormData((prev) => {
+      const references = prev.references.map((reference) =>
+        reference.id === referenceId
+          ? { ...reference, sourceType, title: '', bookSelection: sourceType === STANDARD_REFERENCE_SOURCE_TYPE ? '' : undefined }
+          : reference
+      );
+      const firstReference = references[0] ?? createEmptyReference('reference-1');
+
+      return {
+        ...prev,
+        referenceSourceType: firstReference.sourceType || '',
+        referenceTitle: firstReference.title || '',
+        referencePage: firstReference.page || '',
+        references,
+      };
+    });
+  };
+
+  const handleReferenceBookChange = (referenceId: string, selection: string) => {
+    setFormData((prev) => {
+      const references = prev.references.map((reference) =>
+        reference.id === referenceId
+          ? {
+              ...reference,
+              bookSelection: selection,
+              title: selection === OTHER_BOOK_VALUE ? '' : selection,
+            }
+          : reference
       );
       const firstReference = references[0] ?? createEmptyReference('reference-1');
 
@@ -1064,10 +1116,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                               <div className="relative">
                                 <select
                                   value={reference.sourceType || ''}
-                                  onChange={(event) => handleReferenceChange(reference.id, 'sourceType', event.target.value)}
+                                  onChange={(event) => handleReferenceSourceTypeChange(reference.id, event.target.value)}
+                                  aria-label={`Reference ${index + 1} source type`}
                                   className={`${inputClassName} appearance-none cursor-pointer`}
                                 >
                                   <option value="" className="bg-app text-white">Select source type</option>
+                                  {reference.sourceType && !REFERENCE_SOURCE_TYPES.some((type) => type === reference.sourceType) && (
+                                    <option value={reference.sourceType} className="bg-app text-white">Existing: {reference.sourceType}</option>
+                                  )}
                                   {REFERENCE_SOURCE_TYPES.map((type) => (
                                     <option key={type} value={type} className="bg-app text-white">{type}</option>
                                   ))}
@@ -1076,13 +1132,60 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                             </div>
 
                             <div className="space-y-2">
-                              <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Title / Source Name</label>
-                              <input
-                                value={reference.title || ''}
-                                onChange={(event) => handleReferenceChange(reference.id, 'title', event.target.value)}
-                                placeholder="Felson's Principles of Chest Roentgenology"
-                                className={inputClassName}
-                              />
+                              {reference.sourceType === STANDARD_REFERENCE_SOURCE_TYPE ? (
+                                <>
+                                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Reference Book</label>
+                                  <select
+                                    value={reference.bookSelection || ''}
+                                    onChange={(event) => handleReferenceBookChange(reference.id, event.target.value)}
+                                    aria-label={`Reference ${index + 1} book`}
+                                    className={`${inputClassName} appearance-none cursor-pointer`}
+                                  >
+                                    <option value="" className="bg-app text-white">Select reference book</option>
+                                    {REFERENCE_BOOK_GROUPS.map((group) => (
+                                      <optgroup key={group.specialty} label={group.specialty} className="bg-app text-white">
+                                        {group.books.map((book) => (
+                                          <option key={book} value={book} className="bg-app text-white">{book}</option>
+                                        ))}
+                                      </optgroup>
+                                    ))}
+                                    <option value={OTHER_BOOK_VALUE} className="bg-app text-white">Other book…</option>
+                                  </select>
+                                  {reference.bookSelection === OTHER_BOOK_VALUE && (
+                                    <input
+                                      value={reference.title || ''}
+                                      onChange={(event) => handleReferenceChange(reference.id, 'title', event.target.value)}
+                                      aria-label={`Reference ${index + 1} other book`}
+                                      placeholder="Enter book title and edition"
+                                      className={inputClassName}
+                                    />
+                                  )}
+                                </>
+                              ) : reference.sourceType ? (
+                                (() => {
+                                  const field = getReferenceEntryField(reference.sourceType);
+                                  return (
+                                    <>
+                                      <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">{field.label}</label>
+                                      <input
+                                        type={field.inputType}
+                                        value={reference.title || ''}
+                                        onChange={(event) => handleReferenceChange(reference.id, 'title', event.target.value)}
+                                        aria-label={`Reference ${index + 1} ${field.label}`}
+                                        placeholder={field.placeholder}
+                                        className={inputClassName}
+                                      />
+                                    </>
+                                  );
+                                })()
+                              ) : (
+                                <>
+                                  <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">Reference Details</label>
+                                  <div className="flex min-h-[42px] items-center rounded-xl border border-dashed border-white/10 bg-black/20 px-3 text-xs text-slate-500">
+                                    Select a source type first.
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -1092,7 +1195,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
                               <input
                                 value={reference.page || ''}
                                 onChange={(event) => handleReferenceChange(reference.id, 'page', event.target.value)}
-                                placeholder="p. 214"
+                                aria-label={`Reference ${index + 1} page or section`}
+                                placeholder="Page, figure, or section"
                                 className={inputClassName}
                               />
                             </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import UploadScreen from './UploadScreen';
 
@@ -53,5 +53,56 @@ describe('UploadScreen text limits', () => {
 
     expect(screen.getByPlaceholderText('Enter radiologic clinchers...')).toHaveAttribute('maxlength', '160');
     expect(screen.getByText('0/160')).toBeInTheDocument();
+  });
+
+  it('offers the approved edition-specific mother books without PI-RADS', () => {
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reference 1 source type' }), {
+      target: { value: 'Standard Reference Book' },
+    });
+
+    const bookSelect = screen.getByRole('combobox', { name: 'Reference 1 book' });
+    const bookOptions = within(bookSelect).getAllByRole('option').map((option) => option.textContent || '');
+    expect(bookOptions).toContain('Fundamentals of Diagnostic Radiology — 5th ed. (2019)');
+    expect(bookOptions).toContain("Caffey's Pediatric Diagnostic Imaging — 13th ed. (2019)");
+    expect(bookOptions.join(' ')).not.toMatch(/PI-RADS/i);
+  });
+
+  it('shows the matching custom input for links and other books', () => {
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+
+    const sourceType = screen.getByRole('combobox', { name: 'Reference 1 source type' });
+    fireEvent.change(sourceType, { target: { value: 'Web Link' } });
+    expect(screen.getByRole('textbox', { name: 'Reference 1 Web link' })).toHaveAttribute('type', 'url');
+
+    fireEvent.change(sourceType, { target: { value: 'Standard Reference Book' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reference 1 book' }), {
+      target: { value: '__other_book__' },
+    });
+    expect(screen.getByRole('textbox', { name: 'Reference 1 other book' })).toBeInTheDocument();
+  });
+
+  it('preserves an unlisted legacy book as an editable Other book', () => {
+    render(
+      <UploadScreen
+        existingCase={{
+          id: 'case-1',
+          submission_type: 'interesting_case',
+          analysis_result: {
+            reference: {
+              sourceType: 'Book',
+              title: 'Legacy Radiology Text — 2nd ed. (2001)',
+              page: 'p. 10',
+            },
+          },
+        }}
+      />
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Reference 1 source type' })).toHaveValue('Standard Reference Book');
+    expect(screen.getByRole('combobox', { name: 'Reference 1 book' })).toHaveValue('__other_book__');
+    expect(screen.getByRole('textbox', { name: 'Reference 1 other book' })).toHaveValue('Legacy Radiology Text — 2nd ed. (2001)');
+    expect(screen.getByRole('textbox', { name: 'Reference 1 page or section' })).toHaveValue('p. 10');
   });
 });
