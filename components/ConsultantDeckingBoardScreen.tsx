@@ -821,15 +821,15 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             </label>
             <label className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Patient name</span>
-              <input type="text" value={draft.patientName} onChange={(event) => setDraft((current) => ({ ...current, patientName: event.target.value }))} placeholder="Enter patient name" className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
+              <input aria-label="Patient name" type="text" value={draft.patientName} onChange={(event) => setDraft((current) => ({ ...current, patientName: event.target.value }))} placeholder="Enter patient name" className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
             </label>
             <label className="flex flex-col gap-1.5 w-[76px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Age</span>
-              <input type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} value={draft.patientAge} onChange={(event) => setDraft((current) => ({ ...current, patientAge: event.target.value.replace(/\D/g, '').slice(0, 3) }))} className="h-[42px] w-full appearance-none rounded-full border border-white/5 bg-[#0d1117] px-3 text-center text-[13px] text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
+              <input aria-label="Patient age" type="text" inputMode="numeric" pattern="[0-9]*" maxLength={3} value={draft.patientAge} onChange={(event) => setDraft((current) => ({ ...current, patientAge: event.target.value.replace(/\D/g, '').slice(0, 3) }))} className="h-[42px] w-full appearance-none rounded-full border border-white/5 bg-[#0d1117] px-3 text-center text-[13px] text-white [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
             </label>
             <label className="flex flex-col gap-1.5 w-[75px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Sex</span>
-              <select value={draft.patientSex} onChange={(event) => setDraft((current) => ({ ...current, patientSex: event.target.value as DraftState['patientSex'] }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-2 sm:px-3 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
+              <select aria-label="Patient sex" value={draft.patientSex} onChange={(event) => setDraft((current) => ({ ...current, patientSex: event.target.value as DraftState['patientSex'] }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-2 sm:px-3 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
                 <option value=""></option>
                 {PATIENT_SEX_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
@@ -850,26 +850,26 @@ const ConsultantDeckingBoardScreen: React.FC<ConsultantDeckingBoardScreenProps> 
             </label>
             <label className="flex flex-col gap-1.5 w-[200px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Study description</span>
-              <select value={draft.studyDescription} onChange={(event) => setDraft((current) => ({ ...current, studyDescription: event.target.value }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
+              <select aria-label="Study description" value={draft.studyDescription} onChange={(event) => setDraft((current) => ({ ...current, studyDescription: event.target.value }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
                 <option value="">Select study description</option>
                 {STUDY_OPTION_GROUPS.map((group) => <optgroup key={group.label} label={group.label}>{group.options.map((option) => <option key={option} value={option}>{option}</option>)}</optgroup>)}
               </select>
             </label>
             <label className="flex flex-col gap-1.5 w-[110px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Priority</span>
-              <select value={draft.priorityLevel} onChange={(event) => setDraft((current) => ({ ...current, priorityLevel: event.target.value as ConsultantDeckingPriority }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
+              <select aria-label="Priority" value={draft.priorityLevel} onChange={(event) => setDraft((current) => ({ ...current, priorityLevel: event.target.value as ConsultantDeckingPriority }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
                 {PRIORITY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1.5 w-[110px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Difficulty</span>
-              <select value={draft.difficulty} onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
+              <select aria-label="Case difficulty" value={draft.difficulty} onChange={(event) => setDraft((current) => ({ ...current, difficulty: event.target.value as ConsultantDeckingDifficulty }))} className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50">
                 {DIFFICULTY_OPTIONS.map((option) => <option key={option} value={option}>{labelize(option)}</option>)}
               </select>
             </label>
             <label className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
               <span className="pl-1 text-[11px] font-medium text-slate-400">Why this difficulty?</span>
-              <input type="text" value={draft.briefImpression} maxLength={BRIEF_IMPRESSION_LIMIT} onChange={(event) => setDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} placeholder="Why is this case easy, medium, or hard? ex. difficult impression, many findings" className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
+              <input aria-label="Brief impression" type="text" value={draft.briefImpression} maxLength={BRIEF_IMPRESSION_LIMIT} onChange={(event) => setDraft((current) => ({ ...current, briefImpression: event.target.value.slice(0, BRIEF_IMPRESSION_LIMIT) }))} placeholder="Why is this case easy, medium, or hard? ex. difficult impression, many findings" className="h-[42px] w-full rounded-full border border-white/5 bg-[#0d1117] px-4 text-[13px] text-white placeholder:text-slate-600 focus:border-cyan-500/50 focus:outline-none focus:ring-1 focus:ring-cyan-500/50" />
             </label>
             <button type="submit" className="h-[42px] min-w-[170px] shrink-0 rounded-full border border-cyan-500/30 bg-[#2b5a6c] px-5 text-[13px] font-bold text-cyan-50 transition-colors hover:bg-cyan-700">Add patient</button>
           </div>

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
-import { Profile, StaffAccountAccessRequest, UserRole } from '../types';
+import { PrivilegedAuditEvent, Profile, StaffAccountAccessRequest, UserRole } from '../types';
 import { ensurePrimaryRoleIncluded, EXCLUSIVE_ROLE, normalizeUserRoles } from '../utils/roles';
 import { listAccountAccessRequestsForStaff, reviewAccountAccessRequest } from '../services/accountAccessRequestService';
 import ScreenStatusNotice from './ui/ScreenStatusNotice';
 import PageShell from './ui/PageShell';
 import PageHeader from './ui/PageHeader';
+import { fetchPrivilegedAuditEvents } from '../services/auditService';
 
 interface AdminUserManagementProps {
     onBack: () => void;
@@ -19,12 +20,34 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
     const [statusTone, setStatusTone] = useState<'error' | 'success'>('success');
     const [accessRequests, setAccessRequests] = useState<StaffAccountAccessRequest[]>([]);
     const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+    const [auditEvents, setAuditEvents] = useState<PrivilegedAuditEvent[]>([]);
+    const [loadingAudit, setLoadingAudit] = useState(true);
+    const [loadingMoreAudit, setLoadingMoreAudit] = useState(false);
+    const [auditError, setAuditError] = useState<string | null>(null);
+    const [hasMoreAudit, setHasMoreAudit] = useState(false);
     const ALL_ASSIGNABLE_ROLES: UserRole[] = ['resident', 'fellow', 'consultant', 'training_officer', 'moderator', 'admin'];
 
     useEffect(() => {
         fetchUsers();
         fetchAccessRequests();
+        void loadAuditEvents();
     }, []);
+
+    const loadAuditEvents = async (before?: string) => {
+        if (before) setLoadingMoreAudit(true);
+        else setLoadingAudit(true);
+        setAuditError(null);
+        try {
+            const events = await fetchPrivilegedAuditEvents(20, before);
+            setAuditEvents((current) => before ? [...current, ...events] : events);
+            setHasMoreAudit(events.length === 20);
+        } catch {
+            setAuditError('The audit timeline could not be loaded.');
+        } finally {
+            setLoadingAudit(false);
+            setLoadingMoreAudit(false);
+        }
+    };
 
     const fetchAccessRequests = async () => {
         try {
@@ -48,6 +71,7 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
             )));
             setStatusTone('success');
             setStatusMessage(status === 'approved' ? 'Access request approved.' : 'Access request rejected.');
+            void loadAuditEvents();
         } catch (error: any) {
             setStatusTone('error');
             setStatusMessage(error.message || 'Failed to review access request.');
@@ -159,7 +183,27 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
 
         setStatusTone('success');
         setStatusMessage('Roles updated.');
+        void loadAuditEvents();
     };
+
+    const auditActionLabel = (action: string) => ({
+        access_request_approved: 'Registration approved',
+        access_request_rejected: 'Registration rejected',
+        primary_role_changed: 'Primary role changed',
+        account_status_changed: 'Account status changed',
+        role_assigned: 'Role assigned',
+        role_removed: 'Role removed',
+        case_deleted: 'Case deleted',
+        case_share_created: 'Public share created',
+        case_share_revoked: 'Public share revoked',
+        case_share_regenerated: 'Public share renewed',
+        viber_marked_sent: 'Marked sent to Viber',
+        viber_marked_not_sent: 'Marked not sent to Viber',
+    }[action] || action.replaceAll('_', ' '));
+
+    const auditMetadataLabel = (metadata: PrivilegedAuditEvent['metadata']) => Object.entries(metadata)
+        .map(([key, value]) => `${key.replaceAll('_', ' ')}: ${String(value).replaceAll('_', ' ')}`)
+        .join(' · ');
 
     const filteredUsers = users.filter(user =>
     (user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -226,6 +270,49 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
                             </div>
                         ))}
                     </div>
+                </section>
+
+                <section className="rounded-[1.75rem] border border-white/10 bg-surface p-5 shadow-2xl">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 className="text-lg font-bold text-white">Security Audit</h2>
+                            <p className="text-xs text-slate-500">Privileged account, sharing, deletion, and Viber changes.</p>
+                        </div>
+                        <button type="button" onClick={() => void loadAuditEvents()} className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:text-white">Refresh</button>
+                    </div>
+
+                    {loadingAudit ? (
+                        <div className="space-y-2" aria-label="Loading audit timeline">
+                            {[0, 1, 2].map((item) => <div key={item} className="h-16 animate-pulse rounded-xl bg-white/[0.04]" />)}
+                        </div>
+                    ) : auditError ? (
+                        <div className="rounded-xl border border-rose-500/20 bg-rose-500/[0.06] p-4 text-sm text-rose-200">
+                            {auditError} <button type="button" onClick={() => void loadAuditEvents()} className="ml-1 font-bold underline">Retry</button>
+                        </div>
+                    ) : auditEvents.length === 0 ? (
+                        <p className="rounded-xl border border-white/5 bg-white/[0.03] p-4 text-sm text-slate-500">No privileged events recorded yet.</p>
+                    ) : (
+                        <div className="space-y-2">
+                            {auditEvents.map((event) => (
+                                <article key={event.id} className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.03] p-4">
+                                    <span className="material-icons mt-0.5 text-[18px] text-violet-300">verified_user</span>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                                            <p className="text-sm font-bold capitalize text-slate-200">{auditActionLabel(event.action)}</p>
+                                            <time className="text-[11px] text-slate-500">{new Date(event.createdAt).toLocaleString()}</time>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-400">{event.actorName} · {event.targetType}</p>
+                                        {Object.keys(event.metadata).length > 0 ? <p className="mt-1 text-[11px] capitalize text-slate-500">{auditMetadataLabel(event.metadata)}</p> : null}
+                                    </div>
+                                </article>
+                            ))}
+                            {hasMoreAudit ? (
+                                <button type="button" disabled={loadingMoreAudit} onClick={() => void loadAuditEvents(auditEvents[auditEvents.length - 1]?.createdAt)} className="w-full rounded-xl border border-white/10 py-2.5 text-xs font-bold text-slate-400 transition hover:text-white disabled:opacity-50">
+                                    {loadingMoreAudit ? 'Loading…' : 'Load more'}
+                                </button>
+                            ) : null}
+                        </div>
+                    )}
                 </section>
 
                 <div className="rounded-[1.75rem] border border-white/10 bg-surface shadow-2xl">

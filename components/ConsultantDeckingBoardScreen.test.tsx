@@ -130,8 +130,7 @@ describe('ConsultantDeckingBoardScreen', () => {
     fireEvent.change(screen.getByLabelText('Case difficulty'), { target: { value: 'hard' } });
     fireEvent.change(screen.getByLabelText('Study description'), { target: { value: 'CT brain plain' } });
     fireEvent.change(screen.getByLabelText('Brief impression'), { target: { value: 'Acute stroke pattern' } });
-    fireEvent.change(screen.getByLabelText('Lane'), { target: { value: 'lane-1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add patient' }));
 
     await waitFor(() => {
       expect(createConsultantDeckingEntry).toHaveBeenCalledWith(expect.objectContaining({
@@ -141,7 +140,7 @@ describe('ConsultantDeckingBoardScreen', () => {
         tabId: 'tab-1',
         priorityLevel: 'stat',
         difficulty: 'hard',
-        laneId: 'lane-1',
+        laneId: 'inbox',
       }));
     });
   });
@@ -168,27 +167,29 @@ describe('ConsultantDeckingBoardScreen', () => {
     ]);
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
-    const lane = (await screen.findByRole('heading', { name: 'Dr. Reynes' })).closest('section');
-    const pillButtons = within(lane as HTMLElement).getAllByRole('button', { name: /Edit / });
+    await screen.findByRole('heading', { name: 'Dr. Reynes' });
+    const pillButtons = screen.getAllByRole('button', { name: /Edit (ER|Inpatient)/ });
     expect(pillButtons.map((pill) => pill.getAttribute('aria-label'))).toEqual([
       'Edit ER Stat',
-      'Edit ER Routine',
       'Edit Inpatient Urgent',
+      'Edit ER Routine',
     ]);
   });
 
-  it('shows the brief impression tooltip trigger only for medium/hard cases', async () => {
+  it('makes a supplied difficulty reason available on patient cards', async () => {
     listConsultantDeckingEntries.mockResolvedValue([
       { id: 'entry-1', patientName: 'Hard ER', patientAge: null, patientSex: null, tabId: 'tab-1', difficulty: 'hard', priorityLevel: 'urgent', patientSource: 'er', studyDate: '2026-03-27', studyTime: '08:20', studyDescription: 'CTA brain', briefImpression: 'Likely aneurysm', laneId: 'lane-1', position: 0, createdBy: 'user-1', updatedBy: 'user-1', createdAt: '2026-03-27T00:00:00Z', updatedAt: '2026-03-27T00:00:00Z' },
       { id: 'entry-2', patientName: 'Easy ER', patientAge: null, patientSex: null, tabId: 'tab-1', difficulty: 'easy', priorityLevel: 'routine', patientSource: 'er', studyDate: '2026-03-27', studyTime: '08:00', studyDescription: 'CT brain plain', briefImpression: 'Should not show', laneId: 'lane-1', position: 1, createdBy: 'user-1', updatedBy: 'user-1', createdAt: '2026-03-27T00:00:00Z', updatedAt: '2026-03-27T00:00:00Z' },
     ]);
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
-    expect(await screen.findByLabelText('Show brief impression for Hard ER')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Show brief impression for Easy ER')).not.toBeInTheDocument();
+    const hardCard = await screen.findByRole('button', { name: 'Edit Hard ER' });
+    expect(within(hardCard).getByText('Likely aneurysm')).toBeInTheDocument();
+    const easyCard = screen.getByRole('button', { name: 'Edit Easy ER' });
+    expect(within(easyCard).getByText('Should not show')).toBeInTheDocument();
   });
 
-  it('moves a patient to another tab and lane through the editor', async () => {
+  it('moves a patient to another lane through the editor', async () => {
     listConsultantDeckingEntries.mockResolvedValue([
       { id: 'entry-1', patientName: 'Juan Dela Cruz', patientAge: 46, patientSex: 'M', tabId: 'tab-1', difficulty: 'hard', priorityLevel: 'priority', patientSource: 'er', studyDate: '2026-03-27', studyTime: '08:30', studyDescription: 'CT brain plain', briefImpression: 'Stroke pattern', laneId: 'inbox', position: 0, createdBy: 'user-1', updatedBy: 'user-1', createdAt: '2026-03-27T00:00:00Z', updatedAt: '2026-03-27T00:00:00Z' },
     ]);
@@ -198,26 +199,22 @@ describe('ConsultantDeckingBoardScreen', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Juan Dela Cruz' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit consultant decking patient' });
-    fireEvent.change(within(dialog).getByLabelText('Edit deck tab'), { target: { value: 'tab-2' } });
-    fireEvent.change(within(dialog).getByLabelText('Move to lane'), { target: { value: 'lane-3' } });
+    fireEvent.change(within(dialog).getByLabelText('Move to lane'), { target: { value: 'lane-1' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
 
     await waitFor(() => expect(updateConsultantDeckingEntry).toHaveBeenCalled());
-    expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'tab-2', 'lane-3', 0);
+    expect(moveConsultantDeckingEntry).toHaveBeenCalledWith('entry-1', 'tab-1', 'lane-1', 0);
   });
 
-  it('creates and renames dynamic lanes and saves tab details', async () => {
+  it('creates a dynamic consultant lane from the current add-column control', async () => {
     createConsultantDeckingLane.mockResolvedValue({ id: 'lane-9' });
     updateConsultantDeckingLane.mockResolvedValue(undefined);
     updateConsultantDeckingTab.mockResolvedValue(undefined);
     render(<ConsultantDeckingBoardScreen currentUserId="user-1" onBack={vi.fn()} />);
 
-    fireEvent.change(await screen.findByLabelText('Add consultant lane'), { target: { value: 'Dr. New' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add lane' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add consultant column' }));
+    fireEvent.change(screen.getByLabelText('Consultant name'), { target: { value: 'Dr. New' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add consultant' }));
     await waitFor(() => expect(createConsultantDeckingLane).toHaveBeenCalledWith({ tabId: 'tab-1', label: 'Dr. New' }));
-
-    fireEvent.change(screen.getByLabelText('Deck tab title'), { target: { value: 'Fuente Sunday Deck' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save tab' }));
-    await waitFor(() => expect(updateConsultantDeckingTab).toHaveBeenCalledWith('tab-1', expect.objectContaining({ title: 'Fuente Sunday Deck' })));
   });
 });

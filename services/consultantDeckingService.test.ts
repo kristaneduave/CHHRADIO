@@ -100,13 +100,13 @@ describe('consultantDeckingService', () => {
     expect(entries[0].laneId).toBe('alvarez');
   });
 
-  it('returns seeded lanes when the lane table is empty', async () => {
+  it('returns an empty lane list when a new workspace has not created consultants yet', async () => {
     mockFrom.mockReturnValue(buildLaneListChain([]));
 
     const lanes = await listConsultantDeckingLanes({ force: true });
 
-    expect(lanes.map((lane) => lane.id)).toEqual(__testables.DEFAULT_LANE_SEEDS.map((lane) => lane.id));
-    expect(lanes[0].label).toBe('Unassigned patients');
+    expect(__testables.DEFAULT_LANE_SEEDS).toEqual([]);
+    expect(lanes).toEqual([]);
   });
 
   it('creates new cards at the end of the selected lane', async () => {
@@ -168,6 +168,7 @@ describe('consultantDeckingService', () => {
       study_description: 'CT brain plain',
       brief_impression: 'Stroke pattern',
       lane_id: 'reynes',
+      column_key: 'reynes',
       position: 1,
       created_by: 'user-1',
       updated_by: 'user-1',
@@ -282,6 +283,7 @@ describe('consultantDeckingService', () => {
     expect(update).toHaveBeenNthCalledWith(1, {
       tab_id: 'tab-1',
       lane_id: 'lane-a',
+      column_key: 'inbox',
       position: 0,
       updated_by: 'user-1',
     });
@@ -289,6 +291,7 @@ describe('consultantDeckingService', () => {
     expect(update).toHaveBeenNthCalledWith(2, {
       tab_id: 'tab-1',
       lane_id: 'lane-a',
+      column_key: 'inbox',
       position: 1,
       updated_by: 'user-1',
     });

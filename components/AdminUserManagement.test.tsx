@@ -11,6 +11,7 @@ const {
   userRolesInsert,
   listAccountAccessRequestsForStaff,
   reviewAccountAccessRequest,
+  fetchPrivilegedAuditEvents,
 } = vi.hoisted(() => ({
   profilesOrder: vi.fn(),
   userRolesIn: vi.fn(),
@@ -19,7 +20,10 @@ const {
   userRolesInsert: vi.fn(),
   listAccountAccessRequestsForStaff: vi.fn(),
   reviewAccountAccessRequest: vi.fn(),
+  fetchPrivilegedAuditEvents: vi.fn(),
 }));
+
+vi.mock('../services/auditService', () => ({ fetchPrivilegedAuditEvents }));
 
 vi.mock('../services/accountAccessRequestService', () => ({
   listAccountAccessRequestsForStaff,
@@ -66,6 +70,7 @@ describe('AdminUserManagement', () => {
     userRolesInsert.mockReset();
     listAccountAccessRequestsForStaff.mockReset();
     reviewAccountAccessRequest.mockReset();
+    fetchPrivilegedAuditEvents.mockReset();
 
     profilesOrder.mockResolvedValue({
       data: [
@@ -96,6 +101,26 @@ describe('AdminUserManagement', () => {
     userRolesInsert.mockResolvedValue({ error: null });
     listAccountAccessRequestsForStaff.mockResolvedValue([]);
     reviewAccountAccessRequest.mockResolvedValue(undefined);
+    fetchPrivilegedAuditEvents.mockResolvedValue([]);
+  });
+
+  it('shows the staff security audit timeline without clinical identifiers', async () => {
+    fetchPrivilegedAuditEvents.mockResolvedValue([{
+      id: 1,
+      actorId: 'staff-1',
+      actorName: 'Dr. Admin',
+      action: 'viber_marked_sent',
+      targetType: 'case',
+      targetId: 'hidden-target',
+      metadata: { sent: true },
+      createdAt: '2026-08-28T08:00:00.000Z',
+    }]);
+
+    render(<AdminUserManagement onBack={() => undefined} />);
+
+    expect(await screen.findByText('Marked sent to Viber')).toBeInTheDocument();
+    expect(screen.getByText(/Dr\. Admin/)).toBeInTheDocument();
+    expect(screen.queryByText('hidden-target')).not.toBeInTheDocument();
   });
 
   it('renders the multi-role management sections for a loaded user', async () => {

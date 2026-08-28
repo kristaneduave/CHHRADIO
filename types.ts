@@ -45,6 +45,17 @@ export interface ToastMessage {
   description?: string;
 }
 
+export interface PrivilegedAuditEvent {
+  id: number;
+  actorId: string | null;
+  actorName: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  metadata: Record<string, string | number | boolean | null>;
+  createdAt: string;
+}
+
 export interface ConsultantDeckingEntry {
   id: string;
   patientName: string;

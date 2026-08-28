@@ -6,6 +6,7 @@ import ArticleLibraryScreen from './ArticleLibraryScreen';
 const { serviceMocks, requestServiceMocks, mockProfileRole } = vi.hoisted(() => ({
   serviceMocks: {
     getCurrentPathologyGuidelines: vi.fn(),
+    getCachedPathologyGuidelineLandingSnapshot: vi.fn(),
     getPathologyGuidelineLandingSnapshot: vi.fn(),
     getFeaturedPathologyGuidelines: vi.fn(),
     getGuidelineDraftVersions: vi.fn(),
@@ -144,6 +145,7 @@ beforeEach(() => {
   Object.values(requestServiceMocks).forEach((mockFn) => mockFn.mockReset());
   requestServiceMocks.listPathologyGuidelineRequests.mockResolvedValue([]);
   serviceMocks.getCurrentPathologyGuidelines.mockResolvedValue([chestItem, generalItem]);
+  serviceMocks.getCachedPathologyGuidelineLandingSnapshot.mockReturnValue(null);
   serviceMocks.getPathologyGuidelineLandingSnapshot.mockResolvedValue([chestItem, generalItem]);
   serviceMocks.getFeaturedPathologyGuidelines.mockResolvedValue([chestItem]);
   serviceMocks.getArticleLibraryTopicHubs.mockResolvedValue([]);
@@ -185,11 +187,11 @@ describe('ArticleLibraryScreen', () => {
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     expect(screen.getAllByText('Chest').length).toBeGreaterThan(0);
     expect(screen.getAllByText('General & Other').length).toBeGreaterThan(0);
-    expect(screen.getByText('Requests')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New article' })).toBeInTheDocument();
+    expect((await screen.findAllByText('Requests'))[0]).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'New article' })[0]).toBeInTheDocument();
     expect(screen.queryByText('Mass')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New article' })[0]);
 
     expect(await screen.findByRole('heading', { name: 'New article' })).toBeInTheDocument();
     expect(await screen.findByText('Paste or upload checklist JSON, then add the article title and source link.')).toBeInTheDocument();
@@ -261,12 +263,12 @@ describe('ArticleLibraryScreen', () => {
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
     expect(requestServiceMocks.listPathologyGuidelineRequests).not.toHaveBeenCalled();
-    expect(screen.getByText('Requests load on demand')).toBeInTheDocument();
+    expect(screen.getAllByText('Requests load on demand')[0]).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open request topic form' }));
 
     await waitFor(() => expect(requestServiceMocks.listPathologyGuidelineRequests).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('Pancreatic cyst follow-up')).toBeInTheDocument();
+    expect((await screen.findAllByText('Pancreatic cyst follow-up'))[0]).toBeInTheDocument();
   });
 
   it('opens guide detail in a mobile full-screen sheet', async () => {
@@ -584,7 +586,7 @@ describe('ArticleLibraryScreen', () => {
     render(<ArticleLibraryScreen />);
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New article' })[0]);
     await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByLabelText('Pathology name'), { target: { value: 'Fibromuscular dysplasia (FMD)' } });
     fireEvent.change(screen.getByLabelText('Source title'), { target: { value: 'Multisystem Imaging Manifestations of Fibromuscular Dysplasia' } });
@@ -661,7 +663,7 @@ describe('ArticleLibraryScreen', () => {
     render(<ArticleLibraryScreen />);
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New article' })[0]);
     await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByPlaceholderText('{"pathology_name":"Appendicitis","rich_summary_md":"...","checklist_items":[...]}'), {
       target: {
@@ -750,7 +752,7 @@ describe('ArticleLibraryScreen', () => {
     render(<ArticleLibraryScreen />);
 
     await waitFor(() => expect(serviceMocks.getPathologyGuidelineLandingSnapshot).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: 'New article' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'New article' })[0]);
     await screen.findByRole('heading', { name: 'New article' });
     fireEvent.change(screen.getByPlaceholderText('{"pathology_name":"Appendicitis","rich_summary_md":"...","checklist_items":[...]}'), {
       target: {
