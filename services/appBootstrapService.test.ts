@@ -9,7 +9,7 @@ const {
   preloadPublishedCases,
   preloadLiveAuntMinnieWorkspace,
   preloadCalendarWorkspace,
-  preloadMajorRouteChunks,
+  preloadTopRouteChunks,
   preloadNonCriticalRouteChunks,
 } = vi.hoisted(() => ({
   fetchRecentActivity: vi.fn(async () => []),
@@ -20,7 +20,7 @@ const {
   preloadPublishedCases: vi.fn(async () => undefined),
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
   preloadCalendarWorkspace: vi.fn(async () => undefined),
-  preloadMajorRouteChunks: vi.fn(async () => undefined),
+  preloadTopRouteChunks: vi.fn(async () => undefined),
   preloadNonCriticalRouteChunks: vi.fn(async () => undefined),
 }));
 
@@ -57,7 +57,7 @@ vi.mock('./liveAuntMinnieService', () => ({
 }));
 
 vi.mock('./routePreloadService', () => ({
-  preloadMajorRouteChunks,
+  preloadTopRouteChunks,
   preloadNonCriticalRouteChunks,
 }));
 
@@ -76,32 +76,28 @@ describe('appBootstrapService', () => {
     }
   });
 
-  it('includes major route chunk preload as a blocking task', () => {
+  it('warms common route chunks without delaying first render', () => {
     const tasks = __testables.getBootstrapTasks(buildSession(), false, 'seed-a');
     const routeTask = tasks.find((task) => task.name === 'route-chunks');
 
     expect(routeTask).toMatchObject({
-      blocking: true,
-      weight: 26,
+      blocking: false,
+      weight: 0,
       group: 'route-chunks',
     });
   });
 
-  it('guest mode excludes user-only blocking tasks', () => {
+  it('guest mode opens immediately while public data warms in the background', () => {
     const tasks = __testables.getBootstrapTasks(null, true, 'seed-a');
     const names = tasks.filter((task) => task.blocking).map((task) => task.name);
 
-    expect(names).toEqual([
-      'route-chunks',
-      'search-data',
-      'article-library-data',
-    ]);
+    expect(names).toEqual([]);
   });
 
   it('does not release before all blocking tasks settle and reaches 100 afterwards', async () => {
-    let resolveSearch!: () => void;
-    preloadPublishedCases.mockImplementationOnce(
-      () => new Promise<void>((resolve) => { resolveSearch = resolve; })
+    let resolveDashboard!: () => void;
+    fetchDashboardSnapshot.mockImplementationOnce(
+      () => new Promise<void>((resolve) => { resolveDashboard = resolve; })
     );
 
     const snapshots: Array<{ progressPct: number; releaseReady: boolean }> = [];
@@ -116,7 +112,7 @@ describe('appBootstrapService', () => {
     await Promise.resolve();
     expect(snapshots.some((snapshot) => snapshot.releaseReady)).toBe(false);
 
-    resolveSearch();
+    resolveDashboard();
     const result = await bootstrapPromise;
     const releaseSnapshot = snapshots.find((snapshot) => snapshot.releaseReady);
 
@@ -125,7 +121,7 @@ describe('appBootstrapService', () => {
   });
 
   it('failed blocking tasks still count as settled', async () => {
-    preloadProfileHome.mockRejectedValueOnce(new Error('profile preload failed'));
+    fetchDashboardSnapshot.mockRejectedValueOnce(new Error('dashboard preload failed'));
 
     const snapshots: Array<{ progressPct: number; statusLabel: string; releaseReady: boolean }> = [];
     const result = await startAppBootstrap({
@@ -141,8 +137,20 @@ describe('appBootstrapService', () => {
     });
     const releaseSnapshot = snapshots.find((snapshot) => snapshot.releaseReady);
 
-    expect(result.tasks.find((task) => task.name === 'profile-data')?.status).toBe('failed');
+    expect(result.tasks.find((task) => task.name === 'dashboard-snapshot')?.status).toBe('failed');
     expect(releaseSnapshot).toMatchObject({ progressPct: 100, releaseReady: true });
+  });
+
+  it('releases the app when dashboard loading exceeds the startup timeout', async () => {
+    fetchDashboardSnapshot.mockImplementationOnce(() => new Promise<void>(() => undefined));
+
+    const result = await startAppBootstrap({
+      session: buildSession(),
+      guestMode: false,
+      timeoutMs: 5,
+    });
+
+    expect(result.releaseReason).toBe('timeout');
   });
 
   it('emits phase labels and fun messages in progress snapshots', async () => {

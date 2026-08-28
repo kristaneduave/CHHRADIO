@@ -6,14 +6,17 @@ import SearchScreen from './SearchScreen';
 const {
   getCachedPublishedCasesBundle,
   fetchPublishedCasesBundle,
+  refreshPublishedCasesBundle,
 } = vi.hoisted(() => ({
   getCachedPublishedCasesBundle: vi.fn(),
   fetchPublishedCasesBundle: vi.fn(),
+  refreshPublishedCasesBundle: vi.fn(),
 }));
 
 vi.mock('../services/publishedCasesService', () => ({
   getCachedPublishedCasesBundle,
   fetchPublishedCasesBundle,
+  refreshPublishedCasesBundle,
 }));
 
 vi.mock('../services/caseViberShareService', () => ({
@@ -90,7 +93,10 @@ describe('SearchScreen Viber status', () => {
     window.localStorage.clear();
     getCachedPublishedCasesBundle.mockReset();
     fetchPublishedCasesBundle.mockReset();
-    getCachedPublishedCasesBundle.mockReturnValue(buildBundle());
+    refreshPublishedCasesBundle.mockReset();
+    const bundle = buildBundle();
+    getCachedPublishedCasesBundle.mockReturnValue(bundle);
+    refreshPublishedCasesBundle.mockResolvedValue(bundle);
   });
 
   it('shows one minimalist Viber badge and the filter to registered users', () => {

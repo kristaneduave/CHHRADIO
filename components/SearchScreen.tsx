@@ -4,7 +4,11 @@ import { toastError } from '../utils/toast';
 import LoadingState from './LoadingState';
 import { Skeleton } from './Skeleton';
 import EmptyState from './EmptyState';
-import { fetchPublishedCasesBundle, getCachedPublishedCasesBundle } from '../services/publishedCasesService';
+import {
+  fetchPublishedCasesBundle,
+  getCachedPublishedCasesBundle,
+  refreshPublishedCasesBundle,
+} from '../services/publishedCasesService';
 import {
   CASE_VIBER_SHARE_UPDATED_EVENT,
   CaseViberShareStatusRecord,
@@ -202,9 +206,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   const fetchCasesSeqRef = useRef(0);
 
   useEffect(() => {
-    if (!cachedBundle) {
-      fetchCases();
-    }
+    void fetchCases(Boolean(cachedBundle));
   }, []);
 
   useEffect(() => {
@@ -235,18 +237,22 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     });
   };
 
-  const fetchCases = async () => {
+  const fetchCases = async (silent = false) => {
     const seq = ++fetchCasesSeqRef.current;
     let loadingWatchdogId: ReturnType<typeof setTimeout> | null = null;
-    setLoading(true);
-    setError(null);
-    loadingWatchdogId = setTimeout(() => {
-      if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
-      setError('Database load is taking too long. Please tap Retry.');
-      setLoading(false);
-    }, DATABASE_LOADING_WATCHDOG_MS);
+    if (!silent) setLoading(true);
+    if (!silent) {
+      setError(null);
+      loadingWatchdogId = setTimeout(() => {
+        if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
+        setError('Database load is taking too long. Please tap Retry.');
+        setLoading(false);
+      }, DATABASE_LOADING_WATCHDOG_MS);
+    }
     try {
-      const { rawCases: nextRawCases, records } = await fetchPublishedCasesBundle();
+      const { rawCases: nextRawCases, records } = silent
+        ? await refreshPublishedCasesBundle()
+        : await fetchPublishedCasesBundle();
       if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
       setRawCases(nextRawCases);
       startTransition(() => {
@@ -256,14 +262,16 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     } catch (loadError) {
       console.error('Error fetching cases:', loadError);
       if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
-      setError('Unable to load Database. Please try again.');
-      toastError('Failed to load Database');
+      if (!silent) {
+        setError('Unable to load Database. Please try again.');
+        toastError('Failed to load Database');
+      }
     } finally {
       if (loadingWatchdogId) {
         clearTimeout(loadingWatchdogId);
       }
       if (!isMountedRef.current || seq !== fetchCasesSeqRef.current) return;
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -740,7 +748,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
             <div className="glass-card-enhanced rounded-2xl border border-red-500/20 p-6 text-center">
               <p className="text-sm font-semibold text-red-300 mb-3">{error}</p>
               <button
-                onClick={fetchCases}
+                onClick={() => void fetchCases(false)}
                 className="rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white hover:bg-primary-dark transition-colors"
               >
                 Retry

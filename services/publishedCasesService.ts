@@ -2,6 +2,7 @@ import { PatientRecord } from '../types';
 import { supabase } from './supabase';
 import { fetchWithCache } from '../utils/requestCache';
 import type { CaseViberShareStatusRecord } from './caseViberShareService';
+import { finishPerformanceTiming, startPerformanceTiming } from '../utils/performanceMetrics';
 
 export interface PublishedCasesBundle {
   rawCases: any[];
@@ -10,6 +11,8 @@ export interface PublishedCasesBundle {
 
 let publishedCasesBundleCache: PublishedCasesBundle | null = null;
 let publishedCasesBundlePromise: Promise<PublishedCasesBundle> | null = null;
+let publishedCasesBundleCachedAt = 0;
+const PUBLISHED_CASES_STALE_MS = 30_000;
 
 const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): PatientRecord => {
   const submissionType = item.submission_type || 'interesting_case';
@@ -56,8 +59,8 @@ const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): Pa
   };
 };
 
-export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle> => {
-  if (publishedCasesBundleCache) {
+const loadPublishedCasesBundle = async (forceRefresh = false): Promise<PublishedCasesBundle> => {
+  if (publishedCasesBundleCache && !forceRefresh) {
     return publishedCasesBundleCache;
   }
 
@@ -66,16 +69,20 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
   }
 
   publishedCasesBundlePromise = (async () => {
-  const rawCases = await fetchWithCache(
-    'published-cases:list',
-    async () => {
+  const loadStartedAt = startPerformanceTiming();
+  const fetchRawCases = async () => {
       const { data, error } = await supabase.rpc('list_published_cases_for_viewer');
 
       if (error) throw error;
       return data || [];
-    },
-    { ttlMs: 20_000, allowStaleWhileRevalidate: true },
-  );
+  };
+  const rawCases = forceRefresh
+    ? await fetchRawCases()
+    : await fetchWithCache(
+        'published-cases:list',
+        fetchRawCases,
+        { ttlMs: 20_000, allowStaleWhileRevalidate: true },
+      );
 
   const profileIds = Array.from(
     new Set(
@@ -87,9 +94,7 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
   let profileMap = new Map<string, string>();
 
   if (profileIds.length > 0) {
-    const profiles = await fetchWithCache(
-      `published-cases:profiles:${profileIds.sort().join(',')}`,
-      async () => {
+    const fetchProfiles = async () => {
         const { data, error } = await supabase
           .from('profiles')
           .select('id, full_name, nickname')
@@ -97,9 +102,15 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
 
         if (error) throw error;
         return data || [];
-      },
-      { ttlMs: 60_000, allowStaleWhileRevalidate: true },
-    );
+    };
+    const profileCacheKey = `published-cases:profiles:${profileIds.sort().join(',')}`;
+    const profiles = forceRefresh
+      ? await fetchProfiles()
+      : await fetchWithCache(
+          profileCacheKey,
+          fetchProfiles,
+          { ttlMs: 60_000, allowStaleWhileRevalidate: true },
+        );
 
     profileMap = new Map(
       profiles.map((profile: any) => [
@@ -120,12 +131,27 @@ export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle>
     };
 
     publishedCasesBundleCache = bundle;
+    publishedCasesBundleCachedAt = Date.now();
+    finishPerformanceTiming('database.load', loadStartedAt);
     return bundle;
   })().finally(() => {
     publishedCasesBundlePromise = null;
   });
 
   return publishedCasesBundlePromise;
+};
+
+export const fetchPublishedCasesBundle = async (): Promise<PublishedCasesBundle> =>
+  loadPublishedCasesBundle(false);
+
+export const refreshPublishedCasesBundle = async (): Promise<PublishedCasesBundle> => {
+  if (
+    publishedCasesBundleCache
+    && Date.now() - publishedCasesBundleCachedAt < PUBLISHED_CASES_STALE_MS
+  ) {
+    return publishedCasesBundleCache;
+  }
+  return loadPublishedCasesBundle(true);
 };
 
 export const preloadPublishedCases = async (): Promise<void> => {

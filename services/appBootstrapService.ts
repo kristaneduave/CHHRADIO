@@ -8,7 +8,8 @@ import { preloadProfileHome } from './profileHomeService';
 import { preloadPublishedCases } from './publishedCasesService';
 import { preloadQuizWorkspace } from './quizService';
 import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
-import { preloadMajorRouteChunks, preloadNonCriticalRouteChunks } from './routePreloadService';
+import { preloadNonCriticalRouteChunks, preloadTopRouteChunks } from './routePreloadService';
+import { finishPerformanceTiming, startPerformanceTiming } from '../utils/performanceMetrics';
 
 export type AppBootstrapTaskName =
   | 'dashboard-snapshot'
@@ -58,7 +59,7 @@ interface AppBootstrapTask {
 }
 
 export interface AppBootstrapResult {
-  releaseReason: 'blocking-settled';
+  releaseReason: 'blocking-settled' | 'timeout';
   tasks: AppBootstrapTaskResult[];
   backgroundPromise: Promise<void>;
 }
@@ -215,8 +216,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
     {
       name: 'route-chunks',
       label: 'Warming major screens',
-      weight: 26,
-      blocking: true,
+      weight: 0,
+      blocking: false,
       group: 'route-chunks',
       messagePool: buildTaskMessagePool('route-chunks', [
         'switching on the main screens.',
@@ -228,14 +229,14 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         'convincing the tabs to look clinically professional.',
       ], runSeed).map((entry) => entry.text),
       run: async () => {
-        await preloadMajorRouteChunks();
+        await preloadTopRouteChunks();
       },
     },
     {
       name: 'search-data',
       label: 'Indexing published cases',
-      weight: 14,
-      blocking: true,
+      weight: 0,
+      blocking: false,
       group: 'major-screen-data',
       messagePool: buildTaskMessagePool('search-data', [
         'sorting the case archive.',
@@ -254,8 +255,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
     {
       name: 'article-library-data',
       label: 'Preparing Article Library',
-      weight: 8,
-      blocking: true,
+      weight: 0,
+      blocking: false,
       group: 'major-screen-data',
       messagePool: buildTaskMessagePool('article-library-data', [
         'waking the pathology shelf up.',
@@ -297,8 +298,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
           {
             name: 'unread-count-and-newsfeed',
             label: 'Preparing newsfeed',
-            weight: 10,
-            blocking: true,
+            weight: 0,
+            blocking: false,
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('unread-count-and-newsfeed', [
               'sorting the newsfeed chaos.',
@@ -317,8 +318,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
           {
             name: 'profile-data',
             label: 'Preparing profile workspace',
-            weight: 10,
-            blocking: true,
+            weight: 0,
+            blocking: false,
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('profile-data', [
               'straightening the profile page.',
@@ -337,8 +338,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
           {
             name: 'calendar-data',
             label: 'Preparing calendar',
-            weight: 8,
-            blocking: true,
+            weight: 0,
+            blocking: false,
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('calendar-data', [
               'untangling the calendar.',
@@ -357,8 +358,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
           {
             name: 'activity-data',
             label: 'Preparing recent activity',
-            weight: 4,
-            blocking: true,
+            weight: 0,
+            blocking: false,
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('activity-data', [
               'replaying the latest activity.',
@@ -377,8 +378,8 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
           {
             name: 'quiz-data',
             label: 'Preparing quiz workspace',
-            weight: 6,
-            blocking: true,
+            weight: 0,
+            blocking: false,
             group: 'major-screen-data',
             messagePool: buildTaskMessagePool('quiz-data', [
               'warming the quiz lab.',
@@ -491,6 +492,7 @@ export const startAppBootstrap = async (options: {
   timeoutMs?: number;
   onProgress?: (snapshot: AppBootstrapProgressSnapshot) => void;
 }): Promise<AppBootstrapResult> => {
+  const bootstrapStartedAt = startPerformanceTiming();
   const runSeed = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const tasks = getBootstrapTasks(options.session, options.guestMode, runSeed);
   const blockingTasks = tasks.filter((task) => task.blocking);
@@ -534,13 +536,26 @@ export const startAppBootstrap = async (options: {
     }
   };
 
-  await Promise.allSettled(blockingTasks.map((task) => runTask(task)));
+  const blockingPromise = Promise.allSettled(blockingTasks.map((task) => runTask(task)));
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutMs = Math.max(1000, options.timeoutMs ?? 5000);
+  const releaseReason = await Promise.race<AppBootstrapResult['releaseReason']>([
+    blockingPromise.then(() => 'blocking-settled' as const),
+    new Promise<'timeout'>((resolve) => {
+      timeoutId = setTimeout(() => resolve('timeout'), timeoutMs);
+    }),
+  ]);
+  if (timeoutId) clearTimeout(timeoutId);
+  finishPerformanceTiming('startup.bootstrap', bootstrapStartedAt);
   emitProgress(true);
 
-  const backgroundPromise = Promise.allSettled(backgroundTasks.map((task) => runTask(task))).then(() => undefined);
+  const backgroundPromise = Promise.allSettled([
+    blockingPromise,
+    ...backgroundTasks.map((task) => runTask(task)),
+  ]).then(() => undefined);
 
   return {
-    releaseReason: 'blocking-settled',
+    releaseReason,
     tasks: Array.from(results.values()),
     backgroundPromise,
   };
