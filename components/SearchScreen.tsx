@@ -39,6 +39,7 @@ interface SearchScreenProps {
 
 const OPENED_CASES_STORAGE_KEY = 'chh_database_opened_case_ids_v1';
 const VIBER_FILTER_STORAGE_PREFIX = 'chh_database_viber_filter_v1';
+const VIBER_SORT_STORAGE_PREFIX = 'chh_database_viber_sort_v1';
 
 const readStoredViberFilter = (userId?: string | null): SearchFilters['viberShareStatus'] => {
   if (typeof window === 'undefined' || !userId) return 'all';
@@ -49,6 +50,17 @@ const readStoredViberFilter = (userId?: string | null): SearchFilters['viberShar
 const storeViberFilter = (userId: string | null | undefined, value: SearchFilters['viberShareStatus']) => {
   if (typeof window === 'undefined' || !userId) return;
   window.sessionStorage.setItem(`${VIBER_FILTER_STORAGE_PREFIX}:${userId}`, value);
+};
+
+const readStoredViberSort = (userId: string | null | undefined, viberStatus: SearchFilters['viberShareStatus']) => {
+  if (typeof window === 'undefined' || !userId) return viberStatus === 'not_sent' ? 'oldest' : 'newest';
+  const value = window.sessionStorage.getItem(`${VIBER_SORT_STORAGE_PREFIX}:${userId}`);
+  return value === 'oldest' || value === 'newest' ? value : viberStatus === 'not_sent' ? 'oldest' : 'newest';
+};
+
+const storeViberSort = (userId: string | null | undefined, value: 'newest' | 'oldest') => {
+  if (typeof window === 'undefined' || !userId) return;
+  window.sessionStorage.setItem(`${VIBER_SORT_STORAGE_PREFIX}:${userId}`, value);
 };
 
 const formatUploadedAt = (value: string) =>
@@ -196,6 +208,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   const viewport = useAppViewport();
   const isRegisteredUser = Boolean(currentUserId);
   const cachedBundle = getCachedPublishedCasesBundle();
+  const initialViberFilter = readStoredViberFilter(currentUserId);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
@@ -208,7 +221,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     modality: '',
     diagnosticCode: '',
     submissionType: '',
-    viberShareStatus: readStoredViberFilter(currentUserId),
+    viberShareStatus: initialViberFilter,
     datePreset: 'all',
   });
   const [results, setResults] = useState<PatientRecord[]>(cachedBundle?.records || []);
@@ -216,7 +229,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   const [rawCases, setRawCases] = useState<any[]>(cachedBundle?.rawCases || []);
   const [loading, setLoading] = useState(!cachedBundle);
   const [error, setError] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>(() => readStoredViberSort(currentUserId, initialViberFilter));
 
   // Track opened cases so they lose their "New" styling, including across reloads
   const [openedCaseIds, setOpenedCaseIds] = useState<Set<string>>(() => {
@@ -265,11 +278,11 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     };
   }, [loading]);
 
-  const sortCases = (input: PatientRecord[]) => {
+  const sortCases = (input: PatientRecord[], order: 'newest' | 'oldest' = sortOrder) => {
     return [...input].sort((a, b) => {
       const aTime = new Date(a.date).getTime();
       const bTime = new Date(b.date).getTime();
-      return sortOrder === 'newest' ? bTime - aTime : aTime - bTime;
+      return order === 'newest' ? bTime - aTime : aTime - bTime;
     });
   };
 
@@ -429,6 +442,10 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
+    if (name === 'viberShareStatus' && value === 'not_sent') {
+      setSortOrder('oldest');
+      storeViberSort(currentUserId, 'oldest');
+    }
   };
 
   const isViberShareEligible = (rawCase: any) =>
@@ -481,6 +498,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
       setResults(sortCases(filtered));
     });
     storeViberFilter(currentUserId, filters.viberShareStatus);
+    storeViberSort(currentUserId, sortOrder);
     setShowFilters(false);
     setShowSuggestions(false);
   };
@@ -498,6 +516,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     });
     setQuery('');
     storeViberFilter(currentUserId, 'all');
+    storeViberSort(currentUserId, sortOrder);
     startTransition(() => {
       setResults(sortCases(allCases));
     });
@@ -510,6 +529,36 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
       setResults(sortCases([p]));
     });
     markCaseAsOpened(p.id);
+  };
+
+  const viberQueueCount = isRegisteredUser
+    ? rawCases.filter((rawCase) => isViberShareEligible(rawCase) && !rawCase?.viber_shared_at).length
+    : 0;
+
+  const openViberQueue = () => {
+    const queueFilters: SearchFilters = {
+      startDate: '',
+      endDate: '',
+      specialty: '',
+      modality: '',
+      diagnosticCode: '',
+      submissionType: '',
+      viberShareStatus: 'not_sent',
+      datePreset: 'all',
+    };
+    const queueResults = allCases.filter((item) => {
+      const raw = rawCases.find((candidate) => String(candidate?.id || '') === item.id);
+      return isViberShareEligible(raw) && !raw?.viber_shared_at;
+    });
+
+    setQuery('');
+    setFilters(queueFilters);
+    setSortOrder('oldest');
+    setShowFilters(false);
+    setShowSuggestions(false);
+    storeViberFilter(currentUserId, 'not_sent');
+    storeViberSort(currentUserId, 'oldest');
+    startTransition(() => setResults(sortCases(queueResults, 'oldest')));
   };
 
   const activeFilterChips = [
@@ -548,7 +597,23 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     <PageShell layoutMode="split">
       <div className="flex min-h-full flex-col" data-search-viewport={viewport}>
         <div className="bg-app/80 pb-2 pt-1 backdrop-blur-md">
-          <PageHeader title="Database" />
+          <PageHeader
+            title="Database"
+            action={isRegisteredUser ? (
+              <button
+                type="button"
+                onClick={openViberQueue}
+                className="inline-flex items-center gap-2 rounded-full border border-violet-300/25 bg-violet-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-100 transition hover:border-violet-300/40 hover:bg-violet-500/15"
+                aria-label={`Open Viber queue, ${viberQueueCount} ${viberQueueCount === 1 ? 'case' : 'cases'} pending`}
+              >
+                <span className="material-icons text-[14px] text-violet-300" aria-hidden="true">schedule_send</span>
+                <span>Viber Queue</span>
+                <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-violet-300/15 px-1.5 py-0.5 text-[9px] text-violet-50" aria-live="polite">
+                  {loading && rawCases.length === 0 ? '…' : viberQueueCount}
+                </span>
+              </button>
+            ) : null}
+          />
         </div>
 
         <div className="pt-2 pb-4">
@@ -688,7 +753,11 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <label className="block text-xs font-medium text-slate-300">Sort</label>
                 <select
                   value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value as 'newest' | 'oldest')}
+                  onChange={(e) => {
+                    const nextSortOrder = e.target.value as 'newest' | 'oldest';
+                    setSortOrder(nextSortOrder);
+                    storeViberSort(currentUserId, nextSortOrder);
+                  }}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                   aria-label="Sort search results"
                 >

@@ -25,7 +25,7 @@ vi.mock('../services/caseViberShareService', () => ({
 
 vi.mock('../utils/toast', () => ({ toastError: vi.fn() }));
 vi.mock('./responsive/useViewport', () => ({ useAppViewport: () => 'mobile' }));
-vi.mock('./ui/PageHeader', () => ({ default: ({ title }: { title: string }) => <h1>{title}</h1> }));
+vi.mock('./ui/PageHeader', () => ({ default: ({ title, action }: { title: string; action?: React.ReactNode }) => <header><h1>{title}</h1>{action}</header> }));
 vi.mock('./ui/PageShell', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
 const sharedAt = '2026-08-28T02:43:00.000Z';
@@ -107,6 +107,7 @@ describe('SearchScreen Viber status', () => {
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveAttribute('title', expect.stringMatching(/Sent to Viber on .* by Dr\. Test/i));
     expect(screen.getByText('Viber · T')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Viber queue, 1 case pending' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
     expect(screen.getByLabelText('Viber status')).toBeInTheDocument();
@@ -133,6 +134,7 @@ describe('SearchScreen Viber status', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
     fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
+    expect(screen.getByLabelText('Sort search results')).toHaveValue('oldest');
     fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
 
     expect(screen.getByText('Viber: Not sent')).toBeInTheDocument();
@@ -148,7 +150,9 @@ describe('SearchScreen Viber status', () => {
   });
 
   it('removes a case from the Not sent queue immediately when it is marked sent', async () => {
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
     render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Open Viber queue, 1 case pending' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
     fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
     fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
@@ -167,12 +171,37 @@ describe('SearchScreen Viber status', () => {
 
     await waitFor(() => expect(screen.queryByText('UNSHARED INTERESTING CASE')).not.toBeInTheDocument());
     expect(screen.getByText('0 cases')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open Viber queue, 0 cases pending' })).toBeInTheDocument());
+  });
+
+  it('opens the complete Viber queue with the oldest case first', () => {
+    const bundle = buildBundle();
+    bundle.records.push({
+      ...bundle.records[1],
+      id: 'older-unshared-interesting',
+      name: 'Older Unshared Interesting Case',
+      date: '2026-08-20T02:00:00.000Z',
+    });
+    bundle.rawCases.push({ id: 'older-unshared-interesting', status: 'published', submission_type: 'interesting_case', viber_shared_at: null });
+    getCachedPublishedCasesBundle.mockReturnValue(bundle);
+
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Viber queue, 2 cases pending' }));
+
+    expect(screen.getByText('Viber: Not sent')).toBeInTheDocument();
+    expect(screen.getByText('2 cases')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    expect(screen.getByLabelText('Sort search results')).toHaveValue('oldest');
+    const olderCase = screen.getByText('OLDER UNSHARED INTERESTING CASE');
+    const newerCase = screen.getByText('UNSHARED INTERESTING CASE');
+    expect(olderCase.compareDocumentPosition(newerCase) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('hides Viber workflow status and filtering from anonymous viewers', () => {
     render(<SearchScreen currentUserId={null} onCaseSelect={vi.fn()} />);
 
     expect(screen.queryByText('Viber')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Viber queue/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Sent to Viber on/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
