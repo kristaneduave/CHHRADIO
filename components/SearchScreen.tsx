@@ -98,7 +98,7 @@ const formatViberSharedLabel = (value: string, staffName?: string | null) => {
   return `Sent to Viber on ${sharedAt}${staffName ? ` by ${staffName}` : ''}`;
 };
 
-const formatViberMarkerInitials = (staffName?: string | null) => {
+const formatViberMarkerName = (staffName?: string | null) => {
   const normalizedName = staffName?.trim();
   if (!normalizedName || normalizedName.toLowerCase() === 'hospital staff') return 'HS';
 
@@ -107,6 +107,8 @@ const formatViberMarkerInitials = (staffName?: string | null) => {
     .split(/\s+/)
     .map((part) => part.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
     .filter((part) => part && !honorifics.has(part.toLowerCase()));
+
+  if (nameParts.length === 1) return nameParts[0];
 
   const initialParts = nameParts.length > 3
     ? [nameParts[0], nameParts[1], nameParts[nameParts.length - 1]]
@@ -1060,8 +1062,8 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
               const viberBadgeLabel = showViberBadge
                 ? formatViberSharedLabel(p.viber_shared_at as string, p.viber_shared_by_name)
                 : '';
-              const viberMarkerInitials = showViberBadge
-                ? formatViberMarkerInitials(p.viber_shared_by_name)
+              const viberMarkerName = showViberBadge
+                ? formatViberMarkerName(p.viber_shared_by_name)
                 : '';
 
               return (
@@ -1114,7 +1116,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                               title={viberBadgeLabel}
                             >
                               <span className="material-icons text-[12px] leading-none text-violet-300" aria-hidden="true">check_circle</span>
-                              <span>Viber · {viberMarkerInitials}</span>
+                              <span>Viber · {viberMarkerName}</span>
                             </span>
                           ) : null}
                         </div>

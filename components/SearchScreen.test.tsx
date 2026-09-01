@@ -108,7 +108,7 @@ describe('SearchScreen Viber status', () => {
     const badge = screen.getByLabelText(/Sent to Viber on .* by Dr\. Test/i);
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveAttribute('title', expect.stringMatching(/Sent to Viber on .* by Dr\. Test/i));
-    expect(screen.getByText('Viber · T')).toBeInTheDocument();
+    expect(screen.getByText('Viber · Test')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Viber queue, 1 case pending' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
@@ -119,16 +119,17 @@ describe('SearchScreen Viber status', () => {
 
   it.each([
     ['Gene Robert Michael Sales', 'GRS'],
-    ['Alexandria', 'A'],
+    ['Alexandria', 'Alexandria'],
+    ['Dr. Sales', 'Sales'],
     [null, 'HS'],
-  ])('shows compact marker initials for %s', (staffName, expectedInitials) => {
+  ])('shows the compact marker name for %s', (staffName, expectedMarkerName) => {
     const bundle = buildBundle();
     bundle.records[0] = { ...bundle.records[0], viber_shared_by_name: staffName };
     getCachedPublishedCasesBundle.mockReturnValue(bundle);
 
     render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
 
-    expect(screen.getByText(`Viber · ${expectedInitials}`)).toBeInTheDocument();
+    expect(screen.getByText(`Viber · ${expectedMarkerName}`)).toBeInTheDocument();
   });
 
   it('filters to unshared Interesting Cases and preserves the selection for return navigation', async () => {
@@ -273,7 +274,7 @@ describe('SearchScreen Viber status', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/Sent to Viber on .* by Dr\. Test/i)).toBeInTheDocument();
-      expect(screen.getByText('Viber · T')).toBeInTheDocument();
+      expect(screen.getByText('Viber · Test')).toBeInTheDocument();
     });
   });
 
