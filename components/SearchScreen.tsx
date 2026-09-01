@@ -658,6 +658,56 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     startTransition(() => setResults(sortCases(filterCases(nextFilters, nextQuery), nextFilters.sortOrder)));
   };
 
+  const emptyState = (() => {
+    if (query.trim()) {
+      return {
+        icon: 'search_off',
+        title: `No cases match “${query.trim()}”`,
+        description: 'Check the spelling or try a broader search term.',
+        actionLabel: 'Clear search',
+        onAction: () => removeActiveFilter('query'),
+      };
+    }
+
+    if (isRegisteredUser && filters.viberShareStatus === 'not_sent') {
+      return {
+        icon: 'task_alt',
+        title: 'Viber queue is clear',
+        description: 'All published Interesting Cases have been sent to Viber.',
+        actionLabel: 'View all cases',
+        onAction: clearFilters,
+      };
+    }
+
+    if (isRegisteredUser && filters.viberShareStatus === 'sent') {
+      return {
+        icon: 'send',
+        title: 'No cases have been marked sent',
+        description: 'Cases will appear here after a registered staff member marks them as sent to Viber.',
+        actionLabel: 'View pending cases',
+        onAction: openViberQueue,
+      };
+    }
+
+    if (activeFilterChips.length > 0) {
+      return {
+        icon: 'filter_alt_off',
+        title: 'No cases match these filters',
+        description: 'Remove a filter or clear them all to broaden the results.',
+        actionLabel: 'Clear filters',
+        onAction: clearFilters,
+      };
+    }
+
+    return {
+      icon: 'inventory_2',
+      title: 'No published cases yet',
+      description: 'Published cases will appear here when they become available.',
+      actionLabel: null,
+      onAction: null,
+    };
+  })();
+
   return (
     <PageShell layoutMode="split">
       <div className="flex min-h-full flex-col" data-search-viewport={viewport}>
@@ -1079,17 +1129,18 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
             })
           ) : (
             <EmptyState
-              icon="search_off"
-              title={query ? `No results for "${query}"` : 'No matches found'}
-              description="Adjust your filters or try a different search term to find what you need."
-              action={
+              icon={emptyState.icon}
+              title={emptyState.title}
+              description={emptyState.description}
+              action={emptyState.actionLabel && emptyState.onAction ? (
                 <button
-                  onClick={clearFilters}
+                  type="button"
+                  onClick={emptyState.onAction}
                   className="rounded-xl px-5 py-2.5 font-bold tracking-wider uppercase text-[11px] bg-primary/20 text-primary-light border border-primary/30 hover:bg-primary/30 transition-all shadow-lg"
                 >
-                  Reset Search
+                  {emptyState.actionLabel}
                 </button>
-              }
+              ) : undefined}
             />
           )}
         </div>

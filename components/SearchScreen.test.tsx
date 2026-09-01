@@ -276,4 +276,87 @@ describe('SearchScreen Viber status', () => {
       expect(screen.getByText('Viber · T')).toBeInTheDocument();
     });
   });
+
+  it('shows a completed Viber queue state with a direct path back to all cases', async () => {
+    const bundle = buildBundle();
+    bundle.records[1] = {
+      ...bundle.records[1],
+      viber_shared_at: sharedAt,
+      viber_shared_by: 'staff-1',
+      viber_shared_by_name: 'Dr. Test',
+    };
+    bundle.rawCases[1] = { ...bundle.rawCases[1], viber_shared_at: sharedAt };
+    getCachedPublishedCasesBundle.mockReturnValue(bundle);
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
+
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Viber queue, 0 cases pending' }));
+
+    expect(await screen.findByText('Viber queue is clear')).toBeInTheDocument();
+    expect(screen.getByText('All published Interesting Cases have been sent to Viber.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View all cases' }));
+    expect(screen.getByText('SHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('guides an empty sent-to-Viber view back to pending cases', async () => {
+    const bundle = buildBundle();
+    bundle.records[0] = {
+      ...bundle.records[0],
+      viber_shared_at: null,
+      viber_shared_by: null,
+      viber_shared_by_name: null,
+    };
+    bundle.rawCases[0] = { ...bundle.rawCases[0], viber_shared_at: null };
+    getCachedPublishedCasesBundle.mockReturnValue(bundle);
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
+
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'sent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+
+    expect(await screen.findByText('No cases have been marked sent')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View pending cases' }));
+    expect(screen.getByText('Viber: Not sent')).toBeInTheDocument();
+    expect(screen.getByText('UNSHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('offers to clear a search when no cases match the query', async () => {
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    const search = screen.getByLabelText('Search Database');
+    fireEvent.change(search, { target: { value: 'No such case' } });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(await screen.findByText('No cases match “No such case”')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Clear search'));
+    expect(screen.getByText('SHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('shows a filter-specific empty state for non-Viber filters', async () => {
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'aunt_minnie' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+
+    expect(await screen.findByText('No cases match these filters')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(screen.getByText('SHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('uses a neutral empty library message for anonymous visitors', async () => {
+    const emptyBundle = { records: [], rawCases: [] };
+    getCachedPublishedCasesBundle.mockReturnValue(emptyBundle);
+    refreshPublishedCasesBundle.mockReturnValue(new Promise(() => {}));
+
+    render(<SearchScreen currentUserId={null} onCaseSelect={vi.fn()} />);
+
+    expect(await screen.findByText('No published cases yet')).toBeInTheDocument();
+    expect(screen.getByText('Published cases will appear here when they become available.')).toBeInTheDocument();
+    expect(screen.queryByText(/Viber/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Clear|View/i })).not.toBeInTheDocument();
+  });
 });
