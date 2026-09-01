@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 const {
-  preloadArticleLibraryLanding,
   preloadAnnouncementsWorkspace,
   preloadCalendarWorkspace,
   preloadQuizWorkspace,
@@ -11,7 +10,6 @@ const {
   preloadResidentsCornerBootstrap,
   preloadConsultantDeckingEntries,
 } = vi.hoisted(() => ({
-  preloadArticleLibraryLanding: vi.fn(async () => undefined),
   preloadAnnouncementsWorkspace: vi.fn(async () => undefined),
   preloadCalendarWorkspace: vi.fn(async () => undefined),
   preloadQuizWorkspace: vi.fn(async () => undefined),
@@ -20,10 +18,6 @@ const {
   preloadCurrentProfileHome: vi.fn(async () => undefined),
   preloadResidentsCornerBootstrap: vi.fn(async () => undefined),
   preloadConsultantDeckingEntries: vi.fn(async () => undefined),
-}));
-
-vi.mock('./articleLibraryService', () => ({
-  preloadArticleLibraryLanding,
 }));
 
 vi.mock('./announcementsWorkspaceService', () => ({
@@ -61,7 +55,6 @@ describe('routePreloadService', () => {
     preloadQuizWorkspace.mockClear();
     preloadLiveAuntMinnieWorkspace.mockClear();
     preloadCurrentLiveAuntMinnieRoom.mockClear();
-    preloadArticleLibraryLanding.mockClear();
     preloadAnnouncementsWorkspace.mockClear();
     preloadCalendarWorkspace.mockClear();
     preloadCurrentProfileHome.mockClear();
@@ -89,12 +82,15 @@ describe('routePreloadService', () => {
     expect(preloadCurrentLiveAuntMinnieRoom).toHaveBeenCalledTimes(1);
   });
 
-  it('warms article library landing data when preloading article library', async () => {
+  it('does not preload disabled Articles or Anatomy routes', async () => {
     const { preloadRouteForScreen } = await import('./routePreloadService');
 
     await preloadRouteForScreen('article-library');
+    await preloadRouteForScreen('anatomy');
 
-    expect(preloadArticleLibraryLanding).toHaveBeenCalledTimes(1);
+    expect(preloadAnnouncementsWorkspace).not.toHaveBeenCalled();
+    expect(preloadCalendarWorkspace).not.toHaveBeenCalled();
+    expect(preloadQuizWorkspace).not.toHaveBeenCalled();
   });
 
   it('warms calendar workspace data when preloading calendar', async () => {

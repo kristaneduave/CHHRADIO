@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   fetchRecentActivity,
-  preloadArticleLibraryLanding,
   fetchDashboardSnapshot,
   preloadNewsfeedData,
   preloadProfileHome,
@@ -10,10 +9,8 @@ const {
   preloadLiveAuntMinnieWorkspace,
   preloadCalendarWorkspace,
   preloadTopRouteChunks,
-  preloadNonCriticalRouteChunks,
 } = vi.hoisted(() => ({
   fetchRecentActivity: vi.fn(async () => []),
-  preloadArticleLibraryLanding: vi.fn(async () => undefined),
   fetchDashboardSnapshot: vi.fn(async () => undefined),
   preloadNewsfeedData: vi.fn(async () => undefined),
   preloadProfileHome: vi.fn(async () => undefined),
@@ -21,15 +18,10 @@ const {
   preloadLiveAuntMinnieWorkspace: vi.fn(async () => undefined),
   preloadCalendarWorkspace: vi.fn(async () => undefined),
   preloadTopRouteChunks: vi.fn(async () => undefined),
-  preloadNonCriticalRouteChunks: vi.fn(async () => undefined),
 }));
 
 vi.mock('./activityService', () => ({
   fetchRecentActivity,
-}));
-
-vi.mock('./articleLibraryService', () => ({
-  preloadArticleLibraryLanding,
 }));
 
 vi.mock('./calendarWorkspaceService', () => ({
@@ -58,7 +50,6 @@ vi.mock('./liveAuntMinnieService', () => ({
 
 vi.mock('./routePreloadService', () => ({
   preloadTopRouteChunks,
-  preloadNonCriticalRouteChunks,
 }));
 
 import { __testables, startAppBootstrap } from './appBootstrapService';
@@ -92,6 +83,13 @@ describe('appBootstrapService', () => {
     const names = tasks.filter((task) => task.blocking).map((task) => task.name);
 
     expect(names).toEqual([]);
+  });
+
+  it('does not preload disabled Articles or Anatomy features during startup', () => {
+    const taskNames = __testables.getBootstrapTasks(buildSession(), false, 'seed-a').map((task) => task.name);
+
+    expect(taskNames).not.toContain('article-library-data');
+    expect(taskNames).not.toContain('anatomy-route-chunk');
   });
 
   it('does not release before all blocking tasks settle and reaches 100 afterwards', async () => {

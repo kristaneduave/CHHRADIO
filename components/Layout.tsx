@@ -135,17 +135,13 @@ const Layout: React.FC<LayoutProps> = ({
 
   const ITEM_COLORS: Record<string, { bg: string, border: string, text: string }> = {
     'newsfeed': { bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', text: 'text-cyan-400' },
-    'article-library': { bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', text: 'text-emerald-400' },
     'dashboard': { bg: 'bg-sky-500/10', border: 'border-sky-500/20', text: 'text-sky-400' },
-    'anatomy': { bg: 'bg-rose-500/10', border: 'border-rose-500/20', text: 'text-rose-400' },
     'profile': { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
   };
 
   const navItems = [
     { screen: 'dashboard', label: 'Home', icon: 'home', outlineIcon: 'home' },
     { screen: 'newsfeed', label: 'Newsfeed', icon: 'newspaper', outlineIcon: 'newspaper' },
-    { screen: 'article-library', label: 'Articles', icon: 'fact_check', outlineIcon: 'fact_check' },
-    { screen: 'anatomy', label: 'Anatomy', icon: 'favorite', outlineIcon: 'favorite_border' },
     { screen: 'profile', label: 'Profile', icon: 'person', outlineIcon: 'person_outline' },
   ] as (ScreenMeta & { outlineIcon: string })[];
 

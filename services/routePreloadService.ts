@@ -1,5 +1,4 @@
 import { Screen } from '../types';
-import { preloadArticleLibraryLanding } from './articleLibraryService';
 import { preloadAnnouncementsWorkspace } from './announcementsWorkspaceService';
 import { preloadCalendarWorkspace } from './calendarWorkspaceService';
 import { preloadCurrentLiveAuntMinnieRoom, preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
@@ -49,15 +48,12 @@ const SCREEN_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
   'residents-corner': loadResidentsCornerScreen,
   'resident-endorsements': loadResidentEndorsementsScreen,
   'consultant-decking': loadConsultantDeckingBoardScreen,
-  'article-library': loadArticleLibraryScreen,
   'admin-user-management': loadAdminUserManagementScreen,
   newsfeed: loadNewsfeedScreen,
-  anatomy: loadAnatomyScreen,
   'monthly-census': loadMonthlyCensusPage,
 };
 
 const SCREEN_DATA_PRELOADERS: Partial<Record<Screen, () => Promise<unknown>>> = {
-  'article-library': preloadArticleLibraryLanding,
   announcements: preloadAnnouncementsWorkspace,
   calendar: preloadCalendarWorkspace,
   profile: preloadCurrentProfileHome,
@@ -88,7 +84,6 @@ export const preloadRouteForScreen = async (screen: Screen): Promise<void> => {
 export const preloadTopRouteChunks = async (): Promise<void> => {
   await Promise.all([
     loadNewsfeedScreen(),
-    loadArticleLibraryScreen(),
     loadCalendarScreen(),
     loadSearchScreen(),
     loadProfileScreen(),
@@ -108,15 +103,8 @@ export const preloadMajorRouteChunks = async (): Promise<void> => {
     loadResidentsCornerScreen(),
     loadResidentEndorsementsScreen(),
     loadConsultantDeckingBoardScreen(),
-    loadArticleLibraryScreen(),
     loadQuizScreen(),
     loadMonthlyCensusPage(),
     loadAdminUserManagementScreen(),
-  ]);
-};
-
-export const preloadNonCriticalRouteChunks = async (): Promise<void> => {
-  await Promise.all([
-    loadAnatomyScreen(),
   ]);
 };

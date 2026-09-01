@@ -1,6 +1,5 @@
 import { Session } from '@supabase/supabase-js';
 import { fetchRecentActivity } from './activityService';
-import { preloadArticleLibraryLanding } from './articleLibraryService';
 import { preloadCalendarWorkspace } from './calendarWorkspaceService';
 import { fetchDashboardSnapshot } from './dashboardSnapshotService';
 import { preloadNewsfeedData } from './newsfeedService';
@@ -8,7 +7,7 @@ import { preloadProfileHome } from './profileHomeService';
 import { preloadPublishedCases } from './publishedCasesService';
 import { preloadQuizWorkspace } from './quizService';
 import { preloadLiveAuntMinnieWorkspace } from './liveAuntMinnieService';
-import { preloadNonCriticalRouteChunks, preloadTopRouteChunks } from './routePreloadService';
+import { preloadTopRouteChunks } from './routePreloadService';
 import { finishPerformanceTiming, startPerformanceTiming } from '../utils/performanceMetrics';
 
 export type AppBootstrapTaskName =
@@ -18,11 +17,9 @@ export type AppBootstrapTaskName =
   | 'calendar-data'
   | 'search-data'
   | 'profile-data'
-  | 'article-library-data'
   | 'activity-data'
   | 'quiz-data'
-  | 'live-aunt-minnie-data'
-  | 'anatomy-route-chunk';
+  | 'live-aunt-minnie-data';
 
 type TaskStatus = 'pending' | 'running' | 'done' | 'failed';
 type AppBootstrapTaskGroup = 'core-shell' | 'route-chunks' | 'dashboard-data' | 'major-screen-data' | 'post-release';
@@ -252,26 +249,6 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
         await preloadPublishedCases();
       },
     },
-    {
-      name: 'article-library-data',
-      label: 'Preparing Article Library',
-      weight: 0,
-      blocking: false,
-      group: 'major-screen-data',
-      messagePool: buildTaskMessagePool('article-library-data', [
-        'waking the pathology shelf up.',
-        'stacking the checklists in order.',
-        'getting the teaching files presentable.',
-        'straightening the article shelf.',
-        'pulling the reporting pearls together.',
-        'setting the article room up.',
-        'reshelving the pearls before anyone notices the mess.',
-        'making the library look like people definitely return things on time.',
-      ], runSeed).map((entry) => entry.text),
-      run: async () => {
-        await preloadArticleLibraryLanding();
-      },
-    },
     ...(!hasUser
       ? []
       : ([
@@ -414,22 +391,6 @@ const getBootstrapTasks = (session: Session | null, guestMode: boolean, runSeed:
       ], runSeed).map((entry) => entry.text),
       run: async () => {
         await preloadLiveAuntMinnieWorkspace();
-      },
-    },
-    {
-      name: 'anatomy-route-chunk',
-      label: 'Warming Anatomy screen',
-      weight: 0,
-      blocking: false,
-      group: 'post-release',
-      messagePool: buildTaskMessagePool('anatomy-route-chunk', [
-        'quietly wheeling anatomy into the reading room for later.',
-        'parking the anatomy atlas for later.',
-        'bringing the anatomy shelf in.',
-        'asking anatomy to stay on standby and not become the main character yet.',
-      ], runSeed).map((entry) => entry.text),
-      run: async () => {
-        await preloadNonCriticalRouteChunks();
       },
     },
   ];
