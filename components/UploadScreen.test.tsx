@@ -298,11 +298,12 @@ describe('UploadScreen case entry', () => {
 
     render(<UploadScreen initialSubmissionType="interesting_case" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore draft' }));
     expect(screen.getByPlaceholderText('Enter case title')).toHaveValue('Restored case title');
     expect(screen.getByPlaceholderText('Enter findings...')).toHaveValue('Restored findings');
     expect(screen.queryByRole('checkbox', { name: 'Sent to Viber GC' })).not.toBeInTheDocument();
     expect(screen.getByAltText('Uploaded case image 1')).toHaveAttribute('src', 'https://example.com/restored.jpg');
+    expect(screen.getByText(/Draft restored/)).toBeInTheDocument();
   });
 
   it('discards a discovered local draft', async () => {
@@ -322,10 +323,38 @@ describe('UploadScreen case entry', () => {
     render(<UploadScreen initialSubmissionType="interesting_case" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
 
+    expect(deleteCaseUploadDraft).not.toHaveBeenCalled();
+    expect(screen.getByText('Discard this local draft? This cannot be undone.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard permanently' }));
+
     await waitFor(() => {
       expect(deleteCaseUploadDraft).toHaveBeenCalledWith('upload:case-draft:v1:user-1:new:interesting_case');
     });
-    expect(screen.queryByText('Local draft found')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unfinished draft found')).not.toBeInTheDocument();
+    expect(screen.getByText('Local draft discarded')).toBeInTheDocument();
+  });
+
+  it('keeps a discovered local draft when discard confirmation is cancelled', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'user-1', email: 'doctor@example.com' } } });
+    loadCaseUploadDraft.mockResolvedValue({
+      draft: {
+        version: 1,
+        savedAt: '2026-08-28T02:00:00.000Z',
+        formData: {},
+        customTitle: 'Keep me',
+        step: 1,
+        sentToViberGc: false,
+      },
+      images: [],
+    });
+
+    render(<UploadScreen initialSubmissionType="interesting_case" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep draft' }));
+
+    expect(deleteCaseUploadDraft).not.toHaveBeenCalled();
+    expect(screen.getByText('Unfinished draft found')).toBeInTheDocument();
+    expect(screen.queryByText('Discard this local draft? This cannot be undone.')).not.toBeInTheDocument();
   });
 
   it('autosaves changed form fields after draft discovery completes', async () => {

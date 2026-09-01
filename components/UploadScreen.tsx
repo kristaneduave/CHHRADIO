@@ -241,6 +241,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const [draftStatus, setDraftStatus] = useState<'checking' | 'idle' | 'saving' | 'saved' | 'error'>('checking');
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string>('');
+  const [draftRecoveryNotice, setDraftRecoveryNotice] = useState<string | null>(null);
+  const [isConfirmingDraftDiscard, setIsConfirmingDraftDiscard] = useState(false);
 
   const { saveCase, exportPdf, isSaving, isExportingPdf } = useCaseSubmission();
 
@@ -306,6 +308,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     setDraftStatus('checking');
     setDraftSavedAt(null);
     setDraftError('');
+    setDraftRecoveryNotice(null);
+    setIsConfirmingDraftDiscard(false);
 
     const checkForDraft = async () => {
       try {
@@ -343,6 +347,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
           setDraftCandidate(restored);
           setDraftSavedAt(restored.draft.savedAt);
           setDraftStatus('saved');
+          setIsConfirmingDraftDiscard(false);
           return;
         }
 
@@ -508,6 +513,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
   const handleRestoreLocalDraft = () => {
     if (!draftCandidate || !activeDraftKey || !currentUserId) return;
 
+    const recoveredAt = new Date(draftCandidate.draft.savedAt).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
     const restoredFormData = {
       ...formData,
       ...(draftCandidate.draft.formData || {}),
@@ -531,6 +543,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
     setIsDraftReady(true);
     setDraftStatus('saved');
     setDraftError('');
+    setDraftRecoveryNotice(`Draft restored · ${recoveredAt}`);
+    setIsConfirmingDraftDiscard(false);
+    toastSuccess('Draft restored', 'Your locally saved case has been restored.');
 
     const refreshedDraft: CaseUploadDraft<typeof formData> = {
       version: CASE_DRAFT_SCHEMA_VERSION,
@@ -582,9 +597,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
       setIsDraftReady(true);
       setDraftStatus('idle');
       setDraftError('');
+      setDraftRecoveryNotice('Local draft discarded');
+      setIsConfirmingDraftDiscard(false);
+      toastSuccess('Local draft discarded', 'The unfinished case was removed from this device.');
     } catch (error) {
       setDraftStatus('error');
       setDraftError(error instanceof Error ? error.message : 'Unable to discard the local draft.');
+      setIsConfirmingDraftDiscard(false);
     }
   };
 
@@ -1090,36 +1109,72 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ existingCase, initialSubmis
         {currentUserId && (
           <div className="mb-5 space-y-3" aria-live="polite">
             {draftCandidate ? (
-              <div className="flex flex-col gap-4 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-cyan-100">Local draft found</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-300">
-                    Saved on this device {formattedDraftSavedAt ? `on ${formattedDraftSavedAt}` : 'recently'}, including {draftCandidate.images.length} image{draftCandidate.images.length === 1 ? '' : 's'}.
-                  </p>
+              <div className="rounded-2xl border border-cyan-400/25 bg-cyan-500/10 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                <div className="flex gap-3">
+                  <span className="material-symbols-outlined mt-0.5 text-xl text-cyan-300" aria-hidden="true">restore_page</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-cyan-100">Unfinished draft found</p>
+                    <p className="mt-1 truncate text-sm font-medium text-white">
+                      {draftCandidate.draft.customTitle?.trim() || `${submissionTypeLabel} draft`}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-300">
+                      Saved {formattedDraftSavedAt || 'recently'} · {draftCandidate.images.length} image{draftCandidate.images.length === 1 ? '' : 's'} · This device only
+                    </p>
+                  </div>
                 </div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleDiscardLocalDraft()}
-                    className="rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white"
-                  >
-                    Discard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRestoreLocalDraft}
-                    className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
-                  >
-                    Restore
-                  </button>
-                </div>
+                {isConfirmingDraftDiscard ? (
+                  <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3">
+                    <p className="text-xs leading-5 text-rose-100">Discard this local draft? This cannot be undone.</p>
+                    <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingDraftDiscard(false)}
+                        className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/10 sm:w-auto"
+                      >
+                        Keep draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDiscardLocalDraft()}
+                        className="w-full rounded-xl border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:bg-rose-500/25 sm:w-auto"
+                      >
+                        Discard permanently
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingDraftDiscard(true)}
+                      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white sm:w-auto"
+                    >
+                      Discard
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRestoreLocalDraft}
+                      className="w-full rounded-xl bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 sm:w-auto"
+                    >
+                      Restore draft
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className={`flex items-center gap-2 text-xs ${draftStatus === 'error' ? 'text-rose-300' : 'text-slate-500'}`}>
-                <span className={`h-2 w-2 rounded-full ${draftStatus === 'saving' || draftStatus === 'checking' ? 'animate-pulse bg-cyan-400' : draftStatus === 'error' ? 'bg-rose-400' : draftStatus === 'saved' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
-                <span>{draftStatusText}</span>
-                <span className="text-slate-600">· This device only</span>
-              </div>
+              <>
+                {draftRecoveryNotice && (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-xs font-medium text-emerald-200">
+                    <span className="material-symbols-outlined text-base" aria-hidden="true">check_circle</span>
+                    <span>{draftRecoveryNotice}</span>
+                  </div>
+                )}
+                <div className={`flex items-center gap-2 text-xs ${draftStatus === 'error' ? 'text-rose-300' : 'text-slate-500'}`}>
+                  <span className={`h-2 w-2 rounded-full ${draftStatus === 'saving' || draftStatus === 'checking' ? 'animate-pulse bg-cyan-400' : draftStatus === 'error' ? 'bg-rose-400' : draftStatus === 'saved' ? 'bg-emerald-400' : 'bg-slate-600'}`} />
+                  <span>{draftStatusText}</span>
+                  <span className="text-slate-600">· This device only</span>
+                </div>
+              </>
             )}
             {!draftCandidate && draftStatus === 'error' && draftError && (
               <div className="rounded-xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-xs leading-5 text-rose-200">
