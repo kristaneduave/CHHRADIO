@@ -103,13 +103,29 @@ describe('SearchScreen Viber status', () => {
   it('shows one minimalist Viber badge and the filter to registered users', () => {
     render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
 
-    expect(screen.getByLabelText(/Sent to Viber on .* by Dr\. Test/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Viber')).toHaveLength(1);
+    const badge = screen.getByLabelText(/Sent to Viber on .* by Dr\. Test/i);
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveAttribute('title', expect.stringMatching(/Sent to Viber on .* by Dr\. Test/i));
+    expect(screen.getByText('Viber · T')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
     expect(screen.getByLabelText('Viber status')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Sent to Viber' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Not sent to Viber' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['Gene Robert Michael Sales', 'GRS'],
+    ['Alexandria', 'A'],
+    [null, 'HS'],
+  ])('shows compact marker initials for %s', (staffName, expectedInitials) => {
+    const bundle = buildBundle();
+    bundle.records[0] = { ...bundle.records[0], viber_shared_by_name: staffName };
+    getCachedPublishedCasesBundle.mockReturnValue(bundle);
+
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    expect(screen.getByText(`Viber · ${expectedInitials}`)).toBeInTheDocument();
   });
 
   it('filters to unshared Interesting Cases and preserves the selection for return navigation', async () => {
@@ -185,6 +201,7 @@ describe('SearchScreen Viber status', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/Sent to Viber on .* by Dr\. Test/i)).toBeInTheDocument();
+      expect(screen.getByText('Viber · T')).toBeInTheDocument();
     });
   });
 });

@@ -71,6 +71,23 @@ const formatViberSharedLabel = (value: string, staffName?: string | null) => {
   return `Sent to Viber on ${sharedAt}${staffName ? ` by ${staffName}` : ''}`;
 };
 
+const formatViberMarkerInitials = (staffName?: string | null) => {
+  const normalizedName = staffName?.trim();
+  if (!normalizedName || normalizedName.toLowerCase() === 'hospital staff') return 'HS';
+
+  const honorifics = new Set(['dr', 'dra', 'mr', 'mrs', 'ms']);
+  const nameParts = normalizedName
+    .split(/\s+/)
+    .map((part) => part.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
+    .filter((part) => part && !honorifics.has(part.toLowerCase()));
+
+  const initialParts = nameParts.length > 3
+    ? [nameParts[0], nameParts[1], nameParts[nameParts.length - 1]]
+    : nameParts;
+  const initials = initialParts.map((part) => Array.from(part)[0]).join('').toUpperCase();
+  return initials || 'HS';
+};
+
 const ORGAN_SYSTEM_OPTIONS = [
   'Neuroradiology',
   'Head & Neck',
@@ -805,6 +822,9 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
               const viberBadgeLabel = showViberBadge
                 ? formatViberSharedLabel(p.viber_shared_at as string, p.viber_shared_by_name)
                 : '';
+              const viberMarkerInitials = showViberBadge
+                ? formatViberMarkerInitials(p.viber_shared_by_name)
+                : '';
 
               return (
                 <div
@@ -851,12 +871,12 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                           </span>
                           {showViberBadge ? (
                             <span
-                              className="inline-flex items-center gap-1 rounded-full border border-violet-400/20 bg-violet-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase leading-none tracking-[0.12em] text-violet-200"
+                              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-violet-300/35 bg-violet-500/15 px-2 py-1 text-[9px] font-black uppercase leading-none tracking-[0.13em] text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                               aria-label={viberBadgeLabel}
                               title={viberBadgeLabel}
                             >
-                              <span className="material-icons text-[10px] leading-none" aria-hidden="true">done</span>
-                              <span>Viber</span>
+                              <span className="material-icons text-[12px] leading-none text-violet-300" aria-hidden="true">check_circle</span>
+                              <span>Viber · {viberMarkerInitials}</span>
                             </span>
                           ) : null}
                         </div>
