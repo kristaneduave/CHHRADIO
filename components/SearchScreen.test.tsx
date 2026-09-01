@@ -12,6 +12,7 @@ const {
   fetchPublishedCasesBundle: vi.fn(),
   refreshPublishedCasesBundle: vi.fn(),
 }));
+const viewportState = vi.hoisted(() => ({ current: 'mobile' as 'mobile' | 'desktop' }));
 
 vi.mock('../services/publishedCasesService', () => ({
   getCachedPublishedCasesBundle,
@@ -24,7 +25,7 @@ vi.mock('../services/caseViberShareService', () => ({
 }));
 
 vi.mock('../utils/toast', () => ({ toastError: vi.fn() }));
-vi.mock('./responsive/useViewport', () => ({ useAppViewport: () => 'mobile' }));
+vi.mock('./responsive/useViewport', () => ({ useAppViewport: () => viewportState.current }));
 vi.mock('./ui/PageHeader', () => ({ default: ({ title, action }: { title: string; action?: React.ReactNode }) => <header><h1>{title}</h1>{action}</header> }));
 vi.mock('./ui/PageShell', () => ({ default: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }));
 
@@ -90,6 +91,7 @@ const buildBundle = () => ({
 
 describe('SearchScreen Viber status', () => {
   beforeEach(() => {
+    viewportState.current = 'mobile';
     window.localStorage.clear();
     window.sessionStorage.clear();
     getCachedPublishedCasesBundle.mockReset();
@@ -147,6 +149,47 @@ describe('SearchScreen Viber status', () => {
 
     await waitFor(() => expect(screen.getByText('Viber: Not sent')).toBeInTheDocument());
     expect(screen.getByText('UNSHARED INTERESTING CASE')).toBeInTheDocument();
+  });
+
+  it('uses a mobile filter sheet and discards unapplied changes', () => {
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    expect(screen.getByRole('dialog', { name: 'Advanced filters' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Advanced filters' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Viber: Not sent')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+    expect(screen.getByLabelText('Viber status')).toHaveValue('all');
+  });
+
+  it('keeps advanced filters inline on desktop', () => {
+    viewportState.current = 'desktop';
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle advanced filters' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Advanced filters')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close filters' })).not.toBeInTheDocument();
+  });
+
+  it('shows an active-filter count and removes individual mobile chips', () => {
+    render(<SearchScreen currentUserId="user-1" onCaseSelect={vi.fn()} />);
+    const filterButton = screen.getByRole('button', { name: 'Toggle advanced filters' });
+    fireEvent.click(filterButton);
+    fireEvent.change(screen.getByLabelText('Viber status'), { target: { value: 'not_sent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
+
+    expect(filterButton).toHaveTextContent('1');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove filter: Viber: Not sent' }));
+
+    expect(screen.queryByText('Viber: Not sent')).not.toBeInTheDocument();
+    expect(screen.getByText('SHARED INTERESTING CASE')).toBeInTheDocument();
+    expect(filterButton).not.toHaveTextContent('1');
   });
 
   it('removes a case from the Not sent queue immediately when it is marked sent', async () => {

@@ -473,6 +473,7 @@ export interface SearchFilters {
   submissionType: '' | SubmissionType;
   viberShareStatus: 'all' | 'not_sent' | 'sent';
   datePreset: 'all' | '7d' | '30d' | '90d' | '365d' | 'custom';
+  sortOrder: 'newest' | 'oldest';
 }
 
 export type EventType = 'rotation' | 'call' | 'lecture' | 'exam' | 'leave' | 'meeting' | 'pcr' | 'pickleball';

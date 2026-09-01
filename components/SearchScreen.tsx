@@ -63,6 +63,21 @@ const storeViberSort = (userId: string | null | undefined, value: 'newest' | 'ol
   window.sessionStorage.setItem(`${VIBER_SORT_STORAGE_PREFIX}:${userId}`, value);
 };
 
+const createSearchFilters = (
+  viberShareStatus: SearchFilters['viberShareStatus'] = 'all',
+  sortOrder: SearchFilters['sortOrder'] = viberShareStatus === 'not_sent' ? 'oldest' : 'newest',
+): SearchFilters => ({
+  startDate: '',
+  endDate: '',
+  specialty: '',
+  modality: '',
+  diagnosticCode: '',
+  submissionType: '',
+  viberShareStatus,
+  datePreset: 'all',
+  sortOrder,
+});
+
 const formatUploadedAt = (value: string) =>
   new Date(value).toLocaleString('en-US', {
     month: 'numeric',
@@ -209,27 +224,20 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   const isRegisteredUser = Boolean(currentUserId);
   const cachedBundle = getCachedPublishedCasesBundle();
   const initialViberFilter = readStoredViberFilter(currentUserId);
+  const initialSortOrder = readStoredViberSort(currentUserId, initialViberFilter);
+  const initialFilters = createSearchFilters(initialViberFilter, initialSortOrder);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [suggestions, setSuggestions] = useState<PatientRecord[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<SearchFilters>({
-    startDate: '',
-    endDate: '',
-    specialty: '',
-    modality: '',
-    diagnosticCode: '',
-    submissionType: '',
-    viberShareStatus: initialViberFilter,
-    datePreset: 'all',
-  });
+  const [filters, setFilters] = useState<SearchFilters>(initialFilters);
+  const [draftFilters, setDraftFilters] = useState<SearchFilters>(initialFilters);
   const [results, setResults] = useState<PatientRecord[]>(cachedBundle?.records || []);
   const [allCases, setAllCases] = useState<PatientRecord[]>(cachedBundle?.records || []);
   const [rawCases, setRawCases] = useState<any[]>(cachedBundle?.rawCases || []);
   const [loading, setLoading] = useState(!cachedBundle);
   const [error, setError] = useState<string | null>(null);
-  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>(() => readStoredViberSort(currentUserId, initialViberFilter));
 
   // Track opened cases so they lose their "New" styling, including across reloads
   const [openedCaseIds, setOpenedCaseIds] = useState<Set<string>>(() => {
@@ -278,7 +286,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     };
   }, [loading]);
 
-  const sortCases = (input: PatientRecord[], order: 'newest' | 'oldest' = sortOrder) => {
+  const sortCases = (input: PatientRecord[], order: SearchFilters['sortOrder'] = filters.sortOrder) => {
     return [...input].sort((a, b) => {
       const aTime = new Date(a.date).getTime();
       const bTime = new Date(b.date).getTime();
@@ -352,10 +360,26 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
   }, []);
 
   useEffect(() => {
+    if (!showFilters || viewport !== 'mobile' || typeof document === 'undefined') return;
+    const previousOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setDraftFilters({ ...filters });
+      setShowFilters(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [filters, showFilters, viewport]);
+
+  useEffect(() => {
     startTransition(() => {
       setResults((prev) => sortCases(prev));
     });
-  }, [sortOrder]);
+  }, [filters.sortOrder]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -441,11 +465,26 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
-    if (name === 'viberShareStatus' && value === 'not_sent') {
-      setSortOrder('oldest');
-      storeViberSort(currentUserId, 'oldest');
-    }
+    setDraftFilters((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === 'viberShareStatus' && value === 'not_sent' ? { sortOrder: 'oldest' as const } : {}),
+    }));
+  };
+
+  const openFilters = () => {
+    setDraftFilters({ ...filters });
+    setShowSuggestions(false);
+    setShowFilters(true);
+  };
+
+  const closeFilters = () => {
+    setDraftFilters({ ...filters });
+    setShowFilters(false);
+  };
+
+  const clearDraftFilters = () => {
+    setDraftFilters(createSearchFilters());
   };
 
   const isViberShareEligible = (rawCase: any) =>
@@ -463,63 +502,62 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     return start;
   };
 
-  const applyFilters = () => {
-    const filtered = allCases.filter((p) => {
-      const matchQuery = query
-        ? p.name.toLowerCase().includes(query.toLowerCase()) ||
-        p.initials.toLowerCase().includes(query.toLowerCase()) ||
-        p.diagnosticCode.toLowerCase().includes(query.toLowerCase())
+  const filterCases = (nextFilters: SearchFilters, nextQuery: string) =>
+    allCases.filter((p) => {
+      const matchQuery = nextQuery
+        ? p.name.toLowerCase().includes(nextQuery.toLowerCase()) ||
+        p.initials.toLowerCase().includes(nextQuery.toLowerCase()) ||
+        p.diagnosticCode.toLowerCase().includes(nextQuery.toLowerCase())
         : true;
 
       const raw = rawCases.find((c) => c.id === p.id);
       const rawOrganSystem = resolveOrganSystem(raw?.organ_system);
-      const matchSpecialty = filters.specialty ? rawOrganSystem === filters.specialty : true;
+      const matchSpecialty = nextFilters.specialty ? rawOrganSystem === nextFilters.specialty : true;
       const rawModality = String(raw?.modality || p.modality || '').trim();
-      const matchModality = filters.modality ? rawModality === filters.modality : true;
-      const matchCode = filters.diagnosticCode
-        ? p.diagnosticCode.toLowerCase().includes(filters.diagnosticCode.toLowerCase())
+      const matchModality = nextFilters.modality ? rawModality === nextFilters.modality : true;
+      const matchCode = nextFilters.diagnosticCode
+        ? p.diagnosticCode.toLowerCase().includes(nextFilters.diagnosticCode.toLowerCase())
         : true;
-      const matchSubmissionType = filters.submissionType ? p.submission_type === filters.submissionType : true;
-      const matchViberShareStatus = isRegisteredUser && filters.viberShareStatus !== 'all'
+      const matchSubmissionType = nextFilters.submissionType ? p.submission_type === nextFilters.submissionType : true;
+      const matchViberShareStatus = isRegisteredUser && nextFilters.viberShareStatus !== 'all'
         ? isViberShareEligible(raw)
-          && (filters.viberShareStatus === 'sent' ? Boolean(raw?.viber_shared_at) : !raw?.viber_shared_at)
+          && (nextFilters.viberShareStatus === 'sent' ? Boolean(raw?.viber_shared_at) : !raw?.viber_shared_at)
         : true;
 
       const date = new Date(p.date);
-      const presetStart = getPresetStartDate(filters.datePreset);
-      const start = filters.datePreset === 'custom' && filters.startDate ? new Date(filters.startDate) : presetStart;
-      const end = filters.endDate ? new Date(filters.endDate) : null;
+      const presetStart = getPresetStartDate(nextFilters.datePreset);
+      const start = nextFilters.datePreset === 'custom' && nextFilters.startDate ? new Date(nextFilters.startDate) : presetStart;
+      const end = nextFilters.endDate ? new Date(nextFilters.endDate) : null;
       const matchDate = (!start || date >= start) && (!end || date <= end);
 
       return matchQuery && matchSpecialty && matchModality && matchCode && matchSubmissionType && matchViberShareStatus && matchDate;
     });
 
+  const applyFilters = () => {
+    const nextFilters = draftFilters;
+    const filtered = filterCases(nextFilters, query);
+
+    setFilters({ ...nextFilters });
     startTransition(() => {
-      setResults(sortCases(filtered));
+      setResults(sortCases(filtered, nextFilters.sortOrder));
     });
-    storeViberFilter(currentUserId, filters.viberShareStatus);
-    storeViberSort(currentUserId, sortOrder);
+    storeViberFilter(currentUserId, nextFilters.viberShareStatus);
+    storeViberSort(currentUserId, nextFilters.sortOrder);
     setShowFilters(false);
     setShowSuggestions(false);
   };
 
   const clearFilters = () => {
-    setFilters({
-      startDate: '',
-      endDate: '',
-      specialty: '',
-      modality: '',
-      diagnosticCode: '',
-      submissionType: '',
-      viberShareStatus: 'all',
-      datePreset: 'all',
-    });
+    const clearedFilters = createSearchFilters();
+    setFilters(clearedFilters);
+    setDraftFilters(clearedFilters);
     setQuery('');
     storeViberFilter(currentUserId, 'all');
-    storeViberSort(currentUserId, sortOrder);
+    storeViberSort(currentUserId, 'newest');
     startTransition(() => {
-      setResults(sortCases(allCases));
+      setResults(sortCases(allCases, 'newest'));
     });
+    setShowFilters(false);
   };
 
   const selectSuggestion = (p: PatientRecord) => {
@@ -545,6 +583,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
       submissionType: '',
       viberShareStatus: 'not_sent',
       datePreset: 'all',
+      sortOrder: 'oldest',
     };
     const queueResults = allCases.filter((item) => {
       const raw = rawCases.find((candidate) => String(candidate?.id || '') === item.id);
@@ -553,7 +592,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
 
     setQuery('');
     setFilters(queueFilters);
-    setSortOrder('oldest');
+    setDraftFilters(queueFilters);
     setShowFilters(false);
     setShowSuggestions(false);
     storeViberFilter(currentUserId, 'not_sent');
@@ -561,37 +600,63 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
     startTransition(() => setResults(sortCases(queueResults, 'oldest')));
   };
 
-  const activeFilterChips = [
-    query ? `Query: ${query}` : '',
+  type ActiveFilterKey = 'query' | 'submissionType' | 'specialty' | 'modality' | 'diagnosticCode' | 'viberShareStatus' | 'datePreset' | 'startDate' | 'endDate';
+  const activeFilterChips = ([
+    { key: 'query', label: query ? `Query: ${query}` : '' },
     filters.submissionType
-      ? `Type: ${filters.submissionType === 'interesting_case'
+      ? { key: 'submissionType', label: `Type: ${filters.submissionType === 'interesting_case'
         ? 'Interesting Case'
         : filters.submissionType === 'rare_pathology'
           ? 'Rare Pathology'
           : 'Aunt Minnie'
-      }`
-      : '',
-    filters.specialty ? `Organ system: ${filters.specialty}` : '',
-    filters.modality ? `Modality: ${filters.modality}` : '',
-    filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '',
+      }` }
+      : { key: 'submissionType', label: '' },
+    { key: 'specialty', label: filters.specialty ? `Organ system: ${filters.specialty}` : '' },
+    { key: 'modality', label: filters.modality ? `Modality: ${filters.modality}` : '' },
+    { key: 'diagnosticCode', label: filters.diagnosticCode ? `Patient ID: ${filters.diagnosticCode}` : '' },
     isRegisteredUser && filters.viberShareStatus !== 'all'
-      ? `Viber: ${filters.viberShareStatus === 'sent' ? 'Sent' : 'Not sent'}`
-      : '',
+      ? { key: 'viberShareStatus', label: `Viber: ${filters.viberShareStatus === 'sent' ? 'Sent' : 'Not sent'}` }
+      : { key: 'viberShareStatus', label: '' },
     filters.datePreset !== 'all'
-      ? `Date: ${filters.datePreset === 'custom'
+      ? { key: 'datePreset', label: `Date: ${filters.datePreset === 'custom'
         ? 'Custom'
         : filters.datePreset === '7d'
           ? 'Last 7 days'
           : filters.datePreset === '30d'
             ? 'Last 30 days'
             : filters.datePreset === '90d'
-              ? 'Last 90 days'
+            ? 'Last 90 days'
               : 'Last 12 months'
-      }`
-      : '',
-    filters.startDate ? `From: ${filters.startDate}` : '',
-    filters.endDate ? `To: ${filters.endDate}` : '',
-  ].filter(Boolean);
+      }` }
+      : { key: 'datePreset', label: '' },
+    { key: 'startDate', label: filters.startDate ? `From: ${filters.startDate}` : '' },
+    { key: 'endDate', label: filters.endDate ? `To: ${filters.endDate}` : '' },
+  ] as Array<{ key: ActiveFilterKey; label: string }>).filter((chip) => Boolean(chip.label));
+  const activeFilterCount = activeFilterChips.filter((chip) => chip.key !== 'query').length;
+
+  const removeActiveFilter = (key: ActiveFilterKey) => {
+    const nextFilters = { ...filters };
+    let nextQuery = query;
+
+    if (key === 'query') nextQuery = '';
+    else if (key === 'submissionType') nextFilters.submissionType = '';
+    else if (key === 'specialty') nextFilters.specialty = '';
+    else if (key === 'modality') nextFilters.modality = '';
+    else if (key === 'diagnosticCode') nextFilters.diagnosticCode = '';
+    else if (key === 'viberShareStatus') nextFilters.viberShareStatus = 'all';
+    else if (key === 'datePreset') {
+      nextFilters.datePreset = 'all';
+      nextFilters.startDate = '';
+      nextFilters.endDate = '';
+    } else if (key === 'startDate') nextFilters.startDate = '';
+    else if (key === 'endDate') nextFilters.endDate = '';
+
+    setQuery(nextQuery);
+    setFilters(nextFilters);
+    setDraftFilters(nextFilters);
+    storeViberFilter(currentUserId, nextFilters.viberShareStatus);
+    startTransition(() => setResults(sortCases(filterCases(nextFilters, nextQuery), nextFilters.sortOrder)));
+  };
 
   return (
     <PageShell layoutMode="split">
@@ -638,10 +703,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
             />
             {query ? (
               <button
-                onClick={() => {
-                  setQuery('');
-                  applyFilters();
-                }}
+                onClick={() => removeActiveFilter('query')}
                 className="absolute right-[3rem] top-1/2 -translate-y-1/2 flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-all"
                 aria-label="Clear search"
               >
@@ -649,12 +711,17 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
               </button>
             ) : null}
             <button
-              onClick={() => setShowFilters(!showFilters)}
+              onClick={() => showFilters ? closeFilters() : openFilters()}
               className={`absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${showFilters ? 'bg-primary text-white shadow-[0_4px_12px_rgba(13,162,231,0.3)]' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                 }`}
               aria-label="Toggle advanced filters"
             >
               <span className="material-icons text-[19px]">tune</span>
+              {activeFilterCount > 0 ? (
+                <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-400 px-1 text-[8px] font-black text-slate-950">
+                  {activeFilterCount > 9 ? '9+' : activeFilterCount}
+                </span>
+              ) : null}
             </button>
           </div>
 
@@ -685,20 +752,40 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
         </div>
 
         {showFilters ? (
-          <div className="mb-6 animate-in slide-in-from-top-4 duration-300 rounded-[2rem] border border-cyan-500/15 bg-[#06111b]/92 p-6 backdrop-blur-xl">
+          <>
+          {viewport === 'mobile' ? (
+            <button
+              type="button"
+              className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm"
+              onClick={closeFilters}
+              aria-label="Close filters"
+            />
+          ) : null}
+          <div
+            className={viewport === 'mobile'
+              ? 'fixed inset-x-0 top-[10dvh] z-[45] flex flex-col overflow-hidden rounded-t-[2rem] border border-cyan-500/15 bg-[#06111b]/98 backdrop-blur-xl animate-in slide-in-from-bottom-6 duration-300'
+              : 'mb-6 animate-in slide-in-from-top-4 duration-300 rounded-[2rem] border border-cyan-500/15 bg-[#06111b]/92 backdrop-blur-xl'}
+            style={viewport === 'mobile' ? { bottom: 'var(--mobile-bottom-nav-clearance)' } : undefined}
+            role={viewport === 'mobile' ? 'dialog' : undefined}
+            aria-modal={viewport === 'mobile' ? 'true' : undefined}
+            aria-labelledby="database-filter-heading"
+          >
+            <div className={viewport === 'mobile' ? 'flex-1 overflow-y-auto p-5 pb-4' : 'p-6 pb-4'}>
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-cyan-200">
-                  <span className="material-icons text-[16px]">filter_alt</span>
+                <h3 id="database-filter-heading" className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-cyan-200">
+                  <span className="material-icons text-[16px]" aria-hidden="true">filter_alt</span>
                   Advanced filters
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">Refine the case library by type, date, modality, organ system, and PACS Patient ID.</p>
               </div>
               <button
-                onClick={clearFilters}
-                className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 transition-colors hover:text-slate-200"
+                type="button"
+                onClick={closeFilters}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-400 transition hover:bg-white/[0.08] hover:text-white"
+                aria-label="Cancel filter changes"
               >
-                Clear all
+                <span className="material-icons text-[17px]" aria-hidden="true">close</span>
               </button>
             </div>
 
@@ -707,7 +794,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <label className="block text-xs font-medium text-slate-300">Case type</label>
                 <select
                   name="submissionType"
-                  value={filters.submissionType}
+                  value={draftFilters.submissionType}
                   onChange={handleFilterChange}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
@@ -723,7 +810,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                   <select
                     id="viber-share-status-filter"
                     name="viberShareStatus"
-                    value={filters.viberShareStatus}
+                    value={draftFilters.viberShareStatus}
                     onChange={handleFilterChange}
                     className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                   >
@@ -737,7 +824,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <label className="block text-xs font-medium text-slate-300">Date</label>
                 <select
                   name="datePreset"
-                  value={filters.datePreset}
+                  value={draftFilters.datePreset}
                   onChange={handleFilterChange}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
@@ -752,11 +839,10 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-300">Sort</label>
                 <select
-                  value={sortOrder}
+                  value={draftFilters.sortOrder}
                   onChange={(e) => {
                     const nextSortOrder = e.target.value as 'newest' | 'oldest';
-                    setSortOrder(nextSortOrder);
-                    storeViberSort(currentUserId, nextSortOrder);
+                    setDraftFilters((prev) => ({ ...prev, sortOrder: nextSortOrder }));
                   }}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                   aria-label="Sort search results"
@@ -765,14 +851,14 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                   <option value="oldest" className="bg-surface">Oldest first</option>
                 </select>
               </div>
-              {filters.datePreset === 'custom' ? (
+              {draftFilters.datePreset === 'custom' ? (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="block text-xs font-medium text-slate-300">From date</label>
                     <input
                       type="date"
                       name="startDate"
-                      value={filters.startDate}
+                      value={draftFilters.startDate}
                       onChange={handleFilterChange}
                       className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                     />
@@ -782,7 +868,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                     <input
                       type="date"
                       name="endDate"
-                      value={filters.endDate}
+                      value={draftFilters.endDate}
                       onChange={handleFilterChange}
                       className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                     />
@@ -793,7 +879,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <label className="block text-xs font-medium text-slate-300">Organ system</label>
                 <select
                   name="specialty"
-                  value={filters.specialty}
+                  value={draftFilters.specialty}
                   onChange={handleFilterChange}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
@@ -809,7 +895,7 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <label className="block text-xs font-medium text-slate-300">Modality</label>
                 <select
                   name="modality"
-                  value={filters.modality}
+                  value={draftFilters.modality}
                   onChange={handleFilterChange}
                   className="w-full appearance-none rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition focus:border-cyan-400/35"
                 >
@@ -828,37 +914,70 @@ const SearchScreen: React.FC<SearchScreenProps> = ({ onCaseSelect, currentUserId
                 <input
                   type="text"
                   name="diagnosticCode"
-                  value={filters.diagnosticCode}
+                  value={draftFilters.diagnosticCode}
                   onChange={handleFilterChange}
                   placeholder="e.g. 12345678"
                   className="w-full rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2.5 text-xs text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400/35"
                 />
               </div>
             </div>
+            </div>
 
-            <button
-              onClick={applyFilters}
-              className="mt-6 rounded-xl border border-cyan-400/20 bg-cyan-500/10 px-5 py-2.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/15"
-            >
-              Apply filters
-            </button>
+            <div className={`flex shrink-0 items-center gap-2 border-t border-white/10 bg-[#07121d]/96 px-5 py-4 backdrop-blur ${viewport === 'mobile' ? 'mobile-sheet-footer-clearance' : ''}`}>
+              <button
+                type="button"
+                onClick={clearDraftFilters}
+                className="mr-auto rounded-xl px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 transition hover:bg-white/[0.05] hover:text-white"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={closeFilters}
+                className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.06]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={applyFilters}
+                className="rounded-xl border border-cyan-400/25 bg-cyan-500/15 px-5 py-2.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-500/20"
+              >
+                Apply filters
+              </button>
+            </div>
           </div>
+          </>
         ) : null}
 
         {activeFilterChips.length > 0 && (
           <div className="mb-4 flex items-center justify-between gap-3 px-1">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
               {activeFilterChips.map((chip) => (
-                <span key={chip} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-300">
-                  {chip}
-                </span>
+                <button
+                  type="button"
+                  key={chip.key}
+                  onClick={() => removeActiveFilter(chip.key)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-semibold text-slate-300 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
+                  aria-label={`Remove filter: ${chip.label}`}
+                >
+                  <span>{chip.label}</span>
+                  <span className="material-icons text-[11px]" aria-hidden="true">close</span>
+                </button>
               ))}
             </div>
-            {isRegisteredUser && filters.viberShareStatus !== 'all' ? (
-              <span className="shrink-0 text-[10px] font-semibold text-slate-500" aria-live="polite">
-                {results.length} {results.length === 1 ? 'case' : 'cases'}
-              </span>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              {activeFilterChips.length > 1 ? (
+                <button type="button" onClick={clearFilters} className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500 hover:text-slate-200">
+                  Clear all
+                </button>
+              ) : null}
+              {isRegisteredUser && filters.viberShareStatus !== 'all' ? (
+                <span className="text-[10px] font-semibold text-slate-500" aria-live="polite">
+                  {results.length} {results.length === 1 ? 'case' : 'cases'}
+                </span>
+              ) : null}
+            </div>
           </div>
         )}
 
