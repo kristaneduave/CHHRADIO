@@ -239,7 +239,8 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             for (const del of toDelete) {
                 // Only delete if it's a UUID (not temp which shouldn't exist in DB yet unless persisted)
                 if (!del.id.startsWith('temp-')) {
-                    await supabase.from('consultant_covers').delete().eq('id', del.id);
+                    const { data, error } = await supabase.from('consultant_covers').delete().eq('id', del.id).select('id');
+                    if (error || !data?.length) throw error || new Error('Cover changed or access denied.');
                 }
             }
 
@@ -260,7 +261,8 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
                     payload.id = cover.id;
                 }
 
-                await supabase.from('consultant_covers').upsert(payload);
+                const { error } = await supabase.from('consultant_covers').upsert(payload);
+                if (error) throw error;
             }
 
             // Optimistic update
@@ -272,11 +274,9 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             fetchCovers();
         } catch (err) {
             console.error("Error saving covers:", err);
-            // Fallback to local state if offline/error
-            setCoverOverrides(prev => ({
-                ...prev,
-                [slotId]: covers
-            }));
+            toastError('Covers were not saved', 'Check your connection and staff access, then try again.');
+            void fetchCovers();
+            return;
         }
 
         setManageModalData(prev => ({ ...prev, isOpen: false }));
@@ -311,16 +311,16 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
         }
 
         try {
-            const { error } = await supabase
+            const { data: changedRows, error } = await supabase
                 .from('consultant_covers')
                 .update({
                     informed: newInformed,
                     read_status: newReadStatus,
                     informed_by: newInformedBy
                 })
-                .eq('id', coverId);
+                .eq('id', coverId).select('id');
 
-            if (error) throw error;
+            if (error || !changedRows?.length) throw error || new Error('Cover changed or access denied.');
             // No need to manually update state as subscription will handle it, 
             // but for instant feedback we can:
             setCoverOverrides(prev => ({
@@ -333,6 +333,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             }));
         } catch (err) {
             console.error("Error updating status:", err);
+            toastError('Status was not saved', 'Check your connection and staff access, then try again.');
         }
     };
 
@@ -357,17 +358,14 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
         const updatedLogs = [...(cover.logs || []), newLog];
 
         try {
-            const { error } = await supabase
+            const { data: changedRows, error } = await supabase
                 .from('consultant_covers')
                 .update({
                     logs: updatedLogs
                 })
-                .eq('id', coverId);
+                .eq('id', coverId).select('id');
 
-            if (error) {
-                console.error("Supabase Error (Logs):", error);
-                // Don't throw here to allow optimistic update to "stick" for the session if DB is missing column
-            }
+            if (error || !changedRows?.length) throw error || new Error('Cover changed or access denied.');
 
             // Optimistic update
             setCoverOverrides(prev => ({
@@ -380,6 +378,7 @@ const ResidentsCornerScreen: React.FC<ResidentsCornerScreenProps> = ({ onOpenMon
             }));
         } catch (err) {
             console.error("Error adding log:", err);
+            toastError('Note was not saved', 'Check your connection and staff access, then try again.');
         }
     };
 

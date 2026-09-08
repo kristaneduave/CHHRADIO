@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getMonthlyCensusByMonth, upsertMonthlyCensus } from '../services/monthlyCensusService';
 import { supabase } from '../services/supabase';
+import PrivateAttachmentLink from './PrivateAttachmentLink';
+import { createPrivateAttachmentReference } from '../services/privateAttachmentService';
 import { toastError, toastSuccess } from '../utils/toast';
 import {
   getMonthlyCensusErrorMessage,
@@ -218,11 +220,7 @@ const MonthlyCensusPage: React.FC<MonthlyCensusPageProps> = ({ onBack, onHome, o
 
     if (uploadError) throw uploadError;
 
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from(EVIDENCE_BUCKET).getPublicUrl(objectPath);
-
-    return publicUrl;
+    return createPrivateAttachmentReference(EVIDENCE_BUCKET, objectPath);
   };
 
   const uploadEvidenceIfNeeded = async () => {
@@ -360,9 +358,9 @@ const MonthlyCensusPage: React.FC<MonthlyCensusPageProps> = ({ onBack, onHome, o
     return (
       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         <span className={chipClass}>Uploaded</span>
-        <a href={url} target="_blank" rel="noreferrer" className="text-[11px] text-primary-light hover:underline">
+        <PrivateAttachmentLink reference={url} allowLocalPreview={Boolean(evidenceFiles[key])} className="text-[11px] text-primary-light hover:underline">
           View
-        </a>
+        </PrivateAttachmentLink>
         <button type="button" onClick={() => onPickEvidence(key)} className="text-[11px] text-slate-300 hover:text-white">
           Replace
         </button>

@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import sharedCaseHandler from './api/shared-case';
 import sharedCaseImageHandler from './api/shared-case-image';
+import { getPublicCaseTokenFromPath } from './utils/publicCaseLinks';
 
 const sharedCaseDevPreviewPlugin = () => ({
   name: 'shared-case-dev-preview',
@@ -23,12 +24,11 @@ const sharedCaseDevPreviewPlugin = () => ({
         return;
       }
 
-      if (!pathname.startsWith('/shared/case/')) {
+      const token = getPublicCaseTokenFromPath(pathname);
+      if (!token) {
         next();
         return;
       }
-
-      const token = decodeURIComponent(pathname.slice('/shared/case/'.length).split('/')[0] || '').trim();
       req.query = { ...(req.query || {}), token };
 
       try {

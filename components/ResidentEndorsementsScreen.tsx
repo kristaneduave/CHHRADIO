@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ResidentEndorsementPost, DutyShift, UserRole } from '../types';
 import { supabase } from '../services/supabase';
+import PrivateAttachmentLink from './PrivateAttachmentLink';
+import { createPrivateAttachmentReference } from '../services/privateAttachmentService';
 import {
   createResidentEndorsement,
   createResidentEndorsementComment,
@@ -228,9 +230,8 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
         .upload(objectPath, file);
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from(ENDORSEMENT_FILES_BUCKET).getPublicUrl(objectPath);
       uploaded.push({
-        url: data.publicUrl,
+        url: createPrivateAttachmentReference(ENDORSEMENT_FILES_BUCKET, objectPath),
         type: file.type || 'application/octet-stream',
         name: file.name,
         size: file.size,
@@ -655,11 +656,8 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
                 {post.attachments && post.attachments.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {post.attachments.map((item, idx) => (
-                      <a
-                        key={`${post.id}-att-${idx}`}
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <span key={`${post.id}-att-${idx}`}><PrivateAttachmentLink
+                        reference={item.url}
                         className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-[11px] text-cyan-200 hover:border-cyan-300/50 hover:bg-cyan-500/10"
                       >
                         <span className="material-icons text-[12px]">
@@ -667,7 +665,7 @@ const ResidentEndorsementsScreen: React.FC<ResidentEndorsementsScreenProps> = ({
                         </span>
                         <span className="max-w-[170px] truncate">{item.name || 'Attachment'}</span>
                         <span className="text-slate-400">({formatFileSize(Number(item.size || 0))})</span>
-                      </a>
+                      </PrivateAttachmentLink></span>
                     ))}
                   </div>
                 )}

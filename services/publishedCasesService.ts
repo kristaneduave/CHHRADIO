@@ -1,6 +1,6 @@
 import { PatientRecord } from '../types';
 import { supabase } from './supabase';
-import { fetchWithCache } from '../utils/requestCache';
+import { fetchWithCache, invalidateCacheByPrefix } from '../utils/requestCache';
 import type { CaseViberShareStatusRecord } from './caseViberShareService';
 import { finishPerformanceTiming, startPerformanceTiming } from '../utils/performanceMetrics';
 
@@ -13,6 +13,18 @@ let publishedCasesBundleCache: PublishedCasesBundle | null = null;
 let publishedCasesBundlePromise: Promise<PublishedCasesBundle> | null = null;
 let publishedCasesBundleCachedAt = 0;
 const PUBLISHED_CASES_STALE_MS = 30_000;
+let principalId: string | null | undefined;
+let cacheGeneration = 0;
+
+export const setPublishedCasesPrincipal = (userId: string | null): void => {
+  if (principalId === userId) return;
+  principalId = userId;
+  cacheGeneration += 1;
+  publishedCasesBundleCache = null;
+  publishedCasesBundlePromise = null;
+  publishedCasesBundleCachedAt = 0;
+  invalidateCacheByPrefix('published-cases:');
+};
 
 const buildPublishedCaseRecord = (item: any, authorMap: Map<string, string>): PatientRecord => {
   const submissionType = item.submission_type || 'interesting_case';
@@ -68,6 +80,7 @@ const loadPublishedCasesBundle = async (forceRefresh = false): Promise<Published
     return publishedCasesBundlePromise;
   }
 
+  const generation = cacheGeneration;
   publishedCasesBundlePromise = (async () => {
   const loadStartedAt = startPerformanceTiming();
   const fetchRawCases = async () => {
@@ -83,6 +96,7 @@ const loadPublishedCasesBundle = async (forceRefresh = false): Promise<Published
         fetchRawCases,
         { ttlMs: 20_000, allowStaleWhileRevalidate: true },
       );
+  if (generation !== cacheGeneration) throw new Error('Session changed. Reload cases.');
 
   const profileIds = Array.from(
     new Set(
@@ -130,12 +144,13 @@ const loadPublishedCasesBundle = async (forceRefresh = false): Promise<Published
       records: enrichedRawCases.map((item: any) => buildPublishedCaseRecord(item, profileMap)),
     };
 
+    if (generation !== cacheGeneration) throw new Error('Session changed. Reload cases.');
     publishedCasesBundleCache = bundle;
     publishedCasesBundleCachedAt = Date.now();
     finishPerformanceTiming('database.load', loadStartedAt);
     return bundle;
   })().finally(() => {
-    publishedCasesBundlePromise = null;
+    if (generation === cacheGeneration) publishedCasesBundlePromise = null;
   });
 
   return publishedCasesBundlePromise;

@@ -1066,7 +1066,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 </div>
 
                                 {/* Patient ID is restricted to authenticated users. */}
-                                {isRegisteredUser && (
+                                {isRegisteredUser && !isPublicMode && (
                                     <div>
                                         <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                                             <span className="material-icons text-[12px]">local_hospital</span>

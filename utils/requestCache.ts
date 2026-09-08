@@ -63,10 +63,9 @@ export const fetchWithCache = async <T>(
 
   const request = Promise.resolve(fetcher())
     .then((value) => {
-      cacheStore.set(key, {
-        value,
-        expiresAt: Date.now() + Math.max(0, ttlMs),
-      });
+      if (inFlightStore.get(key)?.promise === request) {
+        cacheStore.set(key, { value, expiresAt: Date.now() + Math.max(0, ttlMs) });
+      }
       return value;
     })
     .finally(() => {

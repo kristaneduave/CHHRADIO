@@ -1,3 +1,6 @@
+import { isUuidPublicCaseToken, normalizePublicCaseToken } from '../utils/publicCaseLinks';
+import { readVerifiedImage, setPublicResponseHeaders, validatePublicImageUrl } from '../utils/publicImageSecurity';
+
 type PublicCaseRecord = {
   image_url?: string | null;
   image_urls?: string[] | null;
@@ -24,8 +27,15 @@ const sendNotFound = (res: any) => {
 };
 
 export default async function handler(req: any, res: any) {
-  const token = String(req.query?.token || '').trim();
-  if (!token) {
+  setPublicResponseHeaders(res);
+  if (!['GET', 'HEAD'].includes(req.method || 'GET')) {
+    res.statusCode = 405;
+    res.setHeader('Allow', 'GET, HEAD');
+    res.end();
+    return;
+  }
+  const token = normalizePublicCaseToken(String(req.query?.token || '').trim());
+  if (!isUuidPublicCaseToken(token)) {
     sendNotFound(res);
     return;
   }
@@ -36,9 +46,13 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const rpcResponse = await fetch(`${url}/rest/v1/rpc/resolve_public_case_by_token`, {
       method: 'POST',
+      signal: controller.signal,
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         apikey: anonKey,
@@ -60,9 +74,11 @@ export default async function handler(req: any, res: any) {
       return;
     }
 
-    const imageResponse = await fetch(imageUrl, {
+    const imageResponse = await fetch(validatePublicImageUrl(imageUrl, url), {
+      signal: controller.signal,
+      redirect: 'error',
       headers: {
-        Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        Accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif',
       },
     });
 
@@ -70,14 +86,15 @@ export default async function handler(req: any, res: any) {
       throw new Error(`Image fetch failed with ${imageResponse.status}`);
     }
 
-    const contentType = imageResponse.headers.get('content-type') || 'image/png';
-    const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+    const { bytes, contentType } = await readVerifiedImage(imageResponse);
 
     res.statusCode = 200;
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
-    res.end(imageBuffer);
+    res.setHeader('Content-Length', String(bytes.byteLength));
+    res.end(req.method === 'HEAD' ? undefined : Buffer.from(bytes));
   } catch {
     sendNotFound(res);
+  } finally {
+    clearTimeout(timeout);
   }
 }

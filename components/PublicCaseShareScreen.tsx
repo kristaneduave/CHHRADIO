@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import CaseViewScreen from './CaseViewScreen';
 import { getCaseShareErrorMessage, getCaseSharePreviewImage, resolvePublicCaseByToken } from '../services/caseShareService';
+import { shortenPublicCaseToken } from '../utils/publicCaseLinks';
+import { publicCaseForViewer } from '../utils/publicCaseProjection';
 
 interface PublicCaseShareScreenProps {
   token: string;
@@ -25,7 +27,7 @@ const updateMetaContent = (attribute: 'name' | 'property', value: string, conten
   }
 };
 
-const buildAppSharePath = (token: string) => `/?publicCaseToken=${encodeURIComponent(token)}`;
+const buildAppSharePath = (token: string) => `/?publicCaseToken=${encodeURIComponent(shortenPublicCaseToken(token))}`;
 
 const buildPreviewDescription = (resolvedCase: any) => {
   const narrative = [
@@ -170,7 +172,7 @@ const PublicCaseShareScreen: React.FC<PublicCaseShareScreenProps> = ({ token, mo
   }
 
   if (mode === 'report') {
-    return <CaseViewScreen caseData={caseData} onBack={handleBack} mode="public" />;
+    return <CaseViewScreen caseData={publicCaseForViewer(caseData)} onBack={handleBack} mode="public" />;
   }
 
   const previewTitle = String(caseData.title || caseData.diagnosis || 'Shared Case').trim() || 'Shared Case';

@@ -1,3 +1,6 @@
+import { buildPublicCasePath, isUuidPublicCaseToken, normalizePublicCaseToken, shortenPublicCaseToken } from '../utils/publicCaseLinks';
+import { setPublicResponseHeaders } from '../utils/publicImageSecurity';
+
 type PublicCaseRecord = {
   title?: string | null;
   diagnosis?: string | null;
@@ -71,9 +74,10 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
     ? 'This shared radiology case link is invalid, disabled, or no longer available.'
     : buildDescription(record);
   const image = getRepresentativeImage(record);
-  const sharedUrl = `${origin}/shared/case/${encodeURIComponent(token)}`;
-  const sharedImageUrl = `${origin}/api/shared-case-image?token=${encodeURIComponent(token)}`;
-  const appPath = `/?publicCaseToken=${encodeURIComponent(token)}`;
+  const shortToken = shortenPublicCaseToken(token);
+  const sharedUrl = `${origin}${buildPublicCasePath(token)}`;
+  const sharedImageUrl = `/api/shared-case-image?token=${encodeURIComponent(shortToken)}`;
+  const appPath = `/?publicCaseToken=${encodeURIComponent(shortToken)}`;
   const safeTitle = escapeHtml(pageTitle);
   const safeCaseTitle = escapeHtml(caseTitle);
   const safeDescription = escapeHtml(description);
@@ -204,8 +208,19 @@ const buildHtml = (token: string, origin: string, record: PublicCaseRecord | nul
 };
 
 export default async function handler(req: any, res: any) {
-  const token = String(req.query?.token || '').trim();
-  if (!token) {
+  setPublicResponseHeaders(res);
+  if (!['GET', 'HEAD'].includes(req.method || 'GET')) {
+    res.statusCode = 405;
+    res.setHeader('Allow', 'GET, HEAD');
+    res.end();
+    return;
+  }
+  if (req.method === 'HEAD') {
+    const end = res.end.bind(res);
+    res.end = () => end();
+  }
+  const token = normalizePublicCaseToken(String(req.query?.token || '').trim());
+  if (!isUuidPublicCaseToken(token)) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.end(buildHtml('', `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`, null, true));
@@ -225,6 +240,8 @@ export default async function handler(req: any, res: any) {
   try {
     const rpcResponse = await fetch(`${url}/rest/v1/rpc/resolve_public_case_by_token`, {
       method: 'POST',
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         apikey: anonKey,
@@ -243,7 +260,6 @@ export default async function handler(req: any, res: any) {
 
     res.statusCode = notFound ? 404 : 200;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
     res.end(buildHtml(token, origin, record, notFound));
   } catch {
     res.statusCode = 500;

@@ -40,6 +40,9 @@ import {
 } from './services/routePreloadService';
 import { startAppBootstrap } from './services/appBootstrapService';
 import { normalizeUserRole } from './utils/roles';
+import { getPublicCaseTokenFromPath } from './utils/publicCaseLinks';
+import { setPublishedCasesPrincipal } from './services/publishedCasesService';
+import { setPrivateAttachmentPrincipal } from './services/privateAttachmentService';
 
 declare global {
   interface NetworkInformation {
@@ -87,7 +90,6 @@ const MonthlyCensusPage = lazy(loadMonthlyCensusPage);
 const AdminUserManagementScreen = lazy(loadAdminUserManagementScreen);
 const APP_INSTANCE_ID = `radcore-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const isDevRuntime = typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
-const PUBLIC_CASE_ROUTE_PREFIX = '/shared/case/';
 const PUBLIC_CASE_QUERY_PARAM = 'publicCaseToken';
 type PublicCaseRouteState = {
   token: string;
@@ -111,15 +113,6 @@ const getBootProgressTweenDuration = (delta: number, isFinalStep: boolean) => {
   return 560;
 };
 
-const getPublicCaseTokenFromPath = (pathname: string) => {
-  if (!pathname.startsWith(PUBLIC_CASE_ROUTE_PREFIX)) {
-    return null;
-  }
-
-  const token = pathname.slice(PUBLIC_CASE_ROUTE_PREFIX.length).split('/')[0]?.trim();
-  return token || null;
-};
-
 const getPublicCaseRouteStateFromLocation = (location: Location): PublicCaseRouteState | null => {
   const tokenFromPath = getPublicCaseTokenFromPath(location.pathname);
   if (tokenFromPath) {
@@ -135,6 +128,7 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('dashboard');
   const currentScreenRef = useRef<Screen>('dashboard');
   const [session, setSession] = useState<Session | null>(null);
+  const resolvedPrincipalRef = useRef<string | null | undefined>(undefined);
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isBootReady, setIsBootReady] = useState(false);
   const [isBootCompleting, setIsBootCompleting] = useState(false);
@@ -303,6 +297,15 @@ const App: React.FC = () => {
     }
 
     const applyResolvedSession = (nextSession: Session | null) => {
+      const nextPrincipal = nextSession?.user?.id || null;
+      if (resolvedPrincipalRef.current !== undefined && resolvedPrincipalRef.current !== nextPrincipal) {
+        setCaseToEdit(null);
+        setNavigationHistory([]);
+        setCurrentScreen('dashboard');
+      }
+      resolvedPrincipalRef.current = nextPrincipal;
+      setPublishedCasesPrincipal(nextSession?.user?.id || null);
+      setPrivateAttachmentPrincipal(nextSession?.user?.id || null);
       setSession((currentSession) => {
         const currentUserId = currentSession?.user?.id || null;
         const nextUserId = nextSession?.user?.id || null;
@@ -924,6 +927,7 @@ const App: React.FC = () => {
       {canRenderAppShell ? (
         <>
           <Layout
+            key={principalKey}
             activeScreen={currentScreen}
             setScreen={navigateToScreen}
             onNavigateBack={navigateBack}

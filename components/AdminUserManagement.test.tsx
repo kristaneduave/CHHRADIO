@@ -9,6 +9,7 @@ const {
   profilesUpdateEq,
   userRolesDeleteEq,
   userRolesInsert,
+  setUserRoles,
   listAccountAccessRequestsForStaff,
   reviewAccountAccessRequest,
   fetchPrivilegedAuditEvents,
@@ -18,6 +19,7 @@ const {
   profilesUpdateEq: vi.fn(),
   userRolesDeleteEq: vi.fn(),
   userRolesInsert: vi.fn(),
+  setUserRoles: vi.fn(),
   listAccountAccessRequestsForStaff: vi.fn(),
   reviewAccountAccessRequest: vi.fn(),
   fetchPrivilegedAuditEvents: vi.fn(),
@@ -32,6 +34,7 @@ vi.mock('../services/accountAccessRequestService', () => ({
 
 vi.mock('../services/supabase', () => ({
   supabase: {
+    rpc: setUserRoles,
     from: vi.fn((table: string) => {
       if (table === 'profiles') {
         return {
@@ -64,6 +67,8 @@ vi.mock('../services/supabase', () => ({
 describe('AdminUserManagement', () => {
   beforeEach(() => {
     profilesOrder.mockReset();
+    setUserRoles.mockReset();
+    setUserRoles.mockResolvedValue({ error: null });
     userRolesIn.mockReset();
     profilesUpdateEq.mockReset();
     userRolesDeleteEq.mockReset();
@@ -142,13 +147,12 @@ describe('AdminUserManagement', () => {
     fireEvent.click(within(userCard as HTMLElement).getAllByRole('button', { name: 'admin' })[1]);
 
     await waitFor(() => {
-      expect(profilesUpdateEq).toHaveBeenCalledWith('id', 'user-1');
-      expect(userRolesDeleteEq).toHaveBeenCalledWith('user_id', 'user-1');
-      expect(userRolesInsert).toHaveBeenCalledWith([
-        { user_id: 'user-1', role: 'resident' },
-        { user_id: 'user-1', role: 'moderator' },
-        { user_id: 'user-1', role: 'admin' },
-      ]);
+      expect(setUserRoles).toHaveBeenCalledWith('set_user_roles', {
+        p_user_id: 'user-1', p_primary_role: 'resident', p_roles: ['resident','moderator','admin'],
+      });
+      expect(profilesUpdateEq).not.toHaveBeenCalled();
+      expect(userRolesDeleteEq).not.toHaveBeenCalled();
+      expect(userRolesInsert).not.toHaveBeenCalled();
     });
 
     expect(screen.getByText('Roles updated.')).toBeInTheDocument();
@@ -163,12 +167,19 @@ describe('AdminUserManagement', () => {
     fireEvent.click(within(userCard as HTMLElement).getAllByRole('button', { name: 'training officer' })[1]);
 
     await waitFor(() => {
-      expect(profilesUpdateEq).toHaveBeenCalledWith('id', 'user-1');
-      expect(userRolesDeleteEq).toHaveBeenCalledWith('user_id', 'user-1');
-      expect(userRolesInsert).toHaveBeenCalledWith([
-        { user_id: 'user-1', role: 'training_officer' },
-      ]);
+      expect(setUserRoles).toHaveBeenCalledWith('set_user_roles', {
+        p_user_id: 'user-1', p_primary_role: 'training_officer', p_roles: ['training_officer'],
+      });
     });
+  });
+
+  it('shows a denied role change without issuing partial table writes', async () => {
+    setUserRoles.mockResolvedValue({error:{message:'Administrator access required.'}});
+    render(<AdminUserManagement onBack={() => undefined} />);
+    const card=(await screen.findByText('Dr. Mira')).closest('div.rounded-xl');
+    fireEvent.click(within(card as HTMLElement).getAllByRole('button',{name:'admin'})[1]);
+    expect(await screen.findByText('Failed to update roles: Administrator access required.')).toBeInTheDocument();
+    expect(userRolesDeleteEq).not.toHaveBeenCalled();expect(profilesUpdateEq).not.toHaveBeenCalled();
   });
 
   it('allows staff to approve a pending access request', async () => {

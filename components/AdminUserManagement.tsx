@@ -142,42 +142,16 @@ const AdminUserManagement: React.FC<AdminUserManagementProps> = ({ onBack }) => 
         try {
             const resolved = resolveRoleSelection(primaryRole, nextRoles);
 
-            // Optimistic update
-            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: resolved.primaryRole, roles: resolved.roles } : u));
-
-            const { error } = await supabase
-                .from('profiles')
-                .update({ role: resolved.primaryRole })
-                .eq('id', userId);
-
+            const { error } = await supabase.rpc('set_user_roles', {
+                p_user_id: userId, p_primary_role: resolved.primaryRole, p_roles: resolved.roles,
+            });
             if (error) throw error;
-
-            const { error: deleteError } = await supabase
-                .from('user_roles')
-                .delete()
-                .eq('user_id', userId);
-
-            if (deleteError) {
-                const message = String(deleteError.message || '').toLowerCase();
-                if (!message.includes('relation') && !message.includes('does not exist') && !message.includes('schema cache')) {
-                    throw deleteError;
-                }
-                return;
-            }
-
-            const { error: insertError } = await supabase
-                .from('user_roles')
-                .insert(resolved.roles.map((role) => ({
-                    user_id: userId,
-                    role,
-                })));
-
-            if (insertError) throw insertError;
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: resolved.primaryRole, roles: resolved.roles } : u));
         } catch (error: any) {
             console.error('Error updating roles:', error);
             setStatusTone('error');
             setStatusMessage(`Failed to update roles: ${error.message}`);
-            fetchUsers(); // Revert on error
+            // The RPC is atomic and local state updates only after success.
             return;
         }
 

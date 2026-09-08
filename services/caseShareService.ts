@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { CaseShareRecord } from '../types';
-
-const PUBLIC_CASE_PATH_PREFIX = '/shared/case';
+import { buildPublicCasePath, normalizePublicCaseToken } from '../utils/publicCaseLinks';
+import { PublicCase, toPublicCase } from '../utils/publicCaseProjection';
 
 const normalizeCaseShareRecord = (value: any): CaseShareRecord => ({
   case_id: String(value?.case_id || value?.share_case_id || ''),
@@ -51,10 +51,10 @@ export const buildPublicCaseUrl = (publicToken: string, origin?: string) => {
     || (typeof window !== 'undefined' ? window.location.origin : '')
     || '';
 
-  return `${baseOrigin}${PUBLIC_CASE_PATH_PREFIX}/${publicToken}`;
+  return `${baseOrigin}${buildPublicCasePath(publicToken)}`;
 };
 
-export const getPublicCasePath = (publicToken: string) => `${PUBLIC_CASE_PATH_PREFIX}/${publicToken}`;
+export const getPublicCasePath = (publicToken: string) => buildPublicCasePath(publicToken);
 
 export const getCaseSharePreviewImage = (caseData: any): string | null => {
   const imageUrls = Array.isArray(caseData?.image_urls) ? caseData.image_urls : [];
@@ -101,10 +101,11 @@ export const revokeCaseShare = async (caseId: string): Promise<CaseShareRecord> 
   return normalizeCaseShareRecord(row);
 };
 
-export const resolvePublicCaseByToken = async (publicToken: string): Promise<any | null> => {
-  const { data, error } = await supabase.rpc('resolve_public_case_by_token', { p_public_token: publicToken });
+export const resolvePublicCaseByToken = async (publicToken: string): Promise<PublicCase | null> => {
+  const normalizedToken = normalizePublicCaseToken(publicToken);
+  const { data, error } = await supabase.rpc('resolve_public_case_by_token', { p_public_token: normalizedToken });
   if (error) throw error;
 
   const row = getSingleRpcRow(data);
-  return row || null;
+  return row ? toPublicCase(row) : null;
 };
