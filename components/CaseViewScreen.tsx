@@ -11,7 +11,13 @@ import { toastError, toastSuccess } from '../utils/toast';
 import { generateConsultantShareText } from '../utils/formatters';
 import { setCaseViberShareStatus } from '../services/caseViberShareService';
 import { buildCasePdfInput } from '../services/casePdfInput';
-import { archiveCaseToDrive, downloadArchivedCasePdf, hasCaseImages } from '../services/caseArchiveService';
+import {
+    DRIVE_ARCHIVE_ENABLED,
+    archiveCaseToDrive,
+    archivePdfFileName,
+    downloadArchivedCasePdf,
+    hasCaseImages,
+} from '../services/caseArchiveService';
 import { getCurrentUserRoleState } from '../services/userRoleService';
 import { hasRole } from '../utils/roles';
 import {
@@ -64,6 +70,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [archivedAt, setArchivedAt] = useState<string | null>(caseData?.archived_at ? String(caseData.archived_at) : null);
+    // Null for a case whose PDF an admin saved and uploaded to Drive by hand.
+    const [archiveDriveFileId, setArchiveDriveFileId] = useState<string | null>(caseData?.archive_drive_file_id || null);
     const [archiveStatus, setArchiveStatus] = useState<string | null>(null);
     const [isUpdatingViberShareStatus, setIsUpdatingViberShareStatus] = useState(false);
     const [viberSharedAt, setViberSharedAt] = useState<string | null>(caseData?.viber_shared_at ? String(caseData.viber_shared_at) : null);
@@ -120,7 +128,8 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     useEffect(() => {
         setArchivedAt(caseData?.archived_at ? String(caseData.archived_at) : null);
-    }, [caseData?.id, caseData?.archived_at]);
+        setArchiveDriveFileId(caseData?.archive_drive_file_id || null);
+    }, [caseData?.id, caseData?.archived_at, caseData?.archive_drive_file_id]);
 
     useEffect(() => {
         if (typeof window === 'undefined' || navigator.connection?.saveData) {
@@ -205,7 +214,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     // Archived images were removed from Storage; the PDF in Google Drive holds them now.
     const images = archivedAt ? [] : (caseData.image_urls || [caseData.image_url].filter(Boolean));
-    const canArchive = !isPublicMode && !archivedAt && (isOwner || isAdmin) && hasCaseImages(caseData);
+    const canArchive = DRIVE_ARCHIVE_ENABLED && !isPublicMode && !archivedAt && (isOwner || isAdmin) && hasCaseImages(caseData);
     function goToPreviousImage() {
         setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
     }
@@ -555,7 +564,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
         try {
             // The archived PDF is the only copy that still has the images.
-            if (archivedAt && !isPublicMode) {
+            if (archivedAt && archiveDriveFileId && !isPublicMode) {
                 await downloadArchivedCasePdf(caseData.id, fileName);
                 return;
             }
@@ -590,6 +599,7 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                     : 'Removing images...');
             });
             setArchivedAt(new Date().toISOString());
+            setArchiveDriveFileId(result.fileId);
             setCurrentImageIndex(0);
             if (result.removedImages < result.imagesToRemove) {
                 toastSuccess('Case archived to Google Drive', 'Some images could not be removed yet; the storage cleanup will remove them.');
@@ -1048,7 +1058,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 Archived to the department Google Drive on {new Date(archivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
                                 {!isPublicMode && ' The PDF still has every image.'}
                             </p>
-                            {!isPublicMode && (
+                            {!isPublicMode && !archiveDriveFileId && (
+                                <p className="mt-2 break-words text-xs leading-relaxed text-slate-300">
+                                    Look for “{archivePdfFileName(caseData)}” in the department Drive.
+                                </p>
+                            )}
+                            {!isPublicMode && archiveDriveFileId && (
                                 <button
                                     type="button"
                                     onClick={handleExportPDF}

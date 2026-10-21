@@ -15,8 +15,79 @@ export interface CaseArchiveResult {
   imagesToRemove: number;
 }
 
+// Direct upload needs the Google Drive setup in docs/case-drive-archive.md. Without it, admins save
+// the PDFs to a folder, upload that folder to Drive by hand, then remove the images.
+export const DRIVE_ARCHIVE_ENABLED = import.meta.env.VITE_CASE_DRIVE_ARCHIVE === 'on';
+
 export const hasCaseImages = (caseData: any) =>
   (Array.isArray(caseData?.image_urls) && caseData.image_urls.length > 0) || Boolean(String(caseData?.image_url || '').trim());
+
+/** "2026-08-20 Ectopic ovary (1a2b3c4d).pdf": sorts by upload date and stays unique per case. */
+export const archivePdfFileName = (caseData: any) => {
+  const uploaded = caseData?.created_at ? new Date(caseData.created_at) : null;
+  const date = uploaded && !Number.isNaN(uploaded.getTime()) ? uploaded.toLocaleDateString('en-CA') : '';
+  const title = String(caseData?.title || 'Case').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return `${date ? `${date} ` : ''}${title || 'Case'} (${String(caseData?.id || '').slice(0, 8)}).pdf`;
+};
+
+/** The case's PDF export with resized JPEG images. Throws if any image cannot be loaded. */
+export const renderArchivePdf = async (caseData: any, publisherName: string): Promise<Blob> => {
+  const input = buildCasePdfInput(caseData);
+  if (input.images.length === 0) throw new Error('This case has no images to archive.');
+  const { renderCasePdfBlob } = await import('./pdfService');
+  const { blob } = await renderCasePdfBlob(
+    input.data, input.images, input.headerTitle, publisherName || 'Radiologist', input.fileName, ARCHIVE_IMAGE_OPTIONS,
+  );
+  return blob;
+};
+
+interface WritableFolder {
+  getFileHandle(name: string, options: { create: boolean }): Promise<{
+    createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>;
+  }>;
+}
+
+/**
+ * Asks for a folder to save PDFs into (Chrome and Edge). Returns null when the browser cannot,
+ * in which case each PDF is downloaded instead.
+ */
+export const pickArchiveFolder = async (): Promise<WritableFolder | null> => {
+  const picker = (window as any).showDirectoryPicker;
+  if (typeof picker !== 'function') return null;
+  return picker({ id: 'case-archive', mode: 'readwrite' });
+};
+
+export const saveArchivePdf = async (folder: WritableFolder | null, fileName: string, blob: Blob) => {
+  if (folder) {
+    const writable = await (await folder.getFileHandle(fileName, { create: true })).createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
+/**
+ * For a case whose PDF was saved and uploaded to Drive by hand: marks it archived and removes the
+ * images nothing else uses. Anything left behind is found later by scripts/storage-cleanup.mjs.
+ */
+export const removeArchivedCaseImages = async (caseId: string, pdfBytes?: number) => {
+  const { data, error } = await supabase.rpc('complete_case_archive', {
+    p_case_id: caseId, p_drive_file_id: null, p_size_bytes: pdfBytes ?? null,
+  });
+  if (error) throw new Error(error.message);
+  const names: string[] = Array.isArray(data) ? data.filter((name): name is string => typeof name === 'string') : [];
+  if (names.length === 0) return { removedImages: 0, imagesToRemove: 0 };
+  const { data: removed, error: removeError } = await supabase.storage.from('case-images').remove(names);
+  return { removedImages: removeError ? 0 : (removed?.length ?? 0), imagesToRemove: names.length };
+};
 
 const authHeader = async () => {
   const { data } = await supabase.auth.getSession();
@@ -47,12 +118,7 @@ export const archiveCaseToDrive = async (
   onProgress?: (stage: CaseArchiveStage, fraction?: number) => void,
 ): Promise<CaseArchiveResult> => {
   onProgress?.('preparing');
-  const input = buildCasePdfInput(caseData);
-  if (input.images.length === 0) throw new Error('This case has no images to archive.');
-  const { renderCasePdfBlob } = await import('./pdfService');
-  const { blob } = await renderCasePdfBlob(
-    input.data, input.images, input.headerTitle, publisherName || 'Radiologist', input.fileName, ARCHIVE_IMAGE_OPTIONS,
-  );
+  const blob = await renderArchivePdf(caseData, publisherName);
 
   const auth = await authHeader();
   const { uploadUrl, chunkBytes } = await requestJson('action=start', {

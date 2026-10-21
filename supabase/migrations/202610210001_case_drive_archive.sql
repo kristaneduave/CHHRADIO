@@ -44,8 +44,9 @@ begin
 end;
 $$;
 
--- Called once Drive has confirmed the PDF. Unlinks the images from the case and returns the
+-- Called once the PDF is safely in Drive. Unlinks the images from the case and returns the
 -- case-images files that nothing else links to any more, such as a quiz built from the case.
+-- A null Drive file means an admin saved the PDF and uploaded it to Drive by hand.
 create or replace function public.complete_case_archive(p_case_id uuid, p_drive_file_id text, p_size_bytes bigint)
 returns text[] language plpgsql security definer set search_path = public as $$
 declare
@@ -53,11 +54,14 @@ declare
   old_refs text[];
   result text[];
 begin
-  if p_drive_file_id is null or p_drive_file_id !~ '^[A-Za-z0-9_-]{10,200}$' then
+  if p_drive_file_id is not null and p_drive_file_id !~ '^[A-Za-z0-9_-]{10,200}$' then
     raise exception 'Invalid Drive file.' using errcode = '22023';
   end if;
-  if p_size_bytes is null or p_size_bytes < 1 then
+  if p_size_bytes is not null and p_size_bytes < 1 then
     raise exception 'Invalid file size.' using errcode = '22023';
+  end if;
+  if p_drive_file_id is null and not public.is_admin() then
+    raise exception 'Only admins can archive cases uploaded to Drive by hand.' using errcode = '42501';
   end if;
   target := public.case_archive_target(p_case_id);
   old_refs := array_remove(coalesce(target.image_urls, '{}') || target.image_url, null);
