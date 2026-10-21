@@ -37,17 +37,17 @@ describe('archive PDF', () => {
     expect(buildCasePdfInput({ title: 'Old', diagnosis: 'RAD-479038' }).data.patientId).toBe('RAD-479038');
   });
 
-  it('puts the Patient ID in archive copies only, and the source in both', async () => {
+  it('puts the Patient ID and source in archive copies and downloads', async () => {
     const input = buildCasePdfInput(sampleCase);
     const archive = await renderCasePdfBlob(input.data, [], input.headerTitle, 'Ana', input.fileName, ARCHIVE);
     const archiveText = await readText(archive.blob);
     expect(archiveText).toContain('PACS-778899');
     expect(archiveText).toContain('Infinitt');
 
-    // Downloads (Export PDF) use the same builder without the Patient ID.
+    // Downloads (Export PDF) use the same builder.
     const { doc } = await __testables.buildCasePdf(input.data, [], input.headerTitle, 'Ana', input.fileName);
     const downloadText = doc.output();
     expect(downloadText).toContain('Infinitt');
-    expect(downloadText).not.toContain('PACS-778899');
+    expect(downloadText).toContain('PACS-778899');
   });
 });
