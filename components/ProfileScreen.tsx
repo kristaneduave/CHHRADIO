@@ -20,6 +20,8 @@ import { ResidentBadges } from './ResidentBadges';
 import { ProfileEditor } from './ProfileEditor';
 import { MyCaseLibrary } from './MyCaseLibrary';
 import { getMyProfileNote, upsertMyProfileNote } from '../services/profileNotesService';
+import { releaseDeletedCaseImages } from '../services/caseImageCleanupService';
+import CaseArchiveManager from './CaseArchiveManager';
 import {
   fetchHiddenAnnouncementsForProfileHome,
   fetchMyCasesForProfileHome,
@@ -95,6 +97,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
   const [updating, setUpdating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showAboutCredits, setShowAboutCredits] = useState(false);
+  const [showCaseArchive, setShowCaseArchive] = useState(false);
   const [aboutChangesExpanded, setAboutChangesExpanded] = useState(false);
   const [currentUserRoles, setCurrentUserRoles] = useState<UserRole[]>(cachedWorkspace?.profileRecord?.role ? [cachedWorkspace.profileRecord.role as UserRole] : []);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -594,6 +597,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
 
   const handleDeleteCase = async () => {
     if (!deletingId) return;
+    const deletedCase = myCases.find(c => c.id === deletingId);
     try {
       const { error } = await supabase
         .from('cases')
@@ -605,6 +609,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
       setMyCases(prev => prev.filter(c => c.id !== deletingId));
       setDeletingId(null);
       toastSuccess('Case deleted successfully.');
+      if (deletedCase) void releaseDeletedCaseImages(deletedCase);
     } catch (error: any) {
       console.error('Error deleting case:', error);
       toastError('Failed to delete case: ' + error.message);
@@ -849,6 +854,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
                   </div>
                   <span className="block text-[12px] font-bold text-orange-400 group-hover:text-orange-300 transition-colors tracking-wider uppercase flex-1">Manage Users</span>
                   <span className="material-icons text-orange-400/40 text-[20px] group-hover:text-orange-400/80 transition-colors">chevron_right</span>
+                </div>
+              </button>
+            )}
+
+            {canManageUsers(currentUserRoles.length ? currentUserRoles : profile.role) && (
+              <button
+                onClick={() => setShowCaseArchive(true)}
+                className="w-full p-2.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.06] hover:border-white/10 transition-all text-left flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-3.5 w-full">
+                  <div className="w-[34px] h-[34px] rounded-xl bg-cyan-500/10 text-cyan-400 flex items-center justify-center border border-cyan-500/20 transition-all">
+                    <span className="material-icons text-[18px]">drive_file_move</span>
+                  </div>
+                  <span className="block text-[12px] font-bold text-slate-300 group-hover:text-white transition-colors tracking-wider uppercase flex-1">Archive Cases to Drive</span>
+                  <span className="material-icons text-white/20 text-[20px] group-hover:text-white/60 transition-colors">chevron_right</span>
                 </div>
               </button>
             )}
@@ -1126,6 +1146,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ currentUserId, onOpenUser
           </div>
         )
       }
+
+      {showCaseArchive && <CaseArchiveManager onClose={() => setShowCaseArchive(false)} />}
 
       {showAboutCredits && (
         <div
