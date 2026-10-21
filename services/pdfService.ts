@@ -638,7 +638,7 @@ const getCompactMetadataGroups = (items: Array<{ label: string; value: string; f
         columns: [
           byLabel.get('Clinical Data') ?? null,
           byLabel.get('Exam') ?? null,
-          byLabel.get('Reference Source') ?? null,
+          byLabel.get('Source') ?? byLabel.get('Reference Source') ?? null,
         ],
       },
     ].filter((row) => row.columns.some(Boolean)),
@@ -1457,9 +1457,13 @@ const buildCasePdf = async (
   customTitle?: string,
   uploaderName?: string,
   customFileName?: string,
-  imageOptions?: CasePdfImageOptions
+  imageOptions?: CasePdfImageOptions,
+  includePatientId = false
 ) => {
   const normalized = normalizePdfExportData(data, customTitle, images);
+  // Only archive copies carry the Patient ID, so the case can be found in PACS later. PDFs that
+  // people download and share leave it out.
+  const patientIdValue = includePatientId ? normalized.patientId || '' : '';
   const preparedImages = await preparePdfImages(normalized.images, imageOptions);
   const doc = new jsPDF();
   const theme = PDF_THEME_BY_SUBMISSION[normalized.submissionType];
@@ -1492,14 +1496,14 @@ const buildCasePdf = async (
           },
             { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
             { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-            { label: 'PACS Patient ID', value: normalized.patientId || '' },
+            { label: 'Patient ID', value: patientIdValue },
             { label: 'Source', value: normalized.caseSource || '' },
             { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
           ]
       : [
           { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
           { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-          { label: 'PACS Patient ID', value: normalized.patientId || '' },
+          { label: 'Patient ID', value: patientIdValue },
           ...(normalized.clinicalData ? [{ label: 'Clinical Data', value: normalized.clinicalData, fullWidth: true }] : []),
         ];
 
@@ -1575,7 +1579,8 @@ export const generateCasePDF = async (
   }
 };
 
-// Same layout as the download, returned as a file for the Google Drive archive. Throws on failure.
+// Same layout as the download plus the Patient ID, returned as a file for the Google Drive archive.
+// Throws on failure.
 export const renderCasePdfBlob = async (
   data: any,
   images: CasePdfImages,
@@ -1584,11 +1589,12 @@ export const renderCasePdfBlob = async (
   customFileName: string,
   imageOptions: CasePdfImageOptions
 ) => {
-  const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName, imageOptions);
+  const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName, imageOptions, true);
   return { blob: doc.output('blob') as Blob, fileName };
 };
 
 export const __testables = {
+  buildCasePdf,
   buildDocumentProperties,
   buildFilename,
   ensureHtmlString,
