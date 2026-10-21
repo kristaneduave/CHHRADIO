@@ -28,7 +28,8 @@ export const buildCasePdfInput = (caseData: any) => {
     pearl: caseData.pearl || caseData.analysis_result?.pearl,
     additionalNotes: caseData.notes,
     uploadDate: caseData.created_at,
-    patientId: caseData.analysis_result?.patientId,
+    // Same value the case screen shows as Patient ID; older cases keep it in diagnosis.
+    patientId: String(caseData.analysis_result?.patientId || '').trim() || String(caseData.diagnosis || '').trim() || null,
     caseSource,
     reference: caseData.analysis_result?.reference,
     references: caseData.analysis_result?.references,
