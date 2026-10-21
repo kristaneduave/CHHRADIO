@@ -1457,13 +1457,11 @@ const buildCasePdf = async (
   customTitle?: string,
   uploaderName?: string,
   customFileName?: string,
-  imageOptions?: CasePdfImageOptions,
-  includePatientId = false
+  imageOptions?: CasePdfImageOptions
 ) => {
   const normalized = normalizePdfExportData(data, customTitle, images);
-  // Only archive copies carry the Patient ID, so the case can be found in PACS later. PDFs that
-  // people download and share leave it out.
-  const patientIdValue = includePatientId ? normalized.patientId || '' : '';
+  // The Patient ID lets anyone holding the PDF find the study in PACS again.
+  const patientIdValue = normalized.patientId || '';
   const preparedImages = await preparePdfImages(normalized.images, imageOptions);
   const doc = new jsPDF();
   const theme = PDF_THEME_BY_SUBMISSION[normalized.submissionType];
@@ -1579,8 +1577,7 @@ export const generateCasePDF = async (
   }
 };
 
-// Same layout as the download plus the Patient ID, returned as a file for the Google Drive archive.
-// Throws on failure.
+// Same layout as the download, returned as a file for the Google Drive archive. Throws on failure.
 export const renderCasePdfBlob = async (
   data: any,
   images: CasePdfImages,
@@ -1589,7 +1586,7 @@ export const renderCasePdfBlob = async (
   customFileName: string,
   imageOptions: CasePdfImageOptions
 ) => {
-  const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName, imageOptions, true);
+  const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName, imageOptions);
   return { blob: doc.output('blob') as Blob, fileName };
 };
 
