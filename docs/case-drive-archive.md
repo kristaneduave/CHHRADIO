@@ -1,19 +1,33 @@
 # Archive cases to Google Drive
 
-Archiving a case saves its PDF export in the department Google Drive, then removes the case's
-images from Supabase Storage. The case text stays in the app, and **Export PDF** downloads the
-archived copy. Images that something else still uses, such as a quiz or Live Aunt Minnie prompt
-built from the case, are kept.
+Archiving a case keeps its PDF export in the department Google Drive and removes the case's images
+from Supabase Storage. The case text stays in the app. Images that something else still uses, such
+as a quiz or Live Aunt Minnie prompt built from the case, are kept. Archive PDFs use resized JPEG
+images (up to 2000 px); if any image cannot be loaded, that case is not archived.
 
-- Case owners can archive their own cases from the case screen (**Archive to Google Drive**).
-- Admins can archive any case, and many at once from **Profile → Archive Cases to Drive**.
-- Images are removed only after Google Drive confirms the PDF arrived intact (size and SHA-256).
-- Archive PDFs use resized JPEG images (up to 2000 px). If any image cannot be loaded, the case is
-  not archived.
+The PDFs contain patient details (initials, age, sex). Keep the Drive folder private to the
+department account; do not share it with "Anyone with the link".
 
-The PDFs contain patient details (initials, age, sex, PACS Patient ID). The Drive folder is private
-to the department account and the app reads it on the user's behalf. Do not share the folder with
-"Anyone with the link".
+## Without any Google setup (manual upload)
+
+Only needs the database step below.
+
+1. **Profile → Archive Cases to Drive** (admins only). Optionally set **Uploaded up to**, then
+   **Select all**.
+2. **Save PDFs to a folder** and choose an empty folder on this computer (Chrome or Edge; other
+   browsers download the files one by one). Files are named `upload-date title (case-id).pdf`.
+3. Upload that folder to the department Google Drive and open a few PDFs to check them.
+4. Back in the app, **Remove images of N saved cases**. Those cases then show "Images archived" and
+   the PDF's file name, so staff can find it in Drive.
+
+Keep the tab open while it runs. Saved-but-not-removed cases keep their images; if you close the
+page, select them again and save again before removing.
+
+## Direct upload to Drive (optional)
+
+Steps 2–4 below connect the app to the department Drive so PDFs upload by themselves, owners can
+archive their own cases, and **Export PDF** downloads the archived copy. Turn it on by also setting
+`VITE_CASE_DRIVE_ARCHIVE=on` in Vercel.
 
 ## 1. Database
 
@@ -63,7 +77,7 @@ In Vercel → Project → Settings → Environment Variables (Production), add:
 | `GOOGLE_DRIVE_REFRESH_TOKEN` | printed by the script |
 | `GOOGLE_DRIVE_ARCHIVE_FOLDER_ID` | printed by the script |
 
-Then deploy the application.
+Also add `VITE_CASE_DRIVE_ARCHIVE` = `on`, then deploy the application.
 
 ## 5. Try one case first
 

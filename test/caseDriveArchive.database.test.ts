@@ -28,7 +28,7 @@ const CASE_EMPTY = id(102);
 const DRIVE_ID = '1AbCdEfGhIjKlMnOpQrStUv';
 const origin = 'https://project.supabase.co';
 const imageUrl = (name: string) => `${origin}/storage/v1/object/public/case-images/${id(OWNER)}/${name}`;
-const complete = (user: number, caseId: string, driveId = DRIVE_ID) =>
+const complete = (user: number, caseId: string, driveId: string | null = DRIVE_ID) =>
   asUser(user, 'select complete_case_archive($1,$2,1234) names', [caseId, driveId]);
 
 beforeAll(async () => {
@@ -92,6 +92,7 @@ describe('case Drive archive', () => {
   it('rejects other users and malformed Drive ids without touching the case', async () => {
     await expect(complete(OTHER, CASE_A)).rejects.toThrow('Case not found');
     await expect(complete(OWNER, CASE_A, '../../etc')).rejects.toThrow('Invalid Drive file');
+    await expect(complete(OWNER, CASE_A, null)).rejects.toThrow('Only admins');
     const [row] = await asUser(OWNER, 'select archived_at, cardinality(image_urls) n from cases where id=$1', [CASE_A]);
     expect(row).toEqual({ archived_at: null, n: 3 });
   });
@@ -109,7 +110,10 @@ describe('case Drive archive', () => {
     const remove = (user: number) => asUser(user, `delete from storage.objects where bucket_id='case-images' and name=$1 returning name`,
       [`${id(OWNER)}/b1.png`]);
     expect(await remove(OTHER)).toEqual([]);
-    expect((await complete(ADMIN, CASE_B))[0].names).toEqual([`${id(OWNER)}/b1.png`]);
+    // Uploaded to Drive by hand: no Drive file id.
+    expect((await complete(ADMIN, CASE_B, null))[0].names).toEqual([`${id(OWNER)}/b1.png`]);
+    const [row] = await asUser(ADMIN, 'select archived_at is not null archived, archive_drive_file_id from cases where id=$1', [CASE_B]);
+    expect(row).toEqual({ archived: true, archive_drive_file_id: null });
     expect(await remove(ADMIN)).toEqual([{ name: `${id(OWNER)}/b1.png` }]);
   });
 });
