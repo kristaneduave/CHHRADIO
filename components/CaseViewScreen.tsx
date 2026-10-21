@@ -10,6 +10,10 @@ import { CaseComment } from '../types';
 import { toastError, toastSuccess } from '../utils/toast';
 import { generateConsultantShareText } from '../utils/formatters';
 import { setCaseViberShareStatus } from '../services/caseViberShareService';
+import { buildCasePdfInput } from '../services/casePdfInput';
+import { archiveCaseToDrive, downloadArchivedCasePdf, hasCaseImages } from '../services/caseArchiveService';
+import { getCurrentUserRoleState } from '../services/userRoleService';
+import { hasRole } from '../utils/roles';
 import {
     IMAGE_DISMISS_SWIPE_THRESHOLD_PX,
     IMAGE_DOUBLE_TAP_DELAY_MS,
@@ -58,6 +62,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     const [isRegisteredUser, setIsRegisteredUser] = useState(false);
     const [isPreparingShare, setIsPreparingShare] = useState(false);
     const [isExportingPdf, setIsExportingPdf] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [archivedAt, setArchivedAt] = useState<string | null>(caseData?.archived_at ? String(caseData.archived_at) : null);
+    const [archiveStatus, setArchiveStatus] = useState<string | null>(null);
     const [isUpdatingViberShareStatus, setIsUpdatingViberShareStatus] = useState(false);
     const [viberSharedAt, setViberSharedAt] = useState<string | null>(caseData?.viber_shared_at ? String(caseData.viber_shared_at) : null);
     const [viberSharedByName, setViberSharedByName] = useState<string | null>(caseData?.viber_shared_by_name ? String(caseData.viber_shared_by_name) : null);
@@ -112,6 +119,10 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
     }, [caseData?.viber_shared_at, caseData?.viber_shared_by_name]);
 
     useEffect(() => {
+        setArchivedAt(caseData?.archived_at ? String(caseData.archived_at) : null);
+    }, [caseData?.id, caseData?.archived_at]);
+
+    useEffect(() => {
         if (typeof window === 'undefined' || navigator.connection?.saveData) {
             return;
         }
@@ -163,6 +174,12 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         const { data: { user } } = await supabase.auth.getUser();
         setIsRegisteredUser(Boolean(user));
         setIsOwner(Boolean(!isPublicMode && user && caseData.created_by === user.id));
+        if (isPublicMode || !user) {
+            setIsAdmin(false);
+            return;
+        }
+        const roleState = await getCurrentUserRoleState().catch(() => null);
+        setIsAdmin(hasRole(roleState?.roles, 'admin'));
     };
 
     const loadPublisherName = async () => {
@@ -186,7 +203,9 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
         setPublisherName(profile?.nickname || profile?.full_name || 'Radiologist');
     };
 
-    const images = caseData.image_urls || [caseData.image_url].filter(Boolean);
+    // Archived images were removed from Storage; the PDF in Google Drive holds them now.
+    const images = archivedAt ? [] : (caseData.image_urls || [caseData.image_url].filter(Boolean));
+    const canArchive = !isPublicMode && !archivedAt && (isOwner || isAdmin) && hasCaseImages(caseData);
     function goToPreviousImage() {
         setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
     }
@@ -532,45 +551,18 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
 
     const handleExportPDF = async () => {
         setIsExportingPdf(true);
-        // Prepare images with descriptions
-        const pdfImages = images.map((url: string, idx: number) => ({
-            url,
-            description: caseData.analysis_result?.imagesMetadata?.[idx]?.description || ''
-        }));
-
-        const formattedData = {
-            submissionType: caseData.submission_type || 'interesting_case',
-            initials: caseData.patient_initials,
-            age: caseData.patient_age,
-            sex: caseData.patient_sex,
-            modality: caseData.modality,
-            organSystem: caseData.organ_system,
-            findings: caseData.findings,
-            impression: resolvedImpression,
-            notes: normalizedEducationalSummary,
-            clinicalData: caseData.clinical_history || caseData.clinicalData,
-            radiologicClinchers: caseData.radiologic_clinchers,
-            pearl: caseData.pearl || caseData.analysis_result?.pearl,
-            additionalNotes: caseData.notes,
-            uploadDate: caseData.created_at,
-            patientId: caseData.analysis_result?.patientId,
-            caseSource,
-            reference: caseData.analysis_result?.reference,
-            references: caseData.analysis_result?.references,
-            title: caseData.title,
-        };
+        const { data, images: pdfImages, headerTitle, fileName } = buildCasePdfInput(caseData);
 
         try {
+            // The archived PDF is the only copy that still has the images.
+            if (archivedAt && !isPublicMode) {
+                await downloadArchivedCasePdf(caseData.id, fileName);
+                return;
+            }
             const generateCasePDF = await loadGenerateCasePDF().catch((error) => {
                 throw new Error(`Unable to load export module: ${String(error)}`);
             });
-            // Header: User input title (e.g. "SINONASAL MENINGIOMA")
-            const headerTitle = (caseData.title || 'RADIOLOGY CASE').toUpperCase();
-
-            // Filename: TITLE
-            const fileName = `${caseData.title || 'CASE'}`.toUpperCase();
-
-            await generateCasePDF(formattedData, null, pdfImages, headerTitle, publisherName, fileName);
+            await generateCasePDF(data, null, pdfImages, headerTitle, publisherName, fileName);
         } catch (e: any) {
             const message = e instanceof Error ? e.message : String(e);
             if (message.includes('Unable to load export module')) {
@@ -580,6 +572,34 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
             }
         } finally {
             setIsExportingPdf(false);
+        }
+    };
+
+    const handleArchiveToDrive = async () => {
+        if (!canArchive || archiveStatus) return;
+        const confirmed = window.confirm(
+            'Archive this case to the department Google Drive?\n\n'
+            + 'The case PDF is saved to Drive, then its images are removed from the app to free storage. '
+            + 'The case text stays, and Export PDF will download the archived copy. This cannot be undone.'
+        );
+        if (!confirmed) return;
+        try {
+            const result = await archiveCaseToDrive(caseData, publisherName, (stage, fraction) => {
+                setArchiveStatus(stage === 'preparing' ? 'Preparing PDF...'
+                    : stage === 'uploading' ? `Uploading ${Math.round((fraction || 0) * 100)}%...`
+                    : 'Removing images...');
+            });
+            setArchivedAt(new Date().toISOString());
+            setCurrentImageIndex(0);
+            if (result.removedImages < result.imagesToRemove) {
+                toastSuccess('Case archived to Google Drive', 'Some images could not be removed yet; the storage cleanup will remove them.');
+            } else {
+                toastSuccess('Case archived to Google Drive');
+            }
+        } catch (error) {
+            toastError('Archive failed', error instanceof Error ? error.message : String(error));
+        } finally {
+            setArchiveStatus(null);
         }
     };
 
@@ -1020,6 +1040,26 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 )}
                             </div>
                         </>
+                    ) : archivedAt ? (
+                        <div className="relative z-10 mx-auto my-8 max-w-sm rounded-xl border border-dashed border-[#1e293b] bg-[#131b26] px-6 py-6 text-center text-slate-400">
+                            <span className={`material-icons mb-2 text-4xl ${theme.tintColor} opacity-70`}>inventory_2</span>
+                            <p className="text-xs font-bold uppercase tracking-widest text-slate-300">Images archived</p>
+                            <p className="mt-2 text-xs leading-relaxed">
+                                Archived to the department Google Drive on {new Date(archivedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.
+                                {!isPublicMode && ' The PDF still has every image.'}
+                            </p>
+                            {!isPublicMode && (
+                                <button
+                                    type="button"
+                                    onClick={handleExportPDF}
+                                    disabled={isExportingPdf}
+                                    className={`mt-4 inline-flex items-center justify-center gap-1.5 rounded-xl ${theme.buttonBg} px-4 py-2.5 text-[12px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50`}
+                                >
+                                    <span className="material-icons text-[16px]">picture_as_pdf</span>
+                                    <span>{isExportingPdf ? 'Opening...' : 'Download archived PDF'}</span>
+                                </button>
+                            )}
+                        </div>
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-500 relative z-10 border border-dashed border-[#1e293b] m-4 rounded-xl mx-auto max-w-sm max-h-[200px] mt-12 bg-[#131b26]">
                             <div className="text-center space-y-3">
@@ -1441,6 +1481,17 @@ const CaseViewScreen: React.FC<CaseViewScreenProps> = ({ caseData, onBack, onEdi
                                 </button>
                             </div>
                         ) : null}
+                        {canArchive && (
+                            <button
+                                type="button"
+                                onClick={handleArchiveToDrive}
+                                disabled={Boolean(archiveStatus)}
+                                className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12px] font-bold text-slate-300 transition-colors hover:bg-white/[0.07] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                <span className="material-icons text-[16px]">drive_file_move</span>
+                                <span className="truncate">{archiveStatus || 'Archive to Google Drive'}</span>
+                            </button>
+                        )}
                     </div>
 
                     {/* Discussion Section */}

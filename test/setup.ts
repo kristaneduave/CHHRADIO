@@ -20,6 +20,7 @@ const createStorage = () => {
   };
 };
 
+if (typeof window !== 'undefined') {
 Object.defineProperty(window, 'localStorage', {
   value: createStorage(),
   configurable: true,
@@ -38,3 +39,4 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 });
+}

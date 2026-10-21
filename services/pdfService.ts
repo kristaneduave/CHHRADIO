@@ -99,6 +99,15 @@ type RenderContext = {
   pageWidth: number;
   pageHeight: number;
   bottomMargin: number;
+  strictImages?: boolean;
+};
+
+// Archive copies replace the original images, so they are resized JPEGs, and any image that cannot
+// be loaded stops the export instead of leaving a placeholder.
+export type CasePdfImageOptions = {
+  mimeType: 'image/jpeg';
+  quality: number;
+  maxDimension: number;
 };
 
 type RunStyle = {
@@ -272,7 +281,55 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob);
   });
 
-const prepareCanvasImage = async (url: string): Promise<string> => {
+const drawToDataUrl = (
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  options: CasePdfImageOptions
+) => {
+  const scale = Math.min(1, options.maxDimension / Math.max(sourceWidth, sourceHeight, 1));
+  canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+  canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+  // JPEG has no transparency; keep transparent areas white rather than black.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL(options.mimeType, options.quality);
+};
+
+const prepareArchiveImage = async (url: string, options: CasePdfImageOptions): Promise<string> => {
+  const failed = () => new Error('An image could not be loaded, so the case was not archived. Try again.');
+  const response = await fetch(url, { mode: 'cors' }).catch(() => null);
+  if (!response?.ok) throw failed();
+  const blob = await response.blob();
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw failed();
+
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(() => null);
+    if (!bitmap) throw failed();
+    return drawToDataUrl(canvas, ctx, bitmap, bitmap.width, bitmap.height, options);
+  }
+
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(failed());
+      img.src = objectUrl;
+    });
+    return drawToDataUrl(canvas, ctx, image, image.naturalWidth || image.width, image.naturalHeight || image.height, options);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
+const prepareCanvasImage = async (url: string, options?: CasePdfImageOptions): Promise<string> => {
+  if (options) return prepareArchiveImage(url, options);
   if (/^data:image\//i.test(url)) return url;
   if (typeof window === 'undefined' || typeof document === 'undefined') return url;
 
@@ -317,11 +374,11 @@ const prepareCanvasImage = async (url: string): Promise<string> => {
   }
 };
 
-const preparePdfImages = async (images: PdfImage[]): Promise<PdfImage[]> =>
+const preparePdfImages = async (images: PdfImage[], options?: CasePdfImageOptions): Promise<PdfImage[]> =>
   Promise.all(
     images.map(async (image) => ({
       ...image,
-      url: await prepareCanvasImage(image.url),
+      url: await prepareCanvasImage(image.url, options),
     }))
   );
 
@@ -660,7 +717,8 @@ const drawImageFrame = (
   height: number,
   image: PdfImage,
   theme: PdfThemeTokens,
-  captionWidth: number
+  captionWidth: number,
+  strict = false
 ) => {
   doc.setDrawColor(...theme.border);
   doc.roundedRect(x, y, width, height, 2.5, 2.5, 'S');
@@ -672,6 +730,7 @@ const drawImageFrame = (
       doc.addImage(image.url, 'PNG', x, y, width, height);
     }
   } catch {
+    if (strict) throw new Error('An image could not be added to the PDF, so the case was not archived.');
     doc.setFillColor(...theme.fillMuted);
     doc.roundedRect(x, y, width, height, 2.5, 2.5, 'F');
     doc.setFont('helvetica', 'bold');
@@ -1311,7 +1370,7 @@ const renderImageGrid = (
       ? doc.splitTextToSize(normalizeText(image.description), width)
       : [];
     ensureImageRowSpace(doc, ctx, imageHeight + captionLines.length * 4 + 8);
-    drawImageFrame(doc, ctx.margin, ctx.y, width, imageHeight, image, theme, width);
+    drawImageFrame(doc, ctx.margin, ctx.y, width, imageHeight, image, theme, width, ctx.strictImages);
     if (captionLines.length > 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(theme.typography.caption);
@@ -1347,7 +1406,7 @@ const renderImageGrid = (
       rowHeight = Math.max(rowHeight, cellHeight);
     }
 
-    drawImageFrame(doc, x, rowY, colWidth, imageHeight, image, theme, colWidth);
+    drawImageFrame(doc, x, rowY, colWidth, imageHeight, image, theme, colWidth, ctx.strictImages);
     if (captionLines.length > 0) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(theme.typography.caption);
@@ -1390,116 +1449,143 @@ const addFooter = (
   }
 };
 
+type CasePdfImages = Array<{ url: string; description?: string }> | string[] | string | null;
+
+const buildCasePdf = async (
+  data: any,
+  images: CasePdfImages,
+  customTitle?: string,
+  uploaderName?: string,
+  customFileName?: string,
+  imageOptions?: CasePdfImageOptions
+) => {
+  const normalized = normalizePdfExportData(data, customTitle, images);
+  const preparedImages = await preparePdfImages(normalized.images, imageOptions);
+  const doc = new jsPDF();
+  const theme = PDF_THEME_BY_SUBMISSION[normalized.submissionType];
+  const ctx: RenderContext = {
+    y: 0,
+    margin: theme.layout.margin,
+    pageWidth: doc.internal.pageSize.width,
+    pageHeight: doc.internal.pageSize.height,
+    bottomMargin: theme.layout.bottomMargin,
+    strictImages: Boolean(imageOptions),
+  };
+
+  doc.setDocumentProperties(buildDocumentProperties(normalized, uploaderName));
+  ctx.y = 8;
+  drawTitleBar(doc, ctx, normalized, theme);
+
+  const overviewRows =
+    normalized.submissionType === 'interesting_case'
+      ? [
+          {
+            label: 'Patient',
+            value: joinWithSeparator(
+              [
+                normalized.patientInitials,
+                normalized.patientAge ? `${normalized.patientAge} yo` : '',
+                normalized.patientSex,
+              ],
+              ' | '
+            ),
+          },
+            { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
+            { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
+            { label: 'PACS Patient ID', value: normalized.patientId || '' },
+            { label: 'Source', value: normalized.caseSource || '' },
+            { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
+          ]
+      : [
+          { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
+          { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
+          { label: 'PACS Patient ID', value: normalized.patientId || '' },
+          ...(normalized.clinicalData ? [{ label: 'Clinical Data', value: normalized.clinicalData, fullWidth: true }] : []),
+        ];
+
+  writeSectionHeader(doc, ctx, 'Case Information', theme);
+  drawCompactMetadataSummary(doc, ctx, overviewRows, theme);
+
+  if (preparedImages.length > 0) {
+    renderImageGrid(doc, ctx, preparedImages, theme);
+  } else {
+    const placeholderY = ctx.y;
+    const width = ctx.pageWidth - ctx.margin * 2;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(...theme.border);
+    doc.roundedRect(ctx.margin, placeholderY, width, 34, 3, 3, 'FD');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(theme.typography.body);
+    doc.setTextColor(...theme.textMuted);
+    doc.text('No images attached for this case.', ctx.margin + 8, placeholderY + 19);
+    ctx.y = placeholderY + 42;
+  }
+
+  // The text follows the images on the same page when it fits; a new page starts only when the
+  // space runs out, and the heading always keeps a couple of lines of text with it.
+  ensureHeadingAndBodySpace(doc, ctx, 12, 14);
+  writeSectionHeader(
+    doc,
+    ctx,
+    normalized.submissionType === 'aunt_minnie' ? 'Description' : 'Findings',
+    theme
+  );
+  writeParagraphText(
+    doc,
+    ctx,
+    normalized.findings ||
+      (normalized.submissionType === 'aunt_minnie' ? 'No description recorded.' : 'No findings recorded.'),
+    theme
+  );
+
+  if (normalized.submissionType === 'rare_pathology' && normalized.radiologicClinchers) {
+    ensureHeadingAndBodySpace(doc, ctx, 12, 14);
+    writeSectionHeader(doc, ctx, 'Radiologic Clinchers', theme);
+    writeParagraphText(doc, ctx, normalized.radiologicClinchers, theme);
+  }
+
+  if (normalized.notesHtml && normalized.submissionType !== 'rare_pathology') {
+    writeSectionHeader(doc, ctx, 'Notes / Remarks', theme);
+    renderRichNotes(doc, ctx, normalized.notesHtml, theme);
+  }
+
+  if ((normalized.references?.length || 0) > 0) {
+    writeSectionHeader(doc, ctx, 'References', theme);
+    renderReferences(doc, ctx, normalized.references || [], theme);
+  }
+
+  addFooter(doc, ctx.margin, ctx.pageHeight, normalized.title, theme, uploaderName);
+  return { doc, fileName: buildFilename(normalized, customFileName) };
+};
+
 export const generateCasePDF = async (
   data: any,
   unusedAnalysis: any,
-  images: Array<{ url: string; description?: string }> | string[] | string | null,
+  images: CasePdfImages,
   customTitle?: string,
   uploaderName?: string,
   customFileName?: string
 ) => {
   try {
-    const normalized = normalizePdfExportData(data, customTitle, images);
-    const preparedImages = await preparePdfImages(normalized.images);
-    const doc = new jsPDF();
-    const theme = PDF_THEME_BY_SUBMISSION[normalized.submissionType];
-    const ctx: RenderContext = {
-      y: 0,
-      margin: theme.layout.margin,
-      pageWidth: doc.internal.pageSize.width,
-      pageHeight: doc.internal.pageSize.height,
-      bottomMargin: theme.layout.bottomMargin,
-    };
-
-    doc.setDocumentProperties(buildDocumentProperties(normalized, uploaderName));
-    ctx.y = 8;
-    drawTitleBar(doc, ctx, normalized, theme);
-
-    const overviewRows =
-      normalized.submissionType === 'interesting_case'
-        ? [
-            {
-              label: 'Patient',
-              value: joinWithSeparator(
-                [
-                  normalized.patientInitials,
-                  normalized.patientAge ? `${normalized.patientAge} yo` : '',
-                  normalized.patientSex,
-                ],
-                ' | '
-              ),
-            },
-              { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
-              { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-              { label: 'PACS Patient ID', value: normalized.patientId || '' },
-              { label: 'Source', value: normalized.caseSource || '' },
-              { label: 'Clinical Data', value: normalized.clinicalData || '', fullWidth: true },
-            ]
-        : [
-            { label: 'Uploaded', value: formatDisplayDate(normalized.uploadDate) },
-            { label: 'Exam', value: joinWithSeparator([normalized.modality, normalized.organSystem], ' - ') },
-            { label: 'PACS Patient ID', value: normalized.patientId || '' },
-            ...(normalized.clinicalData ? [{ label: 'Clinical Data', value: normalized.clinicalData, fullWidth: true }] : []),
-          ];
-
-    writeSectionHeader(doc, ctx, 'Case Information', theme);
-    drawCompactMetadataSummary(doc, ctx, overviewRows, theme);
-
-    if (preparedImages.length > 0) {
-      renderImageGrid(doc, ctx, preparedImages, theme);
-    } else {
-      const placeholderY = ctx.y;
-      const width = ctx.pageWidth - ctx.margin * 2;
-      doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(...theme.border);
-      doc.roundedRect(ctx.margin, placeholderY, width, 34, 3, 3, 'FD');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(theme.typography.body);
-      doc.setTextColor(...theme.textMuted);
-      doc.text('No images attached for this case.', ctx.margin + 8, placeholderY + 19);
-      ctx.y = placeholderY + 42;
-    }
-
-    doc.addPage();
-    ctx.y = 8;
-    drawTitleBar(doc, ctx, normalized, theme);
-
-    writeSectionHeader(
-      doc,
-      ctx,
-      normalized.submissionType === 'aunt_minnie' ? 'Description' : 'Findings',
-      theme
-    );
-    writeParagraphText(
-      doc,
-      ctx,
-      normalized.findings ||
-        (normalized.submissionType === 'aunt_minnie' ? 'No description recorded.' : 'No findings recorded.'),
-      theme
-    );
-
-    if (normalized.submissionType === 'rare_pathology' && normalized.radiologicClinchers) {
-      ensureHeadingAndBodySpace(doc, ctx, 12, 14);
-      writeSectionHeader(doc, ctx, 'Radiologic Clinchers', theme);
-      writeParagraphText(doc, ctx, normalized.radiologicClinchers, theme);
-    }
-
-    if (normalized.notesHtml && normalized.submissionType !== 'rare_pathology') {
-      writeSectionHeader(doc, ctx, 'Notes / Remarks', theme);
-      renderRichNotes(doc, ctx, normalized.notesHtml, theme);
-    }
-
-    if ((normalized.references?.length || 0) > 0) {
-      writeSectionHeader(doc, ctx, 'References', theme);
-      renderReferences(doc, ctx, normalized.references || [], theme);
-    }
-
-    addFooter(doc, ctx.margin, ctx.pageHeight, normalized.title, theme, uploaderName);
-    doc.save(buildFilename(normalized, customFileName));
+    const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName);
+    doc.save(fileName);
   } catch (error: any) {
     console.error('CRITICAL PDF ERROR:', error);
     alert(`Failed to generate PDF. Error: ${error.message || error}`);
   }
+};
+
+// Same layout as the download, returned as a file for the Google Drive archive. Throws on failure.
+export const renderCasePdfBlob = async (
+  data: any,
+  images: CasePdfImages,
+  customTitle: string,
+  uploaderName: string,
+  customFileName: string,
+  imageOptions: CasePdfImageOptions
+) => {
+  const { doc, fileName } = await buildCasePdf(data, images, customTitle, uploaderName, customFileName, imageOptions);
+  return { blob: doc.output('blob') as Blob, fileName };
 };
 
 export const __testables = {
